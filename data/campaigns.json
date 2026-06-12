@@ -35,6 +35,7 @@
         "商業施設内(空港・遊園地・スタジアム・駅ビル等)の一部店舗は対象外",
         "デリバリー利用は対象外(モス・KFCの自社配達モバイルオーダーは対象)"
       ],
+      "facility_risk_patterns": ["空港", "エアポート", "遊園地", "テーマパーク", "スタジアム", "ドーム", "球場", "競馬場", "イオン", "ららぽーと", "アウトレット", "パルコ", "ルミネ", "アトレ", "エキュート", "エミオ", "エトモ", "エキア", "エチカ", "京王リトナード", "キラリナ", "小田急マルシェ", "ウィング", "ジョイナス", "百貨店", "サービスエリア", "パーキングエリア", "高速道路"],
       "merchant_rules": [
         { "merchant_id": "seven_eleven", "note": null, "exclusion_note": "スマホレジ(セブンスマホレジ)は対象外", "exclusion_patterns": [] },
         { "merchant_id": "lawson", "note": "ナチュラルローソン・ローソンストア100・ローソンスリーエフ含む", "exclusion_note": "ローソンスマホレジは対象外", "exclusion_patterns": [] },
@@ -43,10 +44,10 @@
         { "merchant_id": "poplar", "note": "生活彩家含む", "exclusion_note": null, "exclusion_patterns": [] },
         { "merchant_id": "mcdonalds", "note": "モバイルオーダーも対象", "exclusion_note": "デリバリー(マックデリバリー等)は対象外", "exclusion_patterns": [] },
         { "merchant_id": "mos_burger", "note": "モバイルオーダー(自社配達含む)も対象", "exclusion_note": null, "exclusion_patterns": [] },
-        { "merchant_id": "kfc", "note": "モバイルオーダー(自社配達含む)も対象", "exclusion_note": "一部店舗のみ対象。公式の対象店舗一覧で要確認", "exclusion_patterns": [] },
+        { "merchant_id": "kfc", "note": "モバイルオーダー(自社配達含む)も対象", "exclusion_note": "一部店舗のみ対象。公式の対象店舗一覧で要確認", "exclusion_patterns": [], "store_list_url": "https://www.smbc-card.com/nyukai/merit/proper_p5.jsp" },
         { "merchant_id": "yoshinoya", "note": "モバイルオーダーも対象", "exclusion_note": null, "exclusion_patterns": [] },
         { "merchant_id": "sukiya", "note": "モバイルオーダーも対象", "exclusion_note": null, "exclusion_patterns": [] },
-        { "merchant_id": "saizeriya", "note": null, "exclusion_note": "一部店舗のみ対象。公式の対象店舗一覧で要確認", "exclusion_patterns": [] },
+        { "merchant_id": "saizeriya", "note": null, "exclusion_note": "一部店舗のみ対象。公式の対象店舗一覧で要確認", "exclusion_patterns": [], "store_list_url": "https://www.smbc-card.com/nyukai/merit/proper_p5.jsp" },
         { "merchant_id": "gusto", "note": null, "exclusion_note": null, "exclusion_patterns": [] },
         { "merchant_id": "bamiyan", "note": null, "exclusion_note": null, "exclusion_patterns": [] },
         { "merchant_id": "syabuyo", "note": null, "exclusion_note": null, "exclusion_patterns": [] },
@@ -124,6 +125,7 @@
         "対象店舗でもオンラインストア・ネットスーパー・デリバリー・テナント売場は概ね対象外",
         "キャッシング・年会費・リボ/分割手数料等は月5万円利用条件の集計対象外"
       ],
+      "facility_risk_patterns": ["空港", "エアポート", "イオン", "ららぽーと", "アウトレット", "パルコ", "ルミネ", "アトレ", "エキュート", "エミオ", "エトモ", "エキア", "エチカ", "京王リトナード", "キラリナ", "小田急マルシェ", "ウィング", "ジョイナス", "百貨店", "サービスエリア", "パーキングエリア", "高速道路", "ガソリンスタンド", "GS併設"],
       "merchant_rules": [
         { "merchant_id": "seven_eleven", "note": null, "exclusion_note": "複合商業施設内の一部店舗・オンライン/デリバリー・セブン自販機・スマホレジは対象外", "exclusion_patterns": [], "amex_excluded": false },
         { "merchant_id": "lawson", "note": "ナチュラルローソン・ローソンストア100含む", "exclusion_note": "複合商業施設内・駅ビル内・GS併設の一部店舗、オンライン/デリバリー、スマホレジは対象外", "exclusion_patterns": [], "amex_excluded": false },

@@ -20,7 +20,11 @@ import kotlinx.coroutines.launch
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
-    data class Selection(val merchant: Merchant, val judgments: List<Judgment>)
+    data class Selection(
+        val merchant: Merchant,
+        val judgments: List<Judgment>,
+        val branchName: String = "",
+    )
 
     data class UiState(
         val loading: Boolean = true,
@@ -101,7 +105,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // 表示中の判定があればデータ差し替え後の内容で引き直す
                 selection = it.selection?.let { sel ->
                     loaded.data.merchants.firstOrNull { m -> m.id == sel.merchant.id }
-                        ?.let { m -> Selection(m, newEngine.judge(m)) }
+                        ?.let { m -> Selection(m, newEngine.judge(m, sel.branchName), sel.branchName) }
                 },
             )
         }
@@ -134,7 +138,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onSelect(merchant: Merchant) {
         val engine = engine ?: return
-        _state.update { it.copy(selection = Selection(merchant, engine.judge(merchant))) }
+        _state.update {
+            // 「マクドナルド渋谷店」のような入力で選んだ場合は、入力全体を店舗名チェックに引き継ぐ
+            val branch = it.query.trim()
+                .takeUnless { q -> q.isBlank() || engine.isExactNameMatch(merchant, q) }
+                .orEmpty()
+            it.copy(selection = Selection(merchant, engine.judge(merchant, branch), branch))
+        }
+    }
+
+    fun onBranchNameChange(branchName: String) {
+        val engine = engine ?: return
+        _state.update {
+            val sel = it.selection ?: return@update it
+            it.copy(selection = sel.copy(judgments = engine.judge(sel.merchant, branchName), branchName = branchName))
+        }
     }
 
     fun onBack() {

@@ -34,6 +34,7 @@ data class MerchantRule(
     @SerialName("exclusion_note") val exclusionNote: String? = null,
     @SerialName("exclusion_patterns") val exclusionPatterns: List<String> = emptyList(),
     @SerialName("amex_excluded") val amexExcluded: Boolean = false,
+    @SerialName("store_list_url") val storeListUrl: String? = null,
 )
 
 @Serializable
@@ -55,6 +56,7 @@ data class Campaign(
     val conditions: List<String> = emptyList(),
     @SerialName("rate_breakdown") val rateBreakdown: List<RateBreakdown> = emptyList(),
     @SerialName("global_exclusions") val globalExclusions: List<String> = emptyList(),
+    @SerialName("facility_risk_patterns") val facilityRiskPatterns: List<String> = emptyList(),
     @SerialName("merchant_rules") val merchantRules: List<MerchantRule> = emptyList(),
     val sources: List<String> = emptyList(),
     @SerialName("verified_date") val verifiedDate: String = "",

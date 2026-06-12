@@ -45,6 +45,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -52,6 +53,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ktakjm.poikatsu.data.DataSource
 import com.ktakjm.poikatsu.data.Merchant
+import com.ktakjm.poikatsu.domain.BranchWarningLevel
 import com.ktakjm.poikatsu.domain.Judgment
 
 @Composable
@@ -75,6 +77,7 @@ fun PoikatsuApp(modifier: Modifier = Modifier, viewModel: MainViewModel = viewMo
             state.selection != null -> JudgmentDetail(
                 selection = state.selection!!,
                 onBack = viewModel::onBack,
+                onBranchNameChange = viewModel::onBranchNameChange,
             )
             else -> SearchPane(
                 query = state.query,
@@ -191,6 +194,7 @@ private fun SearchPane(
 private fun JudgmentDetail(
     selection: MainViewModel.Selection,
     onBack: () -> Unit,
+    onBranchNameChange: (String) -> Unit,
 ) {
     BackHandler(onBack = onBack)
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -201,6 +205,14 @@ private fun JudgmentDetail(
         Spacer(Modifier.width(8.dp))
         AssistChip(onClick = {}, label = { Text(selection.merchant.category) })
     }
+    OutlinedTextField(
+        value = selection.branchName,
+        onValueChange = onBranchNameChange,
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text("店舗名で対象外チェック") },
+        placeholder = { Text("例: ○○駅前店、イオンモール○○店") },
+        singleLine = true,
+    )
     Spacer(Modifier.height(8.dp))
 
     if (selection.judgments.isEmpty()) {
@@ -277,6 +289,13 @@ private fun JudgmentCardBody(judgment: Judgment, brandColor: Color) {
                     color = MaterialTheme.colorScheme.outline,
                 )
             }
+            judgment.branchWarnings.forEach { warning ->
+                val (mark, color) = when (warning.level) {
+                    BranchWarningLevel.EXCLUDED -> "⛔" to MaterialTheme.colorScheme.error
+                    BranchWarningLevel.RISK -> "⚠" to MaterialTheme.colorScheme.tertiary
+                }
+                Text("$mark ${warning.message}", style = MaterialTheme.typography.bodyMedium, color = color)
+            }
             Text("支払い方法: ${campaign.paymentInstruction}", style = MaterialTheme.typography.bodyMedium)
             rule.note?.let {
                 Text("この店の条件: $it", style = MaterialTheme.typography.bodyMedium)
@@ -286,6 +305,15 @@ private fun JudgmentCardBody(judgment: Judgment, brandColor: Color) {
             }
             rule.exclusionNote?.let {
                 Text("⚠ $it", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.tertiary)
+            }
+            rule.storeListUrl?.let { url ->
+                val uriHandler = LocalUriHandler.current
+                Text(
+                    "公式の対象店舗一覧を開く →",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { uriHandler.openUri(url) },
+                )
             }
             campaign.monthlyCapNote?.let {
                 Text("上限: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)

@@ -7,6 +7,15 @@ import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.ProfileCard
 import com.ktakjm.poikatsu.util.JapaneseText
 
+enum class BranchWarningLevel {
+    /** 公式の対象外店舗パターンに一致(対象外の可能性が高い) */
+    EXCLUDED,
+    /** 商業施設内など、対象外になりがちな立地パターンに一致 */
+    RISK,
+}
+
+data class BranchWarning(val level: BranchWarningLevel, val message: String)
+
 /** ある店舗に対する 1 施策分の判定結果 */
 data class Judgment(
     val campaign: Campaign,
@@ -14,6 +23,7 @@ data class Judgment(
     val card: ProfileCard?,
     val effectiveRate: Double,
     val warnings: List<String>,
+    val branchWarnings: List<BranchWarning> = emptyList(),
 )
 
 class JudgmentEngine(private val data: PoikatsuData) {
@@ -48,6 +58,9 @@ class JudgmentEngine(private val data: PoikatsuData) {
                 when {
                     key.startsWith(q) -> 0
                     key.contains(q) -> 1
+                    // 「マクドナルド渋谷店」のような具体店舗名入力でもチェーンにヒットさせる。
+                    // 短いキー(OK等)の誤爆を避けるため3文字以上に限定
+                    key.length >= 3 && q.contains(key) -> 2
                     else -> Int.MAX_VALUE
                 }
             }
@@ -57,8 +70,17 @@ class JudgmentEngine(private val data: PoikatsuData) {
             .map { it.first }
     }
 
-    /** 該当施策を還元率の高い順に返す。対象外ならば空リスト */
-    fun judge(merchant: Merchant): List<Judgment> =
+    /** 入力がチェーン名そのもの(店舗名部分なし)かどうか */
+    fun isExactNameMatch(merchant: Merchant, query: String): Boolean {
+        val q = JapaneseText.normalize(query)
+        return searchIndex.firstOrNull { it.first.id == merchant.id }?.second?.contains(q) == true
+    }
+
+    /**
+     * 該当施策を還元率の高い順に返す。対象外ならば空リスト。
+     * branchName(「○○駅前店」等)を渡すと、店舗単位の対象外チェックを行う。
+     */
+    fun judge(merchant: Merchant, branchName: String? = null): List<Judgment> =
         data.campaigns.mapNotNull { campaign ->
             val rule = campaign.merchantRules.firstOrNull { it.merchantId == merchant.id }
                 ?: return@mapNotNull null
@@ -78,6 +100,34 @@ class JudgmentEngine(private val data: PoikatsuData) {
                 card = card,
                 effectiveRate = card?.effectiveRateDefault ?: campaign.rateBase,
                 warnings = warnings,
+                branchWarnings = checkBranch(campaign, rule, branchName),
             )
         }.sortedByDescending { it.effectiveRate }
+
+    private fun checkBranch(campaign: Campaign, rule: MerchantRule, branchName: String?): List<BranchWarning> {
+        if (branchName.isNullOrBlank()) return emptyList()
+        val normalized = JapaneseText.normalize(branchName)
+        return buildList {
+            rule.exclusionPatterns
+                .firstOrNull { normalized.contains(JapaneseText.normalize(it)) }
+                ?.let {
+                    add(
+                        BranchWarning(
+                            BranchWarningLevel.EXCLUDED,
+                            "「$it」は公式の対象外店舗パターンに一致します。この店舗では適用されない可能性が高いです",
+                        )
+                    )
+                }
+            campaign.facilityRiskPatterns
+                .firstOrNull { normalized.contains(JapaneseText.normalize(it)) }
+                ?.let {
+                    add(
+                        BranchWarning(
+                            BranchWarningLevel.RISK,
+                            "「$it」を含む店舗(商業施設内など)は対象外の場合があります。店頭または公式サイトで要確認です",
+                        )
+                    )
+                }
+        }
+    }
 }

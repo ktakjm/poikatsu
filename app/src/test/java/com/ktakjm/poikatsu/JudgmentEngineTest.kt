@@ -1,9 +1,11 @@
 package com.ktakjm.poikatsu
 
 import com.ktakjm.poikatsu.data.PoikatsuJson
+import com.ktakjm.poikatsu.domain.BranchWarningLevel
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.util.JapaneseText
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -99,6 +101,50 @@ class JudgmentEngineTest {
     @Test
     fun `カテゴリ一覧がデータから取れる`() {
         assertTrue(engine.categories.containsAll(listOf("コンビニ", "ファストフード", "ファミレス", "カフェ", "回転寿司", "スーパー", "その他")))
+    }
+
+    @Test
+    fun `具体店舗名のフル入力でもチェーンにヒットする`() {
+        assertEquals("マクドナルド", engine.search("マクドナルド渋谷駅前店").first().name)
+        assertTrue(engine.search("くら寿司ららぽーとTOKYO-BAY店").any { it.id == "kurazushi" })
+    }
+
+    @Test
+    fun `公式の対象外店舗パターンに一致すると強警告が出る`() {
+        val merchant = data.merchants.first { it.id == "kurazushi" }
+        val judgment = engine.judge(merchant, "ららぽーとTOKYO-BAY店").single()
+        assertTrue(judgment.branchWarnings.any { it.level == BranchWarningLevel.EXCLUDED })
+    }
+
+    @Test
+    fun `商業施設系の店舗名はリスク警告が出る`() {
+        val merchant = data.merchants.first { it.id == "seven_eleven" }
+        val judgments = engine.judge(merchant, "イオンモール幕張新都心店")
+        // 三井住友・MUFG両施策でリスク警告
+        assertEquals(2, judgments.size)
+        assertTrue(judgments.all { j -> j.branchWarnings.any { it.level == BranchWarningLevel.RISK } })
+    }
+
+    @Test
+    fun `通常の店舗名なら店舗警告は出ない`() {
+        val merchant = data.merchants.first { it.id == "mcdonalds" }
+        val judgment = engine.judge(merchant, "渋谷駅前店").single()
+        assertTrue(judgment.branchWarnings.isEmpty())
+    }
+
+    @Test
+    fun `店舗名未入力なら店舗警告は出ない`() {
+        val merchant = data.merchants.first { it.id == "kurazushi" }
+        assertTrue(engine.judge(merchant).single().branchWarnings.isEmpty())
+        assertTrue(engine.judge(merchant, "").single().branchWarnings.isEmpty())
+    }
+
+    @Test
+    fun `チェーン名そのままの入力は完全一致と判定される`() {
+        val mcdonalds = data.merchants.first { it.id == "mcdonalds" }
+        assertTrue(engine.isExactNameMatch(mcdonalds, "マック"))
+        assertTrue(engine.isExactNameMatch(mcdonalds, "マクドナルド"))
+        assertFalse(engine.isExactNameMatch(mcdonalds, "マクドナルド渋谷店"))
     }
 
     @Test
