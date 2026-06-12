@@ -59,8 +59,8 @@ class JudgmentEngine(private val data: PoikatsuData) {
                     key.startsWith(q) -> 0
                     key.contains(q) -> 1
                     // 「マクドナルド渋谷店」のような具体店舗名入力でもチェーンにヒットさせる。
-                    // 短いキー(OK等)の誤爆を避けるため3文字以上に限定
-                    key.length >= 3 && q.contains(key) -> 2
+                    // 短いキー(OK等)の誤爆を避けるため3文字以上+単語境界判定
+                    key.length >= 3 && containsAsWord(q, key) -> 2
                     else -> Int.MAX_VALUE
                 }
             }
@@ -75,6 +75,47 @@ class JudgmentEngine(private val data: PoikatsuData) {
         val q = JapaneseText.normalize(query)
         return searchIndex.firstOrNull { it.first.id == merchant.id }?.second?.contains(q) == true
     }
+
+    /**
+     * 地図POIの店舗名(例: "マクドナルド 渋谷駅前店")やブランドタグから該当チェーンを特定する。
+     * 「ステーキガスト」が「ガスト」に誤マッチしないよう、一致したキーが最長のチェーンを採用する。
+     */
+    fun matchStore(storeName: String, brand: String? = null): Merchant? {
+        val normalizedName = JapaneseText.normalize(storeName)
+        val normalizedBrand = brand?.let { JapaneseText.normalize(it) }
+        return searchIndex.mapNotNull { (merchant, keys) ->
+            val best = keys.filter { key ->
+                (key.length >= 3 && containsAsWord(normalizedName, key)) || key == normalizedBrand
+            }.maxOfOrNull { it.length }
+            if (best == null) null else merchant to best
+        }.maxByOrNull { it.second }?.first
+    }
+
+    /**
+     * 単語っぽい境界での包含判定。「マックスバリュ」が「マック」にヒットしないよう、
+     * キーの端と隣接文字が同じ文字種(カナ同士・英数同士)で続く場合は別単語の一部とみなす。
+     * 文字種が変わる位置(「くら寿司|ららぽーと」の漢字→かな等)は単語境界として許容する。
+     * 正規化後はカタカナがひらがなになっている前提。
+     */
+    private fun containsAsWord(text: String, key: String): Boolean {
+        var index = text.indexOf(key)
+        while (index >= 0) {
+            val beforeJoined = isSameWord(text.getOrNull(index - 1), key.first())
+            val afterJoined = isSameWord(text.getOrNull(index + key.length), key.last())
+            if (!beforeJoined && !afterJoined) return true
+            index = text.indexOf(key, index + 1)
+        }
+        return false
+    }
+
+    private fun isSameWord(adjacent: Char?, keyEdge: Char): Boolean {
+        if (adjacent == null) return false
+        return (isKana(adjacent) && isKana(keyEdge)) || (isAsciiAlnum(adjacent) && isAsciiAlnum(keyEdge))
+    }
+
+    private fun isKana(c: Char): Boolean = c in 'ぁ'..'ゖ' || c == 'ー'
+
+    private fun isAsciiAlnum(c: Char): Boolean = c.code < 128 && c.isLetterOrDigit()
 
     /**
      * 該当施策を還元率の高い順に返す。対象外ならば空リスト。

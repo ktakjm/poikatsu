@@ -7,9 +7,12 @@ import com.ktakjm.poikatsu.data.DataRepository
 import com.ktakjm.poikatsu.data.DataSource
 import com.ktakjm.poikatsu.data.GithubRawClient
 import com.ktakjm.poikatsu.data.LoadedData
+import com.ktakjm.poikatsu.data.LocationProvider
 import com.ktakjm.poikatsu.data.Merchant
+import com.ktakjm.poikatsu.data.OverpassClient
 import com.ktakjm.poikatsu.domain.Judgment
 import com.ktakjm.poikatsu.domain.JudgmentEngine
+import com.ktakjm.poikatsu.util.GeoMath
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -26,6 +29,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val branchName: String = "",
     )
 
+    data class NearbyPlace(
+        val name: String,
+        val distanceMeters: Int,
+        val merchant: Merchant?,
+        val bestRate: Double?,
+    )
+
+    data class NearbyUi(
+        val loading: Boolean = false,
+        val error: String? = null,
+        val places: List<NearbyPlace> = emptyList(),
+    )
+
     data class UiState(
         val loading: Boolean = true,
         val error: String? = null,
@@ -38,12 +54,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val dataSource: DataSource? = null,
         val refreshing: Boolean = false,
         val refreshFailed: Boolean = false,
+        val nearby: NearbyUi? = null,
+        val nearbyRadiusM: Int = 3000,
     )
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state
 
     private var engine: JudgmentEngine? = null
+
+    private val locationProvider = LocationProvider(app)
 
     private val repository = DataRepository(
         readAsset = { name ->
@@ -117,7 +137,66 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 query = query,
                 results = engine?.search(query, it.selectedCategories).orEmpty(),
                 selection = null,
+                nearby = null,
             )
+        }
+    }
+
+    /** 位置情報パーミッション取得済みの前提で呼ぶ(UI側でリクエスト) */
+    fun fetchNearby() {
+        val engine = engine ?: return
+        _state.update { it.copy(nearby = NearbyUi(loading = true), selection = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val location = locationProvider.currentLocation()
+            if (location == null) {
+                _state.update { it.copy(nearby = NearbyUi(error = "現在地を取得できませんでした。位置情報設定を確認してください")) }
+                return@launch
+            }
+            val pois = OverpassClient.fetchNearby(
+                location.latitude,
+                location.longitude,
+                radiusM = _state.value.nearbyRadiusM,
+            )
+            if (pois == null) {
+                _state.update { it.copy(nearby = NearbyUi(error = "周辺店舗の取得に失敗しました。通信状態を確認してください")) }
+                return@launch
+            }
+            // 対象施策のあるチェーンのみ、距離の近い順に表示
+            val places = pois
+                .mapNotNull { poi ->
+                    val merchant = engine.matchStore(poi.name, poi.brand) ?: return@mapNotNull null
+                    NearbyPlace(
+                        name = poi.displayName,
+                        distanceMeters = GeoMath.distanceMeters(location.latitude, location.longitude, poi.lat, poi.lon),
+                        merchant = merchant,
+                        bestRate = engine.judge(merchant).firstOrNull()?.effectiveRate,
+                    )
+                }
+                .sortedBy { it.distanceMeters }
+            _state.update { it.copy(nearby = NearbyUi(places = places)) }
+        }
+    }
+
+    fun onNearbyRadiusChange(radiusM: Int) {
+        if (_state.value.nearbyRadiusM == radiusM) return
+        _state.update { it.copy(nearbyRadiusM = radiusM) }
+        fetchNearby()
+    }
+
+    fun onLocationDenied() {
+        _state.update { it.copy(nearby = NearbyUi(error = "位置情報の許可が必要です。端末の設定からこのアプリに位置情報を許可してください")) }
+    }
+
+    fun onCloseNearby() {
+        _state.update { it.copy(nearby = null) }
+    }
+
+    /** 周辺リストの店をタップ → POI名を店舗名チェックに引き継いで判定 */
+    fun onSelectNearby(place: NearbyPlace) {
+        val engine = engine ?: return
+        val merchant = place.merchant ?: return
+        _state.update {
+            it.copy(selection = Selection(merchant, engine.judge(merchant, place.name), place.name))
         }
     }
 

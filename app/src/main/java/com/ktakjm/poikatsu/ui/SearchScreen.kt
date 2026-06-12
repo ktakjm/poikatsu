@@ -1,6 +1,10 @@
 package com.ktakjm.poikatsu.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
@@ -45,7 +50,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -70,6 +77,26 @@ fun PoikatsuApp(modifier: Modifier = Modifier, viewModel: MainViewModel = viewMo
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    val context = LocalContext.current
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        if (grants.values.any { it }) viewModel.fetchNearby() else viewModel.onLocationDenied()
+    }
+    val onNearbyClick = {
+        val granted = listOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+        ).any { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
+        if (granted) {
+            viewModel.fetchNearby()
+        } else {
+            permissionLauncher.launch(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            )
+        }
+    }
+
     Column(modifier = modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         when {
             state.loading -> Centered { CircularProgressIndicator() }
@@ -78,6 +105,14 @@ fun PoikatsuApp(modifier: Modifier = Modifier, viewModel: MainViewModel = viewMo
                 selection = state.selection!!,
                 onBack = viewModel::onBack,
                 onBranchNameChange = viewModel::onBranchNameChange,
+            )
+            state.nearby != null -> NearbyPane(
+                nearby = state.nearby!!,
+                radiusM = state.nearbyRadiusM,
+                onClose = viewModel::onCloseNearby,
+                onReload = viewModel::fetchNearby,
+                onRadiusChange = viewModel::onNearbyRadiusChange,
+                onSelectPlace = viewModel::onSelectNearby,
             )
             else -> SearchPane(
                 query = state.query,
@@ -91,6 +126,7 @@ fun PoikatsuApp(modifier: Modifier = Modifier, viewModel: MainViewModel = viewMo
                 onToggleCategory = viewModel::onToggleCategory,
                 onSelect = viewModel::onSelect,
                 onRefresh = viewModel::onManualRefresh,
+                onNearbyClick = onNearbyClick,
             )
         }
     }
@@ -115,12 +151,18 @@ private fun SearchPane(
     onToggleCategory: (String) -> Unit,
     onSelect: (Merchant) -> Unit,
     onRefresh: () -> Unit,
+    onNearbyClick: () -> Unit,
 ) {
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
         modifier = Modifier.fillMaxWidth(),
         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+        trailingIcon = {
+            IconButton(onClick = onNearbyClick) {
+                Icon(Icons.Default.LocationOn, contentDescription = "近くのお店を探す")
+            }
+        },
         placeholder = { Text("店名を入力(例: マック、サイゼ)") },
         singleLine = true,
     )
@@ -189,6 +231,80 @@ private fun SearchPane(
         }
     }
 }
+
+@Composable
+private fun NearbyPane(
+    nearby: MainViewModel.NearbyUi,
+    radiusM: Int,
+    onClose: () -> Unit,
+    onReload: () -> Unit,
+    onRadiusChange: (Int) -> Unit,
+    onSelectPlace: (MainViewModel.NearbyPlace) -> Unit,
+) {
+    BackHandler(onBack = onClose)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onClose) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+        }
+        Text("近くのお店", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+        IconButton(onClick = onReload) {
+            Icon(Icons.Default.Refresh, contentDescription = "再読み込み")
+        }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(500, 1000, 3000).forEach { radius ->
+            FilterChip(
+                selected = radiusM == radius,
+                onClick = { onRadiusChange(radius) },
+                label = { Text(distanceLabel(radius)) },
+            )
+        }
+    }
+    Spacer(Modifier.height(4.dp))
+    when {
+        nearby.loading -> Centered { CircularProgressIndicator() }
+        nearby.error != null -> Text(
+            nearby.error,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+        nearby.places.isEmpty() -> Text(
+            "周辺${distanceLabel(radiusM)}に対象施策のある店舗が見つかりませんでした。",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        else -> LazyColumn {
+            items(nearby.places) { place ->
+                ListItem(
+                    headlineContent = { Text(place.name) },
+                    supportingContent = {
+                        Text("${distanceLabel(place.distanceMeters)}・${place.merchant?.category.orEmpty()}")
+                    },
+                    trailingContent = {
+                        place.bestRate?.let {
+                            Text(
+                                "${trimRate(it)}%",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelectPlace(place) },
+                )
+                HorizontalDivider()
+            }
+        }
+    }
+}
+
+private fun distanceLabel(meters: Int): String =
+    if (meters >= 1000) {
+        val km = meters / 1000.0
+        if (km == km.toLong().toDouble()) "${km.toLong()}km" else "%.1fkm".format(km)
+    } else {
+        "${meters}m"
+    }
 
 @Composable
 private fun JudgmentDetail(
