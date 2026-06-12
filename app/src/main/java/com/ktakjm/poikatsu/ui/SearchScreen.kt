@@ -17,11 +17,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
@@ -37,12 +39,16 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ktakjm.poikatsu.data.DataSource
 import com.ktakjm.poikatsu.data.Merchant
@@ -51,6 +57,16 @@ import com.ktakjm.poikatsu.domain.Judgment
 @Composable
 fun PoikatsuApp(modifier: Modifier = Modifier, viewModel: MainViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
+
+    // フォアグラウンド復帰のたびにリモートデータの再取得を試みる(初回起動時のON_START含む)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) viewModel.onAppForeground()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Column(modifier = modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         when {
@@ -66,9 +82,12 @@ fun PoikatsuApp(modifier: Modifier = Modifier, viewModel: MainViewModel = viewMo
                 selectedCategories = state.selectedCategories,
                 results = state.results,
                 dataStatus = dataStatusLabel(state.dataUpdatedAt, state.dataSource),
+                refreshing = state.refreshing,
+                refreshFailed = state.refreshFailed,
                 onQueryChange = viewModel::onQueryChange,
                 onToggleCategory = viewModel::onToggleCategory,
                 onSelect = viewModel::onSelect,
+                onRefresh = viewModel::onManualRefresh,
             )
         }
     }
@@ -87,9 +106,12 @@ private fun SearchPane(
     selectedCategories: Set<String>,
     results: List<Merchant>,
     dataStatus: String,
+    refreshing: Boolean,
+    refreshFailed: Boolean,
     onQueryChange: (String) -> Unit,
     onToggleCategory: (String) -> Unit,
     onSelect: (Merchant) -> Unit,
+    onRefresh: () -> Unit,
 ) {
     OutlinedTextField(
         value = query,
@@ -111,10 +133,36 @@ private fun SearchPane(
             )
         }
     }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            dataStatus,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.weight(1f),
+        )
+        if (refreshing) {
+            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+        } else {
+            IconButton(onClick = onRefresh, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = "データを再取得",
+                    tint = MaterialTheme.colorScheme.outline,
+                )
+            }
+        }
+    }
+    if (refreshFailed) {
+        Text(
+            "再取得できませんでした。通信状態を確認して再度お試しください。",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
     Spacer(Modifier.height(4.dp))
     when {
         query.isBlank() && selectedCategories.isEmpty() -> Text(
-            "チェーン名を入力するか、カテゴリを選択すると、どのカードで払うのが得かを表示します。\n$dataStatus",
+            "チェーン名を入力するか、カテゴリを選択すると、どのカードで払うのが得かを表示します。",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.outline,
         )

@@ -12,6 +12,7 @@ import com.ktakjm.poikatsu.domain.Judgment
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -31,6 +32,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val selection: Selection? = null,
         val dataUpdatedAt: String = "",
         val dataSource: DataSource? = null,
+        val refreshing: Boolean = false,
+        val refreshFailed: Boolean = false,
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -46,17 +49,42 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         fetchRemote = GithubRawClient::fetch,
     )
 
-    init {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                applyData(repository.loadLocal())
-            } catch (e: Exception) {
-                _state.update { it.copy(loading = false, error = "データの読み込みに失敗しました: ${e.message}") }
-                return@launch
-            }
-            // ローカル表示後にリモートの最新データへ差し替え(失敗時はローカルのまま)
-            repository.refresh()?.let { applyData(it) }
+    private var lastFetchSucceededAt = 0L
+
+    // リモート取得は init ではなく ON_START(onAppForeground)起点。
+    // 初回起動時も Activity の ON_START で必ず一度走る。
+    private val initialLoad: Job = viewModelScope.launch(Dispatchers.IO) {
+        try {
+            applyData(repository.loadLocal())
+        } catch (e: Exception) {
+            _state.update { it.copy(loading = false, error = "データの読み込みに失敗しました: ${e.message}") }
         }
+    }
+
+    /** アプリがフォアグラウンドに来るたびに呼ぶ。直近で成功していればスキップ */
+    fun onAppForeground() = refresh(force = false)
+
+    /** 更新ボタン。スキップせず必ず取得を試みる */
+    fun onManualRefresh() = refresh(force = true)
+
+    private fun refresh(force: Boolean) {
+        if (_state.value.refreshing) return
+        if (!force && System.currentTimeMillis() - lastFetchSucceededAt < AUTO_REFRESH_MIN_INTERVAL_MS) return
+        viewModelScope.launch(Dispatchers.IO) {
+            initialLoad.join() // ローカルロード完了前にリモート結果で上書きされない順序を保証
+            _state.update { it.copy(refreshing = true) }
+            val loaded = repository.refresh()
+            if (loaded != null) {
+                lastFetchSucceededAt = System.currentTimeMillis()
+                applyData(loaded)
+            }
+            _state.update { it.copy(refreshing = false, refreshFailed = loaded == null) }
+        }
+    }
+
+    companion object {
+        // 施策データの更新は月数回程度なので、自動再取得は1時間に1回で十分
+        private const val AUTO_REFRESH_MIN_INTERVAL_MS = 60 * 60_000L
     }
 
     private fun applyData(loaded: LoadedData) {
