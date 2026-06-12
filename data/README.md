@@ -1,0 +1,28 @@
+# 還元施策データ
+
+アプリが読み込む施策マスタ。当面はアプリの assets に同梱し、Phase 1 の M4 で GitHub raw 配信に切り替える。
+
+## ファイル
+
+- `merchants.json` — チェーン店マスタ。`reading`(ひらがな読み)と `aliases`(略称・別ブランド名)は検索のヒット率に直結するので、追加時は必ず入れる。
+- `campaigns.json` — 還元施策。`merchant_rules[].merchant_id` は merchants.json の `id` を参照する。**ユーザー固有の前提はここに書かず、汎用的な施策情報のみを持つ。**
+- `profile.json` — ユーザー前提条件のデフォルト値。現状: 三井住友=Visa(7%)、MUFG=Mastercard・エントリー済み・三菱UFJ銀行口座設定済み(基準7%)。判定エンジンは campaigns.json をこのプロファイルでフィルタして評価する(例: brand が Mastercard なら `amex_excluded` を無視、`entry_required` な施策は `entry_done` を確認)。将来の設定画面はこのファイルの構造をそのまま編集対象にする。
+
+## スキーマの要点
+
+- `rate_base` / `rate_max` — 現実的な基準還元率と理論上の最大。判定画面では rate_base を主表示し、rate_max は条件付きで示す。
+- `entry_required` — エントリー必須か。MUFG はエントリー+三菱UFJ銀行口座がないと 0.5% に落ちるので、表示時に強調する。
+- `merchant_rules[].note` — その店でのみ成立する条件(例: スタバはモバイルオーダーのみ)。
+- `merchant_rules[].exclusion_note` — 対象外になるケースの説明文(人間向け)。
+- `merchant_rules[].exclusion_patterns` — Phase 2 の個別店舗名判定用。入力店舗名にこの部分文字列が含まれたら「対象外の可能性あり」警告を出す。
+- `merchant_rules[].amex_excluded` — (MUFGのみ) Amex ブランドだと優遇対象外の店。
+- `verified_date` — 公式ページで最後に確認した日。**判定画面に必ず表示する。**
+- `brand_color` — 発行体の識別色(#RRGGBB)。UIのストライプ/バッジに使う。**ロゴ画像は商標・著作権の問題があるため使用しない**(公開リポジトリでの再配布になる)。色には権利が及ばないのでブランドカラーで識別する。
+  - 確認済み: 三井住友=トラッドグリーン `#004831` (SMFG VI)、三菱UFJ=MUFGレッド `#E60000`
+  - 将来の候補(採用時に公式ガイドラインで要確認): 楽天=クリムゾンレッド `#BF0000`(公式ブランドガイドラインPDFあり)、PayPay・au PAY・d払い は赤〜オレンジ系が渋滞するため正確な値の確認必須
+
+## 更新ルール
+
+- 月 1 回、`sources` の公式 URL を確認して `verified_date` を更新する。
+- 施策の改定があったら率・店舗リストを直し、`updated_at` を更新する。
+- 整合性チェック: merchant_id の参照切れ・エイリアス衝突がないこと(リポジトリの検証スクリプトを流す)。
