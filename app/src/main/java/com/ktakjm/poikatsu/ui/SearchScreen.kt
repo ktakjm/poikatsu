@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -60,8 +61,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ktakjm.poikatsu.data.DataSource
 import com.ktakjm.poikatsu.data.Merchant
-import com.ktakjm.poikatsu.domain.BranchWarningLevel
 import com.ktakjm.poikatsu.domain.Judgment
+import com.ktakjm.poikatsu.domain.StoreEligibility
+import com.ktakjm.poikatsu.domain.StoreVerdict
 
 @Composable
 fun PoikatsuApp(modifier: Modifier = Modifier, viewModel: MainViewModel = viewModel()) {
@@ -101,10 +103,15 @@ fun PoikatsuApp(modifier: Modifier = Modifier, viewModel: MainViewModel = viewMo
         when {
             state.loading -> Centered { CircularProgressIndicator() }
             state.error != null -> Centered { Text(state.error!!, color = MaterialTheme.colorScheme.error) }
+            state.storeCheck != null -> StoreCheckScreen(
+                storeCheck = state.storeCheck!!,
+                onBack = viewModel::onCloseStoreCheck,
+                onStoreNameChange = viewModel::onStoreNameChange,
+            )
             state.selection != null -> JudgmentDetail(
                 selection = state.selection!!,
                 onBack = viewModel::onBack,
-                onBranchNameChange = viewModel::onBranchNameChange,
+                onOpenStoreCheck = viewModel::onOpenStoreCheck,
             )
             state.nearby != null -> NearbyPane(
                 nearby = state.nearby!!,
@@ -310,7 +317,7 @@ private fun distanceLabel(meters: Int): String =
 private fun JudgmentDetail(
     selection: MainViewModel.Selection,
     onBack: () -> Unit,
-    onBranchNameChange: (String) -> Unit,
+    onOpenStoreCheck: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -321,15 +328,13 @@ private fun JudgmentDetail(
         Spacer(Modifier.width(8.dp))
         AssistChip(onClick = {}, label = { Text(selection.merchant.category) })
     }
-    OutlinedTextField(
-        value = selection.branchName,
-        onValueChange = onBranchNameChange,
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text("店舗名で対象外チェック") },
-        placeholder = { Text("例: ○○駅前店、イオンモール○○店") },
-        singleLine = true,
-    )
-    Spacer(Modifier.height(8.dp))
+    // 公式が対象/対象外を言い切っているチェーンだけ、店舗単位の判定画面へ遷移できる
+    if (selection.canCheckStore) {
+        Button(onClick = onOpenStoreCheck, modifier = Modifier.fillMaxWidth()) {
+            Text("この店舗が対象か調べる →")
+        }
+        Spacer(Modifier.height(8.dp))
+    }
 
     if (selection.judgments.isEmpty()) {
         Card(modifier = Modifier.fillMaxWidth()) {
@@ -405,13 +410,6 @@ private fun JudgmentCardBody(judgment: Judgment, brandColor: Color) {
                     color = MaterialTheme.colorScheme.outline,
                 )
             }
-            judgment.branchWarnings.forEach { warning ->
-                val (mark, color) = when (warning.level) {
-                    BranchWarningLevel.EXCLUDED -> "⛔" to MaterialTheme.colorScheme.error
-                    BranchWarningLevel.RISK -> "⚠" to MaterialTheme.colorScheme.tertiary
-                }
-                Text("$mark ${warning.message}", style = MaterialTheme.typography.bodyMedium, color = color)
-            }
             Text("支払い方法: ${campaign.paymentInstruction}", style = MaterialTheme.typography.bodyMedium)
             rule.note?.let {
                 Text("この店の条件: $it", style = MaterialTheme.typography.bodyMedium)
@@ -439,6 +437,86 @@ private fun JudgmentCardBody(judgment: Judgment, brandColor: Color) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline,
             )
+    }
+}
+
+/** 公式が対象/対象外を言い切っているチェーン専用の、店舗単位の対象判定画面 */
+@Composable
+private fun StoreCheckScreen(
+    storeCheck: MainViewModel.StoreCheckState,
+    onBack: () -> Unit,
+    onStoreNameChange: (String) -> Unit,
+) {
+    BackHandler(onBack = onBack)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+        }
+        Text("${storeCheck.merchant.name} 店舗判定", style = MaterialTheme.typography.titleLarge)
+    }
+    OutlinedTextField(
+        value = storeCheck.input,
+        onValueChange = onStoreNameChange,
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text("店舗名を入力") },
+        placeholder = { Text("例: ○○駅前店") },
+        singleLine = true,
+    )
+    Spacer(Modifier.height(8.dp))
+
+    if (storeCheck.verdicts.isEmpty()) {
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                "対象か調べたい店舗名を入力してください。公式が対象/対象外を公表している店舗のみ判定します。",
+                modifier = Modifier.padding(16.dp),
+            )
+        }
+        return
+    }
+
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        items(storeCheck.verdicts, key = { it.campaign.id }) { verdict ->
+            StoreVerdictCard(verdict)
+        }
+    }
+}
+
+@Composable
+private fun StoreVerdictCard(verdict: StoreVerdict) {
+    val (mark, label, color) = when (verdict.eligibility) {
+        StoreEligibility.ELIGIBLE -> Triple("✅", "対象", MaterialTheme.colorScheme.primary)
+        StoreEligibility.INELIGIBLE -> Triple("⛔", "対象外", MaterialTheme.colorScheme.error)
+        StoreEligibility.UNKNOWN -> Triple("❓", "要確認", MaterialTheme.colorScheme.tertiary)
+    }
+    val reason = when (verdict.eligibility) {
+        StoreEligibility.ELIGIBLE -> "「${verdict.matched}」は公式の対象店舗です"
+        StoreEligibility.INELIGIBLE -> "「${verdict.matched}」は公式の対象外店舗です"
+        StoreEligibility.UNKNOWN ->
+            "公式の対象/対象外リストに掲載がない店舗です。一部対象外店舗があるため、店頭・公式サイトでご確認ください"
+    }
+    Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(verdict.campaign.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+            Text("$mark $label", style = MaterialTheme.typography.headlineSmall, color = color)
+            Text(reason, style = MaterialTheme.typography.bodyMedium)
+            if (verdict.updatedDate.isNotBlank()) {
+                val dateLabel = if (verdict.dateIsOfficial) {
+                    "公式情報の更新日: ${verdict.updatedDate}"
+                } else {
+                    "公式リスト確認日: ${verdict.updatedDate}(公式に更新日記載なし)"
+                }
+                Text(dateLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+            }
+            verdict.sourceUrl?.let { url ->
+                val uriHandler = LocalUriHandler.current
+                Text(
+                    "公式の店舗情報を開く →",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { uriHandler.openUri(url) },
+                )
+            }
+        }
     }
 }
 

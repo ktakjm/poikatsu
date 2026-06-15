@@ -1,11 +1,18 @@
 package com.ktakjm.poikatsu
 
+import com.ktakjm.poikatsu.data.Campaign
+import com.ktakjm.poikatsu.data.Merchant
+import com.ktakjm.poikatsu.data.MerchantRule
+import com.ktakjm.poikatsu.data.OfficialStoreList
+import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
-import com.ktakjm.poikatsu.domain.BranchWarningLevel
+import com.ktakjm.poikatsu.data.Profile
 import com.ktakjm.poikatsu.domain.JudgmentEngine
+import com.ktakjm.poikatsu.domain.StoreEligibility
 import com.ktakjm.poikatsu.util.JapaneseText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -110,33 +117,108 @@ class JudgmentEngineTest {
     }
 
     @Test
-    fun `公式の対象外店舗パターンに一致すると強警告が出る`() {
-        val merchant = data.merchants.first { it.id == "kurazushi" }
-        val judgment = engine.judge(merchant, "ららぽーとTOKYO-BAY店").single()
-        assertTrue(judgment.branchWarnings.any { it.level == BranchWarningLevel.EXCLUDED })
+    fun `対象外リストに一致すると対象外`() {
+        val (eng, merchant) = storeCheckEngine(ineligible = listOf("ららぽーとTOKYO-BAY"))
+        val verdict = eng.checkStore(merchant, "ららぽーとTOKYO-BAY店").single()
+        assertEquals(StoreEligibility.INELIGIBLE, verdict.eligibility)
+        assertEquals("ららぽーとTOKYO-BAY", verdict.matched)
     }
 
     @Test
-    fun `商業施設系の店舗名はリスク警告が出る`() {
-        val merchant = data.merchants.first { it.id == "seven_eleven" }
-        val judgments = engine.judge(merchant, "イオンモール幕張新都心店")
-        // 三井住友・MUFG両施策でリスク警告
-        assertEquals(2, judgments.size)
-        assertTrue(judgments.all { j -> j.branchWarnings.any { it.level == BranchWarningLevel.RISK } })
+    fun `対象リストに一致すると対象`() {
+        val (eng, merchant) = storeCheckEngine(eligible = listOf("アリオ札幌"))
+        assertEquals(StoreEligibility.ELIGIBLE, eng.checkStore(merchant, "アリオ札幌店").single().eligibility)
     }
 
     @Test
-    fun `通常の店舗名なら店舗警告は出ない`() {
-        val merchant = data.merchants.first { it.id == "mcdonalds" }
-        val judgment = engine.judge(merchant, "渋谷駅前店").single()
-        assertTrue(judgment.branchWarnings.isEmpty())
+    fun `どちらのリストにも無ければ要確認`() {
+        val (eng, merchant) = storeCheckEngine(eligible = listOf("アリオ札幌"), ineligible = listOf("ららぽーとTOKYO-BAY"))
+        val verdict = eng.checkStore(merchant, "どこか別の店").single()
+        assertEquals(StoreEligibility.UNKNOWN, verdict.eligibility)
+        assertNull(verdict.matched)
     }
 
     @Test
-    fun `店舗名未入力なら店舗警告は出ない`() {
-        val merchant = data.merchants.first { it.id == "kurazushi" }
-        assertTrue(engine.judge(merchant).single().branchWarnings.isEmpty())
-        assertTrue(engine.judge(merchant, "").single().branchWarnings.isEmpty())
+    fun `対象外は対象より優先される`() {
+        val (eng, merchant) = storeCheckEngine(eligible = listOf("川口"), ineligible = listOf("ララガーデン川口"))
+        assertEquals(StoreEligibility.INELIGIBLE, eng.checkStore(merchant, "ララガーデン川口店").single().eligibility)
+    }
+
+    @Test
+    fun `店舗名未入力なら判定結果は出ない`() {
+        val (eng, merchant) = storeCheckEngine(ineligible = listOf("ららぽーとTOKYO-BAY"))
+        assertTrue(eng.checkStore(merchant, "").isEmpty())
+        assertTrue(eng.checkStore(merchant, "  ").isEmpty())
+    }
+
+    @Test
+    fun `公式リストの有無で対象判定画面への遷移可否が決まる`() {
+        val (withList, mWith) = storeCheckEngine(ineligible = listOf("X"))
+        assertTrue(withList.canCheckStore(mWith))
+        val (without, mWithout) = storeCheckEngine(hasList = false)
+        assertFalse(without.canCheckStore(mWithout))
+    }
+
+    @Test
+    fun `実データ_アカチャンホンポは公式リストで3状態判定できる`() {
+        val merchant = data.merchants.first { it.id == "akachan_honpo" }
+        assertTrue(engine.canCheckStore(merchant))
+        // 公式の対象外店舗(ららぽーとTOKYO-BAY内)→ 対象外
+        assertEquals(StoreEligibility.INELIGIBLE, engine.checkStore(merchant, "ららぽーとTOKYO-BAY店").single().eligibility)
+        // 公式の対象店舗 → 対象
+        assertEquals(StoreEligibility.ELIGIBLE, engine.checkStore(merchant, "アリオ札幌店").single().eligibility)
+        // どちらのリストにも無い → 要確認
+        assertEquals(StoreEligibility.UNKNOWN, engine.checkStore(merchant, "架空のどこか店").single().eligibility)
+    }
+
+    @Test
+    fun `明示的対象外の店舗だけ近隣リストから除外される`() {
+        val (eng, m) = storeCheckEngine(eligible = listOf("アリオ札幌"), ineligible = listOf("ららぽーと豊洲"))
+        // 公式の対象外 → 除外する
+        assertTrue(eng.isExcludedStore(m, "テスト店 ららぽーと豊洲店"))
+        // 公式の対象 → 除外しない
+        assertFalse(eng.isExcludedStore(m, "テスト店 アリオ札幌店"))
+        // どちらにも無い(要確認) → 除外しない(現状仕様どおり表示)
+        assertFalse(eng.isExcludedStore(m, "テスト店 どこか別の店"))
+        // 公式リストの無いチェーン → 除外しない
+        val (eng2, m2) = storeCheckEngine(hasList = false)
+        assertFalse(eng2.isExcludedStore(m2, "何でも"))
+    }
+
+    /** official_store_list を組んだ最小データで JudgmentEngine を作る。hasList=false で公式リスト無し */
+    private fun storeCheckEngine(
+        eligible: List<String> = emptyList(),
+        ineligible: List<String> = emptyList(),
+        hasList: Boolean = true,
+    ): Pair<JudgmentEngine, Merchant> {
+        val merchant = Merchant(id = "m1", name = "テスト店", reading = "てすとてん")
+        val campaign = Campaign(
+            id = "c1",
+            issuer = "test",
+            name = "テスト施策",
+            paymentInstruction = "タッチ決済",
+            rateBase = 5.0,
+            verifiedDate = "2026-06-01",
+            merchantRules = listOf(
+                MerchantRule(
+                    merchantId = "m1",
+                    officialStoreList = if (!hasList) null else OfficialStoreList(
+                        eligibleStores = eligible,
+                        ineligibleStores = ineligible,
+                        updatedDate = "2026-05-01",
+                        dateIsOfficial = false,
+                        sourceUrl = "https://example.com",
+                    ),
+                ),
+            ),
+        )
+        val data = PoikatsuData(
+            merchants = listOf(merchant),
+            campaigns = listOf(campaign),
+            profile = Profile(),
+            updatedAt = "2026-06-01",
+        )
+        return JudgmentEngine(data) to merchant
     }
 
     @Test
