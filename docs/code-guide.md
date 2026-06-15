@@ -3,7 +3,7 @@
 店舗名やカテゴリから「どの支払い方法が最も得か」を判定する Android アプリのコード解説ドキュメント。
 Kotlin + Jetpack Compose の標準的な構成（MVVM + Repository）を学ぶための題材として、各レイヤの責務・設計判断・データフローを説明する。
 
-- 対象リビジョン: Phase 1 完了 + 店舗単位対象外チェック + GPS 周辺検索 実装済み時点
+- 対象リビジョン: Phase 1 完了 + 店舗単位の対象判定（公式リスト方式・3 状態）+ GPS 周辺検索 実装済み時点
 - 全体計画: [PLAN.md](../PLAN.md) / データ仕様: [data/README.md](../data/README.md) / プロジェクト規約: [CLAUDE.md](../CLAUDE.md)
 
 ## 1. 全体アーキテクチャ
@@ -87,7 +87,9 @@ poikatsu/
 │   ├── profile.json        # ユーザー前提条件（保有カード・エントリー状況）
 │   └── README.md           # データスキーマ仕様・更新ルール
 ├── docs/
-│   └── licenses.md         # 依存ライブラリのライセンス調査
+│   ├── licenses.md         # 依存ライブラリのライセンス調査
+│   ├── roadmap.md          # 進捗とロードマップ
+│   └── code-guide.md       # このドキュメント
 └── app/src/
     ├── main/java/com/ktakjm/poikatsu/
     │   ├── MainActivity.kt
@@ -97,7 +99,7 @@ poikatsu/
     │   │                   # OverpassClient, LocationProvider
     │   └── util/           # JapaneseText, GeoMath（純 Kotlin）
     └── test/java/com/ktakjm/poikatsu/
-        ├── JudgmentEngineTest.kt   # 実データを使った検索・判定テスト（23 件）
+        ├── JudgmentEngineTest.kt   # 実データを使った検索・判定・店舗対象判定テスト（27 件）
         ├── DataRepositoryTest.kt   # ロード戦略のテスト（5 件）
         └── NearbyTest.kt           # Overpass パース・距離計算のテスト（10 件）
 ```
@@ -124,15 +126,21 @@ erDiagram
         double rate_base "基準還元率"
         double rate_max "理論最大"
         bool entry_required
-        string_list facility_risk_patterns "施設内リスク立地"
         string verified_date "最終確認日"
     }
     MERCHANT_RULE {
         string merchant_id FK
         string note "店固有条件"
-        string_list exclusion_patterns "対象外店舗パターン"
+        string exclusion_note "対象外の但し書き(人間向け)"
         bool amex_excluded
-        string store_list_url
+        string store_list_url "公式店舗一覧/検索リンク"
+    }
+    OFFICIAL_STORE_LIST {
+        string_list eligible_stores "公式の対象店舗"
+        string_list ineligible_stores "公式の対象外店舗"
+        string updated_date "鮮度(確認日 or 公式更新日)"
+        bool date_is_official
+        string source_url
     }
     PROFILE_CARD {
         string campaign_id FK
@@ -143,6 +151,7 @@ erDiagram
     }
     CAMPAIGN ||--o{ MERCHANT_RULE : "merchant_rules[]"
     MERCHANT_RULE }o--|| MERCHANT : "merchant_id で参照"
+    MERCHANT_RULE ||--o| OFFICIAL_STORE_LIST : "official_store_list(任意)"
     PROFILE_CARD }o--|| CAMPAIGN : "campaign_id で参照"
 ```
 
@@ -217,28 +226,29 @@ flowchart TD
 3. 記号除去（スペース・中点・各種ハイフン等。長音「ー」は読みの一部なので残す）
 4. カタカナ→ひらがな（コードポイントを `-0x60` シフト）
 
-### 5.3 判定（judge）と店舗単位の警告
+### 5.3 チェーン判定（judge）と店舗単位の対象判定（checkStore）
+
+`judge` はチェーン単位の判定（店舗名は受け取らない）。店舗単位の対象/対象外は別関数 `checkStore` が担う。
 
 ```mermaid
 flowchart LR
-    IN["Merchant +<br/>branchName（任意）"] --> LOOP["全 Campaign を走査"]
+    IN["Merchant"] --> LOOP["全 Campaign を走査"]
     LOOP --> RULE{"merchant_rules に<br/>この店の rule あり?"}
     RULE -- "なし" --> DROP(["対象外（リスト除外）"])
     RULE -- "あり" --> CARD["profile から保有カードを引く<br/>effectiveRate を決定"]
     CARD --> WARN["警告生成<br/>・未エントリー<br/>・Amex 対象外"]
-    WARN --> BRANCH{"branchName あり?"}
-    BRANCH -- "あり" --> EXCL["exclusion_patterns 照合 → ⛔ EXCLUDED<br/>facility_risk_patterns 照合 → ⚠ RISK"]
-    BRANCH -- "なし" --> SORT
-    EXCL --> SORT["effectiveRate 降順で<br/>Judgment リスト返却"]
+    WARN --> SORT["effectiveRate 降順で<br/>Judgment リスト返却"]
 
     style IN fill:#1565C0,stroke:#0D47A1,color:#fff
     style SORT fill:#2E7D32,stroke:#1B5E20,color:#fff
     style DROP fill:#E0E0E0,stroke:#9E9E9E,color:#333
-    style EXCL fill:#C2185B,stroke:#880E4F,color:#fff
 ```
 
 - `effectiveRate = card?.effectiveRateDefault ?: campaign.rateBase` — ユーザー前提（profile）があればそれを優先
-- 店舗単位チェックは 2 段階の警告レベル（`BranchWarningLevel`）を持つ。**公式の対象外パターン一致（EXCLUDED）でも断定はせず「可能性が高い」表現に留める**（PLAN.md のリスク方針）
+- **店舗単位の判定 `checkStore(merchant, storeName)`**: `official_store_list` を持つ施策ごとに、`ineligible_stores` 一致 → 対象外 / `eligible_stores` 一致 → 対象 / どちらにも無し → 要確認（`StoreEligibility.UNKNOWN`）の **3 状態**を返す（対象外を優先）。リスト網羅性を仮定せず、**公式が店舗名で明示した店だけ言い切る**設計（旧 `facility_risk_patterns` によるキーワード推測警告は実際の対象外店舗との乖離が大きく廃止）。
+- `canCheckStore(merchant)`: `official_store_list` を持つ施策が 1 つでもあれば、対象判定画面（`StoreCheckScreen`）に遷移できる。
+- `isExcludedStore(merchant, storeName)`: 近隣リスト用。`checkStore` の結果が INELIGIBLE を含み ELIGIBLE を含まないときだけ true（**明示的対象外のみ**近隣リストから除外する）。
+- チェーン rule の引き当ては `Campaign.ruleFor(merchant)`（private 拡張）に集約。
 - `matchStore(storeName, brand)` は GPS 検索用。OSM の POI 名（「マクドナルド 渋谷駅前店」）からチェーンを特定する。「ステーキガスト」が「ガスト」に負けないよう、**一致キーが最長のチェーンを採用**する
 
 ## 6. UI レイヤ（ui/）
@@ -257,15 +267,19 @@ stateDiagram-v2
     Search --> Detail: 店舗を選択（selection != null）
     Search --> Nearby: 位置情報ボタン（nearby != null）
     Nearby --> Detail: 周辺店舗をタップ
+    Detail --> StoreCheck: 「対象か調べる」（storeCheck != null・公式リスト有のみ）
+    StoreCheck --> Detail: 戻る（storeCheck = null）
     Detail --> Search: 戻る（selection = null）
     Nearby --> Search: 閉じる（nearby = null）
 ```
 
-戻る操作は Compose の `BackHandler` で実装。データ差し替え時（リモート更新成功時）は、表示中の `selection` があれば新データで判定を引き直す（`applyData` 内）。
+戻る操作は Compose の `BackHandler` で実装。`storeCheck` 分岐は `selection` より先に評価する（両方非 null のとき対象判定画面を優先表示）。データ差し替え時（リモート更新成功時）は、表示中の `selection` / `storeCheck` があれば新データで判定を引き直す（`applyData` 内）。Selection の組み立ては `JudgmentEngine.selectionFor(merchant, hint)`（private 拡張）に集約し、判定・遷移可否・プリフィルをまとめて引く。
 
 ### 6.2 判定カード表示
 
-`JudgmentCard` は施策ごとに 1 枚。左端のストライプとカード名バッジに `brand_color` を使い、ロゴ画像なしで発行体を識別する。表示要素は「還元率（大）→ 条件達成時最大 → 店舗警告（⛔/⚠）→ 支払い方法 → 店固有条件 → エントリー警告 → 公式店舗一覧リンク → 上限 → **情報確認日**」の順。`verified_date` の表示は必須ルール（データが古くなるリスクへの対処）。
+`JudgmentCard` は施策ごとに 1 枚。左端のストライプとカード名バッジに `brand_color` を使い、ロゴ画像なしで発行体を識別する。表示要素は「還元率（大）→ 条件達成時最大 → 支払い方法 → 店固有条件 → エントリー警告 → 公式店舗一覧リンク → 上限 → **情報確認日**」の順。`verified_date` の表示は必須ルール（データが古くなるリスクへの対処）。
+
+公式リストを持つチェーン（`canCheckStore` が true）では判定詳細に「この店舗が対象か調べる →」ボタンを出し、別画面 `StoreCheckScreen` へ遷移する。同画面は店舗名入力に対し `StoreVerdictCard` で ✅対象 / ⛔対象外 / ❓要確認 を表示し、断定の鮮度（`date_is_official` に応じて「公式情報の更新日」or「確認日」）を併記する。公式リストの無いチェーンはボタンを出さない（判定画面を意識させない）。
 
 ### 6.3 位置情報パーミッション
 
@@ -294,12 +308,14 @@ sequenceDiagram
     loop 各 POI
         VM->>JE: matchStore(poi.name, poi.brand)
         JE-->>VM: 該当チェーン or null（捨てる）
+        VM->>JE: isExcludedStore(merchant, displayName)
+        Note over JE: 公式に明示的「対象外」なら<br/>リストから除外
         VM->>JE: judge(merchant) → 最高還元率
     end
-    VM-->>SC: NearbyUi（距離昇順・対象チェーンのみ）
+    VM-->>SC: NearbyUi（距離昇順・対象チェーンのみ・明示的対象外は除外）
     U->>SC: 店舗をタップ
     SC->>VM: onSelectNearby(place)
-    Note over VM: POI 名を branchName に引き継ぎ<br/>店舗単位の対象外チェック付きで判定
+    Note over VM: POI 名を storeNameHint に引き継ぐ<br/>（対象判定画面で店舗名にプリフィル）
     VM-->>SC: Selection（判定詳細へ）
 ```
 
@@ -308,14 +324,15 @@ Overpass 側の設計判断（`OverpassClient` のコメント参照）:
 - 日本語名の正規表現フィルタはサーバ側で遅すぎるため、**カテゴリタグで広く取ってチェーン照合はクライアント側**で行う
 - 半径 1km 超は `node` のみ取得（`way`＝建物ポリゴン店舗は落ちるが速度優先）
 - 日本の OSM は支店名を `branch` タグに分ける慣習があるため、表示名は `name + branch` を結合
+- 公式に「対象外」と明示された店舗（`isExcludedStore`）は近隣リストに出さない。判定には支店名結合後の `displayName` を使うため、OSM 名に支店名が無いと判定できず表示される（データ粒度依存）
 
 ## 8. テスト戦略
 
-`./gradlew :app:testDebugUnitTest` で全 38 テストが JVM 上で実行される（エミュレータ不要）。
+`./gradlew :app:testDebugUnitTest` で全 43 テストが JVM 上で実行される（エミュレータ不要）。
 
 | テスト | 対象 | 特徴 |
 |---|---|---|
-| `JudgmentEngineTest`（23 件） | 検索・正規化・判定・店舗警告 | **リポジトリ直下 `data/` の実データを読み込む**。「マック→マクドナルド」「マックスバリュは誤ヒットしない」等の振る舞いと、merchant_id 参照切れ等のデータ整合性チェックを兼ねる |
+| `JudgmentEngineTest`（27 件） | 検索・正規化・判定・店舗対象判定（3 状態）・近隣除外 | **リポジトリ直下 `data/` の実データを読み込む**。「マック→マクドナルド」「マックスバリュは誤ヒットしない」等の振る舞いと、merchant_id 参照切れ等のデータ整合性チェックを兼ねる。アカチャンホンポの公式リストで対象/対象外/要確認の 3 状態も検証 |
 | `DataRepositoryTest`（5 件） | ロード戦略 | ラムダ注入により、キャッシュあり/なし/破損、リモート成功/失敗の各経路を File システムだけで検証 |
 | `NearbyTest`（10 件） | Overpass パース・距離計算・チェーン特定 | 固定 JSON フィクスチャでネットワーク非依存 |
 

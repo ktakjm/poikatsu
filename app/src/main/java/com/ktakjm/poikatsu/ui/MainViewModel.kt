@@ -12,6 +12,7 @@ import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.OverpassClient
 import com.ktakjm.poikatsu.domain.Judgment
 import com.ktakjm.poikatsu.domain.JudgmentEngine
+import com.ktakjm.poikatsu.domain.StoreVerdict
 import com.ktakjm.poikatsu.util.GeoMath
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -26,7 +27,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     data class Selection(
         val merchant: Merchant,
         val judgments: List<Judgment>,
-        val branchName: String = "",
+        /** 公式が対象/対象外を言い切っているチェーンか。true のときだけ対象判定画面へ遷移できる */
+        val canCheckStore: Boolean = false,
+        /** 店舗対象判定画面を開くときのプリフィル(検索クエリやNearbyのPOI名の店舗名部分) */
+        val storeNameHint: String = "",
+    )
+
+    data class StoreCheckState(
+        val merchant: Merchant,
+        val input: String,
+        val verdicts: List<StoreVerdict>,
     )
 
     data class NearbyPlace(
@@ -50,6 +60,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val selectedCategories: Set<String> = emptySet(),
         val results: List<Merchant> = emptyList(),
         val selection: Selection? = null,
+        val storeCheck: StoreCheckState? = null,
         val dataUpdatedAt: String = "",
         val dataSource: DataSource? = null,
         val refreshing: Boolean = false,
@@ -111,6 +122,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         private const val AUTO_REFRESH_MIN_INTERVAL_MS = 60 * 60_000L
     }
 
+    /** チェーンと店舗名ヒントから判定詳細用の Selection を組む(判定・遷移可否をまとめて引く) */
+    private fun JudgmentEngine.selectionFor(merchant: Merchant, storeNameHint: String) =
+        Selection(merchant, judge(merchant), canCheckStore(merchant), storeNameHint)
+
     private fun applyData(loaded: LoadedData) {
         val newEngine = JudgmentEngine(loaded.data)
         engine = newEngine
@@ -125,7 +140,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // 表示中の判定があればデータ差し替え後の内容で引き直す
                 selection = it.selection?.let { sel ->
                     loaded.data.merchants.firstOrNull { m -> m.id == sel.merchant.id }
-                        ?.let { m -> Selection(m, newEngine.judge(m, sel.branchName), sel.branchName) }
+                        ?.let { m -> newEngine.selectionFor(m, sel.storeNameHint) }
+                },
+                // 店舗対象判定画面を開いていれば、新データで判定を引き直す
+                storeCheck = it.storeCheck?.let { sc ->
+                    loaded.data.merchants.firstOrNull { m -> m.id == sc.merchant.id }
+                        ?.takeIf { m -> newEngine.canCheckStore(m) }
+                        ?.let { m -> StoreCheckState(m, sc.input, newEngine.checkStore(m, sc.input)) }
                 },
             )
         }
@@ -137,6 +158,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 query = query,
                 results = engine?.search(query, it.selectedCategories).orEmpty(),
                 selection = null,
+                storeCheck = null,
                 nearby = null,
             )
         }
@@ -145,7 +167,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** 位置情報パーミッション取得済みの前提で呼ぶ(UI側でリクエスト) */
     fun fetchNearby() {
         val engine = engine ?: return
-        _state.update { it.copy(nearby = NearbyUi(loading = true), selection = null) }
+        _state.update { it.copy(nearby = NearbyUi(loading = true), selection = null, storeCheck = null) }
         viewModelScope.launch(Dispatchers.IO) {
             val location = locationProvider.currentLocation()
             if (location == null) {
@@ -165,6 +187,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val places = pois
                 .mapNotNull { poi ->
                     val merchant = engine.matchStore(poi.name, poi.brand) ?: return@mapNotNull null
+                    // 公式に「対象外」と明示された店舗(例: アカチャンホンポのららぽーと内店舗)は近隣リストに出さない
+                    if (engine.isExcludedStore(merchant, poi.displayName)) return@mapNotNull null
                     NearbyPlace(
                         name = poi.displayName,
                         distanceMeters = GeoMath.distanceMeters(location.latitude, location.longitude, poi.lat, poi.lon),
@@ -191,12 +215,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(nearby = null) }
     }
 
-    /** 周辺リストの店をタップ → POI名を店舗名チェックに引き継いで判定 */
+    /** 周辺リストの店をタップ → POI名を店舗対象判定のプリフィルに引き継ぐ */
     fun onSelectNearby(place: NearbyPlace) {
         val engine = engine ?: return
         val merchant = place.merchant ?: return
         _state.update {
-            it.copy(selection = Selection(merchant, engine.judge(merchant, place.name), place.name))
+            it.copy(selection = engine.selectionFor(merchant, place.name))
         }
     }
 
@@ -211,6 +235,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 selectedCategories = selected,
                 results = engine?.search(it.query, selected).orEmpty(),
                 selection = null,
+                storeCheck = null,
             )
         }
     }
@@ -218,20 +243,41 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onSelect(merchant: Merchant) {
         val engine = engine ?: return
         _state.update {
-            // 「マクドナルド渋谷店」のような入力で選んだ場合は、入力全体を店舗名チェックに引き継ぐ
-            val branch = it.query.trim()
+            // 「マクドナルド渋谷店」のような入力で選んだ場合は、店舗名部分を対象判定のプリフィルに引き継ぐ
+            val hint = it.query.trim()
                 .takeUnless { q -> q.isBlank() || engine.isExactNameMatch(merchant, q) }
                 .orEmpty()
-            it.copy(selection = Selection(merchant, engine.judge(merchant, branch), branch))
+            it.copy(selection = engine.selectionFor(merchant, hint))
         }
     }
 
-    fun onBranchNameChange(branchName: String) {
+    /** 判定詳細から店舗対象判定画面を開く(canCheckStore のチェーンのみ) */
+    fun onOpenStoreCheck() {
         val engine = engine ?: return
         _state.update {
             val sel = it.selection ?: return@update it
-            it.copy(selection = sel.copy(judgments = engine.judge(sel.merchant, branchName), branchName = branchName))
+            if (!engine.canCheckStore(sel.merchant)) return@update it
+            it.copy(
+                storeCheck = StoreCheckState(
+                    merchant = sel.merchant,
+                    input = sel.storeNameHint,
+                    verdicts = engine.checkStore(sel.merchant, sel.storeNameHint),
+                )
+            )
         }
+    }
+
+    fun onStoreNameChange(storeName: String) {
+        val engine = engine ?: return
+        _state.update {
+            val sc = it.storeCheck ?: return@update it
+            it.copy(storeCheck = sc.copy(input = storeName, verdicts = engine.checkStore(sc.merchant, storeName)))
+        }
+    }
+
+    /** 店舗対象判定画面を閉じて判定詳細に戻る */
+    fun onCloseStoreCheck() {
+        _state.update { it.copy(storeCheck = null) }
     }
 
     fun onBack() {

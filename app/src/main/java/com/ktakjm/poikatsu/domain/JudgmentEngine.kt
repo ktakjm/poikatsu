@@ -7,15 +7,6 @@ import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.ProfileCard
 import com.ktakjm.poikatsu.util.JapaneseText
 
-enum class BranchWarningLevel {
-    /** 公式の対象外店舗パターンに一致(対象外の可能性が高い) */
-    EXCLUDED,
-    /** 商業施設内など、対象外になりがちな立地パターンに一致 */
-    RISK,
-}
-
-data class BranchWarning(val level: BranchWarningLevel, val message: String)
-
 /** ある店舗に対する 1 施策分の判定結果 */
 data class Judgment(
     val campaign: Campaign,
@@ -23,7 +14,28 @@ data class Judgment(
     val card: ProfileCard?,
     val effectiveRate: Double,
     val warnings: List<String>,
-    val branchWarnings: List<BranchWarning> = emptyList(),
+)
+
+enum class StoreEligibility {
+    /** 公式の対象店舗リストに一致 */
+    ELIGIBLE,
+    /** 公式の対象外店舗リストに一致 */
+    INELIGIBLE,
+    /** どちらのリストにも無い(公式リスト外・要確認) */
+    UNKNOWN,
+}
+
+/**
+ * 公式が対象/対象外を言い切っているチェーンについて、特定店舗の判定結果。
+ * official_store_list を持つ施策ごとに 1 件返る。
+ */
+data class StoreVerdict(
+    val campaign: Campaign,
+    val eligibility: StoreEligibility,
+    val matched: String?,
+    val updatedDate: String,
+    val dateIsOfficial: Boolean,
+    val sourceUrl: String?,
 )
 
 class JudgmentEngine(private val data: PoikatsuData) {
@@ -117,14 +129,16 @@ class JudgmentEngine(private val data: PoikatsuData) {
 
     private fun isAsciiAlnum(c: Char): Boolean = c.code < 128 && c.isLetterOrDigit()
 
+    /** この施策におけるそのチェーンのルール(なければ対象外) */
+    private fun Campaign.ruleFor(merchant: Merchant): MerchantRule? =
+        merchantRules.firstOrNull { it.merchantId == merchant.id }
+
     /**
      * 該当施策を還元率の高い順に返す。対象外ならば空リスト。
-     * branchName(「○○駅前店」等)を渡すと、店舗単位の対象外チェックを行う。
      */
-    fun judge(merchant: Merchant, branchName: String? = null): List<Judgment> =
+    fun judge(merchant: Merchant): List<Judgment> =
         data.campaigns.mapNotNull { campaign ->
-            val rule = campaign.merchantRules.firstOrNull { it.merchantId == merchant.id }
-                ?: return@mapNotNull null
+            val rule = campaign.ruleFor(merchant) ?: return@mapNotNull null
             val card = data.profile.cards.firstOrNull { it.campaignId == campaign.id }
             val isAmex = card?.brand?.equals("Amex", ignoreCase = true) == true
             val warnings = buildList {
@@ -141,34 +155,52 @@ class JudgmentEngine(private val data: PoikatsuData) {
                 card = card,
                 effectiveRate = card?.effectiveRateDefault ?: campaign.rateBase,
                 warnings = warnings,
-                branchWarnings = checkBranch(campaign, rule, branchName),
             )
         }.sortedByDescending { it.effectiveRate }
 
-    private fun checkBranch(campaign: Campaign, rule: MerchantRule, branchName: String?): List<BranchWarning> {
-        if (branchName.isNullOrBlank()) return emptyList()
-        val normalized = JapaneseText.normalize(branchName)
-        return buildList {
-            rule.exclusionPatterns
-                .firstOrNull { normalized.contains(JapaneseText.normalize(it)) }
-                ?.let {
-                    add(
-                        BranchWarning(
-                            BranchWarningLevel.EXCLUDED,
-                            "「$it」は公式の対象外店舗パターンに一致します。この店舗では適用されない可能性が高いです",
-                        )
-                    )
-                }
-            campaign.facilityRiskPatterns
-                .firstOrNull { normalized.contains(JapaneseText.normalize(it)) }
-                ?.let {
-                    add(
-                        BranchWarning(
-                            BranchWarningLevel.RISK,
-                            "「$it」を含む店舗(商業施設内など)は対象外の場合があります。店頭または公式サイトで要確認です",
-                        )
-                    )
-                }
+    /**
+     * 公式が対象/対象外を言い切っている店舗リスト(official_store_list)を持つ施策が
+     * 1 つでもあれば、店舗単位の対象判定画面に遷移できる。
+     */
+    fun canCheckStore(merchant: Merchant): Boolean =
+        data.campaigns.any { it.ruleFor(merchant)?.officialStoreList != null }
+
+    /**
+     * 特定店舗の判定を、公式リストを持つ施策ごとに返す。
+     * 対象外(ineligible)を優先し、対象(eligible)、どちらにも無ければ要確認(UNKNOWN)。
+     */
+    fun checkStore(merchant: Merchant, storeName: String): List<StoreVerdict> {
+        val normalized = JapaneseText.normalize(storeName)
+        if (normalized.isBlank()) return emptyList()
+        return data.campaigns.mapNotNull { campaign ->
+            val list = campaign.ruleFor(merchant)?.officialStoreList ?: return@mapNotNull null
+            fun match(stores: List<String>) =
+                stores.firstOrNull { normalized.contains(JapaneseText.normalize(it)) }
+            val ineligible = match(list.ineligibleStores)
+            val eligible = if (ineligible == null) match(list.eligibleStores) else null
+            val (eligibility, matched) = when {
+                ineligible != null -> StoreEligibility.INELIGIBLE to ineligible
+                eligible != null -> StoreEligibility.ELIGIBLE to eligible
+                else -> StoreEligibility.UNKNOWN to null
+            }
+            StoreVerdict(
+                campaign = campaign,
+                eligibility = eligibility,
+                matched = matched,
+                updatedDate = list.updatedDate,
+                dateIsOfficial = list.dateIsOfficial,
+                sourceUrl = list.sourceUrl,
+            )
         }
+    }
+
+    /**
+     * 近隣リスト用: その店舗が公式に「対象外」と明示されているか。
+     * 対象(eligible)明示がある場合は除外扱いにしない。official_store_list が無いチェーンは常に false。
+     */
+    fun isExcludedStore(merchant: Merchant, storeName: String): Boolean {
+        val verdicts = checkStore(merchant, storeName)
+        return verdicts.any { it.eligibility == StoreEligibility.INELIGIBLE } &&
+            verdicts.none { it.eligibility == StoreEligibility.ELIGIBLE }
     }
 }

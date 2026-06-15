@@ -27,14 +27,32 @@ data class RateBreakdown(
     val rate: Double,
 )
 
+/**
+ * 公式が対象/対象外を店舗名で言い切っているリスト。これがある merchant_rule だけ、
+ * 別画面で店舗名を入力して判定する。
+ * - ineligible_stores に一致 → 対象外
+ * - eligible_stores に一致 → 対象
+ * - どちらにも無い → 要確認(公式リスト外。一部対象外店舗があるため断定しない)
+ * exclusion(ineligible)を優先判定する。
+ */
+@Serializable
+data class OfficialStoreList(
+    @SerialName("eligible_stores") val eligibleStores: List<String> = emptyList(),
+    @SerialName("ineligible_stores") val ineligibleStores: List<String> = emptyList(),
+    /** 断定の鮮度として表示する日付。official=true なら公式情報自体の更新日、false なら当方の確認日 */
+    @SerialName("updated_date") val updatedDate: String = "",
+    @SerialName("date_is_official") val dateIsOfficial: Boolean = false,
+    @SerialName("source_url") val sourceUrl: String? = null,
+)
+
 @Serializable
 data class MerchantRule(
     @SerialName("merchant_id") val merchantId: String,
     val note: String? = null,
     @SerialName("exclusion_note") val exclusionNote: String? = null,
-    @SerialName("exclusion_patterns") val exclusionPatterns: List<String> = emptyList(),
     @SerialName("amex_excluded") val amexExcluded: Boolean = false,
     @SerialName("store_list_url") val storeListUrl: String? = null,
+    @SerialName("official_store_list") val officialStoreList: OfficialStoreList? = null,
 )
 
 @Serializable
@@ -56,7 +74,6 @@ data class Campaign(
     val conditions: List<String> = emptyList(),
     @SerialName("rate_breakdown") val rateBreakdown: List<RateBreakdown> = emptyList(),
     @SerialName("global_exclusions") val globalExclusions: List<String> = emptyList(),
-    @SerialName("facility_risk_patterns") val facilityRiskPatterns: List<String> = emptyList(),
     @SerialName("merchant_rules") val merchantRules: List<MerchantRule> = emptyList(),
     val sources: List<String> = emptyList(),
     @SerialName("verified_date") val verifiedDate: String = "",
