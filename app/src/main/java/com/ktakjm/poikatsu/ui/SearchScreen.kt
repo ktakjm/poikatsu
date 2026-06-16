@@ -48,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -120,6 +121,7 @@ fun PoikatsuApp(modifier: Modifier = Modifier, viewModel: MainViewModel = viewMo
                 onReload = viewModel::fetchNearby,
                 onRadiusChange = viewModel::onNearbyRadiusChange,
                 onSelectPlace = viewModel::onSelectNearby,
+                onSearchHere = viewModel::searchHere,
             )
             else -> SearchPane(
                 query = state.query,
@@ -247,62 +249,113 @@ private fun NearbyPane(
     onReload: () -> Unit,
     onRadiusChange: (Int) -> Unit,
     onSelectPlace: (MainViewModel.NearbyPlace) -> Unit,
+    onSearchHere: (Double, Double) -> Unit,
 ) {
     BackHandler(onBack = onClose)
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onClose) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+    // 上下分割(地図 + リスト)のため、weight を使えるよう Column で包む
+    Column(Modifier.fillMaxSize()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onClose) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+            }
+            Text("近くのお店", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            IconButton(onClick = onReload) {
+                Icon(Icons.Default.Refresh, contentDescription = "再読み込み")
+            }
         }
-        Text("近くのお店", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-        IconButton(onClick = onReload) {
-            Icon(Icons.Default.Refresh, contentDescription = "再読み込み")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(500, 1000, 3000).forEach { radius ->
+                FilterChip(
+                    selected = radiusM == radius,
+                    onClick = { onRadiusChange(radius) },
+                    label = { Text(distanceLabel(radius)) },
+                )
+            }
         }
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf(500, 1000, 3000).forEach { radius ->
-            FilterChip(
-                selected = radiusM == radius,
-                onClick = { onRadiusChange(radius) },
-                label = { Text(distanceLabel(radius)) },
+        Spacer(Modifier.height(4.dp))
+        when {
+            nearby.loading -> Box(
+                Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center,
+            ) { CircularProgressIndicator() }
+            nearby.error != null -> Text(
+                nearby.error,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
             )
-        }
-    }
-    Spacer(Modifier.height(4.dp))
-    when {
-        nearby.loading -> Centered { CircularProgressIndicator() }
-        nearby.error != null -> Text(
-            nearby.error,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.error,
-        )
-        nearby.places.isEmpty() -> Text(
-            "周辺${distanceLabel(radiusM)}に対象施策のある店舗が見つかりませんでした。",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        else -> LazyColumn {
-            items(nearby.places) { place ->
-                ListItem(
-                    headlineContent = { Text(place.name) },
-                    supportingContent = {
-                        Text("${distanceLabel(place.distanceMeters)}・${place.merchant?.category.orEmpty()}")
-                    },
-                    trailingContent = {
-                        place.bestRate?.let {
-                            Text(
-                                "${trimRate(it)}%",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary,
+            else -> {
+                val center = if (nearby.centerLat != null && nearby.centerLon != null) {
+                    MapPoint(nearby.centerLat, nearby.centerLon)
+                } else null
+                if (center == null) {
+                    Text("現在地を取得できませんでした。", style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    val userLocation = if (nearby.userLat != null && nearby.userLon != null) {
+                        MapPoint(nearby.userLat, nearby.userLon)
+                    } else null
+                    // ピンは位置が固定なので places に対して安定に作る(パン/ズームでは作り直さない)
+                    val markers = remember(nearby.places) {
+                        nearby.places.map { place ->
+                            MapMarker(
+                                point = MapPoint(place.lat, place.lon),
+                                label = place.name,
+                                colorHex = place.brandColor,
+                                onClick = { onSelectPlace(place) },
                             )
                         }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSelectPlace(place) },
-                )
-                HorizontalDivider()
+                    }
+                    // 上部: 高さ固定の地図(チップ・リストと被らないように)
+                    NearbyMap(
+                        center = center,
+                        userLocation = userLocation,
+                        markers = markers,
+                        initialZoom = zoomForRadius(radiusM),
+                        onSearchHere = { c -> onSearchHere(c.lat, c.lon) },
+                        modifier = Modifier.fillMaxWidth().height(300.dp),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    // 下部: 検索中心からの距離順リスト(還元率・距離)。並びは ViewModel で確定済み
+                    if (nearby.places.isEmpty()) {
+                        Text(
+                            "周辺${distanceLabel(radiusM)}に対象施策のある店舗が見つかりませんでした。",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    } else {
+                        LazyColumn(Modifier.weight(1f)) {
+                            items(nearby.places, key = { "${it.lat},${it.lon},${it.name}" }) { place ->
+                                ListItem(
+                                    headlineContent = { Text(place.name) },
+                                    supportingContent = {
+                                        Text("${distanceLabel(place.distanceMeters)}・${place.merchant?.category.orEmpty()}")
+                                    },
+                                    trailingContent = {
+                                        place.bestRate?.let {
+                                            Text(
+                                                "${trimRate(it)}%",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = MaterialTheme.colorScheme.primary,
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onSelectPlace(place) },
+                                )
+                                HorizontalDivider()
+                            }
+                        }
+                    }
+                }
             }
         }
     }
+}
+
+/** 検索半径に応じた地図の初期ズーム(半径が大きいほど広域=低ズーム)。+1 レベル≒2倍寄り */
+private fun zoomForRadius(radiusM: Int): Double = when {
+    radiusM <= 500 -> 17.0
+    radiusM <= 1000 -> 16.0
+    else -> 14.5
 }
 
 private fun distanceLabel(meters: Int): String =

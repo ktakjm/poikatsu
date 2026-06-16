@@ -1,5 +1,6 @@
 package com.ktakjm.poikatsu.data
 
+import android.util.Log
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -23,8 +24,16 @@ data class Poi(
 /** Overpass API(OSM)で周辺の飲食店・コンビニ・スーパーを検索する。無料・APIキー不要 */
 object OverpassClient {
 
-    private const val ENDPOINT = "https://overpass-api.de/api/interpreter"
+    private const val TAG = "OverpassClient"
+    private const val USER_AGENT = "poikatsu/1.0 (personal use; https://github.com/ktakjm/poikatsu)"
     private const val MAX_RESULTS = 800
+
+    // overpass-api.de は混雑時に 429/504/タイムアウトを返すことが多いため、
+    // 失敗したらミラーへフォールバックする(上から順に試す)。
+    private val ENDPOINTS = listOf(
+        "https://overpass-api.de/api/interpreter",
+        "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    )
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -53,7 +62,20 @@ object OverpassClient {
      * 広域(>1km)は速度優先で node のみ取得(建物ポリゴンとして登録された店は落ちる)。
      * 都心部の広域検索は件数上限により取りこぼす場合がある。失敗時は null。
      */
-    fun fetchNearby(lat: Double, lon: Double, radiusM: Int): List<Poi>? = runCatching {
+    fun fetchNearby(lat: Double, lon: Double, radiusM: Int): List<Poi>? {
+        val query = buildQuery(lat, lon, radiusM)
+        for (endpoint in ENDPOINTS) {
+            val result = runCatching { requestPois(endpoint, query) }
+                .getOrElse { e ->
+                    Log.w(TAG, "Overpass request error: $endpoint", e)
+                    null
+                }
+            if (result != null) return result // 0件成功(emptyList)はここで返る。null は次のエンドポイントへ
+        }
+        return null
+    }
+
+    private fun buildQuery(lat: Double, lon: Double, radiusM: Int): String {
         val kinds = if (radiusM > 1000) listOf("node") else listOf("node", "way")
         val filters = kinds.flatMap { kind ->
             listOf(
@@ -61,23 +83,31 @@ object OverpassClient {
                 """$kind(around:$radiusM,$lat,$lon)["shop"~"convenience|supermarket"];""",
             )
         }.joinToString("\n  ")
-        val query = """
+        return """
             [out:json][timeout:25];
             (
               $filters
             );
             out center qt $MAX_RESULTS;
         """.trimIndent()
+    }
+
+    /** 1エンドポイントに問い合わせる。非2xx/空ボディは null(=フォールバック対象)、成功は List(空もあり得る) */
+    private fun requestPois(endpoint: String, query: String): List<Poi>? {
         val request = Request.Builder()
-            .url(ENDPOINT)
-            .header("User-Agent", "poikatsu/1.0 (personal use; https://github.com/ktakjm/poikatsu)")
+            .url(endpoint)
+            .header("User-Agent", USER_AGENT)
             .post(FormBody.Builder().add("data", query).build())
             .build()
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return@runCatching null
-            parse(response.body?.string() ?: return@runCatching null)
+            if (!response.isSuccessful) {
+                Log.w(TAG, "Overpass HTTP ${response.code} from $endpoint")
+                return null
+            }
+            val body = response.body?.string() ?: return null
+            return parse(body)
         }
-    }.getOrNull()
+    }
 
     /** Overpass の JSON レスポンスを Poi に変換(node は lat/lon、way は center を持つ) */
     fun parse(body: String): List<Poi> =
