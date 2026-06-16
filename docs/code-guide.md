@@ -16,6 +16,7 @@ graph TD
         ACT["MainActivity<br/>（Compose エントリポイント）"]
         SCR["SearchScreen.kt<br/>（Composable 群）"]
         VM["MainViewModel<br/>（UiState を StateFlow で公開）"]
+        MAP["NearbyMap.kt<br/>（osmdroid 地図ラッパ・差し替え境界）"]
     end
     subgraph domain["ドメインレイヤ（domain/）Android 非依存"]
         ENG["JudgmentEngine<br/>（検索・チェーン特定・判定）"]
@@ -34,10 +35,13 @@ graph TD
     subgraph ext["外部"]
         RAW["GitHub raw<br/>data/*.json"]
         OSM["Overpass API<br/>（OpenStreetMap）"]
+        OSMTILE["OSM タイルサーバ<br/>（osmdroid 地図描画）"]
     end
 
     ACT --> SCR
     SCR --> VM
+    SCR --> MAP
+    MAP --> OSMTILE
     VM --> ENG
     VM --> REPO
     VM --> OP
@@ -63,6 +67,8 @@ graph TD
     style GEO fill:#6A1B9A,stroke:#4A148C,color:#fff
     style RAW fill:#E0E0E0,stroke:#9E9E9E,color:#333
     style OSM fill:#E0E0E0,stroke:#9E9E9E,color:#333
+    style OSMTILE fill:#E0E0E0,stroke:#9E9E9E,color:#333
+    style MAP fill:#1565C0,stroke:#0D47A1,color:#fff
 ```
 
 ### 設計判断のポイント
@@ -71,7 +77,7 @@ graph TD
 |---|---|
 | Room を使わない | 施策データは数十件の JSON で全件メモリに乗る。リモート JSON をファイルキャッシュ（テキストのまま保存）するだけで十分だった（PLAN.md M4 実績メモ参照） |
 | DI フレームワーク（Hilt）なし | クラス数が少なく手動 DI で足りる。`DataRepository` は関数（`readAsset` / `fetchRemote`）と `File` をコンストラクタ注入する形にして、フレームワークなしでテスタビリティを確保 |
-| Google Play Services 不使用 | 位置情報はフレームワーク標準の `LocationManager` のみで実装（プロプライエタリ依存を増やさない） |
+| Google Play Services 不使用 | 位置情報はフレームワーク標準の `LocationManager`、地図は osmdroid（OSM）で実装し、プロプライエタリ依存を増やさない。Google Maps SDK は地図表示自体は無料無制限だが Play Services 依存＋API キー＋請求先登録が必要なため不採用（判断の経緯は docs/licenses.md） |
 | 判定ロジックは純 Kotlin | `domain/` と `util/` は Android API に触れないため、実データ（`data/*.json`）を読むユニットテストが JVM 上で高速に回る |
 | ロゴ画像不使用 | 商標・著作権リスク回避。`campaigns.json` の `brand_color`（#RRGGBB）で発行体を識別 |
 
@@ -93,7 +99,7 @@ poikatsu/
 └── app/src/
     ├── main/java/com/ktakjm/poikatsu/
     │   ├── MainActivity.kt
-    │   ├── ui/             # MainViewModel, SearchScreen, theme/
+    │   ├── ui/             # MainViewModel, SearchScreen, NearbyMap, theme/
     │   ├── domain/         # JudgmentEngine（純 Kotlin）
     │   ├── data/           # Models, DataRepository, GithubRawClient,
     │   │                   # OverpassClient, LocationProvider
@@ -303,7 +309,7 @@ sequenceDiagram
     Note over LP: NETWORK 優先・15 秒タイムアウト<br/>失敗時は getLastKnownLocation
     LP-->>VM: 緯度経度
     VM->>OC: fetchNearby(lat, lon, radiusM)
-    Note over OC: Overpass QL で飲食店/コンビニ/<br/>スーパーの POI を取得<br/>（>1km は node のみ＝速度優先）
+    Note over OC: Overpass QL で飲食店/コンビニ/<br/>スーパーの POI を取得<br/>（>1km は node のみ＝速度優先）<br/>本家失敗時はミラーへフォールバック
     OC-->>VM: List(Poi)
     loop 各 POI
         VM->>JE: matchStore(poi.name, poi.brand)
@@ -319,12 +325,23 @@ sequenceDiagram
     VM-->>SC: Selection（判定詳細へ）
 ```
 
+### 7.1 地図表示と差し替え境界（ui/NearbyMap.kt）
+
+近隣検索は **地図 + 距離順リストの上下分割**で表示する（`NearbyPane`）。地図は上部（**固定高 300dp**、はみ出しは `clipToBounds` で抑止し、チップ・リストに被らせない）に検索中心（初期は現在地）で対象店舗をピン表示し、下部に距離順リスト（還元率・距離。残り領域を `weight(1f)` でスクロール）を残す。
+
+- ピンは `campaign.brand_color` で着色（ロゴ不使用方針と整合）。ピン/リスト行のタップはどちらも `onSelectNearby` で判定詳細へ遷移する。
+- 明示的「対象外」店舗（`isExcludedStore`）は地図・リストの両方に出さない。
+- **地図ライブラリの差し替え境界**: osmdroid 固有の型（`MapView`/`GeoPoint`/`Marker`）は `NearbyMap.kt` 1ファイルに閉じ込め、アプリ側（ViewModel/`NearbyPane`）は自前の `MapPoint`/`MapMarker` だけを扱う。これにより将来 Google Maps 等へ**表示層だけ**を差し替える場合も、変更は NearbyMap 本体・依存・API キー設定・docs に閉じる（ViewModel/テストは無変更）。Google Maps の地図表示は無料無制限だが Play Services 依存のため現在は採用していない（docs/licenses.md）。
+- 座標は ViewModel が `NearbyPlace.lat/lon`・`NearbyUi.centerLat/centerLon`（検索の起点＝地図カメラ中心）・`NearbyUi.userLat/userLon`（実際の現在地＝青ドット）で UI まで運ぶ。地図の初期ズームは検索半径から決める（`zoomForRadius`）。OSM タイル利用規約のため `Configuration.userAgentValue` にパッケージ名を設定する。
+- **「このエリアを検索」**: スクロール/ズームは osmdroid に任せ、Compose からは触らない（操作中の再描画でズレないため）。地図上のボタンを押すとその時点の地図中心を `searchHere(lat, lon)` に渡し、**その中心を起点に Overpass を引き直して**距離順リストを作り直す（現在地の青ドットは維持）。半径変更も直近の検索中心を保ったまま再検索する。ピンはパン/ズームでは再描画せず、検索結果（`markers` の参照）が変わったときだけ描き直す。
+
 Overpass 側の設計判断（`OverpassClient` のコメント参照）:
 
 - 日本語名の正規表現フィルタはサーバ側で遅すぎるため、**カテゴリタグで広く取ってチェーン照合はクライアント側**で行う
 - 半径 1km 超は `node` のみ取得（`way`＝建物ポリゴン店舗は落ちるが速度優先）
 - 日本の OSM は支店名を `branch` タグに分ける慣習があるため、表示名は `name + branch` を結合
 - 公式に「対象外」と明示された店舗（`isExcludedStore`）は近隣リストに出さない。判定には支店名結合後の `displayName` を使うため、OSM 名に支店名が無いと判定できず表示される（データ粒度依存）
+- **エンドポイントのフォールバック**: overpass-api.de は混雑時に 429/504/タイムアウトを返しやすいため、本家が失敗したらミラー（`maps.mail.ru`）へ順に試す。失敗理由（HTTP コード/例外）は `OverpassClient` タグで logcat に記録し、全エンドポイント失敗時のみ null を返す
 
 ## 8. テスト戦略
 
@@ -348,7 +365,8 @@ Overpass 側の設計判断（`OverpassClient` のコメント参照）:
 | HTTP | OkHttp（素のまま） | Retrofit/Ktor なし。GET 2 種 + POST 1 種のみなので十分 |
 | ローカル保存 | ファイルキャッシュ（filesDir/remote_data/） | Room は見送り |
 | 位置情報 | LocationManager（フレームワーク標準） | Play Services 不使用 |
-| 周辺店舗 | Overpass API（OSM） | 無料・API キー不要 |
+| 周辺店舗 | Overpass API（OSM） | 無料・API キー不要。本家失敗時はミラーにフォールバック |
+| 地図表示 | osmdroid（OSM ラスタタイル） | Play Services 非依存・Apache-2.0。`NearbyMap.kt` に閉じ込め将来差し替え可能 |
 | データ配信 | GitHub raw（main ブランチ data/） | 更新はアプリ再ビルド不要 |
 
 依存追加時は **ライセンス確認 → docs/licenses.md へ追記** が必須ルール（GPL/AGPL 不可。詳細は [CLAUDE.md](../CLAUDE.md)）。

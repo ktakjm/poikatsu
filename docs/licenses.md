@@ -20,8 +20,17 @@
 | com.google.guava(listenablefuture スタブ) | AndroidXの推移的依存 | Apache-2.0 |
 | org.jspecify | null安全アノテーション | Apache-2.0 |
 | com.squareup.okhttp3:okhttp(+ 推移的依存 com.squareup.okio) | リモートデータ取得(M4で追加, 2026-06-12) | Apache-2.0 |
+| org.osmdroid:osmdroid-android | 近隣検索の地図表示(2026-06-16 追加) | Apache-2.0 |
 
 **ランタイム依存はすべて Apache License 2.0。** コピーレフト(GPL系)は一切なし。
+
+### 地図タイルの利用規約に関する注意(osmdroid)
+
+osmdroid の**ライブラリ自体は Apache-2.0** で問題ないが、既定で地図タイルを **OpenStreetMap 公式タイルサーバ(tile.openstreetmap.org)** から取得する点に注意が必要。
+
+- [OSM Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/) は、有効な User-Agent の付与を求め、**大規模利用・アプリの一般配布での公式タイル利用を禁止**している(開発・軽度な個人利用は許容)。本アプリは `Configuration.userAgentValue` にパッケージ名を設定して規約を順守する。
+- **現状(個人利用・手元3台)は規約上問題なし。** ただし将来 Play Store 等で一般公開する場合は、公式タイルをそのまま使えないため、**別のタイル提供元(自前ホスト or Thunderforest / MapTiler / Stadia 等の無料枠・有償サービス)への切り替えが必要**になる。これは「osmdroid が有償化する」のではなく「タイルデータ源の差し替えが要る」という性質。公開判断時のタスクとして PLAN.md / roadmap のリリース準備に積む。
+- 参考: Google Maps SDK for Android はネイティブ地図表示が無料無制限で公開時もタイル源の懸念がない一方、Play Services 依存 + API キー + 請求先(クレカ)登録が必須で、本プロジェクトの「Play Services 非依存」方針と相反する(roadmap 3.3 / code-guide 設計判断)。地図表示層は将来差し替え可能な抽象化(`ui/NearbyMap.kt` に地図ライブラリ依存を閉じ込め)で実装してある。
 
 ## APK に含まれない依存(義務は発生しない)
 

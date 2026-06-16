@@ -44,12 +44,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val distanceMeters: Int,
         val merchant: Merchant?,
         val bestRate: Double?,
+        val lat: Double,
+        val lon: Double,
+        /** 最上位施策のブランドカラー("#RRGGBB")。地図ピンの着色に使う */
+        val brandColor: String? = null,
     )
 
     data class NearbyUi(
         val loading: Boolean = false,
         val error: String? = null,
         val places: List<NearbyPlace> = emptyList(),
+        /** 検索の中心(=地図カメラ中心)。距離計算の起点。取得前は null */
+        val centerLat: Double? = null,
+        val centerLon: Double? = null,
+        /** 実際の現在地(地図上の青ドット)。「このエリアを検索」しても保持する */
+        val userLat: Double? = null,
+        val userLon: Double? = null,
     )
 
     data class UiState(
@@ -66,7 +76,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val refreshing: Boolean = false,
         val refreshFailed: Boolean = false,
         val nearby: NearbyUi? = null,
-        val nearbyRadiusM: Int = 3000,
+        val nearbyRadiusM: Int = 1000,
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -166,7 +176,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 位置情報パーミッション取得済みの前提で呼ぶ(UI側でリクエスト) */
     fun fetchNearby() {
-        val engine = engine ?: return
+        if (engine == null) return
         _state.update { it.copy(nearby = NearbyUi(loading = true), selection = null, storeCheck = null) }
         viewModelScope.launch(Dispatchers.IO) {
             val location = locationProvider.currentLocation()
@@ -174,37 +184,78 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _state.update { it.copy(nearby = NearbyUi(error = "現在地を取得できませんでした。位置情報設定を確認してください")) }
                 return@launch
             }
-            val pois = OverpassClient.fetchNearby(
-                location.latitude,
-                location.longitude,
-                radiusM = _state.value.nearbyRadiusM,
-            )
-            if (pois == null) {
-                _state.update { it.copy(nearby = NearbyUi(error = "周辺店舗の取得に失敗しました。通信状態を確認してください")) }
-                return@launch
+            // 起点も青ドットも現在地
+            loadNearbyAround(location.latitude, location.longitude, location.latitude, location.longitude)
+        }
+    }
+
+    /** 地図の中心を起点に再検索(「このエリアを検索」)。現在地の青ドットは維持する */
+    fun searchHere(lat: Double, lon: Double) {
+        if (engine == null) return
+        val prev = _state.value.nearby
+        val userLat = prev?.userLat ?: lat
+        val userLon = prev?.userLon ?: lon
+        _state.update { it.copy(nearby = NearbyUi(loading = true)) }
+        viewModelScope.launch(Dispatchers.IO) {
+            loadNearbyAround(lat, lon, userLat, userLon)
+        }
+    }
+
+    /** centerLat/centerLon を起点に Overpass 検索し、その点からの距離順でリスト化する */
+    private fun loadNearbyAround(centerLat: Double, centerLon: Double, userLat: Double, userLon: Double) {
+        val engine = engine ?: return
+        val pois = OverpassClient.fetchNearby(centerLat, centerLon, radiusM = _state.value.nearbyRadiusM)
+        if (pois == null) {
+            _state.update {
+                it.copy(
+                    nearby = NearbyUi(
+                        error = "周辺店舗を取得できませんでした。地図サーバが混雑しているか、通信が不安定な可能性があります。少し時間をおいて再度お試しください。",
+                    ),
+                )
             }
-            // 対象施策のあるチェーンのみ、距離の近い順に表示
-            val places = pois
-                .mapNotNull { poi ->
-                    val merchant = engine.matchStore(poi.name, poi.brand) ?: return@mapNotNull null
-                    // 公式に「対象外」と明示された店舗(例: アカチャンホンポのららぽーと内店舗)は近隣リストに出さない
-                    if (engine.isExcludedStore(merchant, poi.displayName)) return@mapNotNull null
-                    NearbyPlace(
-                        name = poi.displayName,
-                        distanceMeters = GeoMath.distanceMeters(location.latitude, location.longitude, poi.lat, poi.lon),
-                        merchant = merchant,
-                        bestRate = engine.judge(merchant).firstOrNull()?.effectiveRate,
-                    )
-                }
-                .sortedBy { it.distanceMeters }
-            _state.update { it.copy(nearby = NearbyUi(places = places)) }
+            return
+        }
+        // 対象施策のあるチェーンのみ、検索中心からの距離が近い順に表示
+        val places = pois
+            .mapNotNull { poi ->
+                val merchant = engine.matchStore(poi.name, poi.brand) ?: return@mapNotNull null
+                // 公式に「対象外」と明示された店舗(例: アカチャンホンポのららぽーと内店舗)は近隣リストに出さない
+                if (engine.isExcludedStore(merchant, poi.displayName)) return@mapNotNull null
+                val top = engine.judge(merchant).firstOrNull()
+                NearbyPlace(
+                    name = poi.displayName,
+                    distanceMeters = GeoMath.distanceMeters(centerLat, centerLon, poi.lat, poi.lon),
+                    merchant = merchant,
+                    bestRate = top?.effectiveRate,
+                    lat = poi.lat,
+                    lon = poi.lon,
+                    brandColor = top?.campaign?.brandColor,
+                )
+            }
+            .sortedBy { it.distanceMeters }
+        _state.update {
+            it.copy(
+                nearby = NearbyUi(
+                    places = places,
+                    centerLat = centerLat,
+                    centerLon = centerLon,
+                    userLat = userLat,
+                    userLon = userLon,
+                ),
+            )
         }
     }
 
     fun onNearbyRadiusChange(radiusM: Int) {
         if (_state.value.nearbyRadiusM == radiusM) return
         _state.update { it.copy(nearbyRadiusM = radiusM) }
-        fetchNearby()
+        // 直近の検索中心(地図中心)を保ったまま半径だけ変えて再検索。無ければ現在地から
+        val prev = _state.value.nearby
+        if (prev?.centerLat != null && prev.centerLon != null) {
+            searchHere(prev.centerLat, prev.centerLon)
+        } else {
+            fetchNearby()
+        }
     }
 
     fun onLocationDenied() {
