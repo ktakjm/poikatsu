@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.Poikatsu" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+      配色は Compose 製のため PoikatsuTheme(Compose 側)で行う。この XML テーマが担うのは
+      Compose が描画を始めるまでの一瞬のウィンドウ背景のみ。DayNight ベースにすることで
+      ダークモード起動時に白背景が一瞬見える「白フラッシュ」を防ぐ。
+      (com.google.android.material 非依存のため Theme.Material3.* は使わずフレームワークの
+       DeviceDefault.DayNight を採用。minSdk=29 で利用可能)
+    -->
+    <style name="Theme.Poikatsu" parent="android:Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
 </resources>

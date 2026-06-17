@@ -112,6 +112,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** 更新ボタン。スキップせず必ず取得を試みる */
     fun onManualRefresh() = refresh(force = true)
 
+    /** 再取得失敗の Snackbar を表示し終えたらフラグを消費する(同じ失敗を再表示しない) */
+    fun onRefreshFailedShown() = _state.update { it.copy(refreshFailed = false) }
+
     private fun refresh(force: Boolean) {
         if (_state.value.refreshing) return
         if (!force && System.currentTimeMillis() - lastFetchSucceededAt < AUTO_REFRESH_MIN_INTERVAL_MS) return
