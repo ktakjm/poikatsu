@@ -11,27 +11,12 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
-
-private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
-)
+// 「dynamic color 中心・最小」方針: Android 12+ は壁紙由来の dynamic color、
+// 11 以下は M3 標準ベースライン配色にフォールバックする。固定ブランド色は持たない
+// (発行体の identity は地図ピン/カードラベルの brand_color 側で表現する)。
+// 将来ブランド色を持たせたくなったら、シードから生成した配色をここに差し込めばよい。
+private val DarkColorScheme = darkColorScheme()
+private val LightColorScheme = lightColorScheme()
 
 @Composable
 fun PoikatsuTheme(
