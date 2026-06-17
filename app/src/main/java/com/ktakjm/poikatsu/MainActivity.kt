@@ -4,10 +4,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.ui.Modifier
 import com.ktakjm.poikatsu.ui.PoikatsuApp
 import com.ktakjm.poikatsu.ui.theme.PoikatsuTheme
 
@@ -16,10 +12,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
+            // Scaffold(TopAppBar/Snackbar 含む)は画面状態に応じて PoikatsuApp 側で構築する
             PoikatsuTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    PoikatsuApp(modifier = Modifier.padding(innerPadding))
-                }
+                PoikatsuApp()
             }
         }
     }
