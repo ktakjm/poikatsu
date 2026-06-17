@@ -143,7 +143,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     },
                 )
                 state.selection != null -> TopAppBar(
-                    title = { Text(state.selection!!.merchant.name) },
+                    title = { Text(state.selection!!.displayName ?: state.selection!!.merchant.name) },
                     navigationIcon = {
                         IconButton(onClick = viewModel::onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
@@ -398,7 +398,7 @@ private fun NearbyPane(
             MapMarker(
                 point = MapPoint(place.lat, place.lon),
                 label = place.name,
-                colorHex = place.brandColor,
+                colorHexes = place.brandColors,
                 onClick = { onSelectPlace(place) },
             )
         }

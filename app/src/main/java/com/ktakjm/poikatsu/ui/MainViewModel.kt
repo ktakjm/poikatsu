@@ -31,6 +31,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val canCheckStore: Boolean = false,
         /** 店舗対象判定画面を開くときのプリフィル(検索クエリやNearbyのPOI名の店舗名部分) */
         val storeNameHint: String = "",
+        /**
+         * 画面タイトルに出す表示名(近隣リストの POI 名=支店付き)。
+         * null のときはチェーン名(merchant.name)を使う。
+         */
+        val displayName: String? = null,
     )
 
     data class StoreCheckState(
@@ -41,13 +46,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     data class NearbyPlace(
         val name: String,
+        /** 現在地からの距離(m)。検索の起点=地図中心ではなく、常に現在地基準 */
         val distanceMeters: Int,
         val merchant: Merchant?,
         val bestRate: Double?,
         val lat: Double,
         val lon: Double,
-        /** 最上位施策のブランドカラー("#RRGGBB")。地図ピンの着色に使う */
-        val brandColor: String? = null,
+        /**
+         * 対応する全施策のブランドカラー("#RRGGBB")を還元率の高い順・重複排除で並べたもの。
+         * 地図ピンの着色に使い、複数あれば発行体ごとに色を分けて描く(両対応なら 2 色)。
+         */
+        val brandColors: List<String> = emptyList(),
     )
 
     data class NearbyUi(
@@ -136,8 +145,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** チェーンと店舗名ヒントから判定詳細用の Selection を組む(判定・遷移可否をまとめて引く) */
-    private fun JudgmentEngine.selectionFor(merchant: Merchant, storeNameHint: String) =
-        Selection(merchant, judge(merchant), canCheckStore(merchant), storeNameHint)
+    private fun JudgmentEngine.selectionFor(
+        merchant: Merchant,
+        storeNameHint: String,
+        displayName: String? = null,
+    ) = Selection(merchant, judge(merchant), canCheckStore(merchant), storeNameHint, displayName)
 
     private fun applyData(loaded: LoadedData) {
         val newEngine = JudgmentEngine(loaded.data)
@@ -153,7 +165,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // 表示中の判定があればデータ差し替え後の内容で引き直す
                 selection = it.selection?.let { sel ->
                     loaded.data.merchants.firstOrNull { m -> m.id == sel.merchant.id }
-                        ?.let { m -> newEngine.selectionFor(m, sel.storeNameHint) }
+                        ?.let { m -> newEngine.selectionFor(m, sel.storeNameHint, sel.displayName) }
                 },
                 // 店舗対象判定画面を開いていれば、新データで判定を引き直す
                 storeCheck = it.storeCheck?.let { sc ->
@@ -204,7 +216,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** centerLat/centerLon を起点に Overpass 検索し、その点からの距離順でリスト化する */
+    /**
+     * centerLat/centerLon を起点に Overpass で周辺店舗を取得し、現在地(userLat/userLon)からの
+     * 距離が近い順でリスト化する。検索の起点(地図中心)と距離の基準(現在地)は別物で、
+     * 「このエリアを検索」で遠方を見ても距離は常に現在地から測る。
+     */
     private fun loadNearbyAround(centerLat: Double, centerLon: Double, userLat: Double, userLon: Double) {
         val engine = engine ?: return
         val pois = OverpassClient.fetchNearby(centerLat, centerLon, radiusM = _state.value.nearbyRadiusM)
@@ -218,21 +234,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             return
         }
-        // 対象施策のあるチェーンのみ、検索中心からの距離が近い順に表示
+        // 対象施策のあるチェーンのみ、現在地からの距離が近い順に表示(距離は地図中心ではなく現在地基準)
         val places = pois
             .mapNotNull { poi ->
                 val merchant = engine.matchStore(poi.name, poi.brand) ?: return@mapNotNull null
                 // 公式に「対象外」と明示された店舗(例: アカチャンホンポのららぽーと内店舗)は近隣リストに出さない
                 if (engine.isExcludedStore(merchant, poi.displayName)) return@mapNotNull null
-                val top = engine.judge(merchant).firstOrNull()
+                val judgments = engine.judge(merchant)
                 NearbyPlace(
                     name = poi.displayName,
-                    distanceMeters = GeoMath.distanceMeters(centerLat, centerLon, poi.lat, poi.lon),
+                    distanceMeters = GeoMath.distanceMeters(userLat, userLon, poi.lat, poi.lon),
                     merchant = merchant,
-                    bestRate = top?.effectiveRate,
+                    bestRate = judgments.firstOrNull()?.effectiveRate,
                     lat = poi.lat,
                     lon = poi.lon,
-                    brandColor = top?.campaign?.brandColor,
+                    brandColors = judgments.mapNotNull { it.campaign.brandColor }.distinct(),
                 )
             }
             .sortedBy { it.distanceMeters }
@@ -269,12 +285,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(nearby = null) }
     }
 
-    /** 周辺リストの店をタップ → POI名を店舗対象判定のプリフィルに引き継ぐ */
+    /** 周辺リストの店をタップ → POI名を店舗対象判定のプリフィルと画面タイトルに引き継ぐ */
     fun onSelectNearby(place: NearbyPlace) {
         val engine = engine ?: return
         val merchant = place.merchant ?: return
         _state.update {
-            it.copy(selection = engine.selectionFor(merchant, place.name))
+            it.copy(selection = engine.selectionFor(merchant, place.name, displayName = place.name))
         }
     }
 
