@@ -327,12 +327,12 @@ sequenceDiagram
         JE-->>VM: 該当チェーン or null（捨てる）
         VM->>JE: isExcludedStore(merchant, displayName)
         Note over JE: 公式に明示的「対象外」なら<br/>リストから除外
-        VM->>JE: judge(merchant) → 最高還元率
+        VM->>JE: judge(merchant) → 還元率順の施策（最高還元率・対応発行体の色一覧）
     end
-    VM-->>SC: NearbyUi（距離昇順・対象チェーンのみ・明示的対象外は除外）
+    VM-->>SC: NearbyUi（現在地からの距離昇順・対象チェーンのみ・明示的対象外は除外）
     U->>SC: 店舗をタップ
     SC->>VM: onSelectNearby(place)
-    Note over VM: POI 名を storeNameHint に引き継ぐ<br/>（対象判定画面で店舗名にプリフィル）
+    Note over VM: POI 名（支店名込み）を Selection に引き継ぐ<br/>（判定詳細のタイトル＋対象判定画面のプリフィル）
     VM-->>SC: Selection（判定詳細へ）
 ```
 
@@ -343,11 +343,13 @@ sequenceDiagram
 - 地図画面だけ全幅で描くため、全画面共通だった横 16dp パディングはルート（`Box`）から外し `PaddedColumn` ヘルパーへ移譲した。検索・判定詳細・店舗判定の各画面は従来どおり 16dp の左右余白を保つ。
 - ヘッダーは `TopAppBar`（`NearbyTopBar`）。地図画面では外側 `Scaffold` が `topBar` を出さず、`BottomSheetScaffold` の `topBar` スロットに置く。外側 `Scaffold` が既にステータスバー inset を消費済みのため、この内側 `TopAppBar` は `windowInsets = WindowInsets(0,0,0,0)` を指定して inset の二重適用（上端の余白二重化）を防ぐ。
 - **ダークモード追従**: OSM ラスタタイルは描画済み画像で端末テーマに反応しないため、システムがダークなら osmdroid の `TilesOverlay.INVERT_COLORS` をタイルに適用し、ライトなら解除する（`isSystemInDarkTheme()` で判定。モードが切り替わったときだけ差し替えて無駄な `invalidate` を避ける）。本格的なダーク配色が必要なら専用ダークタイル（要・利用規約/帰属確認）への差し替えが将来の選択肢。
-- ピンは `campaign.brand_color` で着色（ロゴ不使用方針と整合）。ピン/リスト行のタップはどちらも `onSelectNearby` で判定詳細へ遷移する。
+- ピンは店舗が対応する施策の `campaign.brand_color` で着色（ロゴ不使用方針と整合）。複数発行体に対応する店舗（例: 三井住友＝緑 と MUFG＝赤 の両対応）は色を扇状に等分して 1 つのピンに描き分ける（2 色なら斜めの境界で分割）。描画は osmdroid の `Marker.icon` に渡す自前 `Drawable`（`storePinDrawable`、`Canvas` で円を `drawArc`）で行う。**自前 `Drawable` は `getIntrinsicWidth/Height` を必ず返す**——osmdroid はアイコンの intrinsic サイズで描画範囲とタップ判定領域を決めるため、未実装（既定の -1）だと点になりタップも効かなくなる。単色用途（現在地の青ドット）は従来どおり `GradientDrawable`（`pinDrawable`）を使う。
+- ピン/リスト行のタップはどちらも `onSelectNearby` で判定詳細へ遷移する。判定詳細のタイトルは POI 表示名（支店名込み、`Selection.displayName`＝リストに出ている名前と同じ）を出し、無ければチェーン名（`merchant.name`）にフォールバックする。
 - 明示的「対象外」店舗（`isExcludedStore`）は地図・リストの両方に出さない。
 - **地図ライブラリの差し替え境界**: osmdroid 固有の型（`MapView`/`GeoPoint`/`Marker`）は `NearbyMap.kt` 1ファイルに閉じ込め、アプリ側（ViewModel/`NearbyPane`）は自前の `MapPoint`/`MapMarker` だけを扱う。これにより将来 Google Maps 等へ**表示層だけ**を差し替える場合も、変更は NearbyMap 本体・依存・API キー設定・docs に閉じる（ViewModel/テストは無変更）。Google Maps の地図表示は無料無制限だが Play Services 依存のため現在は採用していない（docs/licenses.md）。
 - 座標は ViewModel が `NearbyPlace.lat/lon`・`NearbyUi.centerLat/centerLon`（検索の起点＝地図カメラ中心）・`NearbyUi.userLat/userLon`（実際の現在地＝青ドット）で UI まで運ぶ。地図の初期ズームは検索半径から決める（`zoomForRadius`）。OSM タイル利用規約のため `Configuration.userAgentValue` にパッケージ名を設定する。
 - **「このエリアを検索」**: スクロール/ズームは osmdroid に任せ、Compose からは触らない（操作中の再描画でズレないため）。地図上のボタンを押すとその時点の地図中心を `searchHere(lat, lon)` に渡し、**その中心を起点に Overpass を引き直して**距離順リストを作り直す（現在地の青ドットは維持）。半径変更も直近の検索中心を保ったまま再検索する。ピンはパン/ズームでは再描画せず、検索結果（`markers` の参照）が変わったときだけ描き直す。
+- **距離は常に現在地基準**: リストの距離表示・並び順は検索の起点（地図中心 `centerLat/centerLon`）ではなく、常に現在地（`userLat/userLon`）から測る（`loadNearbyAround`）。遠方を「このエリアを検索」しても距離は現在地からの値になる（地図中心＝現在地の通常検索と挙動を統一）。`centerLat/centerLon` は Overpass の検索範囲・地図カメラ・再検索の起点にのみ使い、距離の意味とは分離する。
 
 Overpass 側の設計判断（`OverpassClient` のコメント参照）:
 

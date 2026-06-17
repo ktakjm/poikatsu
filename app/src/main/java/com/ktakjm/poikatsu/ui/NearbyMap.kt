@@ -1,7 +1,12 @@
 package com.ktakjm.poikatsu.ui
 
 import android.content.Context
+import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
+import android.graphics.ColorFilter
+import android.graphics.Paint
+import android.graphics.PixelFormat
+import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -45,8 +50,11 @@ data class MapPoint(val lat: Double, val lon: Double)
 data class MapMarker(
     val point: MapPoint,
     val label: String,
-    /** ブランドカラー("#RRGGBB")。ロゴ不使用方針のため発行体はピンの色で識別する */
-    val colorHex: String?,
+    /**
+     * 対応する発行体のブランドカラー("#RRGGBB")。ロゴ不使用方針のため発行体はピンの色で識別する。
+     * 複数施策に対応する店舗は色を複数渡し、ピンを色ごとに分割して描く(2 色なら左右半分ずつ)。
+     */
+    val colorHexes: List<String>,
     val onClick: () -> Unit,
 )
 
@@ -187,7 +195,7 @@ private fun renderOverlays(
         val marker = Marker(map).apply {
             position = m.point.toGeoPoint()
             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-            icon = pinDrawable(context, parseColor(m.colorHex), sizeDp = 24f)
+            icon = storePinDrawable(context, m.colorHexes, sizeDp = 24f)
             title = m.label
             setOnMarkerClickListener { _, _ ->
                 m.onClick()
@@ -200,7 +208,7 @@ private fun renderOverlays(
     map.invalidate()
 }
 
-/** ブランドカラーの丸ピン Drawable を生成(白縁付き) */
+/** 単色の丸ピン Drawable を生成(白縁付き)。現在地ドットなど 1 色で足りる用途に使う */
 private fun pinDrawable(context: Context, color: Int, sizeDp: Float): Drawable {
     val density = context.resources.displayMetrics.density
     val px = (sizeDp * density).toInt()
@@ -211,6 +219,63 @@ private fun pinDrawable(context: Context, color: Int, sizeDp: Float): Drawable {
         setSize(px, px)
         setBounds(0, 0, px, px)
     }
+}
+
+/**
+ * 店舗ピンの丸 Drawable(白縁付き)。対応する発行体が複数あるときは色を扇状に等分して描く。
+ * 例: 三井住友(緑)と MUFG(赤)の両対応なら、斜めの境界線で右下=緑・左上=赤のように分かれる。
+ * 色が 1 つ(または未指定)のときは従来どおりの単色丸ピン。
+ *
+ * osmdroid の Marker は icon の intrinsic サイズで描画範囲とタップ判定を決めるため、
+ * getIntrinsicWidth/Height を必ず返す(返さないと 0px 扱いになり、点になってクリックもできない)。
+ */
+private fun storePinDrawable(context: Context, colorHexes: List<String>, sizeDp: Float): Drawable {
+    val density = context.resources.displayMetrics.density
+    val px = (sizeDp * density).toInt()
+    val strokePx = 2 * density
+    // 未指定なら parseColor の既定色(緑)1 色で描く
+    val colors = colorHexes.map { parseColor(it) }.ifEmpty { listOf(parseColor(null)) }
+    return object : Drawable() {
+        private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            color = AndroidColor.WHITE
+            strokeWidth = strokePx
+        }
+
+        override fun getIntrinsicWidth() = px
+        override fun getIntrinsicHeight() = px
+
+        override fun draw(canvas: Canvas) {
+            // 縁が切れないよう線幅の半分だけ内側に描画領域を取る
+            val inset = strokePx / 2f
+            val rect = RectF(
+                bounds.left + inset,
+                bounds.top + inset,
+                bounds.right - inset,
+                bounds.bottom - inset,
+            )
+            if (colors.size == 1) {
+                fillPaint.color = colors[0]
+                canvas.drawOval(rect, fillPaint)
+            } else {
+                val sweep = 360f / colors.size
+                var start = -45f // 斜めの境界にするため右上(-45°)を起点に時計回りで等分
+                colors.forEach { c ->
+                    fillPaint.color = c
+                    canvas.drawArc(rect, start, sweep, true, fillPaint)
+                    start += sweep
+                }
+            }
+            canvas.drawOval(rect, strokePaint)
+        }
+
+        override fun setAlpha(alpha: Int) = Unit
+        override fun setColorFilter(colorFilter: ColorFilter?) = Unit
+
+        @Suppress("DEPRECATION")
+        override fun getOpacity() = PixelFormat.TRANSLUCENT
+    }.apply { setBounds(0, 0, px, px) }
 }
 
 /** "#RRGGBB" を Int 色に。不正なら既定色(プライマリ相当の緑) */
