@@ -327,8 +327,10 @@ sequenceDiagram
 
 ### 7.1 地図表示と差し替え境界（ui/NearbyMap.kt）
 
-近隣検索は **地図 + 距離順リストの上下分割**で表示する（`NearbyPane`）。地図は上部（**固定高 300dp**、はみ出しは `clipToBounds` で抑止し、チップ・リストに被らせない）に検索中心（初期は現在地）で対象店舗をピン表示し、下部に距離順リスト（還元率・距離。残り領域を `weight(1f)` でスクロール）を残す。
+近隣検索は **地図を全面に出し、距離順リストを引き上げ式のボトムシート**に収めて表示する（`NearbyPane`、`BottomSheetScaffold`）。普段は地図を広く見せ、ヘッダー（戻る/再読み込み）を `topBar`、半径チップと距離順リスト（還元率・距離）をシートに置く。シートは `PartiallyExpanded`（`sheetPeekHeight = 200dp`）で起動し、引き上げると一覧を全面表示してその中をスクロールできる（`skipHiddenState = true` で一覧シートは常に下部に残す）。読込中/エラー/現在地不明のときは地図なしの縦並びにフォールバックする。地図のはみ出しは `NearbyMap.kt` 側で従来どおり `clipToBounds` により抑止する。
 
+- 地図画面だけ全幅で描くため、全画面共通だった横 16dp パディングはルート（`Box`）から外し `PaddedColumn` ヘルパーへ移譲した。検索・判定詳細・店舗判定の各画面は従来どおり 16dp の左右余白を保つ。
+- **ダークモード追従**: OSM ラスタタイルは描画済み画像で端末テーマに反応しないため、システムがダークなら osmdroid の `TilesOverlay.INVERT_COLORS` をタイルに適用し、ライトなら解除する（`isSystemInDarkTheme()` で判定。モードが切り替わったときだけ差し替えて無駄な `invalidate` を避ける）。本格的なダーク配色が必要なら専用ダークタイル（要・利用規約/帰属確認）への差し替えが将来の選択肢。
 - ピンは `campaign.brand_color` で着色（ロゴ不使用方針と整合）。ピン/リスト行のタップはどちらも `onSelectNearby` で判定詳細へ遷移する。
 - 明示的「対象外」店舗（`isExcludedStore`）は地図・リストの両方に出さない。
 - **地図ライブラリの差し替え境界**: osmdroid 固有の型（`MapView`/`GeoPoint`/`Marker`）は `NearbyMap.kt` 1ファイルに閉じ込め、アプリ側（ViewModel/`NearbyPane`）は自前の `MapPoint`/`MapMarker` だけを扱う。これにより将来 Google Maps 等へ**表示層だけ**を差し替える場合も、変更は NearbyMap 本体・依存・API キー設定・docs に閉じる（ViewModel/テストは無変更）。Google Maps の地図表示は無料無制限だが Play Services 依存のため現在は採用していない（docs/licenses.md）。
