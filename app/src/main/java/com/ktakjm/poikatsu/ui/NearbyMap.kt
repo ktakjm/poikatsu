@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Color as AndroidColor
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,6 +33,7 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.TilesOverlay
 
 /**
  * 地図表示の「継ぎ目」。地図ライブラリ(osmdroid)固有の型はこのファイルの中だけに閉じ込め、
@@ -71,6 +73,9 @@ fun NearbyMap(
     val mapView = rememberMapViewWithLifecycle()
     // center / zoom / markers が変わったときだけ更新する(無関係な再コンポーズで描画し直さない)
     val renderState = remember { RenderState() }
+    // OSM 標準タイルは描画済み画像なので端末のダークモードに追従しない。
+    // システムが夜間ならタイルに色反転フィルタをかけて「暗い地図」に見せる。
+    val darkMode = isSystemInDarkTheme()
 
     Box(modifier) {
         AndroidView(
@@ -88,6 +93,14 @@ fun NearbyMap(
                 if (renderState.lastMarkers !== markers) {
                     renderOverlays(map, context, userLocation, markers)
                     renderState.lastMarkers = markers
+                }
+                // ダークモード切替時だけフィルタを差し替える(毎フレーム invalidate しない)
+                if (renderState.lastDarkMode != darkMode) {
+                    map.overlayManager.tilesOverlay.setColorFilter(
+                        if (darkMode) TilesOverlay.INVERT_COLORS else null,
+                    )
+                    renderState.lastDarkMode = darkMode
+                    map.invalidate()
                 }
             },
         )
@@ -109,6 +122,7 @@ private class RenderState {
     var lastCenter: MapPoint? = null
     var lastZoom: Double = 0.0
     var lastMarkers: List<MapMarker>? = null
+    var lastDarkMode: Boolean? = null
 }
 
 /** osmdroid の MapView を Compose の lifecycle に連動させて生成・破棄する */

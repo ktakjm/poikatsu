@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -31,10 +32,12 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -42,8 +45,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberBottomSheetScaffoldState
+import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -100,20 +106,25 @@ fun PoikatsuApp(modifier: Modifier = Modifier, viewModel: MainViewModel = viewMo
         }
     }
 
-    Column(modifier = modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+    Box(modifier = modifier.fillMaxSize()) {
         when {
             state.loading -> Centered { CircularProgressIndicator() }
             state.error != null -> Centered { Text(state.error!!, color = MaterialTheme.colorScheme.error) }
-            state.storeCheck != null -> StoreCheckScreen(
-                storeCheck = state.storeCheck!!,
-                onBack = viewModel::onCloseStoreCheck,
-                onStoreNameChange = viewModel::onStoreNameChange,
-            )
-            state.selection != null -> JudgmentDetail(
-                selection = state.selection!!,
-                onBack = viewModel::onBack,
-                onOpenStoreCheck = viewModel::onOpenStoreCheck,
-            )
+            state.storeCheck != null -> PaddedColumn {
+                StoreCheckScreen(
+                    storeCheck = state.storeCheck!!,
+                    onBack = viewModel::onCloseStoreCheck,
+                    onStoreNameChange = viewModel::onStoreNameChange,
+                )
+            }
+            state.selection != null -> PaddedColumn {
+                JudgmentDetail(
+                    selection = state.selection!!,
+                    onBack = viewModel::onBack,
+                    onOpenStoreCheck = viewModel::onOpenStoreCheck,
+                )
+            }
+            // 地図画面はボトムシート・地図を端まで使うため全幅。横paddingは内部で個別に当てる
             state.nearby != null -> NearbyPane(
                 nearby = state.nearby!!,
                 radiusM = state.nearbyRadiusM,
@@ -123,22 +134,33 @@ fun PoikatsuApp(modifier: Modifier = Modifier, viewModel: MainViewModel = viewMo
                 onSelectPlace = viewModel::onSelectNearby,
                 onSearchHere = viewModel::searchHere,
             )
-            else -> SearchPane(
-                query = state.query,
-                categories = state.categories,
-                selectedCategories = state.selectedCategories,
-                results = state.results,
-                dataStatus = dataStatusLabel(state.dataUpdatedAt, state.dataSource),
-                refreshing = state.refreshing,
-                refreshFailed = state.refreshFailed,
-                onQueryChange = viewModel::onQueryChange,
-                onToggleCategory = viewModel::onToggleCategory,
-                onSelect = viewModel::onSelect,
-                onRefresh = viewModel::onManualRefresh,
-                onNearbyClick = onNearbyClick,
-            )
+            else -> PaddedColumn {
+                SearchPane(
+                    query = state.query,
+                    categories = state.categories,
+                    selectedCategories = state.selectedCategories,
+                    results = state.results,
+                    dataStatus = dataStatusLabel(state.dataUpdatedAt, state.dataSource),
+                    refreshing = state.refreshing,
+                    refreshFailed = state.refreshFailed,
+                    onQueryChange = viewModel::onQueryChange,
+                    onToggleCategory = viewModel::onToggleCategory,
+                    onSelect = viewModel::onSelect,
+                    onRefresh = viewModel::onManualRefresh,
+                    onNearbyClick = onNearbyClick,
+                )
+            }
         }
     }
+}
+
+/** 地図以外の画面共通の縦並びコンテナ。従来ルートにあった横16dpパディングをここに移譲 */
+@Composable
+private fun PaddedColumn(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        content = content,
+    )
 }
 
 @Composable
@@ -241,6 +263,7 @@ private fun SearchPane(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NearbyPane(
     nearby: MainViewModel.NearbyUi,
@@ -252,101 +275,138 @@ private fun NearbyPane(
     onSearchHere: (Double, Double) -> Unit,
 ) {
     BackHandler(onBack = onClose)
-    // 上下分割(地図 + リスト)のため、weight を使えるよう Column で包む
-    Column(Modifier.fillMaxSize()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onClose) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
-            }
-            Text("近くのお店", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            IconButton(onClick = onReload) {
-                Icon(Icons.Default.Refresh, contentDescription = "再読み込み")
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(500, 1000, 3000).forEach { radius ->
-                FilterChip(
-                    selected = radiusM == radius,
-                    onClick = { onRadiusChange(radius) },
-                    label = { Text(distanceLabel(radius)) },
+
+    val center = if (nearby.centerLat != null && nearby.centerLon != null) {
+        MapPoint(nearby.centerLat, nearby.centerLon)
+    } else null
+
+    // 地図を出せない状態(読込中/エラー/現在地不明)は地図なしの縦並びで表示する
+    if (nearby.loading || nearby.error != null || center == null) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+            NearbyHeader(onClose = onClose, onReload = onReload)
+            RadiusChips(radiusM = radiusM, onRadiusChange = onRadiusChange)
+            Spacer(Modifier.height(4.dp))
+            when {
+                nearby.loading -> Box(
+                    Modifier.fillMaxWidth().weight(1f),
+                    contentAlignment = Alignment.Center,
+                ) { CircularProgressIndicator() }
+                nearby.error != null -> Text(
+                    nearby.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
                 )
+                else -> Text("現在地を取得できませんでした。", style = MaterialTheme.typography.bodyMedium)
             }
         }
-        Spacer(Modifier.height(4.dp))
-        when {
-            nearby.loading -> Box(
-                Modifier.fillMaxWidth().weight(1f),
-                contentAlignment = Alignment.Center,
-            ) { CircularProgressIndicator() }
-            nearby.error != null -> Text(
-                nearby.error,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
+        return
+    }
+
+    val userLocation = if (nearby.userLat != null && nearby.userLon != null) {
+        MapPoint(nearby.userLat, nearby.userLon)
+    } else null
+    // ピンは位置が固定なので places に対して安定に作る(パン/ズームでは作り直さない)
+    val markers = remember(nearby.places) {
+        nearby.places.map { place ->
+            MapMarker(
+                point = MapPoint(place.lat, place.lon),
+                label = place.name,
+                colorHex = place.brandColor,
+                onClick = { onSelectPlace(place) },
             )
-            else -> {
-                val center = if (nearby.centerLat != null && nearby.centerLon != null) {
-                    MapPoint(nearby.centerLat, nearby.centerLon)
-                } else null
-                if (center == null) {
-                    Text("現在地を取得できませんでした。", style = MaterialTheme.typography.bodyMedium)
-                } else {
-                    val userLocation = if (nearby.userLat != null && nearby.userLon != null) {
-                        MapPoint(nearby.userLat, nearby.userLon)
-                    } else null
-                    // ピンは位置が固定なので places に対して安定に作る(パン/ズームでは作り直さない)
-                    val markers = remember(nearby.places) {
-                        nearby.places.map { place ->
-                            MapMarker(
-                                point = MapPoint(place.lat, place.lon),
-                                label = place.name,
-                                colorHex = place.brandColor,
-                                onClick = { onSelectPlace(place) },
-                            )
-                        }
-                    }
-                    // 上部: 高さ固定の地図(チップ・リストと被らないように)
-                    NearbyMap(
-                        center = center,
-                        userLocation = userLocation,
-                        markers = markers,
-                        initialZoom = zoomForRadius(radiusM),
-                        onSearchHere = { c -> onSearchHere(c.lat, c.lon) },
-                        modifier = Modifier.fillMaxWidth().height(300.dp),
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    // 下部: 検索中心からの距離順リスト(還元率・距離)。並びは ViewModel で確定済み
-                    if (nearby.places.isEmpty()) {
-                        Text(
-                            "周辺${distanceLabel(radiusM)}に対象施策のある店舗が見つかりませんでした。",
-                            style = MaterialTheme.typography.bodyMedium,
+        }
+    }
+
+    // 地図を全面に出し、店舗リストは引き上げ式のボトムシートに収める。
+    // 普段は地図を広く見せ、シートを引き上げると一覧を確認できる。
+    val scaffoldState = rememberBottomSheetScaffoldState(
+        bottomSheetState = rememberStandardBottomSheetState(
+            initialValue = SheetValue.PartiallyExpanded,
+            skipHiddenState = true, // 一覧シートは常に下部に残す(消えない)
+        ),
+    )
+    BottomSheetScaffold(
+        scaffoldState = scaffoldState,
+        sheetPeekHeight = 200.dp,
+        topBar = { NearbyHeader(onClose = onClose, onReload = onReload) },
+        sheetContent = {
+            RadiusChips(
+                radiusM = radiusM,
+                onRadiusChange = onRadiusChange,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Spacer(Modifier.height(8.dp))
+            // 検索中心からの距離順リスト(還元率・距離)。並びは ViewModel で確定済み
+            if (nearby.places.isEmpty()) {
+                Text(
+                    "周辺${distanceLabel(radiusM)}に対象施策のある店舗が見つかりませんでした。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            } else {
+                LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+                    items(nearby.places, key = { "${it.lat},${it.lon},${it.name}" }) { place ->
+                        ListItem(
+                            headlineContent = { Text(place.name) },
+                            supportingContent = {
+                                Text("${distanceLabel(place.distanceMeters)}・${place.merchant?.category.orEmpty()}")
+                            },
+                            trailingContent = {
+                                place.bestRate?.let {
+                                    Text(
+                                        "${trimRate(it)}%",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelectPlace(place) },
                         )
-                    } else {
-                        LazyColumn(Modifier.weight(1f)) {
-                            items(nearby.places, key = { "${it.lat},${it.lon},${it.name}" }) { place ->
-                                ListItem(
-                                    headlineContent = { Text(place.name) },
-                                    supportingContent = {
-                                        Text("${distanceLabel(place.distanceMeters)}・${place.merchant?.category.orEmpty()}")
-                                    },
-                                    trailingContent = {
-                                        place.bestRate?.let {
-                                            Text(
-                                                "${trimRate(it)}%",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = MaterialTheme.colorScheme.primary,
-                                            )
-                                        }
-                                    },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { onSelectPlace(place) },
-                                )
-                                HorizontalDivider()
-                            }
-                        }
+                        HorizontalDivider()
                     }
                 }
             }
+        },
+    ) { innerPadding ->
+        // 地図は全面。下端はボトムシート(peek)が重なるが、操作系は地図上部にあるので隠れない
+        NearbyMap(
+            center = center,
+            userLocation = userLocation,
+            markers = markers,
+            initialZoom = zoomForRadius(radiusM),
+            onSearchHere = { c -> onSearchHere(c.lat, c.lon) },
+            modifier = Modifier.fillMaxSize().padding(innerPadding),
+        )
+    }
+}
+
+@Composable
+private fun NearbyHeader(onClose: () -> Unit, onReload: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onClose) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+        }
+        Text("近くのお店", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+        IconButton(onClick = onReload) {
+            Icon(Icons.Default.Refresh, contentDescription = "再読み込み")
+        }
+    }
+}
+
+@Composable
+private fun RadiusChips(radiusM: Int, onRadiusChange: (Int) -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(500, 1000, 3000).forEach { radius ->
+            FilterChip(
+                selected = radiusM == radius,
+                onClick = { onRadiusChange(radius) },
+                label = { Text(distanceLabel(radius)) },
+            )
         }
     }
 }
