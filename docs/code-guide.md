@@ -285,11 +285,22 @@ stateDiagram-v2
 
 `JudgmentCard` は施策ごとに 1 枚。左端のストライプとカード名バッジに `brand_color` を使い、ロゴ画像なしで発行体を識別する。表示要素は「還元率（大）→ 条件達成時最大 → 支払い方法 → 店固有条件 → エントリー警告 → 公式店舗一覧リンク → 上限 → **情報確認日**」の順。`verified_date` の表示は必須ルール（データが古くなるリスクへの対処）。
 
-公式リストを持つチェーン（`canCheckStore` が true）では判定詳細に「この店舗が対象か調べる →」ボタンを出し、別画面 `StoreCheckScreen` へ遷移する。同画面は店舗名入力に対し `StoreVerdictCard` で ✅対象 / ⛔対象外 / ❓要確認 を表示し、断定の鮮度（`date_is_official` に応じて「公式情報の更新日」or「確認日」）を併記する。公式リストの無いチェーンはボタンを出さない（判定画面を意識させない）。
+公式リストを持つチェーン（`canCheckStore` が true）では判定詳細に「この店舗が対象か調べる →」ボタンを出し、別画面 `StoreCheckScreen` へ遷移する。同画面は店舗名入力に対し `StoreVerdictCard` で 対象（`CheckCircle`）/ 対象外（`Close`）/ 要確認（`Info`）を Material アイコン＋セマンティックカラー（primary / error / `warningColor()`）で表示し、断定の鮮度（`date_is_official` に応じて「公式情報の更新日」or「確認日」）を併記する。公式リストの無いチェーンはボタンを出さない（判定画面を意識させない）。
 
 ### 6.3 位置情報パーミッション
 
 パーミッション要求は UI 層（`rememberLauncherForActivityResult`）の責務で、ViewModel は「許可済み前提」の `fetchNearby()` と「拒否された」`onLocationDenied()` だけを持つ。FINE / COARSE のどちらか片方でも許可されれば検索する。
+
+### 6.4 デザイン方針（Material 3 追従）
+
+UI は Compose + Material 3。**実装ルールの要約は [CLAUDE.md「UI・デザイン方針」](../CLAUDE.md) に置く（新規/改修時はそちらに従う）**。ここではその背景と実装上の勘所を補足する。
+
+- **配色は dynamic color 中心・最小**（`ui/theme/Theme.kt`）。固定ブランド色を持たないのは、本アプリが複数発行体（三井住友＝緑 / MUFG＝赤 …）を横断するアグリゲーターで、本体の色を特定発行体色にすると「その会社のアプリ」に見え、かつ error（赤）/ 緑の意味論ともぶつかるため。発行体 identity は `brand_color`（地図ピン・カード名バッジ）側で個別表現する。Android 12+ は壁紙追従、11 以下は `lightColorScheme()`/`darkColorScheme()` の M3 ベースライン。
+- **ベーステーマは DayNight**（`res/values/themes.xml` = `android:Theme.DeviceDefault.DayNight`）。Compose 製なので XML テーマは描画前の一瞬のウィンドウ背景のみを担い、DayNight 化でダークモード起動時の白フラッシュを防ぐ。`com.google.android.material` 非依存のため `Theme.Material3.*` は使わずフレームワークの DayNight を採用（minSdk=29 で可）。
+- **警告色**（`ui/theme/ExtendedColors.kt` の `warningColor()`）は M3 に warning ロールが無いため独自定義した固定の琥珀。error（赤・致命/不可）と注意（琥珀・要確認/一部対象外）を出し分ける。dynamic color に左右されない固定値にしているのは「注意＝琥珀」の意味を端末によらず一定に保つため（error が常に赤系なのと同じ考え）。
+- **ナビゲーション骨格は単一 `Scaffold`**（`PoikatsuApp`）。`topBar`/`snackbarHost` を `UiState` に追従させ、`topBar` の `when` は本文の `when`（6.1 の状態機械）と**同じ分岐順**にする（`storeCheck` → `selection` → `nearby` の優先順がズレると、地図から店舗を選んだ後にバーが消える等の不整合になる）。地図画面だけは外側が `topBar` を出さず、`NearbyPane` 内の `BottomSheetScaffold` が独自バーを持つ（7.1 参照）。
+- **アイコンは `material-icons-core` の範囲**で賄う。`-extended` は数千アイコンで APK/メソッド数が膨らむため公開アプリでは原則追加しない。core に無い理想形（例: 塗りつぶし✕ `Cancel`/`Block`）は代替（`Close` + error 色）で表現する。
+- **アクセシビリティ**: タッチ領域 48dp 最小、絵文字でなくアイコン、コントラストは `onColorFor()` で担保。
 
 ## 7. GPS 周辺検索のデータフロー
 
@@ -330,6 +341,7 @@ sequenceDiagram
 近隣検索は **地図を全面に出し、距離順リストを引き上げ式のボトムシート**に収めて表示する（`NearbyPane`、`BottomSheetScaffold`）。普段は地図を広く見せ、ヘッダー（戻る/再読み込み）を `topBar`、半径チップと距離順リスト（還元率・距離）をシートに置く。シートは `PartiallyExpanded`（`sheetPeekHeight = 200dp`）で起動し、引き上げると一覧を全面表示してその中をスクロールできる（`skipHiddenState = true` で一覧シートは常に下部に残す）。読込中/エラー/現在地不明のときは地図なしの縦並びにフォールバックする。地図のはみ出しは `NearbyMap.kt` 側で従来どおり `clipToBounds` により抑止する。
 
 - 地図画面だけ全幅で描くため、全画面共通だった横 16dp パディングはルート（`Box`）から外し `PaddedColumn` ヘルパーへ移譲した。検索・判定詳細・店舗判定の各画面は従来どおり 16dp の左右余白を保つ。
+- ヘッダーは `TopAppBar`（`NearbyTopBar`）。地図画面では外側 `Scaffold` が `topBar` を出さず、`BottomSheetScaffold` の `topBar` スロットに置く。外側 `Scaffold` が既にステータスバー inset を消費済みのため、この内側 `TopAppBar` は `windowInsets = WindowInsets(0,0,0,0)` を指定して inset の二重適用（上端の余白二重化）を防ぐ。
 - **ダークモード追従**: OSM ラスタタイルは描画済み画像で端末テーマに反応しないため、システムがダークなら osmdroid の `TilesOverlay.INVERT_COLORS` をタイルに適用し、ライトなら解除する（`isSystemInDarkTheme()` で判定。モードが切り替わったときだけ差し替えて無駄な `invalidate` を避ける）。本格的なダーク配色が必要なら専用ダークタイル（要・利用規約/帰属確認）への差し替えが将来の選択肢。
 - ピンは `campaign.brand_color` で着色（ロゴ不使用方針と整合）。ピン/リスト行のタップはどちらも `onSelectNearby` で判定詳細へ遷移する。
 - 明示的「対象外」店舗（`isExcludedStore`）は地図・リストの両方に出さない。
