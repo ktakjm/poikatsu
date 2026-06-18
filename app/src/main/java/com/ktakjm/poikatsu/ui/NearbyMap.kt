@@ -17,8 +17,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,6 +57,8 @@ data class MapMarker(
      * 複数施策に対応する店舗は色を複数渡し、ピンを色ごとに分割して描く(2 色なら左右半分ずつ)。
      */
     val colorHexes: List<String>,
+    /** 一覧/ピンで選択中の店舗。true のピンは大きく・白縁を太くして強調し、最前面に描く */
+    val selected: Boolean = false,
     val onClick: () -> Unit,
 )
 
@@ -66,6 +70,7 @@ data class MapMarker(
  * @param userLocation 実際の現在地(青ドット)。null なら描画しない
  * @param markers 対象店舗ピン
  * @param initialZoom 検索半径に応じた初期ズーム
+ * @param selectedPoint 選択中の店舗。非 null かつ変化したらズームは保ったままその点へカメラを寄せる
  * @param onSearchHere 「このエリアを検索」タップ時、その時点の地図中心を渡す
  */
 @Composable
@@ -74,6 +79,7 @@ fun NearbyMap(
     userLocation: MapPoint?,
     markers: List<MapMarker>,
     initialZoom: Double,
+    selectedPoint: MapPoint?,
     onSearchHere: (MapPoint) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -97,7 +103,12 @@ fun NearbyMap(
                     renderState.lastCenter = center
                     renderState.lastZoom = initialZoom
                 }
-                // ピンはパン/ズームでは作り直さず、検索結果(markers)が変わったときだけ再描画する
+                // 店舗を選択したらズームは保ったままその点へ寄せる(検索の起点 center とは別物)
+                if (renderState.lastSelected != selectedPoint) {
+                    if (selectedPoint != null) map.controller.animateTo(selectedPoint.toGeoPoint())
+                    renderState.lastSelected = selectedPoint
+                }
+                // ピンはパン/ズームでは作り直さず、検索結果・選択状態(markers)が変わったときだけ再描画する
                 if (renderState.lastMarkers !== markers) {
                     renderOverlays(map, context, userLocation, markers)
                     renderState.lastMarkers = markers
@@ -123,6 +134,17 @@ fun NearbyMap(
             Spacer(Modifier.width(4.dp))
             Text("このエリアを検索")
         }
+        // 現在地へ戻す: パン/「このエリアを検索」した後、ワンタップでカメラを現在地(青ドット)へ。
+        // 再検索はせずズームも保つ(周辺を取り直したいときは「このエリアを検索」を押す)。
+        if (userLocation != null) {
+            FilledTonalIconButton(
+                onClick = { mapView.controller.animateTo(userLocation.toGeoPoint()) },
+                // タッチ領域は M3 最小の 48dp を確保。ボトムシート(peek)に隠れない上部右に置く
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp).size(48.dp),
+            ) {
+                Icon(Icons.Default.LocationOn, contentDescription = "現在地へ戻す")
+            }
+        }
     }
 }
 
@@ -131,6 +153,7 @@ private class RenderState {
     var lastZoom: Double = 0.0
     var lastMarkers: List<MapMarker>? = null
     var lastDarkMode: Boolean? = null
+    var lastSelected: MapPoint? = null
 }
 
 /** osmdroid の MapView を Compose の lifecycle に連動させて生成・破棄する */
@@ -190,12 +213,12 @@ private fun renderOverlays(
         map.overlays.add(here)
     }
 
-    // 対象店舗ピン(ブランドカラー)
-    markers.forEach { m ->
+    // 対象店舗ピン(ブランドカラー)。選択中ピンは最前面に来るよう最後に描く(sortedBy で false→true 順)
+    markers.sortedBy { it.selected }.forEach { m ->
         val marker = Marker(map).apply {
             position = m.point.toGeoPoint()
             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-            icon = storePinDrawable(context, m.colorHexes, sizeDp = 24f)
+            icon = storePinDrawable(context, m.colorHexes, sizeDp = if (m.selected) 34f else 24f, selected = m.selected)
             title = m.label
             setOnMarkerClickListener { _, _ ->
                 m.onClick()
@@ -228,11 +251,13 @@ private fun pinDrawable(context: Context, color: Int, sizeDp: Float): Drawable {
  *
  * osmdroid の Marker は icon の intrinsic サイズで描画範囲とタップ判定を決めるため、
  * getIntrinsicWidth/Height を必ず返す(返さないと 0px 扱いになり、点になってクリックもできない)。
+ *
+ * @param selected 選択中なら白縁を太くして強調する(サイズの拡大は呼び出し側の sizeDp で行う)
  */
-private fun storePinDrawable(context: Context, colorHexes: List<String>, sizeDp: Float): Drawable {
+private fun storePinDrawable(context: Context, colorHexes: List<String>, sizeDp: Float, selected: Boolean = false): Drawable {
     val density = context.resources.displayMetrics.density
     val px = (sizeDp * density).toInt()
-    val strokePx = 2 * density
+    val strokePx = (if (selected) 3f else 2f) * density
     // 未指定なら parseColor の既定色(緑)1 色で描く
     val colors = colorHexes.map { parseColor(it) }.ifEmpty { listOf(parseColor(null)) }
     return object : Drawable() {

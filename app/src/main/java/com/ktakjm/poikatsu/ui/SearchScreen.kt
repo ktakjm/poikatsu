@@ -182,7 +182,9 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     onClose = viewModel::onCloseNearby,
                     onReload = viewModel::fetchNearby,
                     onRadiusChange = viewModel::onNearbyRadiusChange,
-                    onSelectPlace = viewModel::onSelectNearby,
+                    onPreviewPlace = viewModel::onPreviewNearby,
+                    onClearPreview = viewModel::onClearNearbyPreview,
+                    onOpenDetail = viewModel::onSelectNearby,
                     onSearchHere = viewModel::searchHere,
                 )
                 else -> PaddedColumn {
@@ -353,10 +355,14 @@ private fun NearbyPane(
     onClose: () -> Unit,
     onReload: () -> Unit,
     onRadiusChange: (Int) -> Unit,
-    onSelectPlace: (MainViewModel.NearbyPlace) -> Unit,
+    onPreviewPlace: (MainViewModel.NearbyPlace) -> Unit,
+    onClearPreview: () -> Unit,
+    onOpenDetail: (MainViewModel.NearbyPlace) -> Unit,
     onSearchHere: (Double, Double) -> Unit,
 ) {
-    BackHandler(onBack = onClose)
+    val selectedPlace = nearby.selectedPlace
+    // 戻る: プレビュー中なら一覧へ戻し、そうでなければ近くのお店モードを閉じる
+    BackHandler(onBack = { if (selectedPlace != null) onClearPreview() else onClose() })
 
     val center = if (nearby.centerLat != null && nearby.centerLon != null) {
         MapPoint(nearby.centerLat, nearby.centerLon)
@@ -392,14 +398,16 @@ private fun NearbyPane(
     val userLocation = if (nearby.userLat != null && nearby.userLon != null) {
         MapPoint(nearby.userLat, nearby.userLon)
     } else null
-    // ピンは位置が固定なので places に対して安定に作る(パン/ズームでは作り直さない)
-    val markers = remember(nearby.places) {
+    // ピンは位置が固定なので places に対して安定に作る(パン/ズームでは作り直さない)。
+    // 選択状態が変わったら強調ピンを描き直すため selectedPlace も remember キーに含める。
+    val markers = remember(nearby.places, selectedPlace) {
         nearby.places.map { place ->
             MapMarker(
                 point = MapPoint(place.lat, place.lon),
                 label = place.name,
                 colorHexes = place.brandColors,
-                onClick = { onSelectPlace(place) },
+                selected = place == selectedPlace,
+                onClick = { onPreviewPlace(place) },
             )
         }
     }
@@ -409,48 +417,62 @@ private fun NearbyPane(
     val scaffoldState = rememberBottomSheetScaffoldState(
         bottomSheetState = rememberStandardBottomSheetState(
             initialValue = SheetValue.PartiallyExpanded,
-            skipHiddenState = true, // 一覧シートは常に下部に残す(消えない)
+            skipHiddenState = true, // 一覧/プレビューシートは常に下部に残す(消えない)
         ),
     )
+    // 店舗を選択したらシートを peek まで畳んで地図を見せる(一覧を展開中でもプレビューが隠れない)
+    LaunchedEffect(selectedPlace) {
+        if (selectedPlace != null) scaffoldState.bottomSheetState.partialExpand()
+    }
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
         sheetPeekHeight = 200.dp,
         topBar = { NearbyTopBar(onClose = onClose, onReload = onReload) },
         sheetContent = {
-            RadiusChips(
-                radiusM = radiusM,
-                onRadiusChange = onRadiusChange,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            Spacer(Modifier.height(8.dp))
-            // 検索中心からの距離順リスト(還元率・距離)。並びは ViewModel で確定済み
-            if (nearby.places.isEmpty()) {
-                Text(
-                    "周辺${distanceLabel(radiusM)}に対象施策のある店舗が見つかりませんでした。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            if (selectedPlace != null) {
+                // 選択中: 地図を残したまま店舗情報をプレビュー。判定詳細へはここから明示遷移する
+                NearbyPreview(
+                    place = selectedPlace,
+                    onOpenDetail = { onOpenDetail(selectedPlace) },
+                    onClose = onClearPreview,
                 )
             } else {
-                LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
-                    items(nearby.places, key = { "${it.lat},${it.lon},${it.name}" }) { place ->
-                        ListItem(
-                            headlineContent = { Text(place.name) },
-                            supportingContent = {
-                                Text("${distanceLabel(place.distanceMeters)}・${place.merchant?.category.orEmpty()}")
-                            },
-                            trailingContent = {
-                                place.bestRate?.let {
-                                    Text(
-                                        "${trimRate(it)}%",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelectPlace(place) },
-                        )
+                RadiusChips(
+                    radiusM = radiusM,
+                    onRadiusChange = onRadiusChange,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+                Spacer(Modifier.height(8.dp))
+                // 検索中心からの距離順リスト(還元率・距離)。並びは ViewModel で確定済み
+                if (nearby.places.isEmpty()) {
+                    Text(
+                        "周辺${distanceLabel(radiusM)}に対象施策のある店舗が見つかりませんでした。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                } else {
+                    LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+                        items(nearby.places, key = { "${it.lat},${it.lon},${it.name}" }) { place ->
+                            ListItem(
+                                headlineContent = { Text(place.name) },
+                                supportingContent = {
+                                    Text("${distanceLabel(place.distanceMeters)}・${place.merchant?.category.orEmpty()}")
+                                },
+                                trailingContent = {
+                                    place.bestRate?.let {
+                                        Text(
+                                            "${trimRate(it)}%",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                },
+                                // タップは全画面遷移せず「選択」。地図でその店にセンタリングしプレビューを出す
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onPreviewPlace(place) },
+                            )
+                        }
                     }
                 }
             }
@@ -462,9 +484,50 @@ private fun NearbyPane(
             userLocation = userLocation,
             markers = markers,
             initialZoom = zoomForRadius(radiusM),
+            selectedPoint = selectedPlace?.let { MapPoint(it.lat, it.lon) },
             onSearchHere = { c -> onSearchHere(c.lat, c.lon) },
             modifier = Modifier.fillMaxSize().padding(innerPadding),
         )
+    }
+}
+
+/**
+ * 選択中の店舗プレビュー(ボトムシート内)。地図を残したまま店舗情報を見せ、
+ * 「判定の詳細を見る」で初めて全画面の判定詳細へ遷移する。× / 戻るで一覧に復帰。
+ */
+@Composable
+private fun NearbyPreview(
+    place: MainViewModel.NearbyPlace,
+    onOpenDetail: () -> Unit,
+    onClose: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) {
+                Text(place.name, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "${distanceLabel(place.distanceMeters)}・${place.merchant?.category.orEmpty()}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
+            IconButton(onClick = onClose) {
+                Icon(Icons.Default.Close, contentDescription = "プレビューを閉じる")
+            }
+        }
+        place.bestRate?.let {
+            Text(
+                "最大 ${trimRate(it)}% 還元",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Button(onClick = onOpenDetail, modifier = Modifier.fillMaxWidth()) {
+            Text("判定の詳細を見る →")
+        }
     }
 }
 
