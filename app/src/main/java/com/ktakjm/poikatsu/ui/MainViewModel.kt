@@ -92,6 +92,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val refreshFailed: Boolean = false,
         val nearby: NearbyUi? = null,
         val nearbyRadiusM: Int = 1000,
+        /** 設定オーバーレイの表示中フラグ。探す/近くのどちらの上にも重ねて開ける */
+        val showSettings: Boolean = false,
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -396,4 +398,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onBack() {
         _state.update { it.copy(selection = null) }
     }
+
+    /** 設定オーバーレイを開く(探す/近くのどちらからでも。下の画面状態は保持する) */
+    fun onOpenSettings() = _state.update { it.copy(showSettings = true) }
+
+    /** 設定オーバーレイを閉じ、開く前の画面(探す/近く)へ戻る */
+    fun onCloseSettings() = _state.update { it.copy(showSettings = false) }
 }

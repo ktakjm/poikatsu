@@ -7,6 +7,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.asPaddingValues
@@ -38,6 +40,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.BottomSheetScaffold
@@ -138,6 +141,14 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
             when {
                 state.loading -> Unit
                 state.error != null -> Unit
+                state.showSettings -> TopAppBar(
+                    title = { Text("設定") },
+                    navigationIcon = {
+                        IconButton(onClick = viewModel::onCloseSettings) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+                        }
+                    },
+                )
                 state.storeCheck != null -> TopAppBar(
                     title = { Text("${state.storeCheck!!.merchant.name} 店舗判定") },
                     navigationIcon = {
@@ -156,14 +167,21 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                 )
                 // 地図画面は NearbyPane 内の BottomSheetScaffold が独自バーを持つので外側は出さない
                 state.nearby != null -> Unit
-                else -> TopAppBar(title = { Text("対象チェーン店") })
+                else -> TopAppBar(
+                    title = { Text("対象チェーン店") },
+                    actions = {
+                        IconButton(onClick = viewModel::onOpenSettings) {
+                            Icon(Icons.Default.Settings, contentDescription = "設定")
+                        }
+                    },
+                )
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         // モード切替は下部ナビ。詳細・店舗判定などの下位画面に重なっている間は出さない
         // (= ベースの2タブ表示時のみ)。nearby != null が「近くタブ選択中」を兼ねる
         bottomBar = {
-            if (!state.loading && state.error == null && state.selection == null && state.storeCheck == null) {
+            if (!state.loading && state.error == null && state.selection == null && state.storeCheck == null && !state.showSettings) {
                 // 標準 NavigationBar の内容高は 80dp。下部が厚いので 64dp に詰める。
                 // システムバー inset は内部で消費されるぶんを足し戻し、安全領域を確保する
                 val barInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -188,6 +206,12 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
             when {
                 state.loading -> Centered { CircularProgressIndicator() }
                 state.error != null -> Centered { Text(state.error!!, color = MaterialTheme.colorScheme.error) }
+                state.showSettings -> SettingsScreen(
+                    dataStatus = dataStatusLabel(state.dataUpdatedAt, state.dataSource),
+                    refreshing = state.refreshing,
+                    onRefresh = viewModel::onManualRefresh,
+                    onBack = viewModel::onCloseSettings,
+                )
                 state.storeCheck != null -> PaddedColumn {
                     StoreCheckScreen(
                         storeCheck = state.storeCheck!!,
@@ -208,6 +232,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     radiusM = state.nearbyRadiusM,
                     onClose = viewModel::onCloseNearby,
                     onReload = viewModel::fetchNearby,
+                    onOpenSettings = viewModel::onOpenSettings,
                     onRadiusChange = viewModel::onNearbyRadiusChange,
                     onPreviewPlace = viewModel::onPreviewNearby,
                     onClearPreview = viewModel::onClearNearbyPreview,
@@ -245,6 +270,54 @@ private fun PaddedColumn(content: @Composable ColumnScope.() -> Unit) {
 @Composable
 private fun Centered(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
+}
+
+/**
+ * 設定画面(探す/近く 両モードの TopAppBar 右肩の歯車から開く全画面オーバーレイ)。
+ * ListItem は端まで使うため PaddedColumn を介さず直接置く。今は「データ」セクションのみで、
+ * 表示(テーマ)・マイカードは後続ステップで追加する。
+ */
+@Composable
+private fun SettingsScreen(
+    dataStatus: String,
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
+    onBack: () -> Unit,
+) {
+    BackHandler(onBack = onBack)
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        SettingsSectionHeader("データ")
+        ListItem(
+            headlineContent = { Text("データの状態") },
+            supportingContent = { Text(dataStatus) },
+        )
+        ListItem(
+            headlineContent = { Text("今すぐ更新") },
+            trailingContent = {
+                if (refreshing) {
+                    CircularProgressIndicator(Modifier.size(24.dp))
+                } else {
+                    Icon(Icons.Default.Refresh, contentDescription = null)
+                }
+            },
+            modifier = Modifier.clickable(enabled = !refreshing, onClick = onRefresh),
+        )
+        SettingsSectionHeader("このアプリ")
+        ListItem(
+            headlineContent = { Text("表示・マイカードの設定") },
+            supportingContent = { Text("この後のステップで追加します") },
+        )
+    }
+}
+
+@Composable
+private fun SettingsSectionHeader(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+    )
 }
 
 /** 非インタラクティブなカテゴリ表示。押せる見た目(Chip)を持たせない静的タグ */
@@ -374,6 +447,7 @@ private fun NearbyPane(
     radiusM: Int,
     onClose: () -> Unit,
     onReload: () -> Unit,
+    onOpenSettings: () -> Unit,
     onRadiusChange: (Int) -> Unit,
     onPreviewPlace: (MainViewModel.NearbyPlace) -> Unit,
     onClearPreview: () -> Unit,
@@ -391,8 +465,13 @@ private fun NearbyPane(
     // 地図を出せない状態(読込中/エラー/現在地不明)は地図なしの縦並びで表示する
     if (nearby.loading || nearby.error != null || center == null) {
         Column(Modifier.fillMaxSize()) {
-            NearbyTopBar(onReload = onReload)
-            RadiusChips(radiusM = radiusM, onRadiusChange = onRadiusChange, modifier = Modifier.padding(horizontal = 16.dp))
+            NearbyTopBar(onOpenSettings = onOpenSettings)
+            RadiusChips(
+                radiusM = radiusM,
+                onRadiusChange = onRadiusChange,
+                onReload = onReload,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
             Spacer(Modifier.height(4.dp))
             when {
                 nearby.loading -> Box(
@@ -447,7 +526,7 @@ private fun NearbyPane(
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
         sheetPeekHeight = 200.dp,
-        topBar = { NearbyTopBar(onReload = onReload) },
+        topBar = { NearbyTopBar(onOpenSettings = onOpenSettings) },
         sheetContent = {
             if (selectedPlace != null) {
                 // 選択中: 地図を残したまま店舗情報をプレビュー。判定詳細へはここから明示遷移する
@@ -460,6 +539,7 @@ private fun NearbyPane(
                 RadiusChips(
                     radiusM = radiusM,
                     onRadiusChange = onRadiusChange,
+                    onReload = onReload,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
                 Spacer(Modifier.height(8.dp))
@@ -553,13 +633,14 @@ private fun NearbyPreview(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun NearbyTopBar(onReload: () -> Unit) {
-    // モード切替は下部ナビが担うため戻る矢印は持たない(タブ間の対等な移動)
+private fun NearbyTopBar(onOpenSettings: () -> Unit) {
+    // モード切替は下部ナビが担うため戻る矢印は持たない(タブ間の対等な移動)。
+    // 再読み込みは半径チップ右端へ移したので、ここは設定への入口(歯車)だけ持つ
     TopAppBar(
         title = { Text("近くのお店") },
         actions = {
-            IconButton(onClick = onReload) {
-                Icon(Icons.Default.Refresh, contentDescription = "再読み込み")
+            IconButton(onClick = onOpenSettings) {
+                Icon(Icons.Default.Settings, contentDescription = "設定")
             }
         },
         // 外側 Scaffold が既にステータスバー inset を消費済みなので、ここで二重に空けない
@@ -568,14 +649,28 @@ private fun NearbyTopBar(onReload: () -> Unit) {
 }
 
 @Composable
-private fun RadiusChips(radiusM: Int, onRadiusChange: (Int) -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+private fun RadiusChips(
+    radiusM: Int,
+    onRadiusChange: (Int) -> Unit,
+    onReload: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         listOf(500, 1000, 3000).forEach { radius ->
             FilterChip(
                 selected = radiusM == radius,
                 onClick = { onRadiusChange(radius) },
                 label = { Text(distanceLabel(radius)) },
             )
+        }
+        // 半径チップの右端に再読み込み。地図表示時はこの行ごとボトムシート内に入る
+        Spacer(Modifier.weight(1f))
+        IconButton(onClick = onReload) {
+            Icon(Icons.Default.Refresh, contentDescription = "再読み込み")
         }
     }
 }
