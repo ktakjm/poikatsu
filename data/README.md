@@ -6,12 +6,12 @@
 
 - `merchants.json` — チェーン店マスタ。`reading`(ひらがな読み)と `aliases`(略称・別ブランド名)は検索のヒット率に直結するので、追加時は必ず入れる。
 - `campaigns.json` — 還元施策。`merchant_rules[].merchant_id` は merchants.json の `id` を参照する。**ユーザー固有の前提はここに書かず、汎用的な施策情報のみを持つ。**
-- `profile.json` — ユーザー前提条件のデフォルト値。現状: 三井住友=Visa(7%)、MUFG=Mastercard・エントリー済み・三菱UFJ銀行口座設定済み(基準7%)。判定エンジンは campaigns.json をこのプロファイルでフィルタして評価する(例: brand が Mastercard なら `amex_excluded` を無視、`entry_required` な施策は `entry_done` を確認)。将来の設定画面はこのファイルの構造をそのまま編集対象にする。
+- `profile.json` — ユーザー前提条件の**デフォルト値(カタログ)**。現状: 三井住友=Visa(7%, `point_multiplier` でウエル活×1.5)、MUFG=Mastercard(基準7%)。**設定画面でカード所有・還元率・ブランド・ウエル活を編集でき、差分は DataStore に保存して起動時にこのプロファイルへ重ねる(profile.json 自体は書き換えない)**。判定エンジンは**所有カードのみ**を対象とし、brand が Amex なら `amex_excluded` の店を除外・Mastercard 等なら無視、`effective_rate_default` を実効還元率として用いる。
 
 ## スキーマの要点
 
 - `rate_base` / `rate_max` — 現実的な基準還元率と理論上の最大。判定画面では rate_base を主表示し、rate_max は条件付きで示す。
-- `entry_required` — エントリー必須か。MUFG はエントリー+三菱UFJ銀行口座がないと 0.5% に落ちるので、表示時に強調する。
+- `entry_required` — エントリー必須か(施策メタデータ)。MUFG はエントリー+三菱UFJ銀行口座がないと 0.5% に落ちる。**還元率はユーザーが公式アプリの実効値を手入力する方針のため、現在この値による警告は出していない**(将来の汎用「要エントリー」表示の余地として残す)。
 - `merchant_rules[].note` — その店でのみ成立する条件(例: スタバはモバイルオーダーのみ)。
 - `merchant_rules[].exclusion_note` — 対象外になるケースの説明文(人間向け)。「一部対象外店舗があります」程度の但し書きとして判定詳細に表示する。**公式が店舗単位で対象/対象外を言い切っていない情報(「例: ○○店」レベルの例示)はここに文章で書くにとどめ、`official_store_list` には入れない**。
 - `merchant_rules[].store_list_url` — 「一部店舗のみ対象」のチェーン(サイゼリヤ・KFC等)で、公式の対象店舗一覧へのリンク。判定詳細から開ける。
@@ -23,7 +23,8 @@
   - `source_url` — (任意)根拠とした公式ページ。
   - 例(アカチャンホンポ/MUFG): 公式([akachan.jp](https://www.akachan.jp/topics/mufgCPlist/))が◯対象/×対象外を店舗名で明示。両方を `eligible_stores`/`ineligible_stores` に登録し、未掲載店は要確認。公式ページに更新日表記が無いため `date_is_official: false`(確認日表示)。
   - 注意: 網羅的でない例示リストをここに入れると「非一致=対象」を誤って断定してしまう。断定できる完全なリストだけを登録すること。
-- `merchant_rules[].amex_excluded` — (MUFGのみ) Amex ブランドだと優遇対象外の店。
+- `merchant_rules[].amex_excluded` — (MUFGのみ) Amex ブランドだと優遇対象外の店。設定でブランドを Amex にした場合、これらの店は判定・検索・地図から除外される。
+- `profile.json` の `point_multiplier`(任意) — ポイント価値の倍率。`{ label, factor, color }`。設定画面で「ウエル活利用時の還元率を表示」チェックを出し、ON で `factor` 倍した実効還元率を表示する。`color` はバッジ色(ウエルシアのロゴ色 #RRGGBB)。三井住友(Vポイント)に設定。
 - `verified_date` — 公式ページで最後に確認した日。**判定画面に必ず表示する。**
 - `brand_color` — 発行体の識別色(#RRGGBB)。UIのストライプ/バッジに使う。**ロゴ画像は商標・著作権の問題があるため使用しない**(公開リポジトリでの再配布になる)。色には権利が及ばないのでブランドカラーで識別する。
   - 確認済み: 三井住友=トラッドグリーン `#004831` (SMFG VI)、三菱UFJ=MUFGレッド `#E60000`

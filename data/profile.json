@@ -7,8 +7,8 @@
         "campaign_id": "smcc_combini_restaurant",
         "card_name": "三井住友カード",
         "brand": "Visa",
-        "entry_done": null,
         "effective_rate_default": 7.0,
+        "point_multiplier": { "label": "ウエル活利用時の還元率を表示", "factor": 1.5, "color": "#00A0E9" },
         "notes": [
           "Visaブランドなので Google Pay / Samsung Wallet のスマホタッチ決済も利用可(Mastercard制限の影響なし)",
           "Oliveフレキシブルペイではない前提のため8%ではなく7%を既定値とする"
@@ -18,8 +18,6 @@
         "campaign_id": "mufg_point_up_program",
         "card_name": "三菱UFJカード",
         "brand": "Mastercard",
-        "entry_done": true,
-        "payment_account_mufg_bank": true,
         "effective_rate_default": 7.0,
         "notes": [
           "エントリー済み+支払口座=三菱UFJ銀行の前提のため、基準還元率は7%(0.5%+スペシャル6.5%)",

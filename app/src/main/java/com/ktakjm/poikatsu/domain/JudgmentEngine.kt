@@ -139,22 +139,23 @@ class JudgmentEngine(private val data: PoikatsuData) {
     fun judge(merchant: Merchant): List<Judgment> =
         data.campaigns.mapNotNull { campaign ->
             val rule = campaign.ruleFor(merchant) ?: return@mapNotNull null
+            // 所有していないカードの施策は対象外。設定で所有 OFF にしたカードは
+            // VM のマージ層で profile から外れるため、ここに来ない(= null スキップ)。
             val card = data.profile.cards.firstOrNull { it.campaignId == campaign.id }
-            val isAmex = card?.brand?.equals("Amex", ignoreCase = true) == true
-            val warnings = buildList {
-                if (campaign.entryRequired && card?.entryDone != true) {
-                    add("エントリー必須の施策です。未エントリーの場合は通常還元のみになります")
-                }
-                if (rule.amexExcluded && isAmex) {
-                    add("Amexブランドはこの店舗では優遇対象外です")
-                }
+                ?: return@mapNotNull null
+            // Amex ブランドかつ店舗が amex_excluded のときは、その店ではこの施策を対象外にする
+            // (優遇還元の適用なし)。地図・検索・詳細すべてからこの施策が消える。
+            if (rule.amexExcluded && card.brand.equals("Amex", ignoreCase = true)) {
+                return@mapNotNull null
             }
             Judgment(
                 campaign = campaign,
                 rule = rule,
                 card = card,
-                effectiveRate = card?.effectiveRateDefault ?: campaign.rateBase,
-                warnings = warnings,
+                effectiveRate = card.effectiveRateDefault ?: campaign.rateBase,
+                // 還元率はユーザーが公式アプリの実効値を手入力する前提なので、エントリー要否の警告は持たない。
+                // warnings は将来の用途(例: period_end 期限切れ)のために残す。
+                warnings = emptyList(),
             )
         }.sortedByDescending { it.effectiveRate }
 

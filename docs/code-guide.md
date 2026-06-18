@@ -205,7 +205,11 @@ flowchart TD
 
 ### リモート更新の発火タイミング（ui/MainViewModel.kt）
 
-リモート取得は `init` ではなく **Lifecycle の ON_START 起点**（`SearchScreen` の `LifecycleEventObserver` → `onAppForeground()`）。初回起動でも必ず一度走り、フォアグラウンド復帰のたびに試行されるが、直近 1 時間以内に成功していればスキップする（施策データの更新は月数回なので十分）。`initialLoad.join()` でローカルロード完了を待ってからリモート結果を適用し、表示順序の競合を防いでいる。
+リモート取得は `init` ではなく **Lifecycle の ON_START 起点**（`SearchScreen` の `LifecycleEventObserver` → `onAppForeground()`）。初回起動でも必ず一度走り、フォアグラウンド復帰のたびに試行されるが、直近 1 時間以内に成功していればスキップする（施策データの更新は月数回なので十分）。`initialLoad.join()` でローカルロード完了を待ってからリモート結果を適用し、表示順序の競合を防いでいる。自動更新は設定でオフにでき（その場合フォアグラウンド時の自動取得をしない／手動更新は可）。
+
+### 設定の永続化（data/SettingsRepository.kt）
+
+テーマ・データ取得・マイカードの設定は **DataStore Preferences**（`SettingsRepository`）に保存する。テーマ／dynamic color／自動更新は型付きキー、カード差分（`CardOverride`：所有・還元率・ブランド・ウエル活）は `campaign_id` をキーにした Map を JSON 文字列として 1 キーに格納する（キー数が可変でも Preferences のキーを増やさない）。`MainViewModel` は `settings` Flow を購読し、変更のたびに **profile.json（カタログ＝既定値）へユーザー差分を重ねて**エンジンを作り直す（マージは VM 層、`JudgmentEngine` は純 Kotlin のまま）。profile.json 自体は書き換えない。テーマは描画前に必要なので `MainActivity` が `state.themeMode`/`dynamicColor` を `PoikatsuTheme` に渡す（6.1 参照）。
 
 ## 5. 判定エンジン（domain/JudgmentEngine.kt）
 
@@ -241,16 +245,24 @@ flowchart LR
     IN["Merchant"] --> LOOP["全 Campaign を走査"]
     LOOP --> RULE{"merchant_rules に<br/>この店の rule あり?"}
     RULE -- "なし" --> DROP(["対象外（リスト除外）"])
-    RULE -- "あり" --> CARD["profile から保有カードを引く<br/>effectiveRate を決定"]
-    CARD --> WARN["警告生成<br/>・未エントリー<br/>・Amex 対象外"]
-    WARN --> SORT["effectiveRate 降順で<br/>Judgment リスト返却"]
+    RULE -- "あり" --> CARD{"保有カードあり?<br/>(未所有=対象外)"}
+    CARD -- "なし" --> DROP
+    CARD -- "あり" --> AMEX{"Amex かつ<br/>amex_excluded?"}
+    AMEX -- "はい" --> DROP
+    AMEX -- "いいえ" --> RATE["effectiveRate 決定"]
+    RATE --> SORT["effectiveRate 降順で<br/>Judgment リスト返却"]
 
     style IN fill:#1565C0,stroke:#0D47A1,color:#fff
     style SORT fill:#2E7D32,stroke:#1B5E20,color:#fff
     style DROP fill:#E0E0E0,stroke:#9E9E9E,color:#333
 ```
 
-- `effectiveRate = card?.effectiveRateDefault ?: campaign.rateBase` — ユーザー前提（profile）があればそれを優先
+- `effectiveRate = card.effectiveRateDefault ?: campaign.rateBase` — ユーザー前提（profile）があればそれを優先
+- **保有カードのみ対象**: profile に対応カードが無い施策はスキップする。設定で「所有」OFF にしたカードは `MainViewModel` のマージ層で profile から外れるため、ここで自然に除外される。
+- **Amex の対象外**: カードブランドが Amex で店舗 rule が `amex_excluded` のとき、その店ではこの施策を除外する（警告ではなく非表示。検索・判定詳細・地図ピン/件数すべてに波及）。非 Amex（Mastercard/Visa/JCB）は従来どおり。
+- **設定値の反映はマージ層**: 還元率の手入力・MUFG ブランド・ウエル活 ×1.5（`ProfileCard.point_multiplier` の係数）は `MainViewModel` が DataStore の差分（`CardOverride`）を profile に重ねてからエンジンへ渡す。`JudgmentEngine` は純 Kotlin・実データテストのまま保つ（4 章「設定の永続化」／6.1 参照）。
+- **reward の無いチェーンは一覧に出さない**: 判定が空（所有カードで対象になる施策が無い）チェーンは検索結果・近隣リストから除外する（`MainViewModel.searchRewarded` と `loadNearbyAround` で `judge` 非空のものだけ残す）。
+- **エントリー要否は持たない**: 還元率はユーザーが公式アプリの実効値（エントリー込み）を手入力する前提のため、`entry_done` フラグと未エントリー警告は廃止した。`Judgment.warnings` は将来の用途（例: `period_end` 期限切れ）に備えて空のまま残す。
 - **店舗単位の判定 `checkStore(merchant, storeName)`**: `official_store_list` を持つ施策ごとに、`ineligible_stores` 一致 → 対象外 / `eligible_stores` 一致 → 対象 / どちらにも無し → 要確認（`StoreEligibility.UNKNOWN`）の **3 状態**を返す（対象外を優先）。リスト網羅性を仮定せず、**公式が店舗名で明示した店だけ言い切る**設計（旧 `facility_risk_patterns` によるキーワード推測警告は実際の対象外店舗との乖離が大きく廃止）。
 - `canCheckStore(merchant)`: `official_store_list` を持つ施策が 1 つでもあれば、対象判定画面（`StoreCheckScreen`）に遷移できる。
 - `isExcludedStore(merchant, storeName)`: 近隣リスト用。`checkStore` の結果が INELIGIBLE を含み ELIGIBLE を含まないときだけ true（**明示的対象外のみ**近隣リストから除外する）。
@@ -282,7 +294,7 @@ stateDiagram-v2
 
 「対象チェーン店」（名前検索）と「近く」（GPS 周辺）は**下部ナビ（`NavigationBar`）で対等に切り替わるトップレベル 2 モード**で、`nearby == null / != null` がそのまま選択中タブを表す（専用の `tab` フラグは持たない）。`Detail`（判定詳細）/`StoreCheck`（店舗判定）はそのどちらかに**重なるオーバーレイ**で、`nearby` を消さないため戻ると元のモードへ復帰する（近くで選んだ店の詳細から戻れば近くに戻る）。
 
-**設定**（`showSettings`）も探す/近くのどちらにも重なる独立オーバーレイで、`loading`/`error` の次・他のオーバーレイより先に評価する。歯車（「対象チェーン店」「近く」両ベース画面の `TopAppBar` 右肩アクション）の `onOpenSettings` で開き、`onCloseSettings`（または `BackHandler`）で閉じると、下の画面状態（`nearby` 等）は保持されるため元のモードへ復帰する。
+**設定**（`showSettings`）も探す/近くのどちらにも重なる独立オーバーレイで、`loading`/`error` の次・他のオーバーレイより先に評価する。歯車（「対象チェーン店」「近く」両ベース画面の `TopAppBar` 右肩アクション）の `onOpenSettings` で開き、`onCloseSettings`（または `BackHandler`）で閉じると、下の画面状態（`nearby` 等）は保持されるため元のモードへ復帰する。設定値（`themeMode`/`dynamicColor`/`autoRefresh`/`cardSettings`）は `SettingsRepository`（DataStore）の Flow を購読して `UiState` に載せ、変更は VM の setter→DataStore へ書く（`onEach { rebuild() }` で再判定）。テーマだけは描画前にテーマ層へ渡す必要があるため、`MainActivity` で VM を生成し `state.themeMode`/`dynamicColor` を `PoikatsuTheme` に注入してから `PoikatsuApp` を包む。
 
 戻る操作は Compose の `BackHandler` で実装。`storeCheck` 分岐は `selection` より先に評価する（両方非 null のとき対象判定画面を優先表示）。データ差し替え時（リモート更新成功時）は、表示中の `selection` / `storeCheck` があれば新データで判定を引き直す（`applyData` 内）。Selection の組み立ては `JudgmentEngine.selectionFor(merchant, hint)`（private 拡張）に集約し、判定・遷移可否・プリフィルをまとめて引く。
 
@@ -290,7 +302,7 @@ stateDiagram-v2
 
 ### 6.2 判定カード表示
 
-`JudgmentCard` は施策ごとに 1 枚。左端のストライプとカード名バッジに `brand_color` を使い、ロゴ画像なしで発行体を識別する。表示要素は「還元率（大）→ 条件達成時最大 → 支払い方法 → 店固有条件 → エントリー警告 → 公式店舗一覧リンク → 上限 → **情報確認日**」の順。`verified_date` の表示は必須ルール（データが古くなるリスクへの対処）。
+`JudgmentCard` は施策ごとに 1 枚。左端のストライプとカード名バッジに `brand_color` を使い、ロゴ画像なしで発行体を識別する。表示要素は「還元率（大）→ 条件達成時最大 → 支払い方法 → 店固有条件 → 公式店舗一覧リンク → 上限 → **情報確認日**」の順。**ウエル活**フラグ（`ProfileCard.point_multiplier`）を持つカードは、ウエル活の ON/OFF によらずカード名バッジの右に「ウエル活利用可」バッジ（色は profile の `point_multiplier.color`＝ウエルシアのロゴ色を `parseBrandColor`＋`onColorFor` で表示）を常時添え、上限の直後に注記を出す（ON＝「※還元率はウエル活利用時の実質還元率」／OFF＝「※WAONポイントに交換する事でウエル活利用可能」）。ON/OFF の状態は実行時フラグ `ProfileCard.welcatsuApplied`（VM のマージで付与・`@Transient`）で判定カードへ運ぶ。`verified_date` の表示は必須ルール（データが古くなるリスクへの対処）。
 
 公式リストを持つチェーン（`canCheckStore` が true）では判定詳細に「この店舗が対象か調べる →」ボタンを出し、別画面 `StoreCheckScreen` へ遷移する。同画面は店舗名入力に対し `StoreVerdictCard` で 対象（`CheckCircle`）/ 対象外（`Close`）/ 要確認（`Info`）を Material アイコン＋セマンティックカラー（primary / error / `warningColor()`）で表示し、断定の鮮度（`date_is_official` に応じて「公式情報の更新日」or「確認日」）を併記する。公式リストの無いチェーンはボタンを出さない（判定画面を意識させない）。
 
@@ -354,7 +366,7 @@ sequenceDiagram
 
 - 地図画面だけ全幅で描くため、全画面共通だった横 16dp パディングはルート（`Box`）から外し `PaddedColumn` ヘルパーへ移譲した。検索・判定詳細・店舗判定の各画面は従来どおり 16dp の左右余白を保つ。
 - ヘッダーは `TopAppBar`（`NearbyTopBar`）。モード切替は下部ナビが担うため**戻る矢印は持たず**、アクションは設定への歯車のみ。**再読み込みは半径チップ行（`RadiusChips`）の右端へ移設**し、地図表示時はチップごとボトムシート内に入る（店舗プレビュー表示中はチップ行が出ないため一時的に隠れる＝更新導線の整理は将来課題）。地図画面では外側 `Scaffold` が `topBar` を出さず、`BottomSheetScaffold` の `topBar` スロットに置く。外側 `Scaffold` が既にステータスバー inset を消費済みのため、この内側 `TopAppBar` は `windowInsets = WindowInsets(0,0,0,0)` を指定して inset の二重適用（上端の余白二重化）を防ぐ。
-- **ダークモード追従**: OSM ラスタタイルは描画済み画像で端末テーマに反応しないため、システムがダークなら osmdroid の `TilesOverlay.INVERT_COLORS` をタイルに適用し、ライトなら解除する（`isSystemInDarkTheme()` で判定。モードが切り替わったときだけ差し替えて無駄な `invalidate` を避ける）。本格的なダーク配色が必要なら専用ダークタイル（要・利用規約/帰属確認）への差し替えが将来の選択肢。
+- **ダークモード追従**: OSM ラスタタイルは描画済み画像でアプリのテーマに反応しないため、表示が暗いとき osmdroid の `TilesOverlay.INVERT_COLORS` をタイルに適用し、明るいなら解除する（モードが切り替わったときだけ差し替えて無駄な `invalidate` を避ける）。**暗いかどうかは `MaterialTheme.colorScheme.surface.luminance() < 0.5` で判定する**——設定のテーマ上書き（システム/ライト/ダーク）を反映した実際の配色から見るため、OS 設定だけを見る `isSystemInDarkTheme()` と違い、アプリ内テーマ切替にも追従する。本格的なダーク配色が必要なら専用ダークタイル（要・利用規約/帰属確認）への差し替えが将来の選択肢。
 - ピンは店舗が対応する施策の `campaign.brand_color` で着色（ロゴ不使用方針と整合）。複数発行体に対応する店舗（例: 三井住友＝緑 と MUFG＝赤 の両対応）は色を扇状に等分して 1 つのピンに描き分ける（2 色なら斜めの境界で分割）。描画は osmdroid の `Marker.icon` に渡す自前 `Drawable`（`storePinDrawable`、`Canvas` で円を `drawArc`）で行う。**自前 `Drawable` は `getIntrinsicWidth/Height` を必ず返す**——osmdroid はアイコンの intrinsic サイズで描画範囲とタップ判定領域を決めるため、未実装（既定の -1）だと点になりタップも効かなくなる。単色用途（現在地の青ドット）は従来どおり `GradientDrawable`（`pinDrawable`）を使う。
 - **選択とプレビュー（リスト⇔地図の連動）**: ピン/リスト行のタップはどちらも全画面遷移せず、その店を「選択」する（`onPreviewNearby` → `NearbyUi.selectedPlace`）。選択中はボトムシートが店舗プレビュー（店名・距離・カテゴリ・最大還元率・「判定の詳細を見る →」）に切り替わり、地図は `NearbyMap` に渡した `selectedPoint` の変化を検知してその店へ `animateTo`（ズーム維持）、該当ピンを `MapMarker.selected=true` で拡大＋白縁強調し最前面に描く（`renderOverlays` で `sortedBy { selected }` し選択ピンを最後に追加）。シートは `partialExpand()` で peek まで畳んで地図を見せる。判定詳細へはプレビューの「判定の詳細を見る →」ボタンから初めて `onSelectNearby` で遷移し、× ボタン / システムバック（`BackHandler`：選択中は `onClearNearbyPreview` で一覧へ、選択していなければ `onCloseNearby` で「探す」タブへ戻る）で復帰する。判定詳細のタイトルは POI 表示名（支店名込み、`Selection.displayName`＝リストに出ている名前と同じ）を出し、無ければチェーン名（`merchant.name`）にフォールバックする。再検索（`searchHere`/半径変更/`fetchNearby`）は新しい `NearbyUi` を作るため `selectedPlace` は null に戻り、選択は自動解除される。
 - **現在地へ戻す**: 地図右上の `FilledTonalIconButton`（`LocationOn`、48dp 確保）をタップすると `mapView.controller.animateTo(userLocation)` で**カメラだけ**現在地（青ドット）へ寄せる（ズーム維持・通信なし・再検索しない）。ピン・一覧は変えない。周辺を取り直したいときは現在地中心になった状態で「このエリアを検索」を押す。`userLocation` が無い（取得失敗）ときはボタンを出さない。「再読み込み」（`fetchNearby`）が GPS 取り直し＋現在地周辺で再検索するのに対し、本ボタンは即時のカメラ移動に役割を限定して重複を避けている。
@@ -393,6 +405,7 @@ Overpass 側の設計判断（`OverpassClient` のコメント参照）:
 | シリアライズ | kotlinx.serialization | ignoreUnknownKeys で前方互換 |
 | HTTP | OkHttp（素のまま） | Retrofit/Ktor なし。GET 2 種 + POST 1 種のみなので十分 |
 | ローカル保存 | ファイルキャッシュ（filesDir/remote_data/） | Room は見送り |
+| 設定の永続化 | DataStore Preferences（`SettingsRepository`） | テーマ・データ取得・カード差分。Apache-2.0 |
 | 位置情報 | LocationManager（フレームワーク標準） | Play Services 不使用 |
 | 周辺店舗 | Overpass API（OSM） | 無料・API キー不要。本家失敗時はミラーにフォールバック |
 | 地図表示 | osmdroid（OSM ラスタタイル） | Play Services 非依存・Apache-2.0。`NearbyMap.kt` に閉じ込め将来差し替え可能 |

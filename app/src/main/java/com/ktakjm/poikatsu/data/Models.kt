@@ -2,6 +2,7 @@ package com.ktakjm.poikatsu.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlinx.serialization.json.Json
 
 @Serializable
@@ -86,14 +87,28 @@ data class CampaignsFile(
     val campaigns: List<Campaign> = emptyList(),
 )
 
+/**
+ * ポイント価値の倍率(例: 三井住友カードの V ポイントはウエル活で 1.5 倍価値)。
+ * 設定画面でこのカードに「ウエル活利用時の還元率を表示」チェックを出すかどうかと、
+ * ON 時に掛ける係数を担う。label/factor をデータ側に持たせ UI に文言をハードコードしない。
+ */
+@Serializable
+data class PointMultiplier(
+    val label: String,
+    val factor: Double,
+    /** バッジ等に使う識別色(例: ウエルシアのコーポレートカラー)。"#RRGGBB" 形式 */
+    val color: String? = null,
+)
+
 @Serializable
 data class ProfileCard(
     @SerialName("campaign_id") val campaignId: String,
     @SerialName("card_name") val cardName: String,
     val brand: String = "",
-    @SerialName("entry_done") val entryDone: Boolean? = null,
-    @SerialName("payment_account_mufg_bank") val paymentAccountMufgBank: Boolean? = null,
     @SerialName("effective_rate_default") val effectiveRateDefault: Double? = null,
+    @SerialName("point_multiplier") val pointMultiplier: PointMultiplier? = null,
+    /** 実行時フラグ: ウエル活(×factor)を適用済みか。VM のマージで設定し JSON には現れない */
+    @Transient val welcatsuApplied: Boolean = false,
     val notes: List<String> = emptyList(),
 )
 

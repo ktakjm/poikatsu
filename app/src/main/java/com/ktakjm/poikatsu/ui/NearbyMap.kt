@@ -9,7 +9,6 @@ import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +21,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -87,9 +88,10 @@ fun NearbyMap(
     val mapView = rememberMapViewWithLifecycle()
     // center / zoom / markers が変わったときだけ更新する(無関係な再コンポーズで描画し直さない)
     val renderState = remember { RenderState() }
-    // OSM 標準タイルは描画済み画像なので端末のダークモードに追従しない。
-    // システムが夜間ならタイルに色反転フィルタをかけて「暗い地図」に見せる。
-    val darkMode = isSystemInDarkTheme()
+    // OSM 標準タイルは描画済み画像なのでアプリのテーマに追従しない。
+    // 設定のテーマ上書き(システム/ライト/ダーク)も含めた「実際の表示が暗いか」を
+    // MaterialTheme の配色から判定する(OS 設定だけ見ると設定のテーマ上書きに追従しない)。
+    val darkMode = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
     Box(modifier) {
         AndroidView(

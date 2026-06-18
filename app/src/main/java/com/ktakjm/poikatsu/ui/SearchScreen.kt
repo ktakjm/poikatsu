@@ -1,6 +1,7 @@
 package com.ktakjm.poikatsu.ui
 
 import android.Manifest
+import android.os.Build
 import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -8,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -34,6 +36,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
@@ -42,11 +45,20 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -70,7 +82,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -78,14 +92,17 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ktakjm.poikatsu.BuildConfig
 import com.ktakjm.poikatsu.data.DataSource
 import com.ktakjm.poikatsu.data.Merchant
+import com.ktakjm.poikatsu.data.ThemeMode
 import com.ktakjm.poikatsu.domain.Judgment
 import com.ktakjm.poikatsu.domain.StoreEligibility
 import com.ktakjm.poikatsu.domain.StoreVerdict
@@ -207,8 +224,19 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                 state.loading -> Centered { CircularProgressIndicator() }
                 state.error != null -> Centered { Text(state.error!!, color = MaterialTheme.colorScheme.error) }
                 state.showSettings -> SettingsScreen(
+                    themeMode = state.themeMode,
+                    dynamicColor = state.dynamicColor,
+                    autoRefresh = state.autoRefresh,
+                    cards = state.cardSettings,
                     dataStatus = dataStatusLabel(state.dataUpdatedAt, state.dataSource),
                     refreshing = state.refreshing,
+                    onThemeModeChange = viewModel::onSetThemeMode,
+                    onDynamicColorChange = viewModel::onSetDynamicColor,
+                    onAutoRefreshChange = viewModel::onSetAutoRefresh,
+                    onCardOwnedChange = viewModel::onSetCardOwned,
+                    onCardRateChange = viewModel::onSetCardRate,
+                    onCardBrandChange = viewModel::onSetCardBrand,
+                    onCardWelcatsuChange = viewModel::onSetCardWelcatsu,
                     onRefresh = viewModel::onManualRefresh,
                     onBack = viewModel::onCloseSettings,
                 )
@@ -274,22 +302,70 @@ private fun Centered(content: @Composable () -> Unit) {
 
 /**
  * 設定画面(探す/近く 両モードの TopAppBar 右肩の歯車から開く全画面オーバーレイ)。
- * ListItem は端まで使うため PaddedColumn を介さず直接置く。今は「データ」セクションのみで、
- * 表示(テーマ)・マイカードは後続ステップで追加する。
+ * ListItem は端まで使うため PaddedColumn を介さず直接置く。表示/マイカード/データ/このアプリの
+ * 4 セクション。値は DataStore 由来(MainViewModel 経由)で、変更は即 ViewModel の setter へ流す。
  */
 @Composable
 private fun SettingsScreen(
+    themeMode: ThemeMode,
+    dynamicColor: Boolean,
+    autoRefresh: Boolean,
+    cards: List<MainViewModel.CardSetting>,
     dataStatus: String,
     refreshing: Boolean,
+    onThemeModeChange: (ThemeMode) -> Unit,
+    onDynamicColorChange: (Boolean) -> Unit,
+    onAutoRefreshChange: (Boolean) -> Unit,
+    onCardOwnedChange: (String, Boolean) -> Unit,
+    onCardRateChange: (String, Double?) -> Unit,
+    onCardBrandChange: (String, String) -> Unit,
+    onCardWelcatsuChange: (String, Boolean) -> Unit,
     onRefresh: () -> Unit,
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
+    val uriHandler = LocalUriHandler.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        // --- 表示 ---
+        SettingsSectionHeader("表示")
+        ThemeModeRow(themeMode = themeMode, onChange = onThemeModeChange)
+        val dynamicSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+        val dynamicNote: (@Composable () -> Unit)? =
+            if (dynamicSupported) null else ({ Text("Android 12 以降で利用できます") })
+        ListItem(
+            headlineContent = { Text("壁紙の色を使う") },
+            supportingContent = dynamicNote,
+            trailingContent = {
+                Switch(
+                    checked = dynamicColor && dynamicSupported,
+                    onCheckedChange = onDynamicColorChange,
+                    enabled = dynamicSupported,
+                )
+            },
+        )
+
+        // --- マイカード ---
+        SettingsSectionHeader("マイカード")
+        cards.forEach { card ->
+            CardSettingItem(
+                card = card,
+                onOwnedChange = { onCardOwnedChange(card.campaignId, it) },
+                onRateChange = { onCardRateChange(card.campaignId, it) },
+                onBrandChange = { onCardBrandChange(card.campaignId, it) },
+                onWelcatsuChange = { onCardWelcatsuChange(card.campaignId, it) },
+            )
+        }
+
+        // --- データ ---
         SettingsSectionHeader("データ")
         ListItem(
             headlineContent = { Text("データの状態") },
             supportingContent = { Text(dataStatus) },
+        )
+        ListItem(
+            headlineContent = { Text("自動更新") },
+            supportingContent = { Text("起動・復帰時に最新データを取得(1時間に1回まで)") },
+            trailingContent = { Switch(checked = autoRefresh, onCheckedChange = onAutoRefreshChange) },
         )
         ListItem(
             headlineContent = { Text("今すぐ更新") },
@@ -302,11 +378,160 @@ private fun SettingsScreen(
             },
             modifier = Modifier.clickable(enabled = !refreshing, onClick = onRefresh),
         )
+
+        // --- このアプリ ---
         SettingsSectionHeader("このアプリ")
         ListItem(
-            headlineContent = { Text("表示・マイカードの設定") },
-            supportingContent = { Text("この後のステップで追加します") },
+            headlineContent = { Text("バージョン") },
+            trailingContent = { Text(BuildConfig.VERSION_NAME) },
         )
+        ListItem(
+            headlineContent = { Text("ソースコード(GitHub)") },
+            trailingContent = {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+            },
+            modifier = Modifier.clickable { uriHandler.openUri("https://github.com/ktakjm/poikatsu") },
+        )
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+/** カード1枚分の設定行: 所有チェック + (所有時) ブランド選択 / 還元率 / ウエル活。 */
+@Composable
+private fun CardSettingItem(
+    card: MainViewModel.CardSetting,
+    onOwnedChange: (Boolean) -> Unit,
+    onRateChange: (Double?) -> Unit,
+    onBrandChange: (String) -> Unit,
+    onWelcatsuChange: (Boolean) -> Unit,
+) {
+    var showRateDialog by remember { mutableStateOf(false) }
+    ListItem(
+        headlineContent = { Text("${card.cardName}（${card.brand}）") },
+        leadingContent = { Checkbox(checked = card.owned, onCheckedChange = onOwnedChange) },
+        supportingContent = { Text(if (card.owned) "持っている" else "持っていない") },
+        modifier = Modifier.clickable { onOwnedChange(!card.owned) },
+    )
+    if (card.owned) {
+        if (card.showBrandPicker) {
+            ListItem(
+                headlineContent = { Text("ブランド") },
+                trailingContent = { BrandDropdown(brand = card.brand, onChange = onBrandChange) },
+                modifier = Modifier.padding(start = 24.dp),
+            )
+            if (card.brand.equals("Amex", ignoreCase = true)) {
+                Text(
+                    "Amex は一部店舗が優遇対象外になります",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = warningColor(),
+                    modifier = Modifier.padding(start = 24.dp, end = 16.dp, bottom = 8.dp),
+                )
+            }
+        }
+        ListItem(
+            headlineContent = { Text("還元率（公式アプリの表示値）") },
+            trailingContent = {
+                Text("${trimRate(card.rate)}%", style = MaterialTheme.typography.titleMedium)
+            },
+            modifier = Modifier.padding(start = 24.dp).clickable { showRateDialog = true },
+        )
+        card.pointMultiplier?.let { pm ->
+            val welcatsuNote: (@Composable () -> Unit)? = if (card.welcatsu) {
+                ({ Text("${trimRate(card.rate * pm.factor)}% で表示中") })
+            } else {
+                null
+            }
+            ListItem(
+                headlineContent = { Text(pm.label) },
+                leadingContent = { Checkbox(checked = card.welcatsu, onCheckedChange = onWelcatsuChange) },
+                supportingContent = welcatsuNote,
+                modifier = Modifier.padding(start = 24.dp).clickable { onWelcatsuChange(!card.welcatsu) },
+            )
+        }
+    }
+    if (showRateDialog) {
+        RateEditDialog(
+            initial = card.rate,
+            onDismiss = { showRateDialog = false },
+            onConfirm = {
+                onRateChange(it)
+                showRateDialog = false
+            },
+        )
+    }
+}
+
+/** ブランド選択(Amex/Mastercard/Visa/JCB)。Amex のときだけ判定挙動が変わる。 */
+@Composable
+private fun BrandDropdown(brand: String, onChange: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { expanded = true }) {
+            Text(brand.ifBlank { "選択" })
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            listOf("Amex", "Mastercard", "Visa", "JCB").forEach { b ->
+                DropdownMenuItem(
+                    text = { Text(b) },
+                    onClick = {
+                        onChange(b)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** 還元率の数値入力ダイアログ。空/「既定に戻す」で上書きを解除する(null を返す)。 */
+@Composable
+private fun RateEditDialog(initial: Double, onDismiss: () -> Unit, onConfirm: (Double?) -> Unit) {
+    var text by remember { mutableStateOf(trimRate(initial)) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("還元率を入力") },
+        text = {
+            Column {
+                Text(
+                    "公式アプリに表示される実効還元率(%)を入力してください。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    suffix = { Text("%") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(text.toDoubleOrNull()) }) { Text("保存") } },
+        dismissButton = { TextButton(onClick = { onConfirm(null) }) { Text("既定に戻す") } },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ThemeModeRow(themeMode: ThemeMode, onChange: (ThemeMode) -> Unit) {
+    val options = listOf(
+        ThemeMode.SYSTEM to "システム",
+        ThemeMode.LIGHT to "ライト",
+        ThemeMode.DARK to "ダーク",
+    )
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text("テーマ", style = MaterialTheme.typography.bodyLarge)
+        Spacer(Modifier.height(8.dp))
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            options.forEachIndexed { index, (mode, label) ->
+                SegmentedButton(
+                    selected = themeMode == mode,
+                    onClick = { onChange(mode) },
+                    shape = SegmentedButtonDefaults.itemShape(index, options.size),
+                ) { Text(label) }
+            }
+        }
     }
 }
 
@@ -626,7 +851,7 @@ private fun NearbyPreview(
             )
         }
         Button(onClick = onOpenDetail, modifier = Modifier.fillMaxWidth()) {
-            Text("判定の詳細を見る →")
+            Text("詳細を確認")
         }
     }
 }
@@ -757,17 +982,35 @@ private fun JudgmentCardBody(judgment: Judgment, brandColor: Color) {
                 )
                 Spacer(Modifier.width(12.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Surface(
-                        color = brandColor,
-                        shape = RoundedCornerShape(4.dp),
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Text(
-                            judgment.card?.cardName ?: campaign.issuer,
-                            style = MaterialTheme.typography.labelMedium,
-                            // ブランドカラーは任意の色なので、白固定ではなく輝度から読める文字色を選ぶ
-                            color = onColorFor(brandColor),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        )
+                        Surface(
+                            color = brandColor,
+                            shape = RoundedCornerShape(4.dp),
+                        ) {
+                            Text(
+                                judgment.card?.cardName ?: campaign.issuer,
+                                style = MaterialTheme.typography.labelMedium,
+                                // ブランドカラーは任意の色なので、白固定ではなく輝度から読める文字色を選ぶ
+                                color = onColorFor(brandColor),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                        // ウエル活フラグを持つ決済手段は、ON/OFF によらず常に識別バッジを付ける(色=ウエルシアのロゴ色)
+                        val pm = judgment.card?.pointMultiplier
+                        if (pm != null) {
+                            val welciaColor = parseBrandColor(pm.color) ?: MaterialTheme.colorScheme.tertiary
+                            Surface(color = welciaColor, shape = RoundedCornerShape(4.dp)) {
+                                Text(
+                                    "ウエル活利用可",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = onColorFor(welciaColor),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                )
+                            }
+                        }
                     }
                     Text(
                         campaign.name,
@@ -805,6 +1048,15 @@ private fun JudgmentCardBody(judgment: Judgment, brandColor: Color) {
             }
             campaign.monthlyCapNote?.let {
                 Text("上限: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+            }
+            // ウエル活フラグのある決済手段は、ON/OFF で実質還元率の意味づけを補足する
+            judgment.card?.takeIf { it.pointMultiplier != null }?.let { card ->
+                Text(
+                    if (card.welcatsuApplied) "※還元率はウエル活利用時の実質還元率"
+                    else "※WAONポイントに交換する事でウエル活利用可能",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
             }
             Text(
                 "情報確認日: ${campaign.verifiedDate} / 最新の条件は公式サイトで確認してください",
