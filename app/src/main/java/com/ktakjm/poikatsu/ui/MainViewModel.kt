@@ -69,6 +69,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         /** 実際の現在地(地図上の青ドット)。「このエリアを検索」しても保持する */
         val userLat: Double? = null,
         val userLon: Double? = null,
+        /**
+         * 一覧/ピンで選択中の店舗(プレビュー表示対象)。null なら一覧表示。
+         * 地図はこの店にセンタリングしピンを強調する。判定詳細へはプレビューから明示遷移する。
+         * 再検索(searchHere/fetchNearby/半径変更)で NearbyUi を作り直すたびに null に戻る。
+         */
+        val selectedPlace: NearbyPlace? = null,
     )
 
     data class UiState(
@@ -285,7 +291,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(nearby = null) }
     }
 
-    /** 周辺リストの店をタップ → POI名を店舗対象判定のプリフィルと画面タイトルに引き継ぐ */
+    /**
+     * 一覧の行/地図のピンをタップ → 全画面遷移せず「選択中」にする。
+     * 地図はこの店にセンタリングしピンを強調、ボトムシートは店舗プレビューに切り替わる。
+     * 判定詳細へはプレビューの導線(onSelectNearby)から進む。
+     */
+    fun onPreviewNearby(place: NearbyPlace) {
+        _state.update { st ->
+            val nearby = st.nearby ?: return@update st
+            st.copy(nearby = nearby.copy(selectedPlace = place))
+        }
+    }
+
+    /** プレビューを閉じて一覧表示に戻す(× / 戻る) */
+    fun onClearNearbyPreview() {
+        _state.update { st ->
+            val nearby = st.nearby ?: return@update st
+            if (nearby.selectedPlace == null) return@update st
+            st.copy(nearby = nearby.copy(selectedPlace = null))
+        }
+    }
+
+    /** プレビューから判定詳細へ → POI名を店舗対象判定のプリフィルと画面タイトルに引き継ぐ */
     fun onSelectNearby(place: NearbyPlace) {
         val engine = engine ?: return
         val merchant = place.merchant ?: return
