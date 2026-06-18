@@ -111,6 +111,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private var lastFetchSucceededAt = 0L
 
+    /**
+     * 近隣取得の世代。タブ移動(onCloseNearby)や再取得のたびに進め、進行中の取得が
+     * 完了しても古い世代なら結果を捨てる。読込中に「近く」タブを離れたのに、取得完了の
+     * タイミングで勝手に近くタブへ戻されるのを防ぐ。書込はUIスレッドのみ・IOスレッドは
+     * 読むだけなので @Volatile で可視性だけ確保する。
+     */
+    @Volatile
+    private var nearbyGeneration = 0
+
     // リモート取得は init ではなく ON_START(onAppForeground)起点。
     // 初回起動時も Activity の ON_START で必ず一度走る。
     private val initialLoad: Job = viewModelScope.launch(Dispatchers.IO) {
@@ -198,15 +207,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** 位置情報パーミッション取得済みの前提で呼ぶ(UI側でリクエスト) */
     fun fetchNearby() {
         if (engine == null) return
+        val gen = ++nearbyGeneration
         _state.update { it.copy(nearby = NearbyUi(loading = true), selection = null, storeCheck = null) }
         viewModelScope.launch(Dispatchers.IO) {
             val location = locationProvider.currentLocation()
             if (location == null) {
-                _state.update { it.copy(nearby = NearbyUi(error = "現在地を取得できませんでした。位置情報設定を確認してください")) }
+                applyNearbyIfCurrent(gen, NearbyUi(error = "現在地を取得できませんでした。位置情報設定を確認してください"))
                 return@launch
             }
             // 起点も青ドットも現在地
-            loadNearbyAround(location.latitude, location.longitude, location.latitude, location.longitude)
+            loadNearbyAround(gen, location.latitude, location.longitude, location.latitude, location.longitude)
         }
     }
 
@@ -216,9 +226,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val prev = _state.value.nearby
         val userLat = prev?.userLat ?: lat
         val userLon = prev?.userLon ?: lon
+        val gen = ++nearbyGeneration
         _state.update { it.copy(nearby = NearbyUi(loading = true)) }
         viewModelScope.launch(Dispatchers.IO) {
-            loadNearbyAround(lat, lon, userLat, userLon)
+            loadNearbyAround(gen, lat, lon, userLat, userLon)
         }
     }
 
@@ -227,17 +238,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * 距離が近い順でリスト化する。検索の起点(地図中心)と距離の基準(現在地)は別物で、
      * 「このエリアを検索」で遠方を見ても距離は常に現在地から測る。
      */
-    private fun loadNearbyAround(centerLat: Double, centerLon: Double, userLat: Double, userLon: Double) {
+    private fun loadNearbyAround(gen: Int, centerLat: Double, centerLon: Double, userLat: Double, userLon: Double) {
         val engine = engine ?: return
         val pois = OverpassClient.fetchNearby(centerLat, centerLon, radiusM = _state.value.nearbyRadiusM)
         if (pois == null) {
-            _state.update {
-                it.copy(
-                    nearby = NearbyUi(
-                        error = "周辺店舗を取得できませんでした。地図サーバが混雑しているか、通信が不安定な可能性があります。少し時間をおいて再度お試しください。",
-                    ),
-                )
-            }
+            applyNearbyIfCurrent(
+                gen,
+                NearbyUi(
+                    error = "周辺店舗を取得できませんでした。地図サーバが混雑しているか、通信が不安定な可能性があります。少し時間をおいて再度お試しください。",
+                ),
+            )
             return
         }
         // 対象施策のあるチェーンのみ、現在地からの距離が近い順に表示(距離は地図中心ではなく現在地基準)
@@ -258,17 +268,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
             .sortedBy { it.distanceMeters }
-        _state.update {
-            it.copy(
-                nearby = NearbyUi(
-                    places = places,
-                    centerLat = centerLat,
-                    centerLon = centerLon,
-                    userLat = userLat,
-                    userLon = userLon,
-                ),
-            )
-        }
+        applyNearbyIfCurrent(
+            gen,
+            NearbyUi(
+                places = places,
+                centerLat = centerLat,
+                centerLon = centerLon,
+                userLat = userLat,
+                userLon = userLon,
+            ),
+        )
+    }
+
+    /** 進行中の近隣取得が最新世代(タブ移動・再取得で破棄されていない)のときだけ結果を反映する */
+    private fun applyNearbyIfCurrent(gen: Int, nearby: NearbyUi) {
+        _state.update { if (gen == nearbyGeneration) it.copy(nearby = nearby) else it }
     }
 
     fun onNearbyRadiusChange(radiusM: Int) {
@@ -288,6 +302,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onCloseNearby() {
+        // 進行中の近隣取得を無効化(世代を進める)。完了しても「近く」タブへ戻されない
+        nearbyGeneration++
         _state.update { it.copy(nearby = null) }
     }
 
