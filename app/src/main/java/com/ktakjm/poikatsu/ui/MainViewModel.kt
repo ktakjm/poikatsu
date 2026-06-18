@@ -10,6 +10,11 @@ import com.ktakjm.poikatsu.data.LoadedData
 import com.ktakjm.poikatsu.data.LocationProvider
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.OverpassClient
+import com.ktakjm.poikatsu.data.AppSettings
+import com.ktakjm.poikatsu.data.PointMultiplier
+import com.ktakjm.poikatsu.data.Profile
+import com.ktakjm.poikatsu.data.SettingsRepository
+import com.ktakjm.poikatsu.data.ThemeMode
 import com.ktakjm.poikatsu.domain.Judgment
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.StoreVerdict
@@ -19,6 +24,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -94,11 +101,34 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val nearbyRadiusM: Int = 1000,
         /** 設定オーバーレイの表示中フラグ。探す/近くのどちらの上にも重ねて開ける */
         val showSettings: Boolean = false,
+        // --- 設定値(DataStore 由来) ---
+        val themeMode: ThemeMode = ThemeMode.SYSTEM,
+        val dynamicColor: Boolean = true,
+        val autoRefresh: Boolean = true,
+        /** 設定画面の「マイカード」用カタログ(未所有カードも含む全候補) */
+        val cardSettings: List<CardSetting> = emptyList(),
+    )
+
+    /** 設定画面のカード1枚分の表示・編集状態(profile カタログ + ユーザー差分のマージ結果) */
+    data class CardSetting(
+        val campaignId: String,
+        val cardName: String,
+        val owned: Boolean,
+        /** 表示・編集する還元率(上書きがあれば上書き値、無ければ既定) */
+        val rate: Double,
+        val brand: String,
+        /** ブランド選択(Amex 等)を出すか。amex_excluded ルールを持つ施策のみ true */
+        val showBrandPicker: Boolean,
+        /** ウエル活チェックの定義(null ならチェックを出さない) */
+        val pointMultiplier: PointMultiplier?,
+        val welcatsu: Boolean,
     )
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state
 
+    // applyData(IO) と設定購読(Main)の両方から書き換わるので可視性を確保する
+    @Volatile
     private var engine: JudgmentEngine? = null
 
     private val locationProvider = LocationProvider(app)
@@ -110,6 +140,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         cacheDir = File(app.filesDir, "remote_data"),
         fetchRemote = GithubRawClient::fetch,
     )
+
+    private val settingsRepo = SettingsRepository(app)
+
+    /** 直近にロードしたデータと設定。どちらかが変わるたびに rebuild() でエンジン再構築する */
+    @Volatile
+    private var lastLoaded: LoadedData? = null
+
+    @Volatile
+    private var lastSettings: AppSettings = AppSettings()
 
     private var lastFetchSucceededAt = 0L
 
@@ -132,8 +171,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** アプリがフォアグラウンドに来るたびに呼ぶ。直近で成功していればスキップ */
-    fun onAppForeground() = refresh(force = false)
+    // DataStore の設定変更を購読し、変わるたびにエンジン・状態を作り直す
+    private val settingsJob: Job = settingsRepo.settings
+        .onEach { lastSettings = it; rebuild() }
+        .launchIn(viewModelScope)
+
+    /** アプリがフォアグラウンドに来るたびに呼ぶ。自動更新 OFF のときは取得しない */
+    fun onAppForeground() {
+        if (lastSettings.autoRefresh) refresh(force = false)
+    }
 
     /** 更新ボタン。スキップせず必ず取得を試みる */
     fun onManualRefresh() = refresh(force = true)
@@ -168,9 +214,58 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         displayName: String? = null,
     ) = Selection(merchant, judge(merchant), canCheckStore(merchant), storeNameHint, displayName)
 
+    /** 検索結果のうち、所有カードで対象になる施策が1つ以上あるチェーンだけ残す(reward 無しは一覧に出さない) */
+    private fun JudgmentEngine.searchRewarded(query: String, categories: Set<String>): List<Merchant> =
+        search(query, categories).filter { judge(it).isNotEmpty() }
+
     private fun applyData(loaded: LoadedData) {
-        val newEngine = JudgmentEngine(loaded.data)
+        lastLoaded = loaded
+        rebuild()
+    }
+
+    /**
+     * 直近のデータ(lastLoaded)とユーザー設定(lastSettings)からエンジンを作り直し状態へ反映する。
+     * エンジンへは「所有カードのみ + 還元率/ブランド/ウエル活上書き」をマージした profile を渡す
+     * (JudgmentEngine 自体は純 Kotlin のまま=実データテストを維持)。設定画面用カタログ(未所有も含む)は別に組む。
+     */
+    private fun rebuild() {
+        val loaded = lastLoaded ?: return
+        val settings = lastSettings
+        val baseCards = loaded.data.profile.cards
+
+        // エンジン用: 所有カードのみ、上書きを反映した profile
+        val mergedCards = baseCards.mapNotNull { card ->
+            val ov = settings.cardOverrides[card.campaignId]
+            if (ov?.owned == false) return@mapNotNull null
+            val rawRate = ov?.rate ?: card.effectiveRateDefault
+            val welcatsuOn = ov?.welcatsu == true && card.pointMultiplier != null
+            val factor = if (welcatsuOn) card.pointMultiplier?.factor ?: 1.0 else 1.0
+            card.copy(
+                brand = ov?.brand ?: card.brand,
+                effectiveRateDefault = rawRate?.let { it * factor },
+                welcatsuApplied = welcatsuOn,
+            )
+        }
+        val engineData = loaded.data.copy(profile = Profile(mergedCards))
+        val newEngine = JudgmentEngine(engineData)
         engine = newEngine
+
+        // 設定画面「マイカード」カタログ: 未所有カードも含む全候補 + 現在の上書き値
+        val cardSettings = baseCards.map { card ->
+            val ov = settings.cardOverrides[card.campaignId]
+            val campaign = loaded.data.campaigns.firstOrNull { it.id == card.campaignId }
+            CardSetting(
+                campaignId = card.campaignId,
+                cardName = card.cardName,
+                owned = ov?.owned ?: true,
+                rate = ov?.rate ?: card.effectiveRateDefault ?: 0.0,
+                brand = ov?.brand ?: card.brand,
+                showBrandPicker = campaign?.merchantRules?.any { it.amexExcluded } == true,
+                pointMultiplier = card.pointMultiplier,
+                welcatsu = ov?.welcatsu ?: false,
+            )
+        }
+
         _state.update {
             it.copy(
                 loading = false,
@@ -178,8 +273,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 dataUpdatedAt = loaded.data.updatedAt,
                 dataSource = loaded.source,
                 categories = newEngine.categories,
-                results = newEngine.search(it.query, it.selectedCategories),
-                // 表示中の判定があればデータ差し替え後の内容で引き直す
+                results = newEngine.searchRewarded(it.query, it.selectedCategories),
+                // 表示中の判定があればマージ後の内容で引き直す
                 selection = it.selection?.let { sel ->
                     loaded.data.merchants.firstOrNull { m -> m.id == sel.merchant.id }
                         ?.let { m -> newEngine.selectionFor(m, sel.storeNameHint, sel.displayName) }
@@ -190,6 +285,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         ?.takeIf { m -> newEngine.canCheckStore(m) }
                         ?.let { m -> StoreCheckState(m, sc.input, newEngine.checkStore(m, sc.input)) }
                 },
+                themeMode = settings.themeMode,
+                dynamicColor = settings.dynamicColor,
+                autoRefresh = settings.autoRefresh,
+                cardSettings = cardSettings,
             )
         }
     }
@@ -198,7 +297,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.update {
             it.copy(
                 query = query,
-                results = engine?.search(query, it.selectedCategories).orEmpty(),
+                results = engine?.searchRewarded(query, it.selectedCategories).orEmpty(),
                 selection = null,
                 storeCheck = null,
                 nearby = null,
@@ -259,6 +358,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // 公式に「対象外」と明示された店舗(例: アカチャンホンポのららぽーと内店舗)は近隣リストに出さない
                 if (engine.isExcludedStore(merchant, poi.displayName)) return@mapNotNull null
                 val judgments = engine.judge(merchant)
+                // 所有カードで対象になる施策が無ければ近隣リストに出さない
+                if (judgments.isEmpty()) return@mapNotNull null
                 NearbyPlace(
                     name = poi.displayName,
                     distanceMeters = GeoMath.distanceMeters(userLat, userLon, poi.lat, poi.lon),
@@ -348,7 +449,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             it.copy(
                 selectedCategories = selected,
-                results = engine?.search(it.query, selected).orEmpty(),
+                results = engine?.searchRewarded(it.query, selected).orEmpty(),
                 selection = null,
                 storeCheck = null,
             )
@@ -404,4 +505,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 設定オーバーレイを閉じ、開く前の画面(探す/近く)へ戻る */
     fun onCloseSettings() = _state.update { it.copy(showSettings = false) }
+
+    // --- 設定値の更新(DataStore へ書き込み → settings Flow 経由で rebuild される) ---
+    fun onSetThemeMode(mode: ThemeMode) = viewModelScope.launch { settingsRepo.setThemeMode(mode) }
+
+    fun onSetDynamicColor(enabled: Boolean) = viewModelScope.launch { settingsRepo.setDynamicColor(enabled) }
+
+    fun onSetAutoRefresh(enabled: Boolean) = viewModelScope.launch { settingsRepo.setAutoRefresh(enabled) }
+
+    fun onSetCardOwned(campaignId: String, owned: Boolean) =
+        viewModelScope.launch { settingsRepo.setOwned(campaignId, owned) }
+
+    fun onSetCardRate(campaignId: String, rate: Double?) =
+        viewModelScope.launch { settingsRepo.setRate(campaignId, rate) }
+
+    fun onSetCardBrand(campaignId: String, brand: String) =
+        viewModelScope.launch { settingsRepo.setBrand(campaignId, brand) }
+
+    fun onSetCardWelcatsu(campaignId: String, enabled: Boolean) =
+        viewModelScope.launch { settingsRepo.setWelcatsu(campaignId, enabled) }
 }

@@ -70,7 +70,7 @@ class JudgmentEngineTest {
     }
 
     @Test
-    fun `MUFGはプロファイル前提のエントリー済みで警告なし還元率7パーセント`() {
+    fun `MUFGはプロファイル前提で還元率7パーセント・警告なし`() {
         val merchant = data.merchants.first { it.id == "sushiro" }
         val judgment = engine.judge(merchant).single()
         assertEquals("mufg_point_up_program", judgment.campaign.id)
@@ -241,6 +241,40 @@ class JudgmentEngineTest {
     fun `プロファイルのカードは実在する施策を参照している`() {
         val campaignIds = data.campaigns.map { it.id }.toSet()
         assertTrue(data.profile.cards.all { it.campaignId in campaignIds })
+    }
+
+    private fun engineWithProfile(profile: Profile) = JudgmentEngine(data.copy(profile = profile))
+
+    private fun profileWithMufgBrand(brand: String) = Profile(
+        data.profile.cards.map {
+            if (it.campaignId == "mufg_point_up_program") it.copy(brand = brand) else it
+        },
+    )
+
+    @Test
+    fun `Amex は amex_excluded の店舗で MUFG が対象外になる`() {
+        val kurazushi = data.merchants.first { it.id == "kurazushi" } // amex_excluded = true
+        val amexEngine = engineWithProfile(profileWithMufgBrand("Amex"))
+        assertTrue(amexEngine.judge(kurazushi).none { it.campaign.id == "mufg_point_up_program" })
+        // 非 Amex(既定プロファイル=Mastercard)では従来どおり MUFG が出る
+        assertTrue(engine.judge(kurazushi).any { it.campaign.id == "mufg_point_up_program" })
+    }
+
+    @Test
+    fun `Amex でも amex_excluded でない店舗では MUFG が残る`() {
+        val sevenEleven = data.merchants.first { it.id == "seven_eleven" } // amex_excluded = false
+        val amexEngine = engineWithProfile(profileWithMufgBrand("Amex"))
+        assertTrue(amexEngine.judge(sevenEleven).any { it.campaign.id == "mufg_point_up_program" })
+    }
+
+    @Test
+    fun `未所有カードの施策は判定に出ない`() {
+        val kurazushi = data.merchants.first { it.id == "kurazushi" }
+        // MUFG カードを所有していない(profile から除外)ケース
+        val onlySmcc = Profile(data.profile.cards.filter { it.campaignId == "smcc_combini_restaurant" })
+        assertTrue(engineWithProfile(onlySmcc).judge(kurazushi).none { it.campaign.id == "mufg_point_up_program" })
+        // どのカードも所有していなければ判定は空
+        assertTrue(engineWithProfile(Profile()).judge(kurazushi).isEmpty())
     }
 }
 

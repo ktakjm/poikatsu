@@ -1,6 +1,6 @@
 # 依存ライブラリのライセンス調査
 
-最終確認日: 2026-06-12(`./gradlew :app:dependencies --configuration releaseRuntimeClasspath` で実依存を列挙して確認)
+最終確認日: 2026-06-19(`./gradlew :app:dependencies --configuration releaseRuntimeClasspath` で実依存を列挙して確認)
 
 ## 結論
 
@@ -21,6 +21,7 @@
 | org.jspecify | null安全アノテーション | Apache-2.0 |
 | com.squareup.okhttp3:okhttp(+ 推移的依存 com.squareup.okio) | リモートデータ取得(M4で追加, 2026-06-12) | Apache-2.0 |
 | org.osmdroid:osmdroid-android | 近隣検索の地図表示(2026-06-16 追加) | Apache-2.0 |
+| androidx.datastore:datastore-preferences | 設定(テーマ・マイカード)の永続化(2026-06-19 追加) | Apache-2.0 |
 
 **ランタイム依存はすべて Apache License 2.0。** コピーレフト(GPL系)は一切なし。
 
