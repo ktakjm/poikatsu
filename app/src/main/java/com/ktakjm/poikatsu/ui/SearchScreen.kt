@@ -9,6 +9,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
@@ -33,7 +35,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
@@ -48,6 +50,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetValue
@@ -152,10 +156,33 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                 )
                 // 地図画面は NearbyPane 内の BottomSheetScaffold が独自バーを持つので外側は出さない
                 state.nearby != null -> Unit
-                else -> TopAppBar(title = { Text("ポイ活ナビ") })
+                else -> TopAppBar(title = { Text("対象チェーン店") })
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        // モード切替は下部ナビ。詳細・店舗判定などの下位画面に重なっている間は出さない
+        // (= ベースの2タブ表示時のみ)。nearby != null が「近くタブ選択中」を兼ねる
+        bottomBar = {
+            if (!state.loading && state.error == null && state.selection == null && state.storeCheck == null) {
+                // 標準 NavigationBar の内容高は 80dp。下部が厚いので 64dp に詰める。
+                // システムバー inset は内部で消費されるぶんを足し戻し、安全領域を確保する
+                val barInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                NavigationBar(modifier = Modifier.height(64.dp + barInset)) {
+                    NavigationBarItem(
+                        selected = state.nearby == null,
+                        onClick = { if (state.nearby != null) viewModel.onCloseNearby() },
+                        icon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        label = { Text("探す") },
+                    )
+                    NavigationBarItem(
+                        selected = state.nearby != null,
+                        onClick = { if (state.nearby == null) onNearbyClick() },
+                        icon = { Icon(Icons.Default.Place, contentDescription = null) },
+                        label = { Text("近く") },
+                    )
+                }
+            }
+        },
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding)) {
             when {
@@ -199,7 +226,6 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         onToggleCategory = viewModel::onToggleCategory,
                         onSelect = viewModel::onSelect,
                         onRefresh = viewModel::onManualRefresh,
-                        onNearbyClick = onNearbyClick,
                     )
                 }
             }
@@ -267,18 +293,12 @@ private fun SearchPane(
     onToggleCategory: (String) -> Unit,
     onSelect: (Merchant) -> Unit,
     onRefresh: () -> Unit,
-    onNearbyClick: () -> Unit,
 ) {
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
         modifier = Modifier.fillMaxWidth(),
         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-        trailingIcon = {
-            IconButton(onClick = onNearbyClick) {
-                Icon(Icons.Default.LocationOn, contentDescription = "近くのお店を探す")
-            }
-        },
         placeholder = { Text("店名を入力(例: マック、サイゼ)") },
         singleLine = true,
     )
@@ -371,7 +391,7 @@ private fun NearbyPane(
     // 地図を出せない状態(読込中/エラー/現在地不明)は地図なしの縦並びで表示する
     if (nearby.loading || nearby.error != null || center == null) {
         Column(Modifier.fillMaxSize()) {
-            NearbyTopBar(onClose = onClose, onReload = onReload)
+            NearbyTopBar(onReload = onReload)
             RadiusChips(radiusM = radiusM, onRadiusChange = onRadiusChange, modifier = Modifier.padding(horizontal = 16.dp))
             Spacer(Modifier.height(4.dp))
             when {
@@ -427,7 +447,7 @@ private fun NearbyPane(
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
         sheetPeekHeight = 200.dp,
-        topBar = { NearbyTopBar(onClose = onClose, onReload = onReload) },
+        topBar = { NearbyTopBar(onReload = onReload) },
         sheetContent = {
             if (selectedPlace != null) {
                 // 選択中: 地図を残したまま店舗情報をプレビュー。判定詳細へはここから明示遷移する
@@ -533,14 +553,10 @@ private fun NearbyPreview(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun NearbyTopBar(onClose: () -> Unit, onReload: () -> Unit) {
+private fun NearbyTopBar(onReload: () -> Unit) {
+    // モード切替は下部ナビが担うため戻る矢印は持たない(タブ間の対等な移動)
     TopAppBar(
         title = { Text("近くのお店") },
-        navigationIcon = {
-            IconButton(onClick = onClose) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
-            }
-        },
         actions = {
             IconButton(onClick = onReload) {
                 Icon(Icons.Default.Refresh, contentDescription = "再読み込み")
