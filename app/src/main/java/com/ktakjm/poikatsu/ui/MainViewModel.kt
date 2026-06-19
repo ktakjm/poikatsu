@@ -66,8 +66,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val brandColors: List<String> = emptyList(),
     )
 
+    /**
+     * 近隣取得のローディング段階。リングの待ち時間が何待ちかを表示で出し分けるために持つ。
+     * 地図タイル(osmdroid)はこの間まだ描画されていない=「地図の読み込み」ではない点に注意。
+     */
+    enum class NearbyLoadPhase {
+        /** 現在地の測位中(LocationProvider、最大15秒)。searchHere 経由では通らない */
+        LOCATING,
+
+        /** Overpass API で周辺店舗を取得中(待ち時間が最も読めない主因) */
+        SEARCHING,
+    }
+
     data class NearbyUi(
         val loading: Boolean = false,
+        /** loading 中の段階。表示メッセージの出し分けに使う(loading=false のときは無意味) */
+        val loadingPhase: NearbyLoadPhase = NearbyLoadPhase.SEARCHING,
         val error: String? = null,
         val places: List<NearbyPlace> = emptyList(),
         /** 検索の中心(=地図カメラ中心)。距離計算の起点。取得前は null */
@@ -309,13 +323,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun fetchNearby() {
         if (engine == null) return
         val gen = ++nearbyGeneration
-        _state.update { it.copy(nearby = NearbyUi(loading = true), selection = null, storeCheck = null) }
+        _state.update {
+            it.copy(
+                nearby = NearbyUi(loading = true, loadingPhase = NearbyLoadPhase.LOCATING),
+                selection = null,
+                storeCheck = null,
+            )
+        }
         viewModelScope.launch(Dispatchers.IO) {
             val location = locationProvider.currentLocation()
             if (location == null) {
                 applyNearbyIfCurrent(gen, NearbyUi(error = "現在地を取得できませんでした。位置情報設定を確認してください"))
                 return@launch
             }
+            setNearbyPhase(gen, NearbyLoadPhase.SEARCHING)
             // 起点も青ドットも現在地
             loadNearbyAround(gen, location.latitude, location.longitude, location.latitude, location.longitude)
         }
@@ -386,6 +407,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** 進行中の近隣取得が最新世代(タブ移動・再取得で破棄されていない)のときだけ結果を反映する */
     private fun applyNearbyIfCurrent(gen: Int, nearby: NearbyUi) {
         _state.update { if (gen == nearbyGeneration) it.copy(nearby = nearby) else it }
+    }
+
+    /** 読込中のローディング段階だけを進める(最新世代かつ読込中のときのみ。完了済みは触らない) */
+    private fun setNearbyPhase(gen: Int, phase: NearbyLoadPhase) {
+        _state.update {
+            val n = it.nearby
+            if (gen == nearbyGeneration && n != null && n.loading) {
+                it.copy(nearby = n.copy(loadingPhase = phase))
+            } else {
+                it
+            }
+        }
     }
 
     fun onNearbyRadiusChange(radiusM: Int) {

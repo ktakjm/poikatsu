@@ -73,6 +73,7 @@ data class MapMarker(
  * @param initialZoom 検索半径に応じた初期ズーム
  * @param selectedPoint 選択中の店舗。非 null かつ変化したらズームは保ったままその点へカメラを寄せる
  * @param onSearchHere 「このエリアを検索」タップ時、その時点の地図中心を渡す
+ * @param onSearchMyLocation 現在地ピン(📍)タップ時。現在地を取り直してその周辺で再検索する
  */
 @Composable
 fun NearbyMap(
@@ -82,6 +83,7 @@ fun NearbyMap(
     initialZoom: Double,
     selectedPoint: MapPoint?,
     onSearchHere: (MapPoint) -> Unit,
+    onSearchMyLocation: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -136,15 +138,15 @@ fun NearbyMap(
             Spacer(Modifier.width(4.dp))
             Text("このエリアを検索")
         }
-        // 現在地へ戻す: パン/「このエリアを検索」した後、ワンタップでカメラを現在地(青ドット)へ。
-        // 再検索はせずズームも保つ(周辺を取り直したいときは「このエリアを検索」を押す)。
+        // 現在地で検索: 現在地を取り直し、その周辺で再検索する(完了後カメラも結果=現在地へ戻る)。
+        // 地図中心が起点の「このエリアを検索」と対になり、検索の起点を「自分」か「見ている場所」かで選ぶ。
         if (userLocation != null) {
             FilledTonalIconButton(
-                onClick = { mapView.controller.animateTo(userLocation.toGeoPoint()) },
+                onClick = onSearchMyLocation,
                 // タッチ領域は M3 最小の 48dp を確保。ボトムシート(peek)に隠れない上部右に置く
                 modifier = Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp).size(48.dp),
             ) {
-                Icon(Icons.Default.LocationOn, contentDescription = "現在地へ戻す")
+                Icon(Icons.Default.LocationOn, contentDescription = "現在地で検索")
             }
         }
     }

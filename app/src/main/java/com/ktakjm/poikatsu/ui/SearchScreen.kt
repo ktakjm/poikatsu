@@ -694,7 +694,6 @@ private fun NearbyPane(
             RadiusChips(
                 radiusM = radiusM,
                 onRadiusChange = onRadiusChange,
-                onReload = onReload,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
             Spacer(Modifier.height(4.dp))
@@ -702,17 +701,31 @@ private fun NearbyPane(
                 nearby.loading -> Box(
                     Modifier.fillMaxWidth().weight(1f),
                     contentAlignment = Alignment.Center,
-                ) { CircularProgressIndicator() }
-                nearby.error != null -> Text(
-                    nearby.error,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(Modifier.height(16.dp))
+                        // リングは地図ではなく「現在地の測位」→「Overpass で周辺店舗取得」を待っている。
+                        // どちらの待ちかを出して長い待ち時間の理由を示す。
+                        Text(
+                            when (nearby.loadingPhase) {
+                                MainViewModel.NearbyLoadPhase.LOCATING -> "現在地を確認しています…"
+                                MainViewModel.NearbyLoadPhase.SEARCHING -> "周辺の店舗を探しています…"
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                nearby.error != null -> NearbyRetryState(
+                    message = nearby.error,
+                    isError = true,
+                    onRetry = onReload,
                 )
-                else -> Text(
-                    "現在地を取得できませんでした。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                else -> NearbyRetryState(
+                    message = "現在地を取得できませんでした。",
+                    isError = false,
+                    onRetry = onReload,
                 )
             }
         }
@@ -764,7 +777,6 @@ private fun NearbyPane(
                 RadiusChips(
                     radiusM = radiusM,
                     onRadiusChange = onRadiusChange,
-                    onReload = onReload,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
                 Spacer(Modifier.height(8.dp))
@@ -811,6 +823,7 @@ private fun NearbyPane(
             initialZoom = zoomForRadius(radiusM),
             selectedPoint = selectedPlace?.let { MapPoint(it.lat, it.lon) },
             onSearchHere = { c -> onSearchHere(c.lat, c.lon) },
+            onSearchMyLocation = onReload,
             modifier = Modifier.fillMaxSize().padding(innerPadding),
         )
     }
@@ -860,7 +873,7 @@ private fun NearbyPreview(
 @Composable
 private fun NearbyTopBar(onOpenSettings: () -> Unit) {
     // モード切替は下部ナビが担うため戻る矢印は持たない(タブ間の対等な移動)。
-    // 再読み込みは半径チップ右端へ移したので、ここは設定への入口(歯車)だけ持つ
+    // 再取得は地図の現在地ピン(📍)に集約したので、ここは設定への入口(歯車)だけ持つ
     TopAppBar(
         title = { Text("近くのお店") },
         actions = {
@@ -877,9 +890,9 @@ private fun NearbyTopBar(onOpenSettings: () -> Unit) {
 private fun RadiusChips(
     radiusM: Int,
     onRadiusChange: (Int) -> Unit,
-    onReload: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // 半径だけを選ぶ行。再取得は地図の現在地ピン(📍)に集約したのでここには置かない。
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -892,11 +905,29 @@ private fun RadiusChips(
                 label = { Text(distanceLabel(radius)) },
             )
         }
-        // 半径チップの右端に再読み込み。地図表示時はこの行ごとボトムシート内に入る
-        Spacer(Modifier.weight(1f))
-        IconButton(onClick = onReload) {
-            Icon(Icons.Default.Refresh, contentDescription = "再読み込み")
-        }
+    }
+}
+
+/**
+ * 近くのお店の取得失敗・現在地不明時の表示。メッセージと「再試行」(現在地で再取得=onReload)を出す。
+ * 地図が出せずピンも置けない状態なので、再取得の導線をここに持つ(通常時は地図の📍が担う)。
+ */
+@Composable
+private fun NearbyRetryState(
+    message: String,
+    isError: Boolean,
+    onRetry: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+        )
+        Button(onClick = onRetry) { Text("再試行") }
     }
 }
 
