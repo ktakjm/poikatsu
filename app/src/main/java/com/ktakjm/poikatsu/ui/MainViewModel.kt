@@ -112,6 +112,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val refreshing: Boolean = false,
         val refreshFailed: Boolean = false,
         val nearby: NearbyUi? = null,
+        /** 近隣の再検索が失敗したときの Snackbar 文言(地図は残す一時失敗)。表示後に null へ戻す */
+        val nearbySearchFailed: String? = null,
         val nearbyRadiusM: Int = 1000,
         /** 設定オーバーレイの表示中フラグ。探す/近くのどちらの上にも重ねて開ける */
         val showSettings: Boolean = false,
@@ -323,9 +325,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun fetchNearby() {
         if (engine == null) return
         val gen = ++nearbyGeneration
+        // 再取得(📍)中も直前の地図・一覧は残し loading だけ立てる(画面をまっさらにしない)。
+        // 初回は prev が無い=NearbyUi() なので center も null となり全画面ローディングになる。
         _state.update {
+            val base = it.nearby ?: NearbyUi()
             it.copy(
-                nearby = NearbyUi(loading = true, loadingPhase = NearbyLoadPhase.LOCATING),
+                nearby = base.copy(
+                    loading = true,
+                    loadingPhase = NearbyLoadPhase.LOCATING,
+                    error = null,
+                    selectedPlace = null,
+                ),
                 selection = null,
                 storeCheck = null,
             )
@@ -333,7 +343,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             val location = locationProvider.currentLocation()
             if (location == null) {
-                applyNearbyIfCurrent(gen, NearbyUi(error = "現在地を取得できませんでした。位置情報設定を確認してください"))
+                failNearby(gen, "現在地を取得できませんでした。位置情報設定を確認してください")
                 return@launch
             }
             setNearbyPhase(gen, NearbyLoadPhase.SEARCHING)
@@ -349,7 +359,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val userLat = prev?.userLat ?: lat
         val userLon = prev?.userLon ?: lon
         val gen = ++nearbyGeneration
-        _state.update { it.copy(nearby = NearbyUi(loading = true)) }
+        // 再検索中も直前の地図・一覧を残し loading だけ立てる(画面をまっさらにしない)。
+        // center は prev のまま保持して完了までカメラを動かさず、結果反映時に新しい中心へ寄せる。
+        _state.update {
+            val base = it.nearby ?: NearbyUi()
+            it.copy(
+                nearby = base.copy(
+                    loading = true,
+                    loadingPhase = NearbyLoadPhase.SEARCHING,
+                    error = null,
+                    selectedPlace = null,
+                ),
+            )
+        }
         viewModelScope.launch(Dispatchers.IO) {
             loadNearbyAround(gen, lat, lon, userLat, userLon)
         }
@@ -364,11 +386,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val engine = engine ?: return
         val pois = OverpassClient.fetchNearby(centerLat, centerLon, radiusM = _state.value.nearbyRadiusM)
         if (pois == null) {
-            applyNearbyIfCurrent(
+            failNearby(
                 gen,
-                NearbyUi(
-                    error = "周辺店舗を取得できませんでした。地図サーバが混雑しているか、通信が不安定な可能性があります。少し時間をおいて再度お試しください。",
-                ),
+                "周辺店舗を取得できませんでした。地図サーバが混雑しているか、通信が不安定な可能性があります。少し時間をおいて再度お試しください。",
             )
             return
         }
@@ -409,6 +429,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { if (gen == nearbyGeneration) it.copy(nearby = nearby) else it }
     }
 
+    /**
+     * 近隣取得の失敗。最新世代のときだけ反映する。既に地図(=結果の中心)が出ているなら内容は残して
+     * loading だけ畳み、一時失敗は Snackbar で知らせる(まっさらにしない)。表示すべき内容が無い
+     * 初回などは全画面エラー(再試行)にする。
+     */
+    private fun failNearby(gen: Int, message: String) {
+        _state.update {
+            if (gen != nearbyGeneration) return@update it
+            val prev = it.nearby
+            if (prev?.centerLat != null && prev.centerLon != null) {
+                it.copy(nearby = prev.copy(loading = false), nearbySearchFailed = message)
+            } else {
+                it.copy(nearby = NearbyUi(error = message))
+            }
+        }
+    }
+
+    /** 近隣再検索失敗の Snackbar を表示し終えたら文言を消費する(同じ失敗を再表示しない) */
+    fun onNearbySearchFailedShown() = _state.update { it.copy(nearbySearchFailed = null) }
+
     /** 読込中のローディング段階だけを進める(最新世代かつ読込中のときのみ。完了済みは触らない) */
     private fun setNearbyPhase(gen: Int, phase: NearbyLoadPhase) {
         _state.update {
@@ -438,9 +478,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onCloseNearby() {
-        // 進行中の近隣取得を無効化(世代を進める)。完了しても「近く」タブへ戻されない
+        // 進行中の近隣取得を無効化(世代を進める)。完了しても「近く」タブへ戻されない。
+        // 未表示の再検索失敗も破棄し、次に「近く」を開いたとき古い Snackbar が出ないようにする
         nearbyGeneration++
-        _state.update { it.copy(nearby = null) }
+        _state.update { it.copy(nearby = null, nearbySearchFailed = null) }
     }
 
     /**

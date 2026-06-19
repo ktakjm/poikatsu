@@ -258,8 +258,10 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                 state.nearby != null -> NearbyPane(
                     nearby = state.nearby!!,
                     radiusM = state.nearbyRadiusM,
+                    searchFailed = state.nearbySearchFailed,
                     onClose = viewModel::onCloseNearby,
                     onReload = viewModel::fetchNearby,
+                    onSearchFailedShown = viewModel::onNearbySearchFailedShown,
                     onOpenSettings = viewModel::onOpenSettings,
                     onRadiusChange = viewModel::onNearbyRadiusChange,
                     onPreviewPlace = viewModel::onPreviewNearby,
@@ -670,8 +672,10 @@ private fun SearchPane(
 private fun NearbyPane(
     nearby: MainViewModel.NearbyUi,
     radiusM: Int,
+    searchFailed: String?,
     onClose: () -> Unit,
     onReload: () -> Unit,
+    onSearchFailedShown: () -> Unit,
     onOpenSettings: () -> Unit,
     onRadiusChange: (Int) -> Unit,
     onPreviewPlace: (MainViewModel.NearbyPlace) -> Unit,
@@ -687,8 +691,9 @@ private fun NearbyPane(
         MapPoint(nearby.centerLat, nearby.centerLon)
     } else null
 
-    // 地図を出せない状態(読込中/エラー/現在地不明)は地図なしの縦並びで表示する
-    if (nearby.loading || nearby.error != null || center == null) {
+    // 地図(中心)がまだ無い初回ロード/エラー時だけ、地図なしの全画面表示にする。
+    // 中心が既にあれば再検索中でも地図・一覧は残し、進捗は地図上に小さく重ねる(NearbyMap の loadingMessage)。
+    if (center == null || nearby.error != null) {
         Column(Modifier.fillMaxSize()) {
             NearbyTopBar(onOpenSettings = onOpenSettings)
             RadiusChips(
@@ -708,10 +713,7 @@ private fun NearbyPane(
                         // リングは地図ではなく「現在地の測位」→「Overpass で周辺店舗取得」を待っている。
                         // どちらの待ちかを出して長い待ち時間の理由を示す。
                         Text(
-                            when (nearby.loadingPhase) {
-                                MainViewModel.NearbyLoadPhase.LOCATING -> "現在地を確認しています…"
-                                MainViewModel.NearbyLoadPhase.SEARCHING -> "周辺の店舗を探しています…"
-                            },
+                            nearbyLoadingText(nearby.loadingPhase),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -761,9 +763,19 @@ private fun NearbyPane(
     LaunchedEffect(selectedPlace) {
         if (selectedPlace != null) scaffoldState.bottomSheetState.partialExpand()
     }
+    // 再検索の一時失敗は地図を残したまま Snackbar で通知する。外側 Scaffold の host は下部シートの
+    // 裏に隠れるため、地図領域に出るこの BottomSheetScaffold 自身の host を使う。
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(searchFailed) {
+        if (searchFailed != null) {
+            snackbarHostState.showSnackbar(searchFailed)
+            onSearchFailedShown()
+        }
+    }
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
         sheetPeekHeight = 200.dp,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = { NearbyTopBar(onOpenSettings = onOpenSettings) },
         sheetContent = {
             if (selectedPlace != null) {
@@ -815,7 +827,8 @@ private fun NearbyPane(
             }
         },
     ) { innerPadding ->
-        // 地図は全面。下端はボトムシート(peek)が重なるが、操作系は地図上部にあるので隠れない
+        // 地図は全面。シート(peek)の背面まで下端いっぱいに描き、角丸から背景が覗くのを防ぐ
+        // (操作系は地図上部にあるので、下端がシートに隠れても問題ない)
         NearbyMap(
             center = center,
             userLocation = userLocation,
@@ -824,7 +837,9 @@ private fun NearbyPane(
             selectedPoint = selectedPlace?.let { MapPoint(it.lat, it.lon) },
             onSearchHere = { c -> onSearchHere(c.lat, c.lon) },
             onSearchMyLocation = onReload,
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
+            loadingMessage = if (nearby.loading) nearbyLoadingText(nearby.loadingPhase) else null,
+            // 下端(シート peek 分)の余白は当てず地図をシート背面まで伸ばす。上端 TopAppBar 分だけ避ける
+            modifier = Modifier.fillMaxSize().padding(top = innerPadding.calculateTopPadding()),
         )
     }
 }
@@ -906,6 +921,15 @@ private fun RadiusChips(
             )
         }
     }
+}
+
+/**
+ * 近隣取得の待ち文言。全画面ローディング(初回)と地図上の進捗ピル(再検索)で同じ文言を使う。
+ * リングは地図タイルではなく「現在地の測位」/「Overpass で周辺店舗取得」を待っている。
+ */
+private fun nearbyLoadingText(phase: MainViewModel.NearbyLoadPhase): String = when (phase) {
+    MainViewModel.NearbyLoadPhase.LOCATING -> "現在地を確認しています…"
+    MainViewModel.NearbyLoadPhase.SEARCHING -> "周辺の店舗を探しています…"
 }
 
 /**

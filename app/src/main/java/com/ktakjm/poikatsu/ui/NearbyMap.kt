@@ -10,18 +10,22 @@ import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -74,6 +78,8 @@ data class MapMarker(
  * @param selectedPoint 選択中の店舗。非 null かつ変化したらズームは保ったままその点へカメラを寄せる
  * @param onSearchHere 「このエリアを検索」タップ時、その時点の地図中心を渡す
  * @param onSearchMyLocation 現在地ピン(📍)タップ時。現在地を取り直してその周辺で再検索する
+ * @param loadingMessage 再検索中の表示文言。非 null の間は地図・ピンを残したまま進捗を小さく重ね、
+ *        検索系ボタンを進捗ピル/無効化に切り替える(全画面ローディングにしない)
  */
 @Composable
 fun NearbyMap(
@@ -84,6 +90,7 @@ fun NearbyMap(
     selectedPoint: MapPoint?,
     onSearchHere: (MapPoint) -> Unit,
     onSearchMyLocation: () -> Unit,
+    loadingMessage: String?,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -127,22 +134,44 @@ fun NearbyMap(
                 }
             },
         )
-        FilledTonalButton(
-            onClick = {
-                val c = mapView.mapCenter
-                onSearchHere(MapPoint(c.latitude, c.longitude))
-            },
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
-        ) {
-            Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(4.dp))
-            Text("このエリアを検索")
+        // 再検索中(loadingMessage != null)は「このエリアを検索」を進捗ピルに差し替える。
+        // 地図・ピンは残したまま、ここだけで「検索中」を示し再タップも防ぐ(全画面ローディングにしない)。
+        if (loadingMessage != null) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                tonalElevation = 3.dp,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(loadingMessage, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        } else {
+            FilledTonalButton(
+                onClick = {
+                    val c = mapView.mapCenter
+                    onSearchHere(MapPoint(c.latitude, c.longitude))
+                },
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
+            ) {
+                Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("このエリアを検索")
+            }
         }
         // 現在地で検索: 現在地を取り直し、その周辺で再検索する(完了後カメラも結果=現在地へ戻る)。
         // 地図中心が起点の「このエリアを検索」と対になり、検索の起点を「自分」か「見ている場所」かで選ぶ。
+        // 再検索中(loadingMessage != null)は二重起動を避けるため無効化する。
         if (userLocation != null) {
             FilledTonalIconButton(
                 onClick = onSearchMyLocation,
+                enabled = loadingMessage == null,
                 // タッチ領域は M3 最小の 48dp を確保。ボトムシート(peek)に隠れない上部右に置く
                 modifier = Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp).size(48.dp),
             ) {
