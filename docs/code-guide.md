@@ -16,16 +16,17 @@ graph TD
         ACT["MainActivity<br/>（Compose エントリポイント）"]
         SCR["SearchScreen.kt<br/>（Composable 群）"]
         VM["MainViewModel<br/>（UiState を StateFlow で公開）"]
-        MAP["NearbyMap.kt<br/>（osmdroid 地図ラッパ・差し替え境界）"]
+        MAP["NearbyMap.kt<br/>（Google Maps ラッパ・差し替え境界）"]
     end
     subgraph domain["ドメインレイヤ（domain/）Android 非依存"]
         ENG["JudgmentEngine<br/>（検索・チェーン特定・判定）"]
     end
     subgraph dat["データレイヤ（data/）"]
         REPO["DataRepository<br/>（ロード戦略: cache→assets / remote）"]
-        MODELS["Models.kt<br/>（kotlinx.serialization）"]
+        MODELS["Models.kt<br/>（kotlinx.serialization・Poi 含む）"]
         GH["GithubRawClient<br/>（施策 JSON フェッチ）"]
-        OP["OverpassClient<br/>（OSM 周辺店舗検索）"]
+        YL["YolpClient<br/>（YOLP 周辺店舗検索・既定）"]
+        OP["OverpassClient<br/>（OSM・休眠フォールバック）"]
         LOC["LocationProvider<br/>（現在地 1 回取得）"]
     end
     subgraph util["ユーティリティ（util/）Android 非依存"]
@@ -34,17 +35,19 @@ graph TD
     end
     subgraph ext["外部"]
         RAW["GitHub raw<br/>data/*.json"]
-        OSM["Overpass API<br/>（OpenStreetMap）"]
-        OSMTILE["OSM タイルサーバ<br/>（osmdroid 地図描画）"]
+        YOLP["YOLP ローカルサーチAPI<br/>（Yahoo・店舗データ）"]
+        GMAP["Google Maps SDK<br/>（地図描画）"]
+        OSM["Overpass API<br/>（OSM・休眠）"]
     end
 
     ACT --> SCR
     SCR --> VM
     SCR --> MAP
-    MAP --> OSMTILE
+    MAP --> GMAP
     VM --> ENG
     VM --> REPO
-    VM --> OP
+    VM --> YL
+    VM -.->|fallback候補| OP
     VM --> LOC
     VM --> GEO
     ENG --> JT
@@ -52,6 +55,7 @@ graph TD
     REPO --> MODELS
     REPO --> GH
     GH --> RAW
+    YL --> YOLP
     OP --> OSM
 
     style ACT fill:#1565C0,stroke:#0D47A1,color:#fff
@@ -61,13 +65,15 @@ graph TD
     style REPO fill:#E65100,stroke:#BF360C,color:#fff
     style MODELS fill:#E65100,stroke:#BF360C,color:#fff
     style GH fill:#E65100,stroke:#BF360C,color:#fff
+    style YL fill:#E65100,stroke:#BF360C,color:#fff
     style OP fill:#E65100,stroke:#BF360C,color:#fff
     style LOC fill:#E65100,stroke:#BF360C,color:#fff
     style JT fill:#6A1B9A,stroke:#4A148C,color:#fff
     style GEO fill:#6A1B9A,stroke:#4A148C,color:#fff
     style RAW fill:#E0E0E0,stroke:#9E9E9E,color:#333
+    style YOLP fill:#E0E0E0,stroke:#9E9E9E,color:#333
+    style GMAP fill:#E0E0E0,stroke:#9E9E9E,color:#333
     style OSM fill:#E0E0E0,stroke:#9E9E9E,color:#333
-    style OSMTILE fill:#E0E0E0,stroke:#9E9E9E,color:#333
     style MAP fill:#1565C0,stroke:#0D47A1,color:#fff
 ```
 
@@ -77,7 +83,7 @@ graph TD
 |---|---|
 | Room を使わない | 施策データは数十件の JSON で全件メモリに乗る。リモート JSON をファイルキャッシュ（テキストのまま保存）するだけで十分だった（PLAN.md M4 実績メモ参照） |
 | DI フレームワーク（Hilt）なし | クラス数が少なく手動 DI で足りる。`DataRepository` は関数（`readAsset` / `fetchRemote`）と `File` をコンストラクタ注入する形にして、フレームワークなしでテスタビリティを確保 |
-| Google Play Services 不使用 | 位置情報はフレームワーク標準の `LocationManager`、地図は osmdroid（OSM）で実装し、プロプライエタリ依存を増やさない。Google Maps SDK は地図表示自体は無料無制限だが Play Services 依存＋API キー＋請求先登録が必要なため不採用（判断の経緯は docs/licenses.md） |
+| 地図は Google Maps（2026-06-20〜） | 当初は Play Services 非依存を掲げ osmdroid（OSM）を採用していたが、OSM はデータ品質（新規店・支店名欠落）と地図デザインが実用に劣るため、描画を **Google Maps SDK**・店舗データを **YOLP** へ移行。**Play Services 依存・API キー・課金アカウントを受け入れる方針転換**。位置情報は引き続き `LocationManager`（Play Services 非依存のまま）。経緯・規約・フェーズ戦略は docs/map-data-stack.md、依存は docs/licenses.md |
 | 判定ロジックは純 Kotlin | `domain/` と `util/` は Android API に触れないため、実データ（`data/*.json`）を読むユニットテストが JVM 上で高速に回る |
 | ロゴ画像不使用 | 商標・著作権リスク回避。`campaigns.json` の `brand_color`（#RRGGBB）で発行体を識別 |
 
@@ -362,39 +368,40 @@ sequenceDiagram
 
 ### 7.1 地図表示と差し替え境界（ui/NearbyMap.kt）
 
-近隣検索は **地図を全面に出し、距離順リストを引き上げ式のボトムシート**に収めて表示する（`NearbyPane`、`BottomSheetScaffold`）。普段は地図を広く見せ、ヘッダー（設定への歯車）を `topBar`、半径チップと距離順リスト（還元率・距離）をシートに置く。シートは `PartiallyExpanded`（`sheetPeekHeight = 200dp`）で起動し、引き上げると一覧を全面表示してその中をスクロールできる（`skipHiddenState = true` で一覧シートは常に下部に残す）。**地図（＝検索の中心）がまだ無い初回ロードと、エラー・現在地不明のときだけ**地図なしの縦並びにフォールバックし、それ以外（＝再検索）は地図・一覧を残す（後述「再検索中も地図・一覧を残す」）。地図のはみ出しは `NearbyMap.kt` 側で従来どおり `clipToBounds` により抑止する。**地図は下端（シート peek 分）の余白を当てずシート背面まで描き、シート角丸から背景が覗くのを防ぐ**（`padding(top = innerPadding.calculateTopPadding())` で上端の `TopAppBar` 分だけ避け、下端は当てない。下端はもともとシートが重なり操作対象でない）。
+近隣検索は **地図を全面に出し、距離順リストを引き上げ式のボトムシート**に収めて表示する（`NearbyPane`、`BottomSheetScaffold`）。普段は地図を広く見せ、ヘッダー（設定への歯車）を `topBar`、半径チップと距離順リスト（還元率・距離）をシートに置く。シートは `PartiallyExpanded`（`sheetPeekHeight = 200dp`）で起動し、引き上げると一覧を全面表示してその中をスクロールできる（`skipHiddenState = true` で一覧シートは常に下部に残す）。**地図（＝検索の中心）がまだ無い初回ロードと、エラー・現在地不明のときだけ**地図なしの縦並びにフォールバックし、それ以外（＝再検索）は地図・一覧を残す（後述「再検索中も地図・一覧を残す」）。**地図は下端（シート peek 分）の余白を当てずシート背面まで描き、シート角丸から背景が覗くのを防ぐ**（`padding(top = innerPadding.calculateTopPadding())` で上端の `TopAppBar` 分だけ避け、下端は当てない。下端はもともとシートが重なり操作対象でない）。
 
 - 地図画面だけ全幅で描くため、全画面共通だった横 16dp パディングはルート（`Box`）から外し `PaddedColumn` ヘルパーへ移譲した。検索・判定詳細・店舗判定の各画面は従来どおり 16dp の左右余白を保つ。
 - ヘッダーは `TopAppBar`（`NearbyTopBar`）。モード切替は下部ナビが担うため**戻る矢印は持たず**、アクションは設定への歯車のみ。**再取得（GPS 取り直し＋周辺再検索）は地図右上の現在地ピン（📍）に集約**し、かつて半径チップ右端にあった ⟳ 再読み込みボタンは撤去した（役割が 📍 と重複していたため。後述「現在地で検索」）。地図画面では外側 `Scaffold` が `topBar` を出さず、`BottomSheetScaffold` の `topBar` スロットに置く。外側 `Scaffold` が既にステータスバー inset を消費済みのため、この内側 `TopAppBar` は `windowInsets = WindowInsets(0,0,0,0)` を指定して inset の二重適用（上端の余白二重化）を防ぐ。
-- **ダークモード追従**: OSM ラスタタイルは描画済み画像でアプリのテーマに反応しないため、表示が暗いとき osmdroid の `TilesOverlay.INVERT_COLORS` をタイルに適用し、明るいなら解除する（モードが切り替わったときだけ差し替えて無駄な `invalidate` を避ける）。**暗いかどうかは `MaterialTheme.colorScheme.surface.luminance() < 0.5` で判定する**——設定のテーマ上書き（システム/ライト/ダーク）を反映した実際の配色から見るため、OS 設定だけを見る `isSystemInDarkTheme()` と違い、アプリ内テーマ切替にも追従する。本格的なダーク配色が必要なら専用ダークタイル（要・利用規約/帰属確認）への差し替えが将来の選択肢。
-- ピンは店舗が対応する施策の `campaign.brand_color` で着色（ロゴ不使用方針と整合）。複数発行体に対応する店舗（例: 三井住友＝緑 と MUFG＝赤 の両対応）は色を扇状に等分して 1 つのピンに描き分ける（2 色なら斜めの境界で分割）。描画は osmdroid の `Marker.icon` に渡す自前 `Drawable`（`storePinDrawable`、`Canvas` で円を `drawArc`）で行う。**自前 `Drawable` は `getIntrinsicWidth/Height` を必ず返す**——osmdroid はアイコンの intrinsic サイズで描画範囲とタップ判定領域を決めるため、未実装（既定の -1）だと点になりタップも効かなくなる。単色用途（現在地の青ドット）は従来どおり `GradientDrawable`（`pinDrawable`）を使う。
-- **選択とプレビュー（リスト⇔地図の連動）**: ピン/リスト行のタップはどちらも全画面遷移せず、その店を「選択」する（`onPreviewNearby` → `NearbyUi.selectedPlace`）。選択中はボトムシートが店舗プレビュー（店名・距離・カテゴリ・最大還元率・「判定の詳細を見る →」）に切り替わり、地図は `NearbyMap` に渡した `selectedPoint` の変化を検知してその店へ `animateTo`（ズーム維持）、該当ピンを `MapMarker.selected=true` で拡大＋白縁強調し最前面に描く（`renderOverlays` で `sortedBy { selected }` し選択ピンを最後に追加）。シートは `partialExpand()` で peek まで畳んで地図を見せる。判定詳細へはプレビューの「判定の詳細を見る →」ボタンから初めて `onSelectNearby` で遷移し、× ボタン / システムバック（`BackHandler`：選択中は `onClearNearbyPreview` で一覧へ、選択していなければ `onCloseNearby` で「探す」タブへ戻る）で復帰する。判定詳細のタイトルは POI 表示名（支店名込み、`Selection.displayName`＝リストに出ている名前と同じ）を出し、無ければチェーン名（`merchant.name`）にフォールバックする。再検索（`searchHere`/半径変更/`fetchNearby`）では `selectedPlace` を null に戻して選択を解除する（再検索中も地図・一覧を残すため `NearbyUi` は作り直さず、直前を `copy` して `loading` と該当フィールドだけ更新する。後述）。
+- **ダークモード追従**: 表示が暗いとき Google Maps の**純正ダーク配色**（`GoogleMap` の `mapColorScheme = ComposeMapColorScheme.DARK`、明るいときは `LIGHT`）を使う。建物・駅も視認できる。地図 View 生成時の `GoogleMapOptions.mapColorScheme` にも同値を渡し、戻った直後の一瞬ライトで描かれるチラつきを防ぐ。**暗いかどうかは `MaterialTheme.colorScheme.surface.luminance() < 0.5` で判定する**——設定のテーマ上書き（システム/ライト/ダーク）を反映した実際の配色から見るため、OS 設定だけを見る `isSystemInDarkTheme()` と違い、アプリ内テーマ切替にも追従する。（旧 osmdroid 時代の `TilesOverlay.INVERT_COLORS`、および移行初期に試した自前スタイル JSON 方式は廃止。）
+- ピンは店舗が対応する施策の `campaign.brand_color` で着色（ロゴ不使用方針と整合）。複数発行体に対応する店舗（例: 三井住友＝緑 と MUFG＝赤 の両対応）は色を扇状に等分して 1 つのピンに描き分ける（2 色なら斜めの境界で分割）。描画は `Canvas` で円を `drawArc` した `Bitmap` を `BitmapDescriptorFactory.fromBitmap` で `Marker.icon` に渡す（`storePinDescriptor`）。単色用途（現在地の青ドット）は `dotDescriptor`。**`BitmapDescriptorFactory` は地図初期化後にのみ使える**ため、アイコン生成は `GoogleMap` のコンテンツ（地図 ready 後に走る）内で `remember` して行う。マーカーは位置で `key` し、リスト増減で `remember` スロットがズレないようにする。
+- **選択とプレビュー（リスト⇔地図の連動）**: ピン/リスト行のタップはどちらも全画面遷移せず、その店を「選択」する（`onPreviewNearby` → `NearbyUi.selectedPlace`）。選択中はボトムシートが店舗プレビュー（店名・距離・カテゴリ・最大還元率・「判定の詳細を見る →」）に切り替わり、地図は `NearbyMap` に渡した `selectedPoint` の変化を `LaunchedEffect` で検知してその店へ `animate`（ズーム維持）、該当ピンを `MapMarker.selected=true` で拡大＋白縁強調し最前面に描く（選択ピンは `zIndex` を上げて最前面に）。シートは `partialExpand()` で peek まで畳んで地図を見せる。判定詳細へはプレビューの「判定の詳細を見る →」ボタンから初めて `onSelectNearby` で遷移し、× ボタン / システムバック（`BackHandler`：選択中は `onClearNearbyPreview` で一覧へ、選択していなければ `onCloseNearby` で「探す」タブへ戻る）で復帰する。判定詳細のタイトルは POI 表示名（支店名込み、`Selection.displayName`＝リストに出ている名前と同じ）を出し、無ければチェーン名（`merchant.name`）にフォールバックする。再検索（`searchHere`/半径変更/`fetchNearby`）では `selectedPlace` を null に戻して選択を解除する（再検索中も地図・一覧を残すため `NearbyUi` は作り直さず、直前を `copy` して `loading` と該当フィールドだけ更新する。後述）。
 - **「現在地で検索（📍）」と「このエリアを検索」＝検索起点の対**: 地図上の操作を「検索の起点をどこにするか」の 2 択に整理した。地図右上の `FilledTonalIconButton`（`LocationOn`、48dp 確保、`onSearchMyLocation`→`fetchNearby`）は**現在地を取り直してその周辺で再検索**する（＝「自分の近く」。完了時に `center` が現在地へ変わりカメラも追従）。地図上中央の「このエリアを検索」（`searchHere`）は**地図中心を起点に再検索**する（＝「見ている場所」）。かつての ⟳「再読み込み」と「現在地へ戻す（カメラだけ移動）」は、前者が 📍 と機能重複し、後者は『現在地に戻ってもピン・一覧が前のまま』で直感に反したため、両者を 📍 の「現在地で検索」に統合した。`userLocation` が無い（取得失敗）ときは 📍 を出さない。
 - 明示的「対象外」店舗（`isExcludedStore`）は地図・リストの両方に出さない。
-- **地図ライブラリの差し替え境界**: osmdroid 固有の型（`MapView`/`GeoPoint`/`Marker`）は `NearbyMap.kt` 1ファイルに閉じ込め、アプリ側（ViewModel/`NearbyPane`）は自前の `MapPoint`/`MapMarker` だけを扱う。これにより将来 Google Maps 等へ**表示層だけ**を差し替える場合も、変更は NearbyMap 本体・依存・API キー設定・docs に閉じる（ViewModel/テストは無変更）。Google Maps の地図表示は無料無制限だが Play Services 依存のため現在は採用していない（docs/licenses.md）。
-- 座標は ViewModel が `NearbyPlace.lat/lon`・`NearbyUi.centerLat/centerLon`（検索の起点＝地図カメラ中心）・`NearbyUi.userLat/userLon`（実際の現在地＝青ドット）で UI まで運ぶ。地図の初期ズームは検索半径から決める（`zoomForRadius`）。OSM タイル利用規約のため `Configuration.userAgentValue` にパッケージ名を設定する。
-- **「このエリアを検索」**: スクロール/ズームは osmdroid に任せ、Compose からは触らない（操作中の再描画でズレないため）。地図上のボタンを押すとその時点の地図中心を `searchHere(lat, lon)` に渡し、**その中心を起点に Overpass を引き直して**距離順リストを作り直す（現在地の青ドットは維持）。半径変更も直近の検索中心を保ったまま再検索する。ピンはパン/ズームでは再描画せず、検索結果（`markers` の参照）が変わったときだけ描き直す。
-- **再検索中も地図・一覧を残す（まっさらにしない）**: `searchHere`/`fetchNearby`/半径変更は、以前は `NearbyUi(loading=true)` を新規生成して `center`/`places` を捨てるため毎回全画面ローディングに落ちていた。現在は**直前の `NearbyUi` を `copy` して `loading` だけ立て**（`center`/`places`/現在地を保持）、`NearbyPane` も「`center` があれば再検索中でも地図・シートを出す」ゲートに変えた。進捗は全画面スピナーでなく、地図中央の「このエリアを検索」ボタンを **進捗ピル（小スピナー＋文言）** に差し替えて示し、その間 📍 は無効化して二重起動を防ぐ。文言は測位中／Overpass 検索中で出し分ける（`MainViewModel.NearbyLoadPhase` LOCATING/SEARCHING を `NearbyUi.loadingPhase` で運び、全画面ローディングと共通の `nearbyLoadingText` で表示）。初回（`center` がまだ無い）だけは従来どおり全画面ローディング。
+- **地図ライブラリの差し替え境界**: 地図ライブラリ固有の型（Google Maps の `LatLng`/`Marker`/`CameraPositionState` 等）は `NearbyMap.kt` 1ファイルに閉じ込め、アプリ側（ViewModel/`NearbyPane`）は自前の `MapPoint`/`MapMarker` だけを扱う。これにより将来 MapLibre 等へ**表示層だけ**を差し替える場合も、変更は NearbyMap 本体・依存・API キー設定・docs に閉じる（ViewModel/テストは無変更）。実際 2026-06 の osmdroid→Google Maps 移行もこの方式で 1 ファイル＋依存・キー・docs に収まった（docs/map-data-stack.md）。
+- 座標は ViewModel が `NearbyPlace.lat/lon`・`NearbyUi.centerLat/centerLon`（検索の起点＝地図カメラ中心）・`NearbyUi.userLat/userLon`（実際の現在地＝青ドット）で UI まで運ぶ。地図の初期ズームは検索半径から決める（`zoomForRadius`）。Google Maps の API キーは AndroidManifest の `com.google.android.geo.API_KEY` meta-data から読む（値は `local.properties` の `MAPS_API_KEY` を `manifestPlaceholders` で差し込み・非コミット）。**Google ロゴ/著作権表示がボトムシート（peek 200dp）に隠れないよう、`NearbyMap` の `bottomPadding` で地図 contentPadding をその分持ち上げる**（Maps 利用規約の帰属表示要件）。
+- **「このエリアを検索」**: スクロール/ズームは Google Maps に任せ、Compose からは触らない（操作中の再描画でズレないため）。地図上のボタンを押すとその時点の地図中心（`cameraPositionState.position.target`）を `searchHere(lat, lon)` に渡し、**その中心を起点に YOLP を引き直して**距離順リストを作り直す（現在地の青ドットは維持）。半径変更も直近の検索中心を保ったまま再検索する。カメラ再センタリングは `center`/`initialZoom`・`selectedPoint` の変化を `LaunchedEffect` で検知したときだけ行い、パン中は動かさない。
+- **再検索中も地図・一覧を残す（まっさらにしない）**: `searchHere`/`fetchNearby`/半径変更は、以前は `NearbyUi(loading=true)` を新規生成して `center`/`places` を捨てるため毎回全画面ローディングに落ちていた。現在は**直前の `NearbyUi` を `copy` して `loading` だけ立て**（`center`/`places`/現在地を保持）、`NearbyPane` も「`center` があれば再検索中でも地図・シートを出す」ゲートに変えた。進捗は全画面スピナーでなく、地図中央の「このエリアを検索」ボタンを **進捗ピル（小スピナー＋文言）** に差し替えて示し、その間 📍 は無効化して二重起動を防ぐ。文言は測位中／YOLP 検索中で出し分ける（`MainViewModel.NearbyLoadPhase` LOCATING/SEARCHING を `NearbyUi.loadingPhase` で運び、全画面ローディングと共通の `nearbyLoadingText` で表示）。初回（`center` がまだ無い）だけは従来どおり全画面ローディング。
 - **失敗は「表示すべき内容の有無」で出し分け**: 取得失敗時は `failNearby` が『既に地図（`center`）が出ているか』で分岐する。出ている再検索の一時失敗は**地図・一覧を残したまま Snackbar 通知**（`UiState.nearbySearchFailed` に文言をセット→表示後 `onNearbySearchFailedShown` で消費）。表示すべき内容が無い初回失敗は従来どおり**全画面エラー＋「再試行」**（`NearbyRetryState`、`onReload`＝`fetchNearby`）にする。CLAUDE.md「一時的失敗は Snackbar・致命的は全画面」に沿う運用。この Snackbar は**外側 `Scaffold` の host だと下部シート（peek）の裏に隠れる**ため、`NearbyPane` の `BottomSheetScaffold` 自身の `snackbarHost` に出す。世代カウンタ（`nearbyGeneration`）が古い失敗は無視し、`onCloseNearby` で未表示の失敗文言も破棄して、次に「近く」を開いたとき古い Snackbar が出ないようにする。
-- **距離は常に現在地基準**: リストの距離表示・並び順は検索の起点（地図中心 `centerLat/centerLon`）ではなく、常に現在地（`userLat/userLon`）から測る（`loadNearbyAround`）。遠方を「このエリアを検索」しても距離は現在地からの値になる（地図中心＝現在地の通常検索と挙動を統一）。`centerLat/centerLon` は Overpass の検索範囲・地図カメラ・再検索の起点にのみ使い、距離の意味とは分離する。
+- **距離は常に現在地基準**: リストの距離表示・並び順は検索の起点（地図中心 `centerLat/centerLon`）ではなく、常に現在地（`userLat/userLon`）から測る（`loadNearbyAround`）。遠方を「このエリアを検索」しても距離は現在地からの値になる（地図中心＝現在地の通常検索と挙動を統一）。`centerLat/centerLon` は YOLP の検索範囲・地図カメラ・再検索の起点にのみ使い、距離の意味とは分離する。
 
-Overpass 側の設計判断（`OverpassClient` のコメント参照）:
+周辺店舗データの設計判断（既定＝`YolpClient` / 休眠フォールバック＝`OverpassClient`。docs/map-data-stack.md）:
 
-- 日本語名の正規表現フィルタはサーバ側で遅すぎるため、**カテゴリタグで広く取ってチェーン照合はクライアント側**で行う
-- 半径 1km 超は `node` のみ取得（`way`＝建物ポリゴン店舗は落ちるが速度優先）
-- 日本の OSM は支店名を `branch` タグに分ける慣習があるため、表示名は `name + branch` を結合
-- 公式に「対象外」と明示された店舗（`isExcludedStore`）は近隣リストに出さない。判定には支店名結合後の `displayName` を使うため、OSM 名に支店名が無いと判定できず表示される（データ粒度依存）
-- **エンドポイントのフォールバック**: overpass-api.de は混雑時に 429/504/タイムアウトを返しやすいため、本家が失敗したらミラー（`maps.mail.ru`）へ順に試す。失敗理由（HTTP コード/例外）は `OverpassClient` タグで logcat に記録し、全エンドポイント失敗時のみ null を返す
+- **既定は YOLP ローカルサーチ**。`OverpassClient.fetchNearby` と同一シグネチャの `YolpClient.fetchNearby(lat, lon, radiusM)` にしてあり、ViewModel は呼び先 1 行で差し替わる（`Poi` は `Models.kt` の中立な型）。
+- ⚠️ **YOLP データはキャッシュ禁止**（利用規約 第6条）。POI を Room/DataStore/ファイルへ永続化せず毎回ライブ取得する。アプリ下部に「Web Services by Yahoo! JAPAN」クレジットを常設する（`NearbyPane` のシート上部）。
+- **取りこぼし対策**（駅前など密集地）: YOLP は 1 リクエスト最大 100 件。業種コード `gc`（**`01`=グルメ全般 / `0205`=スーパー(0205002)＋コンビニ(0205001)**）で絞り、`start` で**ページング**（ソースごと最大 5 ページ＝500 件、`sort=dist` で近い順）して 100 件超を取得する。`gc` のカンマ複数指定は API 仕様に明記が無いため**ソースごとに分けて投げ結果をマージ**（重複は座標＋名前で除外）。`02`（ショッピング全般）は広すぎてスーパーが 100 件に埋もれ、かつ 100 円ショップ等が混ざり誤マッチの原因になるため使わない。**gc で確実に取れないチェーンは店名キーワード `query` で個別取得**：カーブス（ジム=0405003）／アカチャンホンポ（店舗ごとにジャンルコードがバラバラ）／オーケー（YOLP 上でジャンルコードが空＝どの gc でも返らない）。最終的なチェーン絞り込みは `matchStore`。ページ上限到達は logcat に出す（サイレント truncation を避ける）。
+- **`matchStore` の連結店名対応**: YOLP は支店名を区切りなく連結する（例「肉のハナマサひばりヶ丘店」）。`containsAsWord` の後方境界チェックは「マック」⊂「マックスバリュ」の誤マッチ防止用だが、正規化後にチェーン名の直後が同字種（はなまさ｜ひ…）で続くと正しい店も弾く。そこで**キーが 5 文字以上（≒完全なチェーン名）のときは後方境界を緩める**（短いキーは従来どおり厳格）。
+- YOLP は支店名を `Name` に内包するため `branch` は null（`displayName` は `Name` のまま）。公式に「対象外」と明示された店舗（`isExcludedStore`）は近隣リストに出さない（照合は `displayName` で行う）。
+- **休眠フォールバック `OverpassClient`**（OSM・無料・キー不要）はそのまま残置し、5万/日上限に当たる局面での再利用を想定する。Overpass 固有の判断（日本語名の正規表現はサーバ側で遅いため**カテゴリタグで広く取りクライアント側で照合** / 半径 1km 超は `node` のみ / 本家 overpass-api.de 失敗時はミラー `maps.mail.ru` へフォールバック）はコード内コメント参照。
 
 ## 8. テスト戦略
 
-`./gradlew :app:testDebugUnitTest` で全 43 テストが JVM 上で実行される（エミュレータ不要）。
+`./gradlew :app:testDebugUnitTest` で全 52 テストが JVM 上で実行される（エミュレータ不要）。
 
 | テスト | 対象 | 特徴 |
 |---|---|---|
-| `JudgmentEngineTest`（27 件） | 検索・正規化・判定・店舗対象判定（3 状態）・近隣除外 | **リポジトリ直下 `data/` の実データを読み込む**。「マック→マクドナルド」「マックスバリュは誤ヒットしない」等の振る舞いと、merchant_id 参照切れ等のデータ整合性チェックを兼ねる。アカチャンホンポの公式リストで対象/対象外/要確認の 3 状態も検証 |
+| `JudgmentEngineTest`（30 件） | 検索・正規化・判定・店舗対象判定（3 状態）・近隣除外 | **リポジトリ直下 `data/` の実データを読み込む**。「マック→マクドナルド」「マックスバリュは誤ヒットしない」等の振る舞いと、merchant_id 参照切れ等のデータ整合性チェックを兼ねる。アカチャンホンポの公式リストで対象/対象外/要確認の 3 状態も検証 |
 | `DataRepositoryTest`（5 件） | ロード戦略 | ラムダ注入により、キャッシュあり/なし/破損、リモート成功/失敗の各経路を File システムだけで検証 |
-| `NearbyTest`（10 件） | Overpass パース・距離計算・チェーン特定 | 固定 JSON フィクスチャでネットワーク非依存 |
+| `NearbyTest`（16 件） | Overpass/YOLP パース・距離計算・チェーン特定・施設テナント除外・重複排除キー | 固定 JSON フィクスチャでネットワーク非依存 |
 
 「実データをテストに使う」のがこのプロジェクトの肝で、**データ更新（JSON 編集）だけの変更でも CI 的にテストを流せば参照切れやエイリアス衝突を検出できる**。
 
@@ -405,12 +412,13 @@ Overpass 側の設計判断（`OverpassClient` のコメント参照）:
 | 言語 / UI | Kotlin + Jetpack Compose (Material 3) | minSdk 29 / targetSdk 36 |
 | アーキテクチャ | MVVM + Repository、手動 DI | 単一 ViewModel・単一 UiState |
 | シリアライズ | kotlinx.serialization | ignoreUnknownKeys で前方互換 |
-| HTTP | OkHttp（素のまま） | Retrofit/Ktor なし。GET 2 種 + POST 1 種のみなので十分 |
+| HTTP | OkHttp（素のまま） | Retrofit/Ktor なし。YOLP・GitHub raw が GET、休眠の Overpass のみ POST |
 | ローカル保存 | ファイルキャッシュ（filesDir/remote_data/） | Room は見送り |
 | 設定の永続化 | DataStore Preferences（`SettingsRepository`） | テーマ・データ取得・カード差分。Apache-2.0 |
 | 位置情報 | LocationManager（フレームワーク標準） | Play Services 不使用 |
 | 周辺店舗 | Overpass API（OSM） | 無料・API キー不要。本家失敗時はミラーにフォールバック |
-| 地図表示 | osmdroid（OSM ラスタタイル） | Play Services 非依存・Apache-2.0。`NearbyMap.kt` に閉じ込め将来差し替え可能 |
+| 地図描画 | Google Maps SDK（maps-compose） | Play Services 依存・要 API キー。`NearbyMap.kt` に閉じ込め将来差し替え可能（旧 osmdroid から 2026-06 移行） |
+| 店舗データ | YOLP ローカルサーチ（既定）/ Overpass（休眠） | YOLP はキャッシュ禁止・5万/日・要クレジット表示（docs/map-data-stack.md） |
 | データ配信 | GitHub raw（main ブランチ data/） | 更新はアプリ再ビルド不要 |
 
 依存追加時は **ライセンス確認 → docs/licenses.md へ追記** が必須ルール（GPL/AGPL 不可。詳細は [CLAUDE.md](../CLAUDE.md)）。

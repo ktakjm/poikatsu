@@ -108,12 +108,17 @@ class JudgmentEngine(private val data: PoikatsuData) {
      * キーの端と隣接文字が同じ文字種(カナ同士・英数同士)で続く場合は別単語の一部とみなす。
      * 文字種が変わる位置(「くら寿司|ららぽーと」の漢字→かな等)は単語境界として許容する。
      * 正規化後はカタカナがひらがなになっている前提。
+     *
+     * ただし**後方境界は長いキー(5文字以上=ほぼ完全なチェーン名)では緩める**。YOLP の店名は
+     * 支店名を区切りなく連結する(例「肉のハナマサひばりヶ丘店」)ため、チェーン名の直後が同字種
+     * (はなまさ|ひ…)でも支店名の一部とみなして許容しないと取りこぼす。短いキー(「マック」等)は
+     * 「マックスバリュ」のような別単語の接頭辞になりやすいので従来どおり厳格に見る。
      */
     private fun containsAsWord(text: String, key: String): Boolean {
         var index = text.indexOf(key)
         while (index >= 0) {
             val beforeJoined = isSameWord(text.getOrNull(index - 1), key.first())
-            val afterJoined = isSameWord(text.getOrNull(index + key.length), key.last())
+            val afterJoined = key.length < 5 && isSameWord(text.getOrNull(index + key.length), key.last())
             if (!beforeJoined && !afterJoined) return true
             index = text.indexOf(key, index + 1)
         }
@@ -128,6 +133,50 @@ class JudgmentEngine(private val data: PoikatsuData) {
     private fun isKana(c: Char): Boolean = c in 'ぁ'..'ゖ' || c == 'ー'
 
     private fun isAsciiAlnum(c: Char): Boolean = c.code < 128 && c.isLetterOrDigit()
+
+    /**
+     * 商業施設(=対象チェーン)内テナントの誤検知を判定する。施設内テナントは YOLP 上で
+     * 「<施設名>店<テナント業種>」という名前になり、かつ施設のジャンルコードを継ぐため、
+     * 施設名(=対象チェーン)で誤マッチしてしまう。例:「ドミー安城横山店大嶽クリーニング」は
+     * ドミー(スーパー)ではなくクリーニング店。
+     *
+     * チェーン名の**後ろ**に「店」があり、さらにその後ろに業種名らしき和文(かな/漢字)が
+     * 2 文字以上続く場合にテナントとみなす。「上島珈琲店渋谷店」のようにチェーン名自体が
+     * 「店」を含む場合も、チェーン名より後ろだけを見るので誤判定しない(後ろは「渋谷店」で
+     * 末尾が「店」=テナント無し)。チェーン名が見つからない(別名/ブランド一致)ときは判定しない。
+     */
+    fun isFacilityTenant(chainName: String, poiName: String): Boolean {
+        val idx = poiName.indexOf(chainName)
+        if (idx < 0) return false
+        val after = poiName.substring(idx + chainName.length)
+        val tenIndex = after.indexOf('店')
+        if (tenIndex < 0) return false
+        val suffix = after.substring(tenIndex + 1).trim()
+        return suffix.length >= 2 && suffix.any { isKanaOrKanji(it) }
+    }
+
+    private fun isKanaOrKanji(c: Char): Boolean =
+        c.code in 0x3040..0x30FF || c.code in 0x4E00..0x9FFF
+
+    /**
+     * 同一店舗の重複排除に使う「支店名」キー。POI 名から、そのチェーンの識別子(店名・読み・別名)を
+     * 取り除いて残った部分を正規化・空白除去して返す。
+     *
+     * これにより重複判定を **チェーン一致だけでなくチェーン+支店名一致**で行える:
+     * - 「アカチャンホンポ和光 イトーヨーカドー店」と「…和光イトーヨーカドー店」(空白違い)→ 同じ支店キー → 重複
+     * - 「KFC◯◯店」と「ケンタッキーフライドチキン◯◯店」(別名違い)→ どちらも支店キー「◯◯店」→ 重複
+     * - 同一モール内の別店舗(例: レイクタウンの複数スターバックス)→ 支店名が異なる → 別物として残す
+     */
+    fun normalizedBranch(merchant: Merchant, poiName: String): String {
+        var s = JapaneseText.normalize(poiName)
+        val keys = searchIndex.firstOrNull { it.first.id == merchant.id }?.second.orEmpty()
+        // 長いキーから順に 1 回だけ除去(短いキーの部分一致で支店名を削りすぎないため)
+        for (key in keys.filter { it.isNotBlank() }.sortedByDescending { it.length }) {
+            val i = s.indexOf(key)
+            if (i >= 0) s = s.removeRange(i, i + key.length)
+        }
+        return s.filterNot { it.isWhitespace() }
+    }
 
     /** この施策におけるそのチェーンのルール(なければ対象外) */
     private fun Campaign.ruleFor(merchant: Merchant): MerchantRule? =

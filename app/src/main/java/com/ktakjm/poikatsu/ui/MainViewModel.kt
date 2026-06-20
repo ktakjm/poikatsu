@@ -9,7 +9,7 @@ import com.ktakjm.poikatsu.data.GithubRawClient
 import com.ktakjm.poikatsu.data.LoadedData
 import com.ktakjm.poikatsu.data.LocationProvider
 import com.ktakjm.poikatsu.data.Merchant
-import com.ktakjm.poikatsu.data.OverpassClient
+import com.ktakjm.poikatsu.data.YolpClient
 import com.ktakjm.poikatsu.data.AppSettings
 import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.Profile
@@ -68,13 +68,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * 近隣取得のローディング段階。リングの待ち時間が何待ちかを表示で出し分けるために持つ。
-     * 地図タイル(osmdroid)はこの間まだ描画されていない=「地図の読み込み」ではない点に注意。
+     * 地図(Google Maps)はこの間まだ描画されていない=「地図の読み込み」ではない点に注意。
      */
     enum class NearbyLoadPhase {
         /** 現在地の測位中(LocationProvider、最大15秒)。searchHere 経由では通らない */
         LOCATING,
 
-        /** Overpass API で周辺店舗を取得中(待ち時間が最も読めない主因) */
+        /** YOLP で周辺店舗を取得中(待ち時間が最も読めない主因) */
         SEARCHING,
     }
 
@@ -378,13 +378,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * centerLat/centerLon を起点に Overpass で周辺店舗を取得し、現在地(userLat/userLon)からの
+     * centerLat/centerLon を起点に YOLP で周辺店舗を取得し、現在地(userLat/userLon)からの
      * 距離が近い順でリスト化する。検索の起点(地図中心)と距離の基準(現在地)は別物で、
      * 「このエリアを検索」で遠方を見ても距離は常に現在地から測る。
      */
     private fun loadNearbyAround(gen: Int, centerLat: Double, centerLon: Double, userLat: Double, userLon: Double) {
         val engine = engine ?: return
-        val pois = OverpassClient.fetchNearby(centerLat, centerLon, radiusM = _state.value.nearbyRadiusM)
+        val pois = YolpClient.fetchNearby(centerLat, centerLon, radiusM = _state.value.nearbyRadiusM)
         if (pois == null) {
             failNearby(
                 gen,
@@ -396,6 +396,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val places = pois
             .mapNotNull { poi ->
                 val merchant = engine.matchStore(poi.name, poi.brand) ?: return@mapNotNull null
+                // 商業施設(=対象チェーン)内テナントの誤検知を除外
+                // (例: 「ドミー安城横山店大嶽クリーニング」はドミーではなくクリーニング店)
+                if (engine.isFacilityTenant(merchant.name, poi.displayName)) return@mapNotNull null
                 // 公式に「対象外」と明示された店舗(例: アカチャンホンポのららぽーと内店舗)は近隣リストに出さない
                 if (engine.isExcludedStore(merchant, poi.displayName)) return@mapNotNull null
                 val judgments = engine.judge(merchant)
@@ -412,6 +415,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
             .sortedBy { it.distanceMeters }
+            // 同一店舗の重複を排除(YOLP は同じ店を別名・空白違いで複数返すことがある。
+            // 例: 「KFC…店」と「ケンタッキーフライドチキン…店」、空白有無違いの同名)。
+            // 「チェーン + 支店名」がともに一致するものを同一店舗とみなし、最も近い1件を残す。
+            // 座標基準にしないのは、同一モール内に同チェーンの別店舗(例: レイクタウンの複数スタバ)が
+            // 入る場合に誤って1件へ潰さないため(支店名が異なれば別物として残る)。
+            .distinctBy { p ->
+                val m = p.merchant
+                if (m == null) "?:${p.name}" else "${m.id}:${engine.normalizedBranch(m, p.name)}"
+            }
         applyNearbyIfCurrent(
             gen,
             NearbyUi(

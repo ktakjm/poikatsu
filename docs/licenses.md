@@ -19,19 +19,23 @@
 | org.jetbrains:annotations | アノテーション | Apache-2.0 |
 | com.google.guava(listenablefuture スタブ) | AndroidXの推移的依存 | Apache-2.0 |
 | org.jspecify | null安全アノテーション | Apache-2.0 |
-| com.squareup.okhttp3:okhttp(+ 推移的依存 com.squareup.okio) | リモートデータ取得(M4で追加, 2026-06-12) | Apache-2.0 |
-| org.osmdroid:osmdroid-android | 近隣検索の地図表示(2026-06-16 追加) | Apache-2.0 |
+| com.squareup.okhttp3:okhttp(+ 推移的依存 com.squareup.okio) | リモートデータ取得・YOLP/Overpass 呼び出し(M4で追加, 2026-06-12) | Apache-2.0 |
+| com.google.maps.android:maps-compose | 近隣検索の地図表示(Compose ラッパー。2026-06-20 追加) | Apache-2.0 |
+| com.google.android.gms:play-services-maps(+ 推移的な play-services-* / Google Maps SDK) | 地図描画 SDK 本体(maps-compose の依存) | **プロプライエタリ**(Google APIs Terms of Service。OSS ではない) |
 | androidx.datastore:datastore-preferences | 設定(テーマ・マイカード)の永続化(2026-06-19 追加) | Apache-2.0 |
 
-**ランタイム依存はすべて Apache License 2.0。** コピーレフト(GPL系)は一切なし。
+**OSS 依存はすべて Apache License 2.0**(コピーレフト/GPL系は一切なし)。**唯一の例外が Google Maps SDK(`play-services-maps`)で、これは OSS ではなくプロプライエタリなサービス SDK**(Google APIs ToS 準拠)。バイナリ同梱はするが、Apache-2.0 §4 のような NOTICE 義務ではなく Google の規約・帰属表示(SDK が自動描画)に従う。判断の背景は下記「方針転換」と [map-data-stack.md](map-data-stack.md)。
 
-### 地図タイルの利用規約に関する注意(osmdroid)
+> 旧構成の osmdroid(Apache-2.0・OSM 公式タイル)は 2026-06-20 に Google Maps へ差し替えて**依存から除去**した。OSM 公式タイルの一般配布制限(OSM Tile Usage Policy)も併せて解消。経緯は次節と [map-data-stack.md](map-data-stack.md)。
 
-osmdroid の**ライブラリ自体は Apache-2.0** で問題ないが、既定で地図タイルを **OpenStreetMap 公式タイルサーバ(tile.openstreetmap.org)** から取得する点に注意が必要。
+### 地図描画・店舗データの方針転換(2026-06-20)
 
-- [OSM Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/) は、有効な User-Agent の付与を求め、**大規模利用・アプリの一般配布での公式タイル利用を禁止**している(開発・軽度な個人利用は許容)。本アプリは `Configuration.userAgentValue` にパッケージ名を設定して規約を順守する。
-- **現状(個人利用・手元3台)は規約上問題なし。** ただし将来 Play Store 等で一般公開する場合は、公式タイルをそのまま使えないため、**別のタイル提供元(自前ホスト or Thunderforest / MapTiler / Stadia 等の無料枠・有償サービス)への切り替えが必要**になる。これは「osmdroid が有償化する」のではなく「タイルデータ源の差し替えが要る」という性質。公開判断時のタスクとして PLAN.md / roadmap のリリース準備に積む。
-- 参考: Google Maps SDK for Android はネイティブ地図表示が無料無制限で公開時もタイル源の懸念がない一方、Play Services 依存 + API キー + 請求先(クレカ)登録が必須で、本プロジェクトの「Play Services 非依存」方針と相反する(roadmap 3.3 / code-guide 設計判断)。地図表示層は将来差し替え可能な抽象化(`ui/NearbyMap.kt` に地図ライブラリ依存を閉じ込め)で実装してある。
+OSM(osmdroid 描画 + Overpass データ)の品質(新規店欠落・支店名欠落・地図デザイン)が実用に劣るため、**描画を Google Maps SDK、店舗データを YOLP ローカルサーチAPI へ移行する決定**をした。調査の全文・規約・フェーズ戦略は [map-data-stack.md](map-data-stack.md) に集約。本ファイルにはライセンス/規約面の要点のみ記録する。
+
+- **Google Maps SDK for Android**(`com.google.android.gms:play-services-maps`): OSS ではなく **Google の利用規約に縛られるプロプライエタリな「サービスSDK」**。Apache/MIT 等の OSS ライセンス枠では扱わない。描画は無料無制限だが、**課金アカウント(クレカ)+ API キー + Play Services 依存**が必須。API キーは公開アプリで抽出可能なため**パッケージ名 + 署名 SHA-1 で制限**する。上記の「Play Services 非依存」方針はこの採用で**意図的に転換**する(緩和策: 描画層を `NearbyMap.kt` に隔離し将来 MapLibre 等へ差し替え可能なまま維持)。
+- **YOLP ローカルサーチAPI**: Yahoo(LINEヤフー)の **Web API サービス**(同梱ライブラリではなく HTTP API)。順守事項=**①取得データを永続キャッシュしない**(2022改訂 第6条。現状 POI を永続化していないので維持)、**②アプリ下部に「Web Services by Yahoo! JAPAN」等のクレジット表示**(色・サイズを潰さない)、**③1アプリ1日5万リクエストまで無料**、**④無料配布が前提**(データを有料の壁の裏に置く/対価源にすると利用権消滅)。地図描画系 API/SDK は 2020 年に廃止済みのためデータ系のみ利用。
+- **API キー/アプリ ID の管理**: 公開リポジトリのため**コミット禁止**。`local.properties` → `BuildConfig` 経由で注入する(BuildConfig は現状未使用のため新規に有効化が必要)。
+- **公開時の追加義務**: Yahoo クレジットの常設表示。Google Maps の帰属表示は SDK が自動描画するため別途不要。詳細・収益化時の再確認事項は [map-data-stack.md](map-data-stack.md) §3.2/§7。
 
 ## APK に含まれない依存(義務は発生しない)
 
