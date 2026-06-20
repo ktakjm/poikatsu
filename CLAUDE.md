@@ -19,6 +19,7 @@
 - 例外: データ(data/*.json)の変更はアプリがGitHub raw(main)を優先取得するため、実機検証の前にプッシュが必要な場合がある。その際は理由を説明して確認を取る
 - 実機は手元のAndroid 10 / 12 / 16 の3台(だからminSdk=29)。インストールはAndroid Studioの▶ または `./gradlew installDebug`
 - 進捗・保留事項は docs/roadmap.md に反映し、フェーズ完了時は PLAN.md にも記録する
+- バージョニング・タグ: **SemVer**。未公開のうちは `0.x`(大きめの変更でもマイナー上げ)、初の一般公開(Play Store 等)で `1.0.0`。機能のまとまり・アーキ転換などの節目で main に**注釈付きタグ**(`git tag -a vX.Y.Z`)を打ち、同時に `app/build.gradle.kts` の `versionName`(設定画面「このアプリ」の表示値=`BuildConfig.VERSION_NAME`)と `versionCode` を合わせる。タグは `git push origin <tag>` で明示 push(自動では push されない)。中間の fix は patch、それ以外は打ちすぎない
 
 ## その他の方針
 
