@@ -1,8 +1,19 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
 }
+
+// APIキー/アプリIDは公開リポジトリにコミットしないため local.properties から読む(無ければ空)。
+// 空のままでもビルドは通る(地図は表示されず YOLP は null を返す)= キー入手前のコード先行実装が可能。
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val mapsApiKey: String = localProps.getProperty("MAPS_API_KEY") ?: ""
+val yolpAppId: String = localProps.getProperty("YOLP_APP_ID") ?: ""
 
 android {
     namespace = "com.ktakjm.poikatsu"
@@ -20,6 +31,11 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Google Maps SDK は AndroidManifest の meta-data からキーを読む(${MAPS_API_KEY} を差し込む)
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
+        // YOLP ローカルサーチの appid(YolpClient が BuildConfig.YOLP_APP_ID から読む)
+        buildConfigField("String", "YOLP_APP_ID", "\"$yolpAppId\"")
     }
 
     buildTypes {
@@ -60,7 +76,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
-    implementation(libs.osmdroid)
+    implementation(libs.maps.compose)
+    implementation(libs.play.services.maps)
     implementation(libs.androidx.datastore.preferences)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

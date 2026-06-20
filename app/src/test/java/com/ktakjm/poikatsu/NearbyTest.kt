@@ -2,10 +2,13 @@ package com.ktakjm.poikatsu
 
 import com.ktakjm.poikatsu.data.OverpassClient
 import com.ktakjm.poikatsu.data.PoikatsuJson
+import com.ktakjm.poikatsu.data.YolpClient
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.util.GeoMath
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -53,6 +56,50 @@ class StoreMatchTest {
         assertEquals("seven_eleven", engine.matchStore("名称不明", brand = "7-ELEVEN")?.id)
         assertEquals("lawson", engine.matchStore("名称不明", brand = "LAWSON")?.id)
     }
+
+    @Test
+    fun `YOLPの連結店名(支店名がひらがな始まり)でもマッチする`() {
+        // YOLP は支店名を区切りなく連結する。正規化後「肉のはなまさ|ひばりが丘店」のように
+        // チェーン名の直後がひらがなでも、長いキーなら支店名の一部として許容する(取りこぼし防止)。
+        assertEquals("hanamasa", engine.matchStore("肉のハナマサひばりヶ丘店")?.id)
+        // 漢字始まりの支店名は従来から境界OK
+        assertEquals("ok_store", engine.matchStore("オーケー大泉インター店")?.id)
+    }
+
+    @Test
+    fun `重複排除キーは空白違い・別名違いを同一、別支店を別とする`() {
+        val aka = engine.matchStore("アカチャンホンポ和光イトーヨーカドー店")!!
+        // 空白の有無だけ違う同一店舗 → 同じ支店キー
+        assertEquals(
+            engine.normalizedBranch(aka, "アカチャンホンポ和光 イトーヨーカドー店"),
+            engine.normalizedBranch(aka, "アカチャンホンポ和光イトーヨーカドー店"),
+        )
+        // 「KFC」と「ケンタッキーフライドチキン」(別名違い)→ 支店名が同じなら同じキー
+        val kfc = engine.matchStore("KFC渋谷店")!!
+        assertEquals(
+            engine.normalizedBranch(kfc, "KFC渋谷店"),
+            engine.normalizedBranch(kfc, "ケンタッキーフライドチキン渋谷店"),
+        )
+        // 同一モール内の別店舗(支店名が違う)→ 別キー(誤って1件に潰さない)
+        val sbux = engine.matchStore("スターバックスコーヒーイオンレイクタウンkaze店")!!
+        assertNotEquals(
+            engine.normalizedBranch(sbux, "スターバックスコーヒーイオンレイクタウンkaze店"),
+            engine.normalizedBranch(sbux, "スターバックスコーヒーイオンレイクタウンmori店"),
+        )
+    }
+
+    @Test
+    fun `施設内テナントの誤検知を弾く`() {
+        // 「店」の後ろに別業種名が続く=施設(対象チェーン)内テナント → 除外
+        assertTrue(engine.isFacilityTenant("ドミー", "ドミー安城横山店大嶽クリーニング"))
+        // 正規の店舗(末尾が「店」)は除外しない
+        assertFalse(engine.isFacilityTenant("ドミー", "ドミー安城横山店"))
+        assertFalse(engine.isFacilityTenant("肉のハナマサ", "肉のハナマサひばりヶ丘店"))
+        // チェーン名自体に「店」を含む場合も、チェーン名より後ろだけ見るので誤判定しない
+        assertFalse(engine.isFacilityTenant("上島珈琲店", "上島珈琲店渋谷店"))
+        // 施設名込みでも末尾が「店」なら正規(アカチャンホンポの実店舗)
+        assertFalse(engine.isFacilityTenant("アカチャンホンポ", "アカチャンホンポ和光 イトーヨーカドー店"))
+    }
 }
 
 class OverpassParseTest {
@@ -94,6 +141,60 @@ class OverpassParseTest {
         val pois = OverpassClient.parse(body)
         assertEquals("セブン-イレブン 渋谷一丁目店", pois[0].displayName)
         assertEquals("セブン-イレブン", pois[1].displayName)
+    }
+}
+
+class YolpParseTest {
+
+    @Test
+    fun `Feature の Name と Coordinates(lon,lat)をパースできる`() {
+        val body = """
+            {
+              "ResultInfo": { "Count": 2, "Total": 2, "Start": 1 },
+              "Feature": [
+                {
+                  "Id": "1",
+                  "Name": "セブン-イレブン渋谷道玄坂店",
+                  "Geometry": { "Type": "point", "Coordinates": "139.6976,35.6580" }
+                },
+                {
+                  "Id": "2",
+                  "Name": "マクドナルド渋谷店",
+                  "Geometry": { "Type": "point", "Coordinates": "139.7002,35.6591" }
+                }
+              ]
+            }
+        """.trimIndent()
+        val pois = YolpClient.parse(body)
+        assertEquals(2, pois.size)
+        // 支店名は Name に内包される(branch は分けない) → displayName は Name と一致
+        assertEquals("セブン-イレブン渋谷道玄坂店", pois[0].name)
+        assertEquals("セブン-イレブン渋谷道玄坂店", pois[0].displayName)
+        assertNull(pois[0].branch)
+        // Coordinates は "経度,緯度" の順
+        assertEquals(35.6580, pois[0].lat, 0.0001)
+        assertEquals(139.6976, pois[0].lon, 0.0001)
+    }
+
+    @Test
+    fun `Name や座標が欠けた Feature は除外される`() {
+        val body = """
+            {
+              "Feature": [
+                { "Id": "1", "Geometry": { "Coordinates": "139.70,35.65" } },
+                { "Id": "2", "Name": "座標なし店" },
+                { "Id": "3", "Name": "正常店", "Geometry": { "Coordinates": "139.71,35.66" } }
+              ]
+            }
+        """.trimIndent()
+        val pois = YolpClient.parse(body)
+        assertEquals(1, pois.size)
+        assertEquals("正常店", pois[0].name)
+    }
+
+    @Test
+    fun `Feature が無い空レスポンスは空リスト`() {
+        assertEquals(0, YolpClient.parse("""{ "ResultInfo": { "Count": 0 } }""").size)
     }
 }
 

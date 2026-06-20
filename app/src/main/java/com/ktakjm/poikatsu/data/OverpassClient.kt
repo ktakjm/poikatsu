@@ -8,20 +8,11 @@ import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
-/** OpenStreetMap の POI(店舗) */
-data class Poi(
-    val name: String,
-    val branch: String?,
-    val brand: String?,
-    val lat: Double,
-    val lon: Double,
-) {
-    /** 日本のOSMは支店名を branch タグに分ける慣習のため、表示用に結合する */
-    val displayName: String
-        get() = if (branch.isNullOrBlank()) name else "$name $branch"
-}
-
-/** Overpass API(OSM)で周辺の飲食店・コンビニ・スーパーを検索する。無料・APIキー不要 */
+/**
+ * Overpass API(OSM)で周辺の飲食店・コンビニ・スーパーを検索する。無料・APIキー不要。
+ * 現在の既定データ源は [YolpClient]。本クラスは将来 5万/日上限に当たった場合の
+ * フォールバック候補として残置している(docs/map-data-stack.md のフェーズ戦略)。
+ */
 object OverpassClient {
 
     private const val TAG = "OverpassClient"

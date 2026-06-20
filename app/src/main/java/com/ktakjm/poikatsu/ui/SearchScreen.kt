@@ -778,6 +778,14 @@ private fun NearbyPane(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = { NearbyTopBar(onOpenSettings = onOpenSettings) },
         sheetContent = {
+            // YOLP 利用規約: 店舗データの帰属表示。常に視認できるようシート上部(ドラッグハンドル直下)に置く。
+            // 色・サイズを潰さないこと(docs/map-data-stack.md §3.2/§7)。
+            Text(
+                "店舗情報: Web Services by Yahoo! JAPAN",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+            )
             if (selectedPlace != null) {
                 // 選択中: 地図を残したまま店舗情報をプレビュー。判定詳細へはここから明示遷移する
                 NearbyPreview(
@@ -840,6 +848,8 @@ private fun NearbyPane(
             loadingMessage = if (nearby.loading) nearbyLoadingText(nearby.loadingPhase) else null,
             // 下端(シート peek 分)の余白は当てず地図をシート背面まで伸ばす。上端 TopAppBar 分だけ避ける
             modifier = Modifier.fillMaxSize().padding(top = innerPadding.calculateTopPadding()),
+            // Google ロゴ/著作権表示が peek 状態のボトムシートに隠れないよう、peek 高さ分だけ持ち上げる
+            bottomPadding = 200.dp,
         )
     }
 }
@@ -980,6 +990,16 @@ private fun JudgmentDetail(
     // 店名は TopAppBar に表示済み。ここではカテゴリを静的タグで補足する
     CategoryTag(selection.merchant.category)
     Spacer(Modifier.height(12.dp))
+    // 近隣(YOLP)由来で開いた場合のみ、店舗名は YOLP データなので帰属表示を出す。
+    // 名前検索由来(displayName == null)は merchants.json のデータなのでクレジットは出さない。
+    if (selection.displayName != null) {
+        Text(
+            "店舗情報: Web Services by Yahoo! JAPAN",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+    }
     // 公式が対象/対象外を言い切っているチェーンだけ、店舗単位の判定画面へ遷移できる
     if (selection.canCheckStore) {
         Button(onClick = onOpenStoreCheck, modifier = Modifier.fillMaxWidth()) {
