@@ -106,7 +106,9 @@ import com.ktakjm.poikatsu.data.ThemeMode
 import com.ktakjm.poikatsu.domain.Judgment
 import com.ktakjm.poikatsu.domain.StoreEligibility
 import com.ktakjm.poikatsu.domain.StoreVerdict
+import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningColor
+import com.ktakjm.poikatsu.ui.theme.warningContainerColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -563,20 +565,31 @@ private fun CategoryTag(text: String) {
     }
 }
 
-/** 警告・注意の一行表示(アイコン + 文)。色で error(致命) / warning(注意) を出し分ける */
+/**
+ * 警告・注意のトーナル面表示(アイコン + 文)。container/content の対で error(致命) / warning(注意) を出し分ける。
+ * グレーのカード地に色文字を直接乗せるとコントラストが不足するため、専用の淡い面の上に濃い文字で出す。
+ * アイコン/文字の色は Surface の contentColor から自動で引き継ぐ。
+ */
 @Composable
-private fun NoticeRow(text: String, color: Color) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.Top,
+private fun NoticeRow(text: String, containerColor: Color, contentColor: Color) {
+    Surface(
+        color = containerColor,
+        contentColor = contentColor,
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        Icon(
-            Icons.Default.Warning,
-            contentDescription = null,
-            tint = color,
-            modifier = Modifier.size(18.dp).padding(top = 2.dp),
-        )
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = color)
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Icon(
+                Icons.Default.Warning,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp).padding(top = 2.dp),
+            )
+            Text(text, style = MaterialTheme.typography.bodyMedium)
+        }
     }
 }
 
@@ -1098,12 +1111,12 @@ private fun JudgmentCardBody(judgment: Judgment, brandColor: Color) {
             rule.note?.let {
                 Text("この店の条件: $it", style = MaterialTheme.typography.bodyMedium)
             }
-            // 致命的な注意(警告)は error、対象外があり得る等の注意は warning で出し分ける
+            // 致命的な注意(警告)は errorContainer、対象外があり得る等の注意は warningContainer で出し分ける
             judgment.warnings.forEach {
-                NoticeRow(it, MaterialTheme.colorScheme.error)
+                NoticeRow(it, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
             }
             rule.exclusionNote?.let {
-                NoticeRow(it, warningColor())
+                NoticeRow(it, warningContainerColor(), onWarningContainerColor())
             }
             rule.storeListUrl?.let { url ->
                 val uriHandler = LocalUriHandler.current
@@ -1172,19 +1185,27 @@ private fun StoreCheckScreen(
 
 @Composable
 private fun StoreVerdictCard(verdict: StoreVerdict) {
-    // 状態は絵文字ではなく Material アイコン + セマンティックカラーで表す(端末差なく、テーマに追従)
+    // 状態は絵文字ではなく Material アイコン + セマンティックカラーのトーナル面(ピル)で表す。
+    // 色文字をカード地に直接乗せず、container/content の対で出すことでコントラストを担保する(テーマにも追従)。
     val icon: ImageVector
     val label: String
-    val color: Color
+    val containerColor: Color
+    val contentColor: Color
     when (verdict.eligibility) {
         StoreEligibility.ELIGIBLE -> {
-            icon = Icons.Default.CheckCircle; label = "対象"; color = MaterialTheme.colorScheme.primary
+            icon = Icons.Default.CheckCircle; label = "対象"
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
         }
         StoreEligibility.INELIGIBLE -> {
-            icon = Icons.Default.Close; label = "対象外"; color = MaterialTheme.colorScheme.error
+            icon = Icons.Default.Close; label = "対象外"
+            containerColor = MaterialTheme.colorScheme.errorContainer
+            contentColor = MaterialTheme.colorScheme.onErrorContainer
         }
         StoreEligibility.UNKNOWN -> {
-            icon = Icons.Default.Info; label = "要確認"; color = warningColor()
+            icon = Icons.Default.Info; label = "要確認"
+            containerColor = warningContainerColor()
+            contentColor = onWarningContainerColor()
         }
     }
     val reason = when (verdict.eligibility) {
@@ -1196,12 +1217,19 @@ private fun StoreVerdictCard(verdict: StoreVerdict) {
     Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(verdict.campaign.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Surface(
+                color = containerColor,
+                contentColor = contentColor,
+                shape = RoundedCornerShape(10.dp),
             ) {
-                Icon(icon, contentDescription = null, tint = color)
-                Text(label, style = MaterialTheme.typography.headlineSmall, color = color)
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(icon, contentDescription = null)
+                    Text(label, style = MaterialTheme.typography.titleLarge)
+                }
             }
             Text(reason, style = MaterialTheme.typography.bodyMedium)
             if (verdict.updatedDate.isNotBlank()) {

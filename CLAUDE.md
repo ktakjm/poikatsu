@@ -33,7 +33,7 @@
 UI は Jetpack Compose + Material 3。新規画面・コンポーネントを足すとき、既存を直すときも以下に従う(詳細・背景は docs/code-guide.md「6. UI レイヤ」)。
 
 - **配色は dynamic color 中心・最小**: 固定ブランド色は持たない。Android 12+ は dynamic color(壁紙追従)、11 以下は M3 標準ベースライン(`lightColorScheme()`/`darkColorScheme()`)にフォールバック。色は必ず `MaterialTheme.colorScheme` のロールから取る(生 RGB をハードコードしない)。ブランドカラー(brand_color)は発行体識別(地図ピン/カードラベル)の用途に限る。
-- **セマンティックカラー**: 致命・不可は `colorScheme.error`、注意・要確認は `ui/theme/ExtendedColors.kt` の `warningColor()`(M3 に warning ロールが無いため独自定義)を使う。`tertiary` 等のブランドアクセントを警告の意味に流用しない。
+- **セマンティックカラー**: 致命・不可は error 系、注意・要確認は warning 系(`ui/theme/ExtendedColors.kt`。M3 に warning ロールが無いため独自定義)を使う。`tertiary` 等のブランドアクセントを警告の意味に流用しない。**ロールは用途で使い分ける**(M3 の意味色が単色でなく container 対を持つのと同じ): 白に近い surface に乗せる**文字/アイコン**は `colorScheme.error` / `warningColor()`(単色)、グレーの `surfaceVariant`(カード地)等に**面で見せる注意/警告**は container 対(`errorContainer`+`onErrorContainer` / `warningContainerColor()`+`onWarningContainerColor()`)を `Surface` で使う。色文字を直接グレー地に乗せない(コントラスト不足)。
 - **任意の背景色に乗せる文字色**は白/黒固定にせず `onColorFor()`(輝度判定)で読める方を選ぶ。
 - **状態・装飾は絵文字でなく Material アイコン**で表し、色は colorScheme から取る。アイコンは `material-icons-core` の範囲で賄う(`-extended` は巨大なので原則追加しない。足りなければ代替アイコン+色で表現)。
 - **タッチ領域は最小 48dp**(`IconButton` 等を 48dp 未満に潰さない。見た目を小さくしたいときはアイコン側だけ縮める)。
