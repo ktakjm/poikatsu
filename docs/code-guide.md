@@ -136,7 +136,6 @@ erDiagram
         string issuer "発行体"
         string brand_color "#RRGGBB"
         double rate_base "基準還元率"
-        double rate_max "理論最大"
         bool entry_required
         string verified_date "最終確認日"
     }

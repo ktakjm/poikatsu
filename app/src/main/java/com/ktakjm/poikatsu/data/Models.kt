@@ -80,7 +80,6 @@ data class Campaign(
     val name: String,
     @SerialName("payment_instruction") val paymentInstruction: String,
     @SerialName("rate_base") val rateBase: Double,
-    @SerialName("rate_max") val rateMax: Double = 0.0,
     @SerialName("rate_note") val rateNote: String = "",
     @SerialName("entry_required") val entryRequired: Boolean = false,
     @SerialName("period_start") val periodStart: String? = null,

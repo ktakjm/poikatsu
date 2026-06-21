@@ -1094,13 +1094,6 @@ private fun JudgmentCardBody(judgment: Judgment, brandColor: Color) {
                     )
                 }
             }
-            if (campaign.rateMax > judgment.effectiveRate) {
-                Text(
-                    "条件達成で最大${trimRate(campaign.rateMax)}%",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline,
-                )
-            }
             Text("支払い方法: ${campaign.paymentInstruction}", style = MaterialTheme.typography.bodyMedium)
             rule.note?.let {
                 Text("この店の条件: $it", style = MaterialTheme.typography.bodyMedium)
