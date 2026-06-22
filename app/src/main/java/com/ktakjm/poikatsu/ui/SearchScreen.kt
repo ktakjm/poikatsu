@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -94,10 +95,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.core.content.ContextCompat
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -159,6 +163,11 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
         }
     }
 
+    // 下位画面(詳細/店舗判定/設定)やロード・エラーに重なっていない「ベースの2タブ表示」状態。
+    // 下部ナビの表示条件であり、地図モード(= この状態 かつ 近くタブ選択)の判定にもそのまま使う。
+    val baseTabsVisible = !state.loading && state.error == null &&
+        state.selection == null && state.storeCheck == null && !state.showSettings
+
     Scaffold(
         // TopAppBar は表示中の画面に追従させる。分岐順は下の本文(when)と必ず一致させること
         topBar = {
@@ -205,7 +214,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
         // モード切替は下部ナビ。詳細・店舗判定などの下位画面に重なっている間は出さない
         // (= ベースの2タブ表示時のみ)。nearby != null が「近くタブ選択中」を兼ねる
         bottomBar = {
-            if (!state.loading && state.error == null && state.selection == null && state.storeCheck == null && !state.showSettings) {
+            if (baseTabsVisible) {
                 // 標準 NavigationBar の内容高は 80dp。下部が厚いので 56dp まで詰める。
                 // システムバー inset は内部で消費されるぶんを足し戻し、安全領域を確保する
                 val barInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -226,7 +235,16 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
             }
         },
     ) { innerPadding ->
-        Box(Modifier.fillMaxSize().padding(innerPadding)) {
+        // 地図モードはステータスバー裏まで地図を全面表示(full-bleed)するため上端 inset を当てない。
+        // 上端 inset は NearbyPane に渡し、地図上の浮きコントロール(設定/このエリアを検索/現在地)だけが
+        // その分を避ける。地図以外(探す/設定/詳細/店舗判定/ロード/エラー)は従来どおり inset 分内側に寄せる。
+        val isMap = baseTabsVisible && state.nearby != null
+        val contentPadding = if (isMap) {
+            PaddingValues(bottom = innerPadding.calculateBottomPadding())
+        } else {
+            innerPadding
+        }
+        Box(Modifier.fillMaxSize().padding(contentPadding)) {
             when {
                 state.loading -> Centered { CircularProgressIndicator() }
                 state.error != null -> Centered { Text(state.error!!, color = MaterialTheme.colorScheme.error) }
@@ -286,6 +304,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     onClearPreview = viewModel::onClearNearbyPreview,
                     onOpenDetail = viewModel::onSelectNearby,
                     onSearchHere = viewModel::searchHere,
+                    // full-bleed 地図の浮きコントロール/ロード・エラー画面が避けるステータスバー高さ
+                    topInset = innerPadding.calculateTopPadding(),
                 )
                 else -> PaddedColumn {
                     SearchPane(
@@ -715,6 +735,7 @@ private fun NearbyPane(
     onClearPreview: () -> Unit,
     onOpenDetail: (MainViewModel.NearbyPlace) -> Unit,
     onSearchHere: (Double, Double, Int, Double) -> Unit,
+    topInset: Dp,
 ) {
     val selectedPlace = nearby.selectedPlace
     // 戻る: プレビュー中なら一覧へ戻し、そうでなければ近くのお店モードを閉じる
@@ -727,25 +748,22 @@ private fun NearbyPane(
     // 地図(中心)がまだ無い初回ロード/エラー時だけ、地図なしの全画面表示にする。
     // 中心が既にあれば再検索中でも地図・一覧は残し、進捗は地図上に小さく重ねる(NearbyMap の loadingMessage)。
     if (center == null || nearby.error != null) {
-        Column(Modifier.fillMaxSize()) {
-            NearbyTopBar(onOpenSettings = onOpenSettings)
-            Spacer(Modifier.height(4.dp))
+        // 地図なしの全画面状態(地図が出る前のロード/エラー)。地図モードはタイトルバーを持たない
+        // (full-bleed)ので、ここでも「近くのお店」見出し・歯車は出さず内容だけを中央に出す。
+        // 地図表示への切替で見出しが消える中途半端な見えを防ぐ。下部ナビは残るのでモード/設定への
+        // 導線は保たれる(設定は「探す」タブから)。
+        Centered {
             when {
-                nearby.loading -> Box(
-                    Modifier.fillMaxWidth().weight(1f),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        Spacer(Modifier.height(16.dp))
-                        // リングは地図ではなく「現在地の測位」→「Overpass で周辺店舗取得」を待っている。
-                        // どちらの待ちかを出して長い待ち時間の理由を示す。
-                        Text(
-                            nearbyLoadingText(nearby.loadingPhase),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                nearby.loading -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    Spacer(Modifier.height(16.dp))
+                    // リングは地図ではなく「現在地の測位」→「Overpass で周辺店舗取得」を待っている。
+                    // どちらの待ちかを出して長い待ち時間の理由を示す。
+                    Text(
+                        nearbyLoadingText(nearby.loadingPhase),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 nearby.error != null -> NearbyRetryState(
                     message = nearby.error,
@@ -807,9 +825,15 @@ private fun NearbyPane(
             skipHiddenState = true, // 一覧/プレビューシートは常に下部に残す(消えない)
         ),
     )
-    // 店舗を選択したらシートを peek まで畳んで地図を見せる(一覧を展開中でもプレビューが隠れない)
+    // 一覧を展開中(Expanded)に店舗を選んだら peek まで畳んで地図を見せる。ただし既に
+    // PartiallyExpanded のとき(詳細画面から戻った直後の再生成を含む)は partialExpand を呼ばない。
+    // レイアウト確定前に状態変更すると競合し、シートが peek より沈んで「詳細を確認」下端が欠ける。
     LaunchedEffect(selectedPlace) {
-        if (selectedPlace != null) scaffoldState.bottomSheetState.partialExpand()
+        if (selectedPlace != null &&
+            scaffoldState.bottomSheetState.currentValue != SheetValue.PartiallyExpanded
+        ) {
+            scaffoldState.bottomSheetState.partialExpand()
+        }
     }
     // 再検索の一時失敗は地図を残したまま Snackbar で通知する。外側 Scaffold の host は下部シートの
     // 裏に隠れるため、地図領域に出るこの BottomSheetScaffold 自身の host を使う。
@@ -822,31 +846,42 @@ private fun NearbyPane(
     }
     // ボトムシートの覗き高さ。地図(上)とシート(下)の取り分。地図下端の余白(Google ロゴを peek 上に
     // 逃がす bottomPadding)もこの値に合わせる。
-    val sheetPeek = 220.dp
+    // プレビュー(店舗選択中)は内容を実測し、220 で収まらない端末(フォント倍率・長い店名)では
+    // 「詳細を確認」下端が欠けないよう覗き高さを内容まで伸ばす。収まるなら従来どおり 220 のまま。
+    val listPeek = 220.dp
+    val density = LocalDensity.current
+    var previewSheetPeek by remember { mutableStateOf<Dp?>(null) }
+    val sheetPeek = if (selectedPlace != null) {
+        previewSheetPeek?.let { maxOf(listPeek, it) } ?: listPeek
+    } else {
+        listPeek
+    }
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
         sheetPeekHeight = sheetPeek,
         // 既定ハンドルは上下余白が厚く直下のクレジットが間延びするため、縦を詰めた小ぶりのものにする
         sheetDragHandle = { CompactDragHandle() },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = { NearbyTopBar(onOpenSettings = onOpenSettings) },
+        // 地図を画面上端(ステータスバー裏)まで全面表示する full-bleed。タイトルバーは持たず、
+        // 設定への入口(歯車)は地図上の浮きコントロールへ移した(NearbyMap)。
         sheetContent = {
-            // YOLP 利用規約: 店舗データの帰属表示。常に視認できるようシート上部(ドラッグハンドル直下)に置く。
-            // 色・サイズを潰さないこと(docs/map-data-stack.md §3.2/§7)。
-            Text(
-                "店舗情報: Web Services by Yahoo! JAPAN",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
-            )
             if (selectedPlace != null) {
-                // 選択中: 地図を残したまま店舗情報をプレビュー。判定詳細へはここから明示遷移する
-                NearbyPreview(
-                    place = selectedPlace,
-                    onOpenDetail = { onOpenDetail(selectedPlace) },
-                    onClose = onClearPreview,
-                )
+                // 選択中: 地図を残したまま店舗情報をプレビュー。判定詳細へはここから明示遷移する。
+                // 覗き高さを内容に合わせるため帰属表示込みで実測し、ドラッグハンドル分を足す。
+                Column(
+                    modifier = Modifier.onSizeChanged {
+                        previewSheetPeek = with(density) { it.height.toDp() } + COMPACT_HANDLE_HEIGHT
+                    },
+                ) {
+                    SheetAttribution()
+                    NearbyPreview(
+                        place = selectedPlace,
+                        onOpenDetail = { onOpenDetail(selectedPlace) },
+                        onClose = onClearPreview,
+                    )
+                }
             } else {
+                SheetAttribution()
                 // 絞り込み(レンズ)。絞るものが在るか、チェーン絞り込み中のとき出す。
                 // peek を圧迫しないよう横スクロールの1行。半径は地図ズームで決まるのでチップは持たない。
                 if (nearby.places.isNotEmpty() || merchantFilter != null) {
@@ -903,9 +938,9 @@ private fun NearbyPane(
                 }
             }
         },
-    ) { innerPadding ->
-        // 地図は全面。シート(peek)の背面まで下端いっぱいに描き、角丸から背景が覗くのを防ぐ
-        // (操作系は地図上部にあるので、下端がシートに隠れても問題ない)
+    ) { _ ->
+        // 地図は全面(full-bleed)。上端はステータスバー裏まで、下端はシート(peek)背面まで描き、
+        // 角丸や端から背景が覗くのを防ぐ。ステータスバーと重なる浮きコントロールは topInset で避ける。
         NearbyMap(
             center = center,
             userLocation = userLocation,
@@ -914,9 +949,11 @@ private fun NearbyPane(
             selectedPoint = selectedPlace?.let { MapPoint(it.lat, it.lon) },
             onSearchHere = { p, r, z -> onSearchHere(p.lat, p.lon, r, z) },
             onSearchMyLocation = onReload,
+            onOpenSettings = onOpenSettings,
             loadingMessage = if (nearby.loading) nearbyLoadingText(nearby.loadingPhase) else null,
-            // 下端(シート peek 分)の余白は当てず地図をシート背面まで伸ばす。上端 TopAppBar 分だけ避ける
-            modifier = Modifier.fillMaxSize().padding(top = innerPadding.calculateTopPadding()),
+            modifier = Modifier.fillMaxSize(),
+            // 浮きコントロールを押し下げてステータスバーと干渉させない高さ
+            topInset = topInset,
             // Google ロゴ/著作権表示が peek 状態のボトムシートに隠れないよう、peek 高さ分だけ持ち上げる
             bottomPadding = sheetPeek,
         )
@@ -984,20 +1021,20 @@ private fun CompactDragHandle() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** [CompactDragHandle] の総高(縦 padding 6dp×2 + ハンドル 4dp)。プレビュー用 peek 算出に使う。 */
+private val COMPACT_HANDLE_HEIGHT = 16.dp
+
+/**
+ * YOLP 利用規約: 店舗データの帰属表示。常に視認できるようシート上部(ドラッグハンドル直下)に置く。
+ * 色・サイズを潰さないこと(docs/map-data-stack.md §3.2/§7)。
+ */
 @Composable
-private fun NearbyTopBar(onOpenSettings: () -> Unit) {
-    // モード切替は下部ナビが担うため戻る矢印は持たない(タブ間の対等な移動)。
-    // 再取得は地図の現在地ピン(📍)に集約したので、ここは設定への入口(歯車)だけ持つ
-    TopAppBar(
-        title = { Text("近くのお店") },
-        actions = {
-            IconButton(onClick = onOpenSettings) {
-                Icon(Icons.Default.Settings, contentDescription = "設定")
-            }
-        },
-        // 外側 Scaffold が既にステータスバー inset を消費済みなので、ここで二重に空けない
-        windowInsets = WindowInsets(0, 0, 0, 0),
+private fun SheetAttribution() {
+    Text(
+        "店舗情報: Web Services by Yahoo! JAPAN",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
     )
 }
 

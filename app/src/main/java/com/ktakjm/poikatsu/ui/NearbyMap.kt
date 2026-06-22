@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -86,8 +88,11 @@ data class MapMarker(
  * @param selectedPoint 選択中の店舗。非 null かつ変化したらズームは保ったままその点へカメラを寄せる
  * @param onSearchHere 「このエリアを検索」タップ時、地図中心・可視範囲から算出した半径(m)・現在のズームを渡す
  * @param onSearchMyLocation 現在地ピン(📍)タップ時。現在地を取り直してその周辺で再検索する
+ * @param onOpenSettings 設定(歯車)タップ時。地図はタイトルバーを持たないので設定への入口は左上の浮きボタン
  * @param loadingMessage 再検索中の表示文言。非 null の間は地図・ピンを残したまま進捗を小さく重ね、
  *        検索系ボタンを進捗ピル/無効化に切り替える(全画面ローディングにしない)
+ * @param topInset 地図はステータスバー裏まで全面表示(full-bleed)するため、上部の浮きコントロール
+ *        (設定/このエリアを検索/現在地)をこの高さ分だけ押し下げてステータスバーと干渉させない
  * @param bottomPadding 地図下端の余白。Google ロゴ/著作権表示がボトムシートに隠れないよう、
  *        シートの peek 高さ分だけ持ち上げる(Maps 利用規約: 帰属表示は視認できる必要がある)
  */
@@ -100,8 +105,10 @@ fun NearbyMap(
     selectedPoint: MapPoint?,
     onSearchHere: (MapPoint, Int, Double) -> Unit,
     onSearchMyLocation: () -> Unit,
+    onOpenSettings: () -> Unit,
     loadingMessage: String?,
     modifier: Modifier = Modifier,
+    topInset: Dp = 0.dp,
     bottomPadding: Dp = 0.dp,
 ) {
     val context = LocalContext.current
@@ -122,22 +129,32 @@ fun NearbyMap(
 
     // 初期カメラは「選択中の店舗があればその店、無ければ検索の中心」。詳細画面から戻ったときも
     // ここで最初から正しい場所に置く。move/animate は初回には走らせない(走らせると 0,0 付近からの
-    // 高速移動が見えてしまう)。2 回目以降の center / selectedPoint の変化にだけ反応する。
+    // 高速移動や、戻った直後に一度 center へ飛んでから選択店舗へ animate で寄り直す「北→じわり南下」の
+    // ズレが見えてしまう)。2 回目以降の center / selectedPoint の変化にだけ反応する。
     // この初期カメラは cameraPositionState の初期値と、地図 View 生成時の GoogleMapOptions の両方で使う。
     val initialCamera = CameraPosition.fromLatLngZoom((selectedPoint ?: center).toLatLng(), initialZoom.toFloat())
     val cameraPositionState = rememberCameraPositionState { position = initialCamera }
-    var cameraMounted by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { cameraMounted = true }
+    // 初回スキップは各 LaunchedEffect が自分のフラグで個別に行う。共有フラグ + 別 LaunchedEffect で
+    // 立てる方式だと、フラグを立てる effect が同じ dispatcher 上で先に走り終えてしまい(記述順 FIFO)、
+    // 本来スキップしたい初回から素通りしてしまう。
     // 検索の起点(center)・半径(zoom)が変わったら再センタリング(初回は初期位置で済むので skip)。
+    var centerInitialized by remember { mutableStateOf(false) }
     LaunchedEffect(center, initialZoom) {
-        if (!cameraMounted) return@LaunchedEffect
+        if (!centerInitialized) {
+            centerInitialized = true
+            return@LaunchedEffect
+        }
         cameraPositionState.move(
             CameraUpdateFactory.newLatLngZoom(center.toLatLng(), initialZoom.toFloat()),
         )
     }
     // 店舗を選択したらズームは保ったままその点へ寄せる(初回は skip。検索の起点 center とは別物)。
+    var selectionInitialized by remember { mutableStateOf(false) }
     LaunchedEffect(selectedPoint) {
-        if (!cameraMounted) return@LaunchedEffect
+        if (!selectionInitialized) {
+            selectionInitialized = true
+            return@LaunchedEffect
+        }
         if (selectedPoint != null) {
             cameraPositionState.animate(CameraUpdateFactory.newLatLng(selectedPoint.toLatLng()))
         }
@@ -200,45 +217,63 @@ fun NearbyMap(
                 }
             }
         }
-        // 再検索中(loadingMessage != null)は「このエリアを検索」を進捗ピルに差し替える。
-        // 地図・ピンは残したまま、ここだけで「検索中」を示し再タップも防ぐ(全画面ローディングにしない)。
-        if (loadingMessage != null) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                tonalElevation = 3.dp,
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        // 上部中央のコントロール(「このエリアを検索」/ 再検索中の進捗ピル)。左右のアイコンボタン(48dp)と
+        // 縦中心を揃えるため、同じ上端オフセットの 48dp 高の枠内で中央寄せにする(ステータスバーにも被らない)。
+        // 再検索中は「このエリアを検索」を進捗ピルへ差し替え、地図・ピンは残したまま再タップを防ぐ。
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = topInset + 8.dp)
+                .height(48.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (loadingMessage != null) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    tonalElevation = 3.dp,
                 ) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Text(loadingMessage, style = MaterialTheme.typography.bodyMedium)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text(loadingMessage, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            } else {
+                FilledTonalButton(
+                    onClick = {
+                        val pos = cameraPositionState.position
+                        val c = pos.target
+                        // 可視範囲(中心→北東角の距離)を検索半径にする。ズームアウトで広く、インで狭く=
+                        // 「画面に写っている範囲を検索」。projection 未確定(描画直後)のみ既定 1km にフォールバック。
+                        val bounds = cameraPositionState.projection?.visibleRegion?.latLngBounds
+                        val radiusM = bounds?.let {
+                            GeoMath.distanceMeters(
+                                c.latitude, c.longitude, it.northeast.latitude, it.northeast.longitude,
+                            )
+                        } ?: 1000
+                        onSearchHere(MapPoint(c.latitude, c.longitude), radiusM, pos.zoom.toDouble())
+                    },
+                ) {
+                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("このエリアを検索")
                 }
             }
-        } else {
-            FilledTonalButton(
-                onClick = {
-                    val pos = cameraPositionState.position
-                    val c = pos.target
-                    // 可視範囲(中心→北東角の距離)を検索半径にする。ズームアウトで広く、インで狭く=
-                    // 「画面に写っている範囲を検索」。projection 未確定(描画直後)のみ既定 1km にフォールバック。
-                    val bounds = cameraPositionState.projection?.visibleRegion?.latLngBounds
-                    val radiusM = bounds?.let {
-                        GeoMath.distanceMeters(
-                            c.latitude, c.longitude, it.northeast.latitude, it.northeast.longitude,
-                        )
-                    } ?: 1000
-                    onSearchHere(MapPoint(c.latitude, c.longitude), radiusM, pos.zoom.toDouble())
-                },
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
-            ) {
-                Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("このエリアを検索")
-            }
+        }
+        // 設定への入口(歯車)。地図はタイトルバーを持たないので左上に浮かせる。
+        // 左=設定 / 中央=このエリアを検索 / 右=現在地で検索 の 3 点を上端に対称配置する。
+        FilledTonalIconButton(
+            onClick = onOpenSettings,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(top = topInset + 8.dp, start = 8.dp)
+                .size(48.dp),
+        ) {
+            Icon(Icons.Default.Settings, contentDescription = "設定")
         }
         // 現在地で検索: 現在地を取り直し、その周辺で再検索する(完了後カメラも結果=現在地へ戻る)。
         // 地図中心が起点の「このエリアを検索」と対になり、検索の起点を「自分」か「見ている場所」かで選ぶ。
@@ -248,7 +283,7 @@ fun NearbyMap(
                 onClick = onSearchMyLocation,
                 enabled = loadingMessage == null,
                 // タッチ領域は M3 最小の 48dp を確保。ボトムシート(peek)に隠れない上部右に置く
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 8.dp).size(48.dp),
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = topInset + 8.dp, end = 8.dp).size(48.dp),
             ) {
                 Icon(Icons.Default.LocationOn, contentDescription = "現在地で検索")
             }
