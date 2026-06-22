@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -46,6 +47,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Card
@@ -60,9 +62,11 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -201,10 +205,10 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
         // (= ベースの2タブ表示時のみ)。nearby != null が「近くタブ選択中」を兼ねる
         bottomBar = {
             if (!state.loading && state.error == null && state.selection == null && state.storeCheck == null && !state.showSettings) {
-                // 標準 NavigationBar の内容高は 80dp。下部が厚いので 64dp に詰める。
+                // 標準 NavigationBar の内容高は 80dp。下部が厚いので 56dp まで詰める。
                 // システムバー inset は内部で消費されるぶんを足し戻し、安全領域を確保する
                 val barInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                NavigationBar(modifier = Modifier.height(64.dp + barInset)) {
+                NavigationBar(modifier = Modifier.height(56.dp + barInset)) {
                     NavigationBarItem(
                         selected = state.nearby == null,
                         onClick = { if (state.nearby != null) viewModel.onCloseNearby() },
@@ -254,18 +258,29 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         selection = state.selection!!,
                         onBack = viewModel::onBack,
                         onOpenStoreCheck = viewModel::onOpenStoreCheck,
+                        // ブリッジ: そのチェーンに絞ってから「近く」へ突入(パーミッションは onNearbyClick が担う)
+                        onFindNearby = {
+                            state.selection?.merchant?.let {
+                                viewModel.onFindNearby(it)
+                                onNearbyClick()
+                            }
+                        },
                     )
                 }
                 // 地図画面はボトムシート・地図を端まで使うため全幅。横paddingは内部で個別に当てる
                 state.nearby != null -> NearbyPane(
                     nearby = state.nearby!!,
-                    radiusM = state.nearbyRadiusM,
+                    categories = state.categories,
+                    selectedCategories = state.nearbySelectedCategories,
+                    merchantFilter = state.nearbyMerchantFilter,
                     searchFailed = state.nearbySearchFailed,
                     onClose = viewModel::onCloseNearby,
+                    onToggleCategory = viewModel::onToggleNearbyCategory,
+                    onSelectChain = viewModel::onSelectNearbyChain,
+                    onClearChain = viewModel::onClearNearbyChain,
                     onReload = viewModel::fetchNearby,
                     onSearchFailedShown = viewModel::onNearbySearchFailedShown,
                     onOpenSettings = viewModel::onOpenSettings,
-                    onRadiusChange = viewModel::onNearbyRadiusChange,
                     onPreviewPlace = viewModel::onPreviewNearby,
                     onClearPreview = viewModel::onClearNearbyPreview,
                     onOpenDetail = viewModel::onSelectNearby,
@@ -684,17 +699,21 @@ private fun SearchPane(
 @Composable
 private fun NearbyPane(
     nearby: MainViewModel.NearbyUi,
-    radiusM: Int,
+    categories: List<String>,
+    selectedCategories: Set<String>,
+    merchantFilter: Merchant?,
     searchFailed: String?,
     onClose: () -> Unit,
     onReload: () -> Unit,
     onSearchFailedShown: () -> Unit,
     onOpenSettings: () -> Unit,
-    onRadiusChange: (Int) -> Unit,
+    onToggleCategory: (String) -> Unit,
+    onSelectChain: (Merchant) -> Unit,
+    onClearChain: () -> Unit,
     onPreviewPlace: (MainViewModel.NearbyPlace) -> Unit,
     onClearPreview: () -> Unit,
     onOpenDetail: (MainViewModel.NearbyPlace) -> Unit,
-    onSearchHere: (Double, Double) -> Unit,
+    onSearchHere: (Double, Double, Int, Double) -> Unit,
 ) {
     val selectedPlace = nearby.selectedPlace
     // 戻る: プレビュー中なら一覧へ戻し、そうでなければ近くのお店モードを閉じる
@@ -709,11 +728,6 @@ private fun NearbyPane(
     if (center == null || nearby.error != null) {
         Column(Modifier.fillMaxSize()) {
             NearbyTopBar(onOpenSettings = onOpenSettings)
-            RadiusChips(
-                radiusM = radiusM,
-                onRadiusChange = onRadiusChange,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
             Spacer(Modifier.height(4.dp))
             when {
                 nearby.loading -> Box(
@@ -750,10 +764,30 @@ private fun NearbyPane(
     val userLocation = if (nearby.userLat != null && nearby.userLon != null) {
         MapPoint(nearby.userLat, nearby.userLon)
     } else null
+    // 絞り込み(レンズ)を適用した表示集合。地図ピン・一覧の両方でこれを使う。
+    // チェーン絞り込み(merchantFilter)はジャンルより優先。未指定なら参照同一で再計算を避ける。
+    val visiblePlaces = remember(nearby.places, selectedCategories, merchantFilter) {
+        when {
+            merchantFilter != null -> nearby.places.filter { it.merchant?.id == merchantFilter.id }
+            selectedCategories.isEmpty() -> nearby.places
+            else -> nearby.places.filter { it.merchant?.category in selectedCategories }
+        }
+    }
+    // 「チェーンで絞る」ピッカー用: いま(ジャンル絞り込み後の)周辺に在るチェーンと件数。多い順→読み順。
+    // 全体ではなく周辺に在るものだけ出す(「近く」の約束)。merchantFilter 指定中はピル表示なので未使用。
+    val presentChains = remember(nearby.places, selectedCategories) {
+        nearby.places
+            .filter { selectedCategories.isEmpty() || it.merchant?.category in selectedCategories }
+            .mapNotNull { it.merchant }
+            .groupingBy { it }.eachCount()
+            .entries
+            .sortedWith(compareByDescending<Map.Entry<Merchant, Int>> { it.value }.thenBy { it.key.reading })
+            .map { it.key to it.value }
+    }
     // ピンは位置が固定なので places に対して安定に作る(パン/ズームでは作り直さない)。
     // 選択状態が変わったら強調ピンを描き直すため selectedPlace も remember キーに含める。
-    val markers = remember(nearby.places, selectedPlace) {
-        nearby.places.map { place ->
+    val markers = remember(visiblePlaces, selectedPlace) {
+        visiblePlaces.map { place ->
             MapMarker(
                 point = MapPoint(place.lat, place.lon),
                 label = place.name,
@@ -785,9 +819,14 @@ private fun NearbyPane(
             onSearchFailedShown()
         }
     }
+    // ボトムシートの覗き高さ。地図(上)とシート(下)の取り分。地図下端の余白(Google ロゴを peek 上に
+    // 逃がす bottomPadding)もこの値に合わせる。
+    val sheetPeek = 220.dp
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
-        sheetPeekHeight = 200.dp,
+        sheetPeekHeight = sheetPeek,
+        // 既定ハンドルは上下余白が厚く直下のクレジットが間延びするため、縦を詰めた小ぶりのものにする
+        sheetDragHandle = { CompactDragHandle() },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = { NearbyTopBar(onOpenSettings = onOpenSettings) },
         sheetContent = {
@@ -807,22 +846,38 @@ private fun NearbyPane(
                     onClose = onClearPreview,
                 )
             } else {
-                RadiusChips(
-                    radiusM = radiusM,
-                    onRadiusChange = onRadiusChange,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-                Spacer(Modifier.height(8.dp))
-                // 検索中心からの距離順リスト(還元率・距離)。並びは ViewModel で確定済み
-                if (nearby.places.isEmpty()) {
+                // 絞り込み(レンズ)。絞るものが在るか、チェーン絞り込み中のとき出す。
+                // peek を圧迫しないよう横スクロールの1行。半径は地図ズームで決まるのでチップは持たない。
+                if (nearby.places.isNotEmpty() || merchantFilter != null) {
+                    NearbyFilterBar(
+                        categories = categories,
+                        selectedCategories = selectedCategories,
+                        presentChains = presentChains,
+                        merchantFilter = merchantFilter,
+                        onToggleCategory = onToggleCategory,
+                        onSelectChain = onSelectChain,
+                        onClearChain = onClearChain,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+                // 検索中心からの距離順リスト(還元率・距離)。並びは ViewModel で確定済み。
+                // 表示は絞り込み後の visiblePlaces。空の理由を3通りで出し分ける。
+                if (visiblePlaces.isEmpty()) {
                     Text(
-                        "周辺${distanceLabel(radiusM)}に対象施策のある店舗が見つかりませんでした。",
+                        when {
+                            merchantFilter != null ->
+                                "「${merchantFilter.name}」はこの範囲にありません。地図を動かすか、絞り込みを解除してください。"
+                            nearby.places.isEmpty() ->
+                                "この範囲に対象施策のある店舗が見つかりませんでした。地図を動かして探してください。"
+                            else -> "選択中のジャンルに該当する周辺店舗がありません。"
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 } else {
                     LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
-                        items(nearby.places, key = { "${it.lat},${it.lon},${it.name}" }) { place ->
+                        items(visiblePlaces, key = { "${it.lat},${it.lon},${it.name}" }) { place ->
                             ListItem(
                                 headlineContent = { Text(place.name) },
                                 supportingContent = {
@@ -854,15 +909,15 @@ private fun NearbyPane(
             center = center,
             userLocation = userLocation,
             markers = markers,
-            initialZoom = zoomForRadius(radiusM),
+            initialZoom = nearby.zoom,
             selectedPoint = selectedPlace?.let { MapPoint(it.lat, it.lon) },
-            onSearchHere = { c -> onSearchHere(c.lat, c.lon) },
+            onSearchHere = { p, r, z -> onSearchHere(p.lat, p.lon, r, z) },
             onSearchMyLocation = onReload,
             loadingMessage = if (nearby.loading) nearbyLoadingText(nearby.loadingPhase) else null,
             // 下端(シート peek 分)の余白は当てず地図をシート背面まで伸ばす。上端 TopAppBar 分だけ避ける
             modifier = Modifier.fillMaxSize().padding(top = innerPadding.calculateTopPadding()),
             // Google ロゴ/著作権表示が peek 状態のボトムシートに隠れないよう、peek 高さ分だけ持ち上げる
-            bottomPadding = 200.dp,
+            bottomPadding = sheetPeek,
         )
     }
 }
@@ -904,6 +959,27 @@ private fun NearbyPreview(
         Button(onClick = onOpenDetail, modifier = Modifier.fillMaxWidth()) {
             Text("詳細を確認")
         }
+        // peek の下端にボタンが密着して欠けて見えないよう、最後に余白を確保する
+        Spacer(Modifier.height(12.dp))
+    }
+}
+
+/**
+ * ボトムシートの掴み手。既定(BottomSheetDefaults.DragHandle)は上下余白が厚く、直下の
+ * Yahoo! クレジット周りが間延びするため、縦を詰めた小ぶりのハンドルにする。
+ */
+@Composable
+private fun CompactDragHandle() {
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+            shape = RoundedCornerShape(50),
+        ) {
+            Box(Modifier.width(32.dp).height(4.dp))
+        }
     }
 }
 
@@ -924,24 +1000,85 @@ private fun NearbyTopBar(onOpenSettings: () -> Unit) {
     )
 }
 
+/**
+ * 「近く」モードの絞り込みバー(横スクロール1行)。ボトムシートの peek 高さを圧迫しないよう1行に収める。
+ * - チェーン絞り込み中(merchantFilter != null): そのチェーン名のピル(×で解除)だけを出す(チェーンはジャンルより優先)。
+ * - 未絞り込み: 在チェーンが2つ以上あれば「チェーンで絞る」ピッカー + ジャンルチップ。
+ * ジャンル選択集合は探すモードと独立(MainViewModel.nearbySelectedCategories)。
+ */
 @Composable
-private fun RadiusChips(
-    radiusM: Int,
-    onRadiusChange: (Int) -> Unit,
+private fun NearbyFilterBar(
+    categories: List<String>,
+    selectedCategories: Set<String>,
+    presentChains: List<Pair<Merchant, Int>>,
+    merchantFilter: Merchant?,
+    onToggleCategory: (String) -> Unit,
+    onSelectChain: (Merchant) -> Unit,
+    onClearChain: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // 半径だけを選ぶ行。再取得は地図の現在地ピン(📍)に集約したのでここには置かない。
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        listOf(500, 1000, 3000).forEach { radius ->
-            FilterChip(
-                selected = radiusM == radius,
-                onClick = { onRadiusChange(radius) },
-                label = { Text(distanceLabel(radius)) },
+    if (merchantFilter != null) {
+        Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            InputChip(
+                selected = true,
+                onClick = onClearChain,
+                label = { Text(merchantFilter.name) },
+                trailingIcon = {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "チェーン絞り込みを解除",
+                        modifier = Modifier.size(18.dp),
+                    )
+                },
             )
+        }
+    } else {
+        Row(
+            modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // 在チェーンが2つ以上のときだけ「チェーンで絞る」を出す(1つなら絞る意味がない)
+            if (presentChains.size >= 2) {
+                ChainFilterDropdown(chains = presentChains, onSelect = onSelectChain)
+            }
+            categories.forEach { category ->
+                FilterChip(
+                    selected = category in selectedCategories,
+                    onClick = { onToggleCategory(category) },
+                    label = { Text(category) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 「チェーンで絞る」ピッカー。いま周辺に在るチェーンを件数つきで挙げ、選ぶと merchantFilter を設定する。
+ * テキスト検索ではなく在チェーンからの選択にとどめる(レンズ層・検索の入口は「探す」に一本化)。
+ */
+@Composable
+private fun ChainFilterDropdown(
+    chains: List<Pair<Merchant, Int>>,
+    onSelect: (Merchant) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        AssistChip(
+            onClick = { expanded = true },
+            label = { Text("チェーンで絞る") },
+            trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            chains.forEach { (merchant, count) ->
+                DropdownMenuItem(
+                    text = { Text("${merchant.name}（$count）") },
+                    onClick = {
+                        onSelect(merchant)
+                        expanded = false
+                    },
+                )
+            }
         }
     }
 }
@@ -978,13 +1115,6 @@ private fun NearbyRetryState(
     }
 }
 
-/** 検索半径に応じた地図の初期ズーム(半径が大きいほど広域=低ズーム)。+1 レベル≒2倍寄り */
-private fun zoomForRadius(radiusM: Int): Double = when {
-    radiusM <= 500 -> 17.0
-    radiusM <= 1000 -> 16.0
-    else -> 14.5
-}
-
 private fun distanceLabel(meters: Int): String =
     if (meters >= 1000) {
         val km = meters / 1000.0
@@ -998,6 +1128,7 @@ private fun JudgmentDetail(
     selection: MainViewModel.Selection,
     onBack: () -> Unit,
     onOpenStoreCheck: () -> Unit,
+    onFindNearby: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
     // 店名は TopAppBar に表示済み。ここではカテゴリを静的タグで補足する
@@ -1012,6 +1143,16 @@ private fun JudgmentDetail(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp),
         )
+    }
+    // ブリッジ(探す→近く): 名前検索から来たとき(displayName == null)だけ「近くで探す」を出す。
+    // 近隣由来(displayName != null)は既に地図上にいるので出さない。
+    if (selection.displayName == null) {
+        FilledTonalButton(onClick = onFindNearby, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Default.Place, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("近くのこの店を探す")
+        }
+        Spacer(Modifier.height(8.dp))
     }
     // 公式が対象/対象外を言い切っているチェーンだけ、店舗単位の判定画面へ遷移できる
     if (selection.canCheckStore) {

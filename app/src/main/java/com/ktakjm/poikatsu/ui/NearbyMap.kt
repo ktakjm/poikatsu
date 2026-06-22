@@ -52,6 +52,7 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
+import com.ktakjm.poikatsu.util.GeoMath
 
 /**
  * 地図表示の「継ぎ目」。地図ライブラリ(Google Maps)固有の型はこのファイルの中だけに閉じ込め、
@@ -83,7 +84,7 @@ data class MapMarker(
  * @param markers 対象店舗ピン
  * @param initialZoom 検索半径に応じた初期ズーム
  * @param selectedPoint 選択中の店舗。非 null かつ変化したらズームは保ったままその点へカメラを寄せる
- * @param onSearchHere 「このエリアを検索」タップ時、その時点の地図中心を渡す
+ * @param onSearchHere 「このエリアを検索」タップ時、地図中心・可視範囲から算出した半径(m)・現在のズームを渡す
  * @param onSearchMyLocation 現在地ピン(📍)タップ時。現在地を取り直してその周辺で再検索する
  * @param loadingMessage 再検索中の表示文言。非 null の間は地図・ピンを残したまま進捗を小さく重ね、
  *        検索系ボタンを進捗ピル/無効化に切り替える(全画面ローディングにしない)
@@ -97,7 +98,7 @@ fun NearbyMap(
     markers: List<MapMarker>,
     initialZoom: Double,
     selectedPoint: MapPoint?,
-    onSearchHere: (MapPoint) -> Unit,
+    onSearchHere: (MapPoint, Int, Double) -> Unit,
     onSearchMyLocation: () -> Unit,
     loadingMessage: String?,
     modifier: Modifier = Modifier,
@@ -220,8 +221,17 @@ fun NearbyMap(
         } else {
             FilledTonalButton(
                 onClick = {
-                    val c = cameraPositionState.position.target
-                    onSearchHere(MapPoint(c.latitude, c.longitude))
+                    val pos = cameraPositionState.position
+                    val c = pos.target
+                    // 可視範囲(中心→北東角の距離)を検索半径にする。ズームアウトで広く、インで狭く=
+                    // 「画面に写っている範囲を検索」。projection 未確定(描画直後)のみ既定 1km にフォールバック。
+                    val bounds = cameraPositionState.projection?.visibleRegion?.latLngBounds
+                    val radiusM = bounds?.let {
+                        GeoMath.distanceMeters(
+                            c.latitude, c.longitude, it.northeast.latitude, it.northeast.longitude,
+                        )
+                    } ?: 1000
+                    onSearchHere(MapPoint(c.latitude, c.longitude), radiusM, pos.zoom.toDouble())
                 },
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
             ) {
