@@ -337,7 +337,7 @@ sequenceDiagram
     participant SC as SearchScreen
     participant VM as MainViewModel
     participant LP as LocationProvider
-    participant OC as OverpassClient
+    participant YC as YolpClient
     participant JE as JudgmentEngine
 
     U->>SC: 下部ナビの「近く」タブをタップ
@@ -346,9 +346,9 @@ sequenceDiagram
     VM->>LP: currentLocation()
     Note over LP: NETWORK 優先・15 秒タイムアウト<br/>失敗時は getLastKnownLocation
     LP-->>VM: 緯度経度
-    VM->>OC: fetchNearby(lat, lon, radiusM)
-    Note over OC: Overpass QL で飲食店/コンビニ/<br/>スーパーの POI を取得<br/>（>1km は node のみ＝速度優先）<br/>本家失敗時はミラーへフォールバック
-    OC-->>VM: List(Poi)
+    VM->>YC: fetchNearby(lat, lon, radiusM)
+    Note over YC: 業種コード gc（01=グルメ / 0205=スーパー・コンビニ）<br/>＋店名キーワードで POI を取得・start でページング<br/>（最大 500 件/ソース）。結果はキャッシュせず毎回ライブ取得
+    YC-->>VM: List(Poi)
     loop 各 POI
         VM->>JE: matchStore(poi.name, poi.brand)
         JE-->>VM: 該当チェーン or null（捨てる）
@@ -418,7 +418,6 @@ sequenceDiagram
 | ローカル保存 | ファイルキャッシュ（filesDir/remote_data/） | Room は見送り |
 | 設定の永続化 | DataStore Preferences（`SettingsRepository`） | テーマ・データ取得・カード差分。Apache-2.0 |
 | 位置情報 | LocationManager（フレームワーク標準） | Play Services 不使用 |
-| 周辺店舗 | Overpass API（OSM） | 無料・API キー不要。本家失敗時はミラーにフォールバック |
 | 地図描画 | Google Maps SDK（maps-compose） | Play Services 依存・要 API キー。`NearbyMap.kt` に閉じ込め将来差し替え可能（旧 osmdroid から 2026-06 移行） |
 | 店舗データ | YOLP ローカルサーチ（既定）/ Overpass（休眠） | YOLP はキャッシュ禁止・5万/日・要クレジット表示（docs/map-data-stack.md） |
 | データ配信 | GitHub raw（main ブランチ data/） | 更新はアプリ再ビルド不要 |
