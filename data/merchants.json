@@ -44,7 +44,7 @@
     { "id": "kappazushi", "name": "かっぱ寿司", "reading": "かっぱずし", "aliases": ["かっぱずし"], "category": "回転寿司" },
     { "id": "kurazushi", "name": "くら寿司", "reading": "くらずし", "aliases": ["無添くら寿司", "くらずし"], "category": "回転寿司" },
     { "id": "sushiro", "name": "スシロー", "reading": "すしろー", "aliases": ["SUSHIRO"], "category": "回転寿司" },
-    { "id": "coke_on", "name": "コカ・コーラ自販機", "reading": "こかこーらじはんき", "aliases": ["Coke ON", "コークオン", "コカコーラ自販機"], "category": "その他", "location_hint": { "text": "Coke ON 公式アプリで対応自販機を探せます", "label": "Coke ON で探す", "url": "https://play.google.com/store/apps/details?id=jp.co.coca_cola.cokeon" } },
+    { "id": "coke_on", "name": "コカ・コーラ自販機", "reading": "こかこーらじはんき", "aliases": ["Coke ON", "コークオン", "コカコーラ自販機"], "category": "その他", "location_hint": { "text": "Coke ON 公式アプリで対応自販機を探せます", "label": "Coke ON で探す", "url": "https://play.google.com/store/apps/details?id=com.coke.cokeon" } },
     { "id": "ok_store", "name": "オーケー", "reading": "おーけー", "aliases": ["オーケーストア", "OKストア"], "category": "スーパー" },
     { "id": "ozeki", "name": "オオゼキ", "reading": "おおぜき", "aliases": [], "category": "スーパー" },
     { "id": "aoki_super", "name": "アオキスーパー", "reading": "あおきすーぱー", "aliases": ["フードストアあおき"], "category": "スーパー" },
