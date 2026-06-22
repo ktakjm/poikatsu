@@ -4,7 +4,7 @@
 
 ## ファイル
 
-- `merchants.json` — チェーン店マスタ。`reading`(ひらがな読み)と `aliases`(略称・別ブランド名)は検索のヒット率に直結するので、追加時は必ず入れる。
+- `merchants.json` — チェーン店マスタ。`reading`(ひらがな読み)と `aliases`(略称・別ブランド名)は検索のヒット率に直結するので、追加時は必ず入れる。位置情報を持たない発行体(自販機など)は `location_hint`(`text`/`label`/`url`)を持たせる。これがあると判定詳細で「近くのこの店を探す」を出さず、代わりに位置を確認できる外部アプリ/サイトへ案内する(例: コカ・コーラ自販機 → Coke ON 公式アプリ)。
 - `campaigns.json` — 還元施策。`merchant_rules[].merchant_id` は merchants.json の `id` を参照する。**ユーザー固有の前提はここに書かず、汎用的な施策情報のみを持つ。**
 - `profile.json` — ユーザー前提条件の**デフォルト値(カタログ)**。現状: 三井住友=Visa(7%, `point_multiplier` でウエル活×1.5)、MUFG=Mastercard(基準7%)。**設定画面でカード所有・還元率・ブランド・ウエル活を編集でき、差分は DataStore に保存して起動時にこのプロファイルへ重ねる(profile.json 自体は書き換えない)**。判定エンジンは**所有カードのみ**を対象とし、brand が Amex なら `amex_excluded` の店を除外・Mastercard 等なら無視、`effective_rate_default` を実効還元率として用いる。
 

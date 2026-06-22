@@ -105,6 +105,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ktakjm.poikatsu.BuildConfig
 import com.ktakjm.poikatsu.data.DataSource
+import com.ktakjm.poikatsu.data.LocationHint
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.ThemeMode
 import com.ktakjm.poikatsu.domain.Judgment
@@ -1147,17 +1148,28 @@ private fun JudgmentDetail(
     // ブリッジ(探す→近く): 名前検索から来たとき(displayName == null)だけ「近くで探す」を出す。
     // 近隣由来(displayName != null)は既に地図上にいるので出さない。
     if (selection.displayName == null) {
-        FilledTonalButton(onClick = onFindNearby, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Place, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("近くのこの店を探す")
+        val locationHint = selection.merchant.locationHint
+        if (locationHint == null) {
+            FilledTonalButton(onClick = onFindNearby, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Place, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("近くのこの店を探す")
+            }
+        } else {
+            // 位置情報を持たない発行体(自販機など)は「近く」が行き止まりになるので、
+            // 代わりに位置を確認できる外部アプリ/サイトへ案内する
+            LocationHintNote(locationHint)
         }
         Spacer(Modifier.height(8.dp))
     }
-    // 公式が対象/対象外を言い切っているチェーンだけ、店舗単位の判定画面へ遷移できる
+    // 公式が対象/対象外を言い切っているチェーンだけ、店舗単位の判定画面へ遷移できる。
+    // 遷移元で文言を出し分ける: 地図ピン由来(displayName != null)は特定の1店舗を見ているので
+    // 「この店舗が対象か」、名前検索由来(displayName == null)はチェーン全体なので「対象店舗を調べる」。
     if (selection.canCheckStore) {
         Button(onClick = onOpenStoreCheck, modifier = Modifier.fillMaxWidth()) {
-            Text("この店舗が対象か調べる →")
+            val storeCheckLabel =
+                if (selection.displayName != null) "この店舗が対象か調べる →" else "対象店舗を調べる →"
+            Text(storeCheckLabel)
         }
         Spacer(Modifier.height(8.dp))
     }
@@ -1175,6 +1187,44 @@ private fun JudgmentDetail(
     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         items(selection.judgments, key = { it.campaign.id }) { judgment ->
             JudgmentCard(judgment)
+        }
+    }
+}
+
+/**
+ * 位置情報を持たない発行体(自販機など)向けの案内行。「近くのこの店を探す」の代わりに、
+ * 位置を確認できる外部アプリ/サイト(例: Coke ON 公式アプリ)への導線を出す。
+ * 失敗・警告ではなく案内なので Info アイコン+onSurfaceVariant 系の控えめな見せ方にする。
+ */
+@Composable
+private fun LocationHintNote(hint: LocationHint) {
+    val uriHandler = LocalUriHandler.current
+    Row(verticalAlignment = Alignment.Top) {
+        Icon(
+            Icons.Default.Info,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp).padding(top = 2.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text(
+                "自販機の位置はこのアプリでは取得できません",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                hint.text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "${hint.label} →",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { uriHandler.openUri(hint.url) },
+            )
         }
     }
 }
