@@ -29,6 +29,12 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** 「近く」初回・「現在地で検索」時の既定半径(m)。以降の「このエリアを検索」は地図の可視範囲から算出する */
+private const val NEARBY_DEFAULT_RADIUS_M = 1000
+
+/** 「近く」初回・「現在地で検索」時の既定ズーム。可視範囲検索では各回の地図ズームを引き継ぐ */
+private const val NEARBY_DEFAULT_ZOOM = 16.0
+
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     data class Selection(
@@ -96,6 +102,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          * 再検索(searchHere/fetchNearby/半径変更)で NearbyUi を作り直すたびに null に戻る。
          */
         val selectedPlace: NearbyPlace? = null,
+        /**
+         * 地図カメラのズーム。初回/現在地検索は既定値、「このエリアを検索」では検索時の地図ズームを
+         * そのまま引き継ぐ(再センタリングで勝手にズームを変えないため。可視範囲=検索範囲の要)。
+         */
+        val zoom: Double = NEARBY_DEFAULT_ZOOM,
     )
 
     data class UiState(
@@ -114,7 +125,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val nearby: NearbyUi? = null,
         /** 近隣の再検索が失敗したときの Snackbar 文言(地図は残す一時失敗)。表示後に null へ戻す */
         val nearbySearchFailed: String? = null,
-        val nearbyRadiusM: Int = 1000,
+        /**
+         * 「近く」のジャンル絞り込み。探す側の selectedCategories とは独立に持つ
+         * (一方の絞り込みが他方に波及しないように)。空セットは全ジャンル。
+         * クライアント側フィルタなので YOLP 再取得は不要で、再検索(searchHere/半径変更/
+         * fetchNearby)をまたいで保持したいため NearbyUi(毎回作り直す)でなくここに置く。
+         */
+        val nearbySelectedCategories: Set<String> = emptySet(),
         /** 設定オーバーレイの表示中フラグ。探す/近くのどちらの上にも重ねて開ける */
         val showSettings: Boolean = false,
         // --- 設定値(DataStore 由来) ---
@@ -347,13 +364,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 return@launch
             }
             setNearbyPhase(gen, NearbyLoadPhase.SEARCHING)
-            // 起点も青ドットも現在地
-            loadNearbyAround(gen, location.latitude, location.longitude, location.latitude, location.longitude)
+            // 起点も青ドットも現在地。初回/現在地検索は既定半径・既定ズームで取り直す
+            loadNearbyAround(
+                gen, location.latitude, location.longitude, location.latitude, location.longitude,
+                radiusM = NEARBY_DEFAULT_RADIUS_M, zoom = NEARBY_DEFAULT_ZOOM,
+            )
         }
     }
 
-    /** 地図の中心を起点に再検索(「このエリアを検索」)。現在地の青ドットは維持する */
-    fun searchHere(lat: Double, lon: Double) {
+    /**
+     * 地図の中心を起点に再検索(「このエリアを検索」)。半径は地図の可視範囲から、ズームは現在の
+     * 地図ズームを受け取り、結果反映時にカメラを動かさず可視範囲そのままで取り直す。青ドットは維持。
+     */
+    fun searchHere(lat: Double, lon: Double, radiusM: Int, zoom: Double) {
         if (engine == null) return
         val prev = _state.value.nearby
         val userLat = prev?.userLat ?: lat
@@ -373,7 +396,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
         viewModelScope.launch(Dispatchers.IO) {
-            loadNearbyAround(gen, lat, lon, userLat, userLon)
+            loadNearbyAround(gen, lat, lon, userLat, userLon, radiusM, zoom)
         }
     }
 
@@ -382,9 +405,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * 距離が近い順でリスト化する。検索の起点(地図中心)と距離の基準(現在地)は別物で、
      * 「このエリアを検索」で遠方を見ても距離は常に現在地から測る。
      */
-    private fun loadNearbyAround(gen: Int, centerLat: Double, centerLon: Double, userLat: Double, userLon: Double) {
+    private fun loadNearbyAround(
+        gen: Int,
+        centerLat: Double,
+        centerLon: Double,
+        userLat: Double,
+        userLon: Double,
+        radiusM: Int,
+        zoom: Double,
+    ) {
         val engine = engine ?: return
-        val pois = YolpClient.fetchNearby(centerLat, centerLon, radiusM = _state.value.nearbyRadiusM)
+        val pois = YolpClient.fetchNearby(centerLat, centerLon, radiusM = radiusM)
         if (pois == null) {
             failNearby(
                 gen,
@@ -432,6 +463,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 centerLon = centerLon,
                 userLat = userLat,
                 userLon = userLon,
+                zoom = zoom,
             ),
         )
     }
@@ -470,18 +502,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } else {
                 it
             }
-        }
-    }
-
-    fun onNearbyRadiusChange(radiusM: Int) {
-        if (_state.value.nearbyRadiusM == radiusM) return
-        _state.update { it.copy(nearbyRadiusM = radiusM) }
-        // 直近の検索中心(地図中心)を保ったまま半径だけ変えて再検索。無ければ現在地から
-        val prev = _state.value.nearby
-        if (prev?.centerLat != null && prev.centerLon != null) {
-            searchHere(prev.centerLat, prev.centerLon)
-        } else {
-            fetchNearby()
         }
     }
 
@@ -539,6 +559,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 selection = null,
                 storeCheck = null,
             )
+        }
+    }
+
+    /**
+     * 「近く」のジャンル絞り込みトグル。表示集合の絞り込みは UI 側で nearby.places に対して行う
+     * クライアントフィルタなので、ここでは選択集合を更新するだけ(YOLP 再取得しない)。
+     * チップは一覧表示時のみ出る(プレビュー中は出ない)ため selectedPlace は触らない。
+     */
+    fun onToggleNearbyCategory(category: String) {
+        _state.update {
+            val selected = if (category in it.nearbySelectedCategories) {
+                it.nearbySelectedCategories - category
+            } else {
+                it.nearbySelectedCategories + category
+            }
+            it.copy(nearbySelectedCategories = selected)
         }
     }
 
