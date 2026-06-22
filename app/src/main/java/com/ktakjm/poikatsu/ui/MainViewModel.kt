@@ -132,6 +132,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          * fetchNearby)をまたいで保持したいため NearbyUi(毎回作り直す)でなくここに置く。
          */
         val nearbySelectedCategories: Set<String> = emptySet(),
+        /**
+         * 「近く」のチェーン絞り込み(レンズ2段目)。設定中はジャンル絞り込みより優先し、地図/一覧を
+         * このチェーンだけに絞る。在チェーン選択((2))とブリッジ(探す→近く,(3))の着地状態を共有する。
+         * null で未絞り込み。表示名にのみ使うので Merchant をそのまま保持(フィルタは id 比較)。
+         */
+        val nearbyMerchantFilter: Merchant? = null,
         /** 設定オーバーレイの表示中フラグ。探す/近くのどちらの上にも重ねて開ける */
         val showSettings: Boolean = false,
         // --- 設定値(DataStore 由来) ---
@@ -575,6 +581,34 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 it.nearbySelectedCategories + category
             }
             it.copy(nearbySelectedCategories = selected)
+        }
+    }
+
+    /**
+     * 「近く」のチェーン絞り込み(在チェーンのピッカーから選択=レンズ2段目)。ジャンル選択は
+     * 残したまま(ピルを解除すると元のジャンル絞り込みに戻る=ドリルダウンの体験)。
+     */
+    fun onSelectNearbyChain(merchant: Merchant) {
+        _state.update { it.copy(nearbyMerchantFilter = merchant) }
+    }
+
+    /** チェーン絞り込みを解除(ピルの×)。ジャンル絞り込みは元の選択に戻る。 */
+    fun onClearNearbyChain() {
+        _state.update { it.copy(nearbyMerchantFilter = null) }
+    }
+
+    /**
+     * ブリッジ: 判定詳細(探す由来)から「近くのこの店を探す」。そのチェーンに絞った状態を作り、
+     * 判定詳細を閉じる。実際の「近く」突入(位置情報パーミッション→fetchNearby)は UI 側が続けて行う。
+     * ジャンル絞り込みはクリアしてチェーン1点に集中する(ピル解除で全件に戻る)。
+     */
+    fun onFindNearby(merchant: Merchant) {
+        _state.update {
+            it.copy(
+                nearbyMerchantFilter = merchant,
+                nearbySelectedCategories = emptySet(),
+                selection = null,
+            )
         }
     }
 
