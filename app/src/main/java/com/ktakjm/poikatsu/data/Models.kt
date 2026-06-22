@@ -12,6 +12,17 @@ data class Merchant(
     val reading: String = "",
     val aliases: List<String> = emptyList(),
     val category: String = "",
+    // 位置情報を持たない発行体(自販機など)の案内。これがあると「近く」探索が行き止まりになるため、
+    // 判定詳細では「近くのこの店を探す」を出さず、代わりに外部アプリ/サイトでの確認を促す。
+    @SerialName("location_hint") val locationHint: LocationHint? = null,
+)
+
+/** 位置情報を持たない発行体で、店舗位置を確認できる外部導線(例: Coke ON 公式アプリ)を示す。 */
+@Serializable
+data class LocationHint(
+    val text: String,
+    val label: String,
+    val url: String,
 )
 
 /**
