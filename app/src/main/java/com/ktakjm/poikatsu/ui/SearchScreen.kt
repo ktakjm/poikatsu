@@ -293,6 +293,9 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     selectedCategories = state.nearbySelectedCategories,
                     merchantFilter = state.nearbyMerchantFilter,
                     searchFailed = state.nearbySearchFailed,
+                    originName = state.nearbyOrigin?.name,
+                    geocodeCandidates = state.geocodeCandidates,
+                    isGeocoding = state.isGeocoding,
                     onClose = viewModel::onCloseNearby,
                     onToggleCategory = viewModel::onToggleNearbyCategory,
                     onSelectChain = viewModel::onSelectNearbyChain,
@@ -305,6 +308,10 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     onClusterTap = viewModel::onClearNearbyPreview,
                     onOpenDetail = viewModel::onSelectNearby,
                     onSearchHere = viewModel::searchHere,
+                    onGeocode = viewModel::onGeocode,
+                    onSelectCandidate = viewModel::onSelectGeocodedPlace,
+                    onClearOrigin = viewModel::onClearOrigin,
+                    onDismissSearch = viewModel::onDismissGeocoding,
                     // full-bleed 地図の浮きコントロール/ロード・エラー画面が避けるステータスバー高さ
                     topInset = innerPadding.calculateTopPadding(),
                 )
@@ -725,6 +732,9 @@ private fun NearbyPane(
     selectedCategories: Set<String>,
     merchantFilter: Merchant?,
     searchFailed: String?,
+    originName: String?,
+    geocodeCandidates: List<MainViewModel.GeocodedPlace>,
+    isGeocoding: Boolean,
     onClose: () -> Unit,
     onReload: () -> Unit,
     onSearchFailedShown: () -> Unit,
@@ -737,6 +747,10 @@ private fun NearbyPane(
     onClusterTap: () -> Unit,
     onOpenDetail: (MainViewModel.NearbyPlace) -> Unit,
     onSearchHere: (Double, Double, Int, Double) -> Unit,
+    onGeocode: (String) -> Unit,
+    onSelectCandidate: (MainViewModel.GeocodedPlace) -> Unit,
+    onClearOrigin: () -> Unit,
+    onDismissSearch: () -> Unit,
     topInset: Dp,
 ) {
     val selectedPlace = nearby.selectedPlace
@@ -954,10 +968,15 @@ private fun NearbyPane(
             onOpenSettings = onOpenSettings,
             onClusterTap = onClusterTap,
             loadingMessage = if (nearby.loading) nearbyLoadingText(nearby.loadingPhase) else null,
+            originName = originName,
+            geocodeCandidates = geocodeCandidates,
+            isGeocoding = isGeocoding,
+            onGeocode = onGeocode,
+            onSelectCandidate = onSelectCandidate,
+            onClearOrigin = onClearOrigin,
+            onDismissSearch = onDismissSearch,
             modifier = Modifier.fillMaxSize(),
-            // 浮きコントロールを押し下げてステータスバーと干渉させない高さ
             topInset = topInset,
-            // Google ロゴ/著作権表示が peek 状態のボトムシートに隠れないよう、peek 高さ分だけ持ち上げる
             bottomPadding = sheetPeek,
         )
     }

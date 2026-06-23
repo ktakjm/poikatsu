@@ -1,6 +1,8 @@
 package com.ktakjm.poikatsu.ui
 
 import android.app.Application
+import android.location.Geocoder
+import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ktakjm.poikatsu.data.DataRepository
@@ -20,6 +22,8 @@ import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.StoreVerdict
 import com.ktakjm.poikatsu.util.GeoMath
 import java.io.File
+import java.util.Locale
+import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +32,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 /** 「近く」初回・「現在地で検索」時の既定半径(m)。以降の「このエリアを検索」は地図の可視範囲から算出する */
 private const val NEARBY_DEFAULT_RADIUS_M = 1000
@@ -84,6 +89,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         SEARCHING,
     }
 
+    /** 地名検索で得たジオコーディング候補。候補リストから選択して起点にする */
+    data class GeocodedPlace(
+        val name: String,
+        val fullAddress: String,
+        val lat: Double,
+        val lon: Double,
+    )
+
     data class NearbyUi(
         val loading: Boolean = false,
         /** loading 中の段階。表示メッセージの出し分けに使う(loading=false のときは無意味) */
@@ -138,6 +151,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          * null で未絞り込み。表示名にのみ使うので Merchant をそのまま保持(フィルタは id 比較)。
          */
         val nearbyMerchantFilter: Merchant? = null,
+        /**
+         * 「近く」の起点(地名検索)。null は GPS 起点(既定)。設定中は距離・並び順をこの地点から測る。
+         * 再検索(searchHere/fetchNearby)をまたいで保持し、「現在地で検索」/検索バーの✕で null に戻す。
+         */
+        val nearbyOrigin: GeocodedPlace? = null,
+        /** ジオコーディング候補リスト。検索バーで地名を入力→送信後に結果が入る */
+        val geocodeCandidates: List<GeocodedPlace> = emptyList(),
+        /** ジオコーディング中フラグ */
+        val isGeocoding: Boolean = false,
         /** 設定オーバーレイの表示中フラグ。探す/近くのどちらの上にも重ねて開ける */
         val showSettings: Boolean = false,
         // --- 設定値(DataStore 由来) ---
@@ -350,6 +372,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val gen = ++nearbyGeneration
         // 再取得(📍)中も直前の地図・一覧は残し loading だけ立てる(画面をまっさらにしない)。
         // 初回は prev が無い=NearbyUi() なので center も null となり全画面ローディングになる。
+        // 📍 は現在地起点に戻すため nearbyOrigin もクリアする。
         _state.update {
             val base = it.nearby ?: NearbyUi()
             it.copy(
@@ -361,6 +384,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ),
                 selection = null,
                 storeCheck = null,
+                nearbyOrigin = null,
+                geocodeCandidates = emptyList(),
+                isGeocoding = false,
             )
         }
         viewModelScope.launch(Dispatchers.IO) {
@@ -373,6 +399,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // 起点も青ドットも現在地。初回/現在地検索は既定半径・既定ズームで取り直す
             loadNearbyAround(
                 gen, location.latitude, location.longitude, location.latitude, location.longitude,
+                location.latitude, location.longitude,
                 radiusM = NEARBY_DEFAULT_RADIUS_M, zoom = NEARBY_DEFAULT_ZOOM,
             )
         }
@@ -387,6 +414,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val prev = _state.value.nearby
         val userLat = prev?.userLat ?: lat
         val userLon = prev?.userLon ?: lon
+        val origin = _state.value.nearbyOrigin
+        val originLat = origin?.lat ?: userLat
+        val originLon = origin?.lon ?: userLon
         val gen = ++nearbyGeneration
         // 再検索中も直前の地図・一覧を残し loading だけ立てる(画面をまっさらにしない)。
         // center は prev のまま保持して完了までカメラを動かさず、結果反映時に新しい中心へ寄せる。
@@ -402,14 +432,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
         viewModelScope.launch(Dispatchers.IO) {
-            loadNearbyAround(gen, lat, lon, userLat, userLon, radiusM, zoom)
+            loadNearbyAround(gen, lat, lon, userLat, userLon, originLat, originLon, radiusM, zoom)
         }
     }
 
     /**
-     * centerLat/centerLon を起点に YOLP で周辺店舗を取得し、現在地(userLat/userLon)からの
-     * 距離が近い順でリスト化する。検索の起点(地図中心)と距離の基準(現在地)は別物で、
-     * 「このエリアを検索」で遠方を見ても距離は常に現在地から測る。
+     * centerLat/centerLon を起点に YOLP で周辺店舗を取得し、距離基準(originLat/originLon)
+     * からの距離が近い順でリスト化する。検索の起点(地図中心)と距離の基準(起点)は別物。
+     * 起点が GPS(既定)なら距離は現在地基準、地名検索中は検索地点基準になる。
      */
     private fun loadNearbyAround(
         gen: Int,
@@ -417,6 +447,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         centerLon: Double,
         userLat: Double,
         userLon: Double,
+        originLat: Double,
+        originLon: Double,
         radiusM: Int,
         zoom: Double,
     ) {
@@ -429,7 +461,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
             return
         }
-        // 対象施策のあるチェーンのみ、現在地からの距離が近い順に表示(距離は地図中心ではなく現在地基準)
+        // 対象施策のあるチェーンのみ、起点からの距離が近い順に表示(距離は起点=GPS or 検索地点)
         val places = pois
             .mapNotNull { poi ->
                 val merchant = engine.matchStore(poi.name, poi.brand) ?: return@mapNotNull null
@@ -443,7 +475,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (judgments.isEmpty()) return@mapNotNull null
                 NearbyPlace(
                     name = poi.displayName,
-                    distanceMeters = GeoMath.distanceMeters(userLat, userLon, poi.lat, poi.lon),
+                    distanceMeters = GeoMath.distanceMeters(originLat, originLon, poi.lat, poi.lon),
                     merchant = merchant,
                     bestRate = judgments.firstOrNull()?.effectiveRate,
                     lat = poi.lat,
@@ -519,7 +551,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // 進行中の近隣取得を無効化(世代を進める)。完了しても「近く」タブへ戻されない。
         // 未表示の再検索失敗も破棄し、次に「近く」を開いたとき古い Snackbar が出ないようにする
         nearbyGeneration++
-        _state.update { it.copy(nearby = null, nearbySearchFailed = null) }
+        _state.update {
+            it.copy(
+                nearby = null,
+                nearbySearchFailed = null,
+                nearbyOrigin = null,
+                geocodeCandidates = emptyList(),
+                isGeocoding = false,
+            )
+        }
     }
 
     /**
@@ -654,6 +694,107 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onBack() {
         _state.update { it.copy(selection = null) }
+    }
+
+    // --- 地名検索(起点コントロール) ---
+
+    fun onGeocode(query: String) {
+        if (query.isBlank()) {
+            _state.update { it.copy(geocodeCandidates = emptyList(), isGeocoding = false) }
+            return
+        }
+        _state.update { it.copy(isGeocoding = true, geocodeCandidates = emptyList()) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val app = getApplication<Application>()
+            if (!Geocoder.isPresent()) {
+                _state.update { it.copy(isGeocoding = false) }
+                return@launch
+            }
+            val geocoder = Geocoder(app, Locale.JAPAN)
+            val candidates = try {
+                val addresses = if (Build.VERSION.SDK_INT >= 33) {
+                    suspendCancellableCoroutine { cont ->
+                        geocoder.getFromLocationName(query, 5) { addresses ->
+                            if (cont.isActive) cont.resume(addresses)
+                        }
+                    }
+                } else {
+                    @Suppress("DEPRECATION")
+                    geocoder.getFromLocationName(query, 5) ?: emptyList()
+                }
+                addresses.mapNotNull { addr ->
+                    val name = addr.featureName
+                        ?: addr.getAddressLine(0)?.split(",")?.firstOrNull()?.trim()
+                        ?: return@mapNotNull null
+                    val fullAddress = buildString {
+                        addr.adminArea?.let { append(it) }
+                        addr.locality?.let { if (it != addr.adminArea) append(it) }
+                        addr.subLocality?.let { append(it) }
+                        addr.thoroughfare?.let { append(it) }
+                        addr.subThoroughfare?.let { append(it) }
+                    }
+                    GeocodedPlace(name, fullAddress, addr.latitude, addr.longitude)
+                }
+            } catch (_: Exception) {
+                emptyList()
+            }
+            _state.update { it.copy(geocodeCandidates = candidates, isGeocoding = false) }
+        }
+    }
+
+    fun onSelectGeocodedPlace(place: GeocodedPlace) {
+        if (engine == null) return
+        val prev = _state.value.nearby
+        val userLat = prev?.userLat
+        val userLon = prev?.userLon
+        val gen = ++nearbyGeneration
+        _state.update {
+            val base = it.nearby ?: NearbyUi()
+            it.copy(
+                nearbyOrigin = place,
+                geocodeCandidates = emptyList(),
+                isGeocoding = false,
+                nearby = base.copy(
+                    loading = true,
+                    loadingPhase = NearbyLoadPhase.SEARCHING,
+                    error = null,
+                    selectedPlace = null,
+                ),
+            )
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            loadNearbyAround(
+                gen, place.lat, place.lon,
+                userLat ?: place.lat, userLon ?: place.lon,
+                place.lat, place.lon,
+                radiusM = NEARBY_DEFAULT_RADIUS_M, zoom = NEARBY_DEFAULT_ZOOM,
+            )
+        }
+    }
+
+    /** 起点を GPS に戻す(検索バーの✕)。カメラは動かさず距離だけ現在地基準で再計算する */
+    fun onClearOrigin() {
+        _state.update { st ->
+            val n = st.nearby
+                ?: return@update st.copy(nearbyOrigin = null, geocodeCandidates = emptyList())
+            val gpsLat = n.userLat
+            val gpsLon = n.userLon
+            if (gpsLat == null || gpsLon == null) {
+                return@update st.copy(nearbyOrigin = null, geocodeCandidates = emptyList())
+            }
+            val recalculated = n.places.map { p ->
+                p.copy(distanceMeters = GeoMath.distanceMeters(gpsLat, gpsLon, p.lat, p.lon))
+            }.sortedBy { it.distanceMeters }
+            st.copy(
+                nearbyOrigin = null,
+                geocodeCandidates = emptyList(),
+                nearby = n.copy(places = recalculated),
+            )
+        }
+    }
+
+    fun onDismissGeocoding() {
+        _state.update { it.copy(geocodeCandidates = emptyList(), isGeocoding = false) }
     }
 
     /** 設定オーバーレイを開く(探す/近くのどちらからでも。下の画面状態は保持する) */

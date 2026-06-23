@@ -7,29 +7,41 @@ import android.graphics.Color as AndroidColor
 import android.graphics.Paint
 import android.graphics.RectF
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,13 +50,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -64,6 +83,8 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
 import com.ktakjm.poikatsu.util.GeoMath
 import kotlinx.coroutines.launch
+import kotlin.math.cos
+import kotlin.math.pow
 
 /**
  * 地図表示の「継ぎ目」。地図ライブラリ(Google Maps)固有の型はこのファイルの中だけに閉じ込め、
@@ -87,25 +108,8 @@ data class MapMarker(
 )
 
 /**
- * 対象店舗をピン表示する地図。スクロール/ズームは Google Maps に任せ、Compose 側からは触らない
- * (操作中の再描画でズレないように)。中心を起点に再検索したいときは「このエリアを検索」ボタンを使う。
- *
- * @param center カメラ中心(=検索の起点)。値が変わると再センタリングする
- * @param userLocation 実際の現在地(青ドット)。null なら描画しない
- * @param markers 対象店舗ピン
- * @param initialZoom 検索半径に応じた初期ズーム
- * @param selectedPoint 選択中の店舗。非 null かつ変化したらズームは保ったままその点へカメラを寄せる
- * @param onSearchHere 「このエリアを検索」タップ時、地図中心・可視範囲から算出した半径(m)・現在のズームを渡す
- * @param onSearchMyLocation 現在地ピン(📍)タップ時。現在地を取り直してその周辺で再検索する
- * @param onOpenSettings 設定(歯車)タップ時。地図はタイトルバーを持たないので設定への入口は左上の浮きボタン
- * @param onClusterTap クラスタ(複数ピンをまとめた件数バッジ)タップ時。地図はクラスタ地点へズームインする。
- *        プレビュー表示中ならリスト表示に戻すために呼び出し側で selectedPlace をクリアする
- * @param loadingMessage 再検索中の表示文言。非 null の間は地図・ピンを残したまま進捗を小さく重ね、
- *        検索系ボタンを進捗ピル/無効化に切り替える(全画面ローディングにしない)
- * @param topInset 地図はステータスバー裏まで全面表示(full-bleed)するため、上部の浮きコントロール
- *        (設定/このエリアを検索/現在地)をこの高さ分だけ押し下げてステータスバーと干渉させない
- * @param bottomPadding 地図下端の余白。Google ロゴ/著作権表示がボトムシートに隠れないよう、
- *        シートの peek 高さ分だけ持ち上げる(Maps 利用規約: 帰属表示は視認できる必要がある)
+ * 対象店舗をピン表示する地図。浮きコントロールは上部(検索バー＋歯車)、
+ * 条件付き「このエリアを検索」、右下の現在地ボタンで構成する。
  */
 @Composable
 fun NearbyMap(
@@ -119,17 +123,23 @@ fun NearbyMap(
     onOpenSettings: () -> Unit,
     onClusterTap: () -> Unit,
     loadingMessage: String?,
+    // 地名検索(起点コントロール)
+    originName: String?,
+    geocodeCandidates: List<MainViewModel.GeocodedPlace>,
+    isGeocoding: Boolean,
+    onGeocode: (String) -> Unit,
+    onSelectCandidate: (MainViewModel.GeocodedPlace) -> Unit,
+    onClearOrigin: () -> Unit,
+    onDismissSearch: () -> Unit,
     modifier: Modifier = Modifier,
     topInset: Dp = 0.dp,
     bottomPadding: Dp = 0.dp,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // 設定のテーマ上書き(システム/ライト/ダーク)も含めた「実際の表示が暗いか」を配色から判定する
-    // (OS 設定だけ見ると設定のテーマ上書きに追従しない)。暗いときは Google 純正のダーク配色を使う。
+    val focusManager = LocalFocusManager.current
     val darkMode = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val uiSettings = remember {
-        // 操作系は自前のボタン(このエリアを検索/現在地で検索)に集約しているので Google の UI は最小化する
         MapUiSettings(
             zoomControlsEnabled = false,
             mapToolbarEnabled = false,
@@ -140,17 +150,9 @@ fun NearbyMap(
         )
     }
 
-    // 初期カメラは「選択中の店舗があればその店、無ければ検索の中心」。詳細画面から戻ったときも
-    // ここで最初から正しい場所に置く。move/animate は初回には走らせない(走らせると 0,0 付近からの
-    // 高速移動や、戻った直後に一度 center へ飛んでから選択店舗へ animate で寄り直す「北→じわり南下」の
-    // ズレが見えてしまう)。2 回目以降の center / selectedPoint の変化にだけ反応する。
-    // この初期カメラは cameraPositionState の初期値と、地図 View 生成時の GoogleMapOptions の両方で使う。
     val initialCamera = CameraPosition.fromLatLngZoom((selectedPoint ?: center).toLatLng(), initialZoom.toFloat())
     val cameraPositionState = rememberCameraPositionState { position = initialCamera }
-    // 初回スキップは各 LaunchedEffect が自分のフラグで個別に行う。共有フラグ + 別 LaunchedEffect で
-    // 立てる方式だと、フラグを立てる effect が同じ dispatcher 上で先に走り終えてしまい(記述順 FIFO)、
-    // 本来スキップしたい初回から素通りしてしまう。
-    // 検索の起点(center)・半径(zoom)が変わったら再センタリング(初回は初期位置で済むので skip)。
+
     var centerInitialized by remember { mutableStateOf(false) }
     LaunchedEffect(center, initialZoom) {
         if (!centerInitialized) {
@@ -161,8 +163,7 @@ fun NearbyMap(
             CameraUpdateFactory.newLatLngZoom(center.toLatLng(), initialZoom.toFloat()),
         )
     }
-    // 店舗を選択したらその点へ寄せる。クラスタ解除のため最低 SELECTION_MIN_ZOOM まで寄る
-    // (既に深くズームしていればそのズームを維持)。初回は skip(検索の起点 center とは別物)。
+
     var selectionInitialized by remember { mutableStateOf(false) }
     LaunchedEffect(selectedPoint) {
         if (!selectionInitialized) {
@@ -177,24 +178,43 @@ fun NearbyMap(
         }
     }
 
+    // 「このエリアを検索」の表示条件:
+    // (1) 地図カメラが最終検索中心から画面の約4割以上移動した、または
+    // (2) ズームアウトにより表示範囲が検索時の倍以上に広がった(ズームが1段階以上下がった)
+    val showSearchHere by remember(center, initialZoom) {
+        derivedStateOf {
+            if (loadingMessage != null) return@derivedStateOf false
+            val currentZoom = cameraPositionState.position.zoom.toDouble()
+            val target = cameraPositionState.position.target
+            val dist = GeoMath.distanceMeters(
+                center.lat, center.lon, target.latitude, target.longitude,
+            )
+            val metersPerPx = 156543.03 * cos(Math.toRadians(center.lat)) / 2.0.pow(currentZoom)
+            val halfScreenM = (540 * metersPerPx).toInt()
+            val movedEnough = dist > maxOf(halfScreenM * 4 / 10, 100)
+            val zoomedOutEnough = currentZoom <= initialZoom - 1.0
+            movedEnough || zoomedOutEnough
+        }
+    }
+
+    // 検索バーのローカル状態
+    var searchActive by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    var searchSubmitted by remember { mutableStateOf(false) }
+
     Box(modifier) {
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = cameraPositionState,
-            // 地図 View 生成時の初期カメラ・配色を固定する。これをしないと詳細画面から戻って地図が
-            // 再生成された際、Google Maps が一瞬デフォルト(0,0=世界地図 / ライト配色)を描いてから
-            // 切り替わって見える。
             googleMapOptionsFactory = {
                 GoogleMapOptions()
                     .camera(initialCamera)
                     .mapColorScheme(if (darkMode) MapColorScheme.DARK else MapColorScheme.LIGHT)
             },
             uiSettings = uiSettings,
-            // 暗いときは Google 純正のダーク配色(建物・駅も視認できる)。自前スタイル JSON は使わない。
             mapColorScheme = if (darkMode) ComposeMapColorScheme.DARK else ComposeMapColorScheme.LIGHT,
             contentPadding = PaddingValues(bottom = bottomPadding),
         ) {
-            // 実際の現在地(青系の小さなドット・中心アンカー)
             if (userLocation != null) {
                 Marker(
                     state = rememberMarkerState(
@@ -209,8 +229,6 @@ fun NearbyMap(
                     zIndex = 0f,
                 )
             }
-            // 対象店舗ピンをクラスタリングして表示。密集ピンは件数バッジにまとめ、
-            // ズームインで個別ピン(ブランドカラー)に展開する。
             val clusterItems = remember(markers) { markers.map(::StoreClusterItem) }
             Clustering(
                 items = clusterItems,
@@ -286,17 +304,118 @@ fun NearbyMap(
                 },
             )
         }
-        // 上部中央のコントロール(「このエリアを検索」/ 再検索中の進捗ピル)。左右のアイコンボタン(48dp)と
-        // 縦中心を揃えるため、同じ上端オフセットの 48dp 高の枠内で中央寄せにする(ステータスバーにも被らない)。
-        // 再検索中は「このエリアを検索」を進捗ピルへ差し替え、地図・ピンは残したまま再タップを防ぐ。
-        Box(
+
+        // --- 上部コントロール: 検索バー + 歯車 + 候補リスト + 「このエリアを検索」/進捗ピル ---
+        Column(
             modifier = Modifier
-                .align(Alignment.TopCenter)
+                .align(Alignment.TopStart)
                 .padding(top = topInset + 8.dp)
-                .height(48.dp),
-            contentAlignment = Alignment.Center,
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // 検索バー + 歯車を1行に配置
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PlaceSearchBar(
+                    originName = originName,
+                    active = searchActive,
+                    query = searchQuery,
+                    isGeocoding = isGeocoding,
+                    onActivate = {
+                        searchActive = true
+                        searchQuery = ""
+                        searchSubmitted = false
+                        onDismissSearch()
+                    },
+                    onQueryChange = { searchQuery = it; searchSubmitted = false },
+                    onSearch = {
+                        if (searchQuery.isNotBlank()) {
+                            searchSubmitted = true
+                            onGeocode(searchQuery)
+                            focusManager.clearFocus()
+                        }
+                    },
+                    onClearOrigin = {
+                        searchActive = false
+                        searchQuery = ""
+                        searchSubmitted = false
+                        onClearOrigin()
+                    },
+                    onDismiss = {
+                        searchActive = false
+                        searchQuery = ""
+                        searchSubmitted = false
+                        onDismissSearch()
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(8.dp))
+                FilledTonalIconButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Icon(Icons.Default.Settings, contentDescription = "設定")
+                }
+            }
+
+            // 候補リスト(検索バーが活性でジオコーディング完了後に表示)
+            if (searchActive && (geocodeCandidates.isNotEmpty() || (searchSubmitted && !isGeocoding))) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    tonalElevation = 3.dp,
+                    shadowElevation = 3.dp,
+                ) {
+                    Column {
+                        if (geocodeCandidates.isEmpty() && searchSubmitted && !isGeocoding) {
+                            Text(
+                                "場所が見つかりませんでした",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(16.dp),
+                            )
+                        }
+                        geocodeCandidates.forEach { place ->
+                            ListItem(
+                                headlineContent = {
+                                    val display = if (place.fullAddress.isNotBlank() &&
+                                        place.fullAddress != place.name
+                                    ) {
+                                        "${place.name}（${place.fullAddress}）"
+                                    } else {
+                                        place.name
+                                    }
+                                    Text(display, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                },
+                                leadingContent = {
+                                    Icon(
+                                        Icons.Default.Place,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                },
+                                modifier = Modifier.clickable {
+                                    searchActive = false
+                                    searchQuery = ""
+                                    searchSubmitted = false
+                                    focusManager.clearFocus()
+                                    onSelectCandidate(place)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 「このエリアを検索」(条件付き) / 再検索中の進捗ピル
             if (loadingMessage != null) {
+                Spacer(Modifier.height(8.dp))
                 Surface(
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.secondaryContainer,
@@ -311,13 +430,12 @@ fun NearbyMap(
                         Text(loadingMessage, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
-            } else {
+            } else if (showSearchHere) {
+                Spacer(Modifier.height(8.dp))
                 FilledTonalButton(
                     onClick = {
                         val pos = cameraPositionState.position
                         val c = pos.target
-                        // 可視範囲(中心→北東角の距離)を検索半径にする。ズームアウトで広く、インで狭く=
-                        // 「画面に写っている範囲を検索」。projection 未確定(描画直後)のみ既定 1km にフォールバック。
                         val bounds = cameraPositionState.projection?.visibleRegion?.latLngBounds
                         val radiusM = bounds?.let {
                             GeoMath.distanceMeters(
@@ -327,34 +445,166 @@ fun NearbyMap(
                         onSearchHere(MapPoint(c.latitude, c.longitude), radiusM, pos.zoom.toDouble())
                     },
                 ) {
-                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
                     Text("このエリアを検索")
                 }
             }
         }
-        // 設定への入口(歯車)。地図はタイトルバーを持たないので左上に浮かせる。
-        // 左=設定 / 中央=このエリアを検索 / 右=現在地で検索 の 3 点を上端に対称配置する。
-        FilledTonalIconButton(
-            onClick = onOpenSettings,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(top = topInset + 8.dp, start = 8.dp)
-                .size(48.dp),
-        ) {
-            Icon(Icons.Default.Settings, contentDescription = "設定")
-        }
-        // 現在地で検索: 現在地を取り直し、その周辺で再検索する(完了後カメラも結果=現在地へ戻る)。
-        // 地図中心が起点の「このエリアを検索」と対になり、検索の起点を「自分」か「見ている場所」かで選ぶ。
-        // 再検索中(loadingMessage != null)は二重起動を避けるため無効化する。
+
+        // 📍 現在地で検索: 右下(ボトムシート peek の上)
         if (userLocation != null) {
             FilledTonalIconButton(
                 onClick = onSearchMyLocation,
                 enabled = loadingMessage == null,
-                // タッチ領域は M3 最小の 48dp を確保。ボトムシート(peek)に隠れない上部右に置く
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = topInset + 8.dp, end = 8.dp).size(48.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = bottomPadding + 16.dp, end = 8.dp)
+                    .size(48.dp),
             ) {
                 Icon(Icons.Default.LocationOn, contentDescription = "現在地で検索")
+            }
+        }
+    }
+}
+
+/** 地図上部の場所検索バー。GPS 起点/地名起点/テキスト入力の3状態を切り替える */
+@Composable
+private fun PlaceSearchBar(
+    originName: String?,
+    active: Boolean,
+    query: String,
+    isGeocoding: Boolean,
+    onActivate: () -> Unit,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onClearOrigin: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(active) {
+        if (active) focusRequester.requestFocus()
+    }
+
+    Surface(
+        modifier = modifier.height(48.dp),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 3.dp,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        ) {
+            when {
+                active -> {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    BasicTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(focusRequester),
+                        singleLine = true,
+                        textStyle = TextStyle(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = MaterialTheme.typography.bodyLarge.fontSize,
+                        ),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+                        decorationBox = { inner ->
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (query.isEmpty()) {
+                                    Text(
+                                        "場所を検索…",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                    )
+                                }
+                                inner()
+                            }
+                        },
+                    )
+                    if (isGeocoding) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else if (query.isNotEmpty()) {
+                        IconButton(
+                            onClick = { onQueryChange("") },
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "クリア",
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    } else {
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "閉じる",
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
+                originName != null -> {
+                    Icon(
+                        Icons.Default.Place,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "${originName}周辺",
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onActivate() },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    IconButton(
+                        onClick = onClearOrigin,
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "起点をクリア",
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+                else -> {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "場所を検索…",
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onActivate() },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                }
             }
         }
     }

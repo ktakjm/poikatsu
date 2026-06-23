@@ -37,10 +37,11 @@ UI は Jetpack Compose + Material 3。新規画面・コンポーネントを足
 - **任意の背景色に乗せる文字色**は白/黒固定にせず `onColorFor()`(輝度判定)で読める方を選ぶ。
 - **状態・装飾は絵文字でなく Material アイコン**で表し、色は colorScheme から取る。アイコンは `material-icons-core` の範囲で賄う(`-extended` は巨大なので原則追加しない。足りなければ代替アイコン+色で表現)。
 - **タッチ領域は最小 48dp**(`IconButton` 等を 48dp 未満に潰さない。見た目を小さくしたいときはアイコン側だけ縮める)。
-- **画面上部は `TopAppBar`**(手書き Row ヘッダーにしない)。アプリは単一 `Scaffold`(PoikatsuApp)で `topBar`/`bottomBar`/`snackbarHost` を画面状態に追従させ、`topBar` の分岐順は本文 `when` と必ず一致させる。**例外は地図(近く)モード**: 地図系アプリの定石どおりタイトルバーを持たず、地図をステータスバー裏まで全面表示(full-bleed)し、設定/このエリアを検索/現在地は地図上の浮きコントロールに置く(詳細は code-guide.md 7.1)。
+- **画面上部は `TopAppBar`**(手書き Row ヘッダーにしない)。アプリは単一 `Scaffold`(PoikatsuApp)で `topBar`/`bottomBar`/`snackbarHost` を画面状態に追従させ、`topBar` の分岐順は本文 `when` と必ず一致させる。**例外は地図(近く)モード**: 地図系アプリの定石どおりタイトルバーを持たず、地図をステータスバー裏まで全面表示(full-bleed)し、上部に**場所検索バー＋歯車**（1行）、条件付き「このエリアを検索」、右下に現在地ボタンを浮きコントロールとして置く(詳細は code-guide.md 7.1)。
 - **トップレベルのモード切替は下部 `NavigationBar`**(「対象チェーン店」/「近く」)。`nearby == null/!= null` を選択中タブとして流用し、判定詳細・店舗判定はその上のオーバーレイ。下部ナビはベースの 2 タブ表示時のみ出し、オーバーレイ・ローディング・エラー時は隠す。専用の `ShortNavigationBar` は M3 Expressive 系のため不採用(標準 `NavigationBar` を `Modifier.height` で詰める)。
 - **一時的な失敗は Snackbar**で通知し画面に常駐させない。致命的エラー(表示すべきコンテンツが無い)は全画面表示でよい。
 - **リストは行ごとの全幅 Divider で区切らない**。ListItem の余白・グルーピングで分ける(Divider は「まとめる」用途に限る)。
 - **edge-to-edge を維持**(`enableEdgeToEdge()` + Scaffold の inset)。inset は基本 Scaffold が `innerPadding` で配り、コンテンツ側はそれを当てる。地図(近く)モードだけは上端 inset を当てず地図をステータスバー裏まで描き、その高さ(`topInset`)を `NearbyPane`/`NearbyMap` に渡して浮きコントロールだけが避ける。ステータスバー/ナビバーのアイコン明暗は `MainActivity` で**システムのダーク設定でなくアプリのテーマ**(`darkTheme`)に追従させる(`WindowCompat` の `isAppearanceLight*Bars`。テーマ上書き時に full-bleed の地図上でアイコンが埋もれないように)。
 - **地図ピンのクラスタリング**: 密集ピンは `maps-compose-utils` の `Clustering` で件数バッジ(`inverseSurface` 色の円＋白縁＋件数)にまとめ、ズームインで個別ピン(ブランドカラー)に展開する。クラスタタップは現在ズーム+2(上限 `MAX_CLUSTER_ZOOM=19`)＋プレビュー解除。リスト行タップ時はクラスタ解除のため最低 `SELECTION_MIN_ZOOM=17` まで寄る(密集商業施設では解除できなくても許容)。クラスタリングは `NearbyMap.kt` 内部に完全に閉じ込め、アプリ側は `List<MapMarker>` を渡すだけ。現在地マーカー(青ドット)はクラスタ対象外。
+- **地図の起点コントロール（場所検索）**: 「近く」モードの起点は 3 種類: (1) GPS 現在地(既定)、(2) 地図パン→「このエリアを検索」、(3) **地名検索**（検索バーに地名入力→`Geocoder` で候補5件→選択で地図移動＋再検索）。起点が地名のとき距離・並び順はその地点基準になる。📍（現在地で検索）または検索バーの✕で GPS 起点に戻る。✕はカメラを動かさず距離だけ再計算する（YOLP 再取得なし）。「このエリアを検索」はパンで画面の約4割以上移動、またはズームアウトで表示範囲が倍以上になったときだけ表示する。起点とレンズ（ジャンル/チェーン絞り込み）は直交し、互いに干渉しない。
 - **M3 Expressive(波形プログレス `*WavyProgressIndicator` / モーフィング `LoadingIndicator`)は alpha 専用**(material3 1.5.0-alpha 系)。安定版重視の方針のため、stable 化するまで採用しない。
