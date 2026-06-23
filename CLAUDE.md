@@ -42,4 +42,5 @@ UI は Jetpack Compose + Material 3。新規画面・コンポーネントを足
 - **一時的な失敗は Snackbar**で通知し画面に常駐させない。致命的エラー(表示すべきコンテンツが無い)は全画面表示でよい。
 - **リストは行ごとの全幅 Divider で区切らない**。ListItem の余白・グルーピングで分ける(Divider は「まとめる」用途に限る)。
 - **edge-to-edge を維持**(`enableEdgeToEdge()` + Scaffold の inset)。inset は基本 Scaffold が `innerPadding` で配り、コンテンツ側はそれを当てる。地図(近く)モードだけは上端 inset を当てず地図をステータスバー裏まで描き、その高さ(`topInset`)を `NearbyPane`/`NearbyMap` に渡して浮きコントロールだけが避ける。ステータスバー/ナビバーのアイコン明暗は `MainActivity` で**システムのダーク設定でなくアプリのテーマ**(`darkTheme`)に追従させる(`WindowCompat` の `isAppearanceLight*Bars`。テーマ上書き時に full-bleed の地図上でアイコンが埋もれないように)。
+- **地図ピンのクラスタリング**: 密集ピンは `maps-compose-utils` の `Clustering` で件数バッジ(`inverseSurface` 色の円＋白縁＋件数)にまとめ、ズームインで個別ピン(ブランドカラー)に展開する。クラスタタップは現在ズーム+2(上限 `MAX_CLUSTER_ZOOM=19`)＋プレビュー解除。リスト行タップ時はクラスタ解除のため最低 `SELECTION_MIN_ZOOM=17` まで寄る(密集商業施設では解除できなくても許容)。クラスタリングは `NearbyMap.kt` 内部に完全に閉じ込め、アプリ側は `List<MapMarker>` を渡すだけ。現在地マーカー(青ドット)はクラスタ対象外。
 - **M3 Expressive(波形プログレス `*WavyProgressIndicator` / モーフィング `LoadingIndicator`)は alpha 専用**(material3 1.5.0-alpha 系)。安定版重視の方針のため、stable 化するまで採用しない。

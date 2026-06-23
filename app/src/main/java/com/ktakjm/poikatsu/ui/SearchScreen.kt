@@ -302,6 +302,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     onOpenSettings = viewModel::onOpenSettings,
                     onPreviewPlace = viewModel::onPreviewNearby,
                     onClearPreview = viewModel::onClearNearbyPreview,
+                    onClusterTap = viewModel::onClearNearbyPreview,
                     onOpenDetail = viewModel::onSelectNearby,
                     onSearchHere = viewModel::searchHere,
                     // full-bleed 地図の浮きコントロール/ロード・エラー画面が避けるステータスバー高さ
@@ -733,6 +734,7 @@ private fun NearbyPane(
     onClearChain: () -> Unit,
     onPreviewPlace: (MainViewModel.NearbyPlace) -> Unit,
     onClearPreview: () -> Unit,
+    onClusterTap: () -> Unit,
     onOpenDetail: (MainViewModel.NearbyPlace) -> Unit,
     onSearchHere: (Double, Double, Int, Double) -> Unit,
     topInset: Dp,
@@ -950,6 +952,7 @@ private fun NearbyPane(
             onSearchHere = { p, r, z -> onSearchHere(p.lat, p.lon, r, z) },
             onSearchMyLocation = onReload,
             onOpenSettings = onOpenSettings,
+            onClusterTap = onClusterTap,
             loadingMessage = if (nearby.loading) nearbyLoadingText(nearby.loadingPhase) else null,
             modifier = Modifier.fillMaxSize(),
             // 浮きコントロールを押し下げてステータスバーと干渉させない高さ

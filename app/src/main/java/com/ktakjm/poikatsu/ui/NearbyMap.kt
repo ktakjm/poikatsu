@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
 import android.graphics.Paint
 import android.graphics.RectF
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -30,15 +31,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -49,12 +55,15 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.ComposeMapColorScheme
+import com.google.maps.android.clustering.ClusterItem
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.clustering.Clustering
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
 import com.ktakjm.poikatsu.util.GeoMath
+import kotlinx.coroutines.launch
 
 /**
  * 地図表示の「継ぎ目」。地図ライブラリ(Google Maps)固有の型はこのファイルの中だけに閉じ込め、
@@ -89,6 +98,8 @@ data class MapMarker(
  * @param onSearchHere 「このエリアを検索」タップ時、地図中心・可視範囲から算出した半径(m)・現在のズームを渡す
  * @param onSearchMyLocation 現在地ピン(📍)タップ時。現在地を取り直してその周辺で再検索する
  * @param onOpenSettings 設定(歯車)タップ時。地図はタイトルバーを持たないので設定への入口は左上の浮きボタン
+ * @param onClusterTap クラスタ(複数ピンをまとめた件数バッジ)タップ時。地図はクラスタ地点へズームインする。
+ *        プレビュー表示中ならリスト表示に戻すために呼び出し側で selectedPlace をクリアする
  * @param loadingMessage 再検索中の表示文言。非 null の間は地図・ピンを残したまま進捗を小さく重ね、
  *        検索系ボタンを進捗ピル/無効化に切り替える(全画面ローディングにしない)
  * @param topInset 地図はステータスバー裏まで全面表示(full-bleed)するため、上部の浮きコントロール
@@ -106,12 +117,14 @@ fun NearbyMap(
     onSearchHere: (MapPoint, Int, Double) -> Unit,
     onSearchMyLocation: () -> Unit,
     onOpenSettings: () -> Unit,
+    onClusterTap: () -> Unit,
     loadingMessage: String?,
     modifier: Modifier = Modifier,
     topInset: Dp = 0.dp,
     bottomPadding: Dp = 0.dp,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     // 設定のテーマ上書き(システム/ライト/ダーク)も含めた「実際の表示が暗いか」を配色から判定する
     // (OS 設定だけ見ると設定のテーマ上書きに追従しない)。暗いときは Google 純正のダーク配色を使う。
     val darkMode = MaterialTheme.colorScheme.surface.luminance() < 0.5f
@@ -148,7 +161,8 @@ fun NearbyMap(
             CameraUpdateFactory.newLatLngZoom(center.toLatLng(), initialZoom.toFloat()),
         )
     }
-    // 店舗を選択したらズームは保ったままその点へ寄せる(初回は skip。検索の起点 center とは別物)。
+    // 店舗を選択したらその点へ寄せる。クラスタ解除のため最低 SELECTION_MIN_ZOOM まで寄る
+    // (既に深くズームしていればそのズームを維持)。初回は skip(検索の起点 center とは別物)。
     var selectionInitialized by remember { mutableStateOf(false) }
     LaunchedEffect(selectedPoint) {
         if (!selectionInitialized) {
@@ -156,7 +170,10 @@ fun NearbyMap(
             return@LaunchedEffect
         }
         if (selectedPoint != null) {
-            cameraPositionState.animate(CameraUpdateFactory.newLatLng(selectedPoint.toLatLng()))
+            val targetZoom = cameraPositionState.position.zoom.coerceAtLeast(SELECTION_MIN_ZOOM)
+            cameraPositionState.animate(
+                CameraUpdateFactory.newLatLngZoom(selectedPoint.toLatLng(), targetZoom),
+            )
         }
     }
 
@@ -192,30 +209,82 @@ fun NearbyMap(
                     zIndex = 0f,
                 )
             }
-            // 対象店舗ピン(ブランドカラー)。選択中は最前面(zIndex)・拡大・白縁強調で描く。
-            // リストの増減/並び替えで remember のスロットがズレないよう位置で key する。
-            markers.forEach { m ->
-                key(m.point.lat, m.point.lon) {
-                    Marker(
-                        state = rememberMarkerState(position = m.point.toLatLng()),
-                        icon = remember(m.colorHexes, m.selected) {
-                            storePinDescriptor(
-                                context,
-                                m.colorHexes,
-                                sizeDp = if (m.selected) 34f else 24f,
-                                selected = m.selected,
+            // 対象店舗ピンをクラスタリングして表示。密集ピンは件数バッジにまとめ、
+            // ズームインで個別ピン(ブランドカラー)に展開する。
+            val clusterItems = remember(markers) { markers.map(::StoreClusterItem) }
+            Clustering(
+                items = clusterItems,
+                onClusterClick = { cluster ->
+                    scope.launch {
+                        val newZoom = (cameraPositionState.position.zoom + 2f)
+                            .coerceAtMost(MAX_CLUSTER_ZOOM)
+                        cameraPositionState.animate(
+                            CameraUpdateFactory.newLatLngZoom(cluster.position, newZoom),
+                        )
+                    }
+                    onClusterTap()
+                    true
+                },
+                onClusterItemClick = { item ->
+                    item.marker.onClick()
+                    true
+                },
+                clusterContent = { cluster ->
+                    Surface(
+                        modifier = Modifier.size(40.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.inverseSurface,
+                        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                        border = BorderStroke(2.dp, Color.White),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "${cluster.size}",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
                             )
-                        },
-                        // 既定の下端中央アンカー(0.5, 1.0)を使う
-                        title = m.label,
-                        zIndex = if (m.selected) 1f else 0f,
-                        onClick = {
-                            m.onClick()
-                            true
-                        },
+                        }
+                    }
+                },
+                clusterItemContent = { item ->
+                    val selected = item.marker.selected
+                    val sizeDp = if (selected) 34.dp else 24.dp
+                    val colors = item.marker.colorHexes.map { Color(parseColor(it)) }
+                        .ifEmpty { listOf(Color(parseColor(null))) }
+                    val strokeWidth = if (selected) 3.dp else 2.dp
+                    Box(
+                        modifier = Modifier
+                            .size(sizeDp)
+                            .drawBehind {
+                                val sw = strokeWidth.toPx()
+                                val inset = sw / 2f
+                                val ovalSize = Size(size.width - sw, size.height - sw)
+                                val ovalOffset = Offset(inset, inset)
+                                if (colors.size == 1) {
+                                    drawOval(colors[0], topLeft = ovalOffset, size = ovalSize)
+                                } else {
+                                    val sweep = 360f / colors.size
+                                    var start = -45f
+                                    colors.forEach { c ->
+                                        drawArc(
+                                            c, start, sweep,
+                                            useCenter = true,
+                                            topLeft = ovalOffset,
+                                            size = ovalSize,
+                                        )
+                                        start += sweep
+                                    }
+                                }
+                                drawOval(
+                                    Color.White,
+                                    topLeft = ovalOffset,
+                                    size = ovalSize,
+                                    style = Stroke(width = sw),
+                                )
+                            },
                     )
-                }
-            }
+                },
+            )
         }
         // 上部中央のコントロール(「このエリアを検索」/ 再検索中の進捗ピル)。左右のアイコンボタン(48dp)と
         // 縦中心を揃えるため、同じ上端オフセットの 48dp 高の枠内で中央寄せにする(ステータスバーにも被らない)。
@@ -291,52 +360,6 @@ fun NearbyMap(
     }
 }
 
-/**
- * 店舗ピンの丸ビットマップ(白縁付き)。対応する発行体が複数あるときは色を扇状に等分して描く。
- * 例: 三井住友(緑)と MUFG(赤)の両対応なら、斜めの境界線で右下=緑・左上=赤のように分かれる。
- * 色が 1 つ(または未指定)のときは単色丸ピン。
- *
- * @param selected 選択中なら白縁を太くして強調する(サイズの拡大は呼び出し側の sizeDp で行う)
- */
-private fun storePinDescriptor(
-    context: Context,
-    colorHexes: List<String>,
-    sizeDp: Float,
-    selected: Boolean,
-): BitmapDescriptor {
-    val density = context.resources.displayMetrics.density
-    val px = (sizeDp * density).toInt().coerceAtLeast(1)
-    val strokePx = (if (selected) 3f else 2f) * density
-    // 未指定なら parseColor の既定色(緑)1 色で描く
-    val colors = colorHexes.map { parseColor(it) }.ifEmpty { listOf(parseColor(null)) }
-
-    val bitmap = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-    val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        color = AndroidColor.WHITE
-        strokeWidth = strokePx
-    }
-    // 縁が切れないよう線幅の半分だけ内側に描画領域を取る
-    val inset = strokePx / 2f
-    val rect = RectF(inset, inset, px - inset, px - inset)
-    if (colors.size == 1) {
-        fillPaint.color = colors[0]
-        canvas.drawOval(rect, fillPaint)
-    } else {
-        val sweep = 360f / colors.size
-        var start = -45f // 斜めの境界にするため右上(-45°)を起点に時計回りで等分
-        colors.forEach { c ->
-            fillPaint.color = c
-            canvas.drawArc(rect, start, sweep, true, fillPaint)
-            start += sweep
-        }
-    }
-    canvas.drawOval(rect, strokePaint)
-    return BitmapDescriptorFactory.fromBitmap(bitmap)
-}
-
 /** 単色の丸ドット(白縁付き)。現在地ドットなど 1 色で足りる用途に使う */
 private fun dotDescriptor(context: Context, color: Int, sizeDp: Float): BitmapDescriptor {
     val density = context.resources.displayMetrics.density
@@ -363,3 +386,14 @@ private fun parseColor(hex: String?): Int =
     hex?.let { runCatching { AndroidColor.parseColor(it) }.getOrNull() } ?: AndroidColor.rgb(0x2E, 0x7D, 0x32)
 
 private fun MapPoint.toLatLng() = LatLng(lat, lon)
+
+private class StoreClusterItem(val marker: MapMarker) : ClusterItem {
+    private val position = LatLng(marker.point.lat, marker.point.lon)
+    override fun getPosition() = position
+    override fun getTitle() = marker.label
+    override fun getSnippet(): String? = null
+    override fun getZIndex() = if (marker.selected) 1f else 0f
+}
+
+private const val MAX_CLUSTER_ZOOM = 19f
+private const val SELECTION_MIN_ZOOM = 17f

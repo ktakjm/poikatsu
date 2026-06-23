@@ -21,6 +21,7 @@
 | org.jspecify | null安全アノテーション | Apache-2.0 |
 | com.squareup.okhttp3:okhttp(+ 推移的依存 com.squareup.okio) | リモートデータ取得・YOLP/Overpass 呼び出し(M4で追加, 2026-06-12) | Apache-2.0 |
 | com.google.maps.android:maps-compose | 近隣検索の地図表示(Compose ラッパー。2026-06-20 追加) | Apache-2.0 |
+| com.google.maps.android:maps-compose-utils(+ 推移的な android-maps-utils) | 地図ピンのクラスタリング(密集ピンを件数バッジにまとめる。2026-06-24 追加) | Apache-2.0 |
 | com.google.android.gms:play-services-maps(+ 推移的な play-services-* / Google Maps SDK) | 地図描画 SDK 本体(maps-compose の依存) | **プロプライエタリ**(Google APIs Terms of Service。OSS ではない) |
 | androidx.datastore:datastore-preferences | 設定(テーマ・マイカード)の永続化(2026-06-19 追加) | Apache-2.0 |
 
