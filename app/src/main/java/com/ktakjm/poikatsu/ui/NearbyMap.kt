@@ -239,6 +239,16 @@ fun NearbyMap(
                         cameraPositionState.animate(
                             CameraUpdateFactory.newLatLngZoom(cluster.position, newZoom),
                         )
+                        val pos = cameraPositionState.position
+                        val c = pos.target
+                        val bounds = cameraPositionState.projection?.visibleRegion?.latLngBounds
+                        val radiusM = bounds?.let {
+                            GeoMath.distanceMeters(
+                                c.latitude, c.longitude,
+                                it.northeast.latitude, it.northeast.longitude,
+                            )
+                        } ?: 1000
+                        onSearchHere(MapPoint(c.latitude, c.longitude), radiusM, pos.zoom.toDouble())
                     }
                     onClusterTap()
                     true

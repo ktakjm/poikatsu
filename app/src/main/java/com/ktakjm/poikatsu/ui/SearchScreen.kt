@@ -997,6 +997,7 @@ private fun NearbyPane(
                     SheetAttribution()
                     NearbyPreview(
                         place = selectedPlace,
+                        originName = originName,
                         onOpenDetail = { onOpenDetail(selectedPlace) },
                         onClose = onClearPreview,
                     )
@@ -1038,7 +1039,7 @@ private fun NearbyPane(
                             ListItem(
                                 headlineContent = { Text(place.name) },
                                 supportingContent = {
-                                    Text("${distanceLabel(place.distanceMeters)}・${place.merchant?.category.orEmpty()}")
+                                    Text("${distanceLabel(place.distanceMeters, originName)}・${place.merchant?.category.orEmpty()}")
                                 },
                                 trailingContent = {
                                     place.bestRate?.let {
@@ -1094,6 +1095,7 @@ private fun NearbyPane(
 @Composable
 private fun NearbyPreview(
     place: MainViewModel.NearbyPlace,
+    originName: String?,
     onOpenDetail: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -1105,7 +1107,7 @@ private fun NearbyPreview(
             Column(Modifier.weight(1f)) {
                 Text(place.name, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "${distanceLabel(place.distanceMeters)}・${place.merchant?.category.orEmpty()}",
+                    "${distanceLabel(place.distanceMeters, originName)}・${place.merchant?.category.orEmpty()}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.outline,
                 )
@@ -1280,13 +1282,21 @@ private fun NearbyRetryState(
     }
 }
 
-private fun distanceLabel(meters: Int): String =
-    if (meters >= 1000) {
+private fun distanceLabel(meters: Int, originName: String?): String {
+    val prefix = if (originName != null) {
+        val short = if (originName.length > 10) originName.take(10) + "…" else originName
+        "${short}から"
+    } else {
+        "現在地から"
+    }
+    val dist = if (meters >= 1000) {
         val km = meters / 1000.0
         if (km == km.toLong().toDouble()) "${km.toLong()}km" else "%.1fkm".format(km)
     } else {
         "${meters}m"
     }
+    return "$prefix$dist"
+}
 
 @Composable
 private fun JudgmentDetail(

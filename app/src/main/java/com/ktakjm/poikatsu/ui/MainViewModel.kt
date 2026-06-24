@@ -72,8 +72,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     data class NearbyPlace(
         val name: String,
-        /** 現在地からの距離(m)。検索の起点=地図中心ではなく、常に現在地基準 */
+        /** 起点(現在地 or 地名検索地点)からの距離(m)。距離ラベル表示用 */
         val distanceMeters: Int,
+        /** 地図中心(検索時のカメラ中心)からの距離(m)。リストのソート用 */
+        val distanceFromCenter: Int,
         val merchant: Merchant?,
         val bestRate: Double?,
         val lat: Double,
@@ -462,9 +464,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * centerLat/centerLon を起点に YOLP で周辺店舗を取得し、距離基準(originLat/originLon)
-     * からの距離が近い順でリスト化する。検索の起点(地図中心)と距離の基準(起点)は別物。
-     * 起点が GPS(既定)なら距離は現在地基準、地名検索中は検索地点基準になる。
+     * centerLat/centerLon を起点に YOLP で周辺店舗を取得する。
+     * リストのソートは地図中心(centerLat/centerLon)からの距離順。
+     * 距離表示は起点(originLat/originLon = GPS or 地名検索地点)基準。
      */
     private fun loadNearbyAround(
         gen: Int,
@@ -486,21 +488,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
             return
         }
-        // 対象施策のあるチェーンのみ、起点からの距離が近い順に表示(距離は起点=GPS or 検索地点)
         val places = pois
             .mapNotNull { poi ->
                 val merchant = engine.matchStore(poi.name, poi.brand) ?: return@mapNotNull null
-                // 商業施設(=対象チェーン)内テナントの誤検知を除外
-                // (例: 「ドミー安城横山店大嶽クリーニング」はドミーではなくクリーニング店)
                 if (engine.isFacilityTenant(merchant.name, poi.displayName)) return@mapNotNull null
-                // 公式に「対象外」と明示された店舗(例: アカチャンホンポのららぽーと内店舗)は近隣リストに出さない
                 if (engine.isExcludedStore(merchant, poi.displayName)) return@mapNotNull null
                 val judgments = engine.judge(merchant)
-                // 所有カードで対象になる施策が無ければ近隣リストに出さない
                 if (judgments.isEmpty()) return@mapNotNull null
                 NearbyPlace(
                     name = poi.displayName,
                     distanceMeters = GeoMath.distanceMeters(originLat, originLon, poi.lat, poi.lon),
+                    distanceFromCenter = GeoMath.distanceMeters(centerLat, centerLon, poi.lat, poi.lon),
                     merchant = merchant,
                     bestRate = judgments.firstOrNull()?.effectiveRate,
                     lat = poi.lat,
@@ -508,7 +506,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     brandColors = judgments.mapNotNull { it.campaign.brandColor }.distinct(),
                 )
             }
-            .sortedBy { it.distanceMeters }
+            .sortedBy { it.distanceFromCenter }
             // 同一店舗の重複を排除(YOLP は同じ店を別名・空白違いで複数返すことがある。
             // 例: 「KFC…店」と「ケンタッキーフライドチキン…店」、空白有無違いの同名)。
             // 「チェーン + 支店名」がともに一致するものを同一店舗とみなし、最も近い1件を残す。
@@ -809,7 +807,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             val recalculated = n.places.map { p ->
                 p.copy(distanceMeters = GeoMath.distanceMeters(gpsLat, gpsLon, p.lat, p.lon))
-            }.sortedBy { it.distanceMeters }
+            }.sortedBy { it.distanceFromCenter }
             st.copy(
                 nearbyOrigin = null,
                 geocodeCandidates = emptyList(),
