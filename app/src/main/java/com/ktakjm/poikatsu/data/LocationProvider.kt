@@ -27,8 +27,9 @@ class LocationProvider(private val context: Context) {
     suspend fun currentLocation(): Location? {
         if (!hasPermission()) return null
         val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        // NETWORK(Wi-Fi/基地局)は屋内でも速い。なければGPS
-        val provider = listOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
+        // GPS を優先し、なければ NETWORK(Wi-Fi/基地局)にフォールバック。
+        // エミュレータの位置注入は GPS プロバイダにのみ効くため GPS が先。
+        val provider = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
             .firstOrNull { manager.isProviderEnabled(it) } ?: return null
 
         val fresh = withTimeoutOrNull(15_000) {
