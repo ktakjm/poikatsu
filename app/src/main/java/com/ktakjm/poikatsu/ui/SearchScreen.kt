@@ -204,7 +204,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                 // 地図画面は NearbyPane 内の BottomSheetScaffold が独自バーを持つので外側は出さない
                 state.nearby != null -> Unit
                 else -> TopAppBar(
-                    title = { Text("対象チェーン店") },
+                    title = { Text("ポイ活ナビ") },
                     actions = {
                         IconButton(onClick = viewModel::onOpenSettings) {
                             Icon(Icons.Default.Settings, contentDescription = "設定")
@@ -226,13 +226,13 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         selected = state.nearby == null,
                         onClick = { if (state.nearby != null) viewModel.onCloseNearby() },
                         icon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        label = { Text("探す") },
+                        label = { Text("検索") },
                     )
                     NavigationBarItem(
                         selected = state.nearby != null,
                         onClick = { if (state.nearby == null) onNearbyClick() },
                         icon = { Icon(Icons.Default.Place, contentDescription = null) },
-                        label = { Text("近く") },
+                        label = { Text("周辺") },
                     )
                 }
             }
