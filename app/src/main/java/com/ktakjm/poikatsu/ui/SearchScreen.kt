@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -101,6 +102,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.KeyboardType
@@ -971,6 +973,10 @@ private fun NearbyPane(
     // 「詳細を確認」下端が欠けないよう覗き高さを内容まで伸ばす。収まるなら従来どおり 220 のまま。
     val listPeek = 220.dp
     val density = LocalDensity.current
+    // シート展開時の最大高さ: 上部コントロール(検索バー+「このエリアを検索」)の下で止める
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    val topControlsHeight = topInset + 208.dp
+    val sheetMaxHeight = screenHeight - topControlsHeight
     var previewSheetPeek by remember { mutableStateOf<Dp?>(null) }
     val sheetPeek = if (selectedPlace != null) {
         previewSheetPeek?.let { maxOf(listPeek, it) } ?: listPeek
@@ -1003,58 +1009,55 @@ private fun NearbyPane(
                     )
                 }
             } else {
-                SheetAttribution()
-                // 絞り込み(レンズ)。絞るものが在るか、チェーン絞り込み中のとき出す。
-                // peek を圧迫しないよう横スクロールの1行。半径は地図ズームで決まるのでチップは持たない。
-                if (nearby.places.isNotEmpty() || merchantFilter != null) {
-                    NearbyFilterBar(
-                        categories = categories,
-                        selectedCategories = selectedCategories,
-                        presentChains = presentChains,
-                        merchantFilter = merchantFilter,
-                        onToggleCategory = onToggleCategory,
-                        onSelectChain = onSelectChain,
-                        onClearChain = onClearChain,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                    Spacer(Modifier.height(8.dp))
-                }
-                // 検索中心からの距離順リスト(還元率・距離)。並びは ViewModel で確定済み。
-                // 表示は絞り込み後の visiblePlaces。空の理由を3通りで出し分ける。
-                if (visiblePlaces.isEmpty()) {
-                    Text(
-                        when {
-                            merchantFilter != null ->
-                                "「${merchantFilter.name}」はこの範囲にありません。地図を動かすか、絞り込みを解除してください。"
-                            nearby.places.isEmpty() ->
-                                "この範囲に対象施策のある店舗が見つかりませんでした。地図を動かして探してください。"
-                            else -> "選択中のジャンルに該当する周辺店舗がありません。"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    )
-                } else {
-                    LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
-                        items(visiblePlaces, key = { "${it.lat},${it.lon},${it.name}" }) { place ->
-                            ListItem(
-                                headlineContent = { Text(place.name) },
-                                supportingContent = {
-                                    Text("${distanceLabel(place.distanceMeters, originName)}・${place.merchant?.category.orEmpty()}")
-                                },
-                                trailingContent = {
-                                    place.bestRate?.let {
-                                        Text(
-                                            "${trimRate(it)}%",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = MaterialTheme.colorScheme.primary,
-                                        )
-                                    }
-                                },
-                                // タップは全画面遷移せず「選択」。地図でその店にセンタリングしプレビューを出す
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onPreviewPlace(place) },
-                            )
+                Column(Modifier.heightIn(max = sheetMaxHeight)) {
+                    SheetAttribution()
+                    if (nearby.places.isNotEmpty() || merchantFilter != null) {
+                        NearbyFilterBar(
+                            categories = categories,
+                            selectedCategories = selectedCategories,
+                            presentChains = presentChains,
+                            merchantFilter = merchantFilter,
+                            onToggleCategory = onToggleCategory,
+                            onSelectChain = onSelectChain,
+                            onClearChain = onClearChain,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    if (visiblePlaces.isEmpty()) {
+                        Text(
+                            when {
+                                merchantFilter != null ->
+                                    "「${merchantFilter.name}」はこの範囲にありません。地図を動かすか、絞り込みを解除してください。"
+                                nearby.places.isEmpty() ->
+                                    "この範囲に対象施策のある店舗が見つかりませんでした。地図を動かして探してください。"
+                                else -> "選択中のジャンルに該当する周辺店舗がありません。"
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                    } else {
+                        LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+                            items(visiblePlaces, key = { "${it.lat},${it.lon},${it.name}" }) { place ->
+                                ListItem(
+                                    headlineContent = { Text(place.name) },
+                                    supportingContent = {
+                                        Text("${distanceLabel(place.distanceMeters, originName)}・${place.merchant?.category.orEmpty()}")
+                                    },
+                                    trailingContent = {
+                                        place.bestRate?.let {
+                                            Text(
+                                                "${trimRate(it)}%",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = MaterialTheme.colorScheme.primary,
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onPreviewPlace(place) },
+                                )
+                            }
                         }
                     }
                 }
