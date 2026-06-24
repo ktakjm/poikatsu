@@ -96,6 +96,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
@@ -757,6 +758,7 @@ private fun SearchResultCard(result: MainViewModel.SearchResult, onClick: () -> 
     val stripeColors = result.brandColors
         .mapNotNull { parseBrandColor(it) }
         .ifEmpty { listOf(fallback) }
+    val separatorColor = MaterialTheme.colorScheme.surfaceContainerHigh
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
@@ -770,13 +772,28 @@ private fun SearchResultCard(result: MainViewModel.SearchResult, onClick: () -> 
                         if (stripeColors.size == 1) {
                             drawRect(stripeColors[0])
                         } else {
-                            val segH = size.height / stripeColors.size
+                            val gap = 1.dp.toPx()
+                            val n = stripeColors.size
+                            val segH = (size.height - gap * (n - 1)) / n
+                            val skew = size.width * 0.5f
+                            drawRect(separatorColor)
                             stripeColors.forEachIndexed { i, c ->
-                                drawRect(
-                                    c,
-                                    topLeft = Offset(0f, segH * i),
-                                    size = Size(size.width, segH),
-                                )
+                                val segTop = i * (segH + gap)
+                                val segBot = segTop + segH
+                                val path = Path().apply {
+                                    if (i == 0) {
+                                        moveTo(0f, 0f); lineTo(size.width, 0f)
+                                    } else {
+                                        moveTo(0f, segTop + skew); lineTo(size.width, segTop - skew)
+                                    }
+                                    if (i == n - 1) {
+                                        lineTo(size.width, size.height); lineTo(0f, size.height)
+                                    } else {
+                                        lineTo(size.width, segBot - skew); lineTo(0f, segBot + skew)
+                                    }
+                                    close()
+                                }
+                                drawPath(path, c)
                             }
                         }
                     },
