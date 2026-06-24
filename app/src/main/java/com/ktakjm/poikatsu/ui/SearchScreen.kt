@@ -19,6 +19,9 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -643,7 +646,7 @@ private fun SearchPane(
     query: String,
     categories: List<String>,
     selectedCategories: Set<String>,
-    results: List<Merchant>,
+    results: List<MainViewModel.SearchResult>,
     dataStatus: String,
     refreshing: Boolean,
     onQueryChange: (String) -> Unit,
@@ -707,18 +710,72 @@ private fun SearchPane(
             else "「$query」に一致する店舗が見つかりませんでした。登録済みの高還元施策の対象外の可能性があります。",
             style = MaterialTheme.typography.bodyMedium,
         )
-        else -> LazyColumn {
-            items(results, key = { it.id }) { merchant ->
-                ListItem(
-                    headlineContent = { Text(merchant.name) },
-                    supportingContent = { Text(merchant.category) },
-                    trailingContent = {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+        else -> LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(results, key = { it.merchant.id }) { result ->
+                SearchResultCard(result) { onSelect(result.merchant) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchResultCard(result: MainViewModel.SearchResult, onClick: () -> Unit) {
+    val fallback = MaterialTheme.colorScheme.primary
+    val stripeColors = result.brandColors
+        .mapNotNull { parseBrandColor(it) }
+        .ifEmpty { listOf(fallback) }
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Row(Modifier.height(IntrinsicSize.Min)) {
+            Box(
+                Modifier
+                    .width(6.dp)
+                    .fillMaxHeight()
+                    .drawBehind {
+                        if (stripeColors.size == 1) {
+                            drawRect(stripeColors[0])
+                        } else {
+                            val segH = size.height / stripeColors.size
+                            stripeColors.forEachIndexed { i, c ->
+                                drawRect(
+                                    c,
+                                    topLeft = Offset(0f, segH * i),
+                                    size = Size(size.width, segH),
+                                )
+                            }
+                        }
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSelect(merchant) },
-                )
+            )
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(result.merchant.name, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        result.merchant.category,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "${trimRate(result.bestRate)}%",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    if (result.campaignCount > 1) {
+                        Text(
+                            "${result.campaignCount}件の施策",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
     }

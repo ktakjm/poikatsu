@@ -42,6 +42,14 @@ private const val NEARBY_DEFAULT_ZOOM = 16.0
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
+    data class SearchResult(
+        val merchant: Merchant,
+        val bestRate: Double,
+        val campaignCount: Int,
+        /** ブランドカラー("#RRGGBB")を還元率の高い順に最大3色 */
+        val brandColors: List<String>,
+    )
+
     data class Selection(
         val merchant: Merchant,
         val judgments: List<Judgment>,
@@ -128,7 +136,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val query: String = "",
         val categories: List<String> = emptyList(),
         val selectedCategories: Set<String> = emptySet(),
-        val results: List<Merchant> = emptyList(),
+        val results: List<SearchResult> = emptyList(),
         val selection: Selection? = null,
         val storeCheck: StoreCheckState? = null,
         val dataUpdatedAt: String = "",
@@ -276,8 +284,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     ) = Selection(merchant, judge(merchant), canCheckStore(merchant), storeNameHint, displayName)
 
     /** 検索結果のうち、所有カードで対象になる施策が1つ以上あるチェーンだけ残す(reward 無しは一覧に出さない) */
-    private fun JudgmentEngine.searchRewarded(query: String, categories: Set<String>): List<Merchant> =
-        search(query, categories).filter { judge(it).isNotEmpty() }
+    private fun JudgmentEngine.searchRewarded(query: String, categories: Set<String>): List<SearchResult> =
+        search(query, categories).mapNotNull { merchant ->
+            val judgments = judge(merchant)
+            if (judgments.isEmpty()) return@mapNotNull null
+            SearchResult(
+                merchant = merchant,
+                bestRate = judgments.first().effectiveRate,
+                campaignCount = judgments.size,
+                brandColors = judgments.mapNotNull { it.campaign.brandColor }.distinct().take(3),
+            )
+        }
 
     private fun applyData(loaded: LoadedData) {
         lastLoaded = loaded
