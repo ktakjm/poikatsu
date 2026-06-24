@@ -25,7 +25,7 @@ class DataRepositoryTest {
     private fun repository(fetchRemote: (String) -> String?) = DataRepository(
         readAsset = { name -> assetTexts.getValue(name) },
         cacheDir = File(tempFolder.root, "remote_data"),
-        fetchRemote = fetchRemote,
+        fetchRemote = { name, _ -> fetchRemote(name) },
     )
 
     @Test

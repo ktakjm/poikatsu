@@ -5,7 +5,7 @@
     {
       "id": "smcc_combini_restaurant",
       "issuer": "三井住友カード",
-      "brand_color": "#004831",
+      "brand_color": "#00A94F",
       "name": "対象のコンビニ・飲食店で最大8%還元",
       "payment_instruction": "スマホのVisaタッチ決済 / Mastercardタッチ決済、または対象チェーンのモバイルオーダーで支払う",
       "rate_base": 7.0,

@@ -17,7 +17,7 @@ data class LoadedData(val data: PoikatsuData, val source: DataSource)
 class DataRepository(
     private val readAsset: (String) -> String,
     private val cacheDir: File,
-    private val fetchRemote: (String) -> String?,
+    private val fetchRemote: (String, String) -> String?,
 ) {
     companion object {
         const val MERCHANTS = "merchants.json"
@@ -41,9 +41,9 @@ class DataRepository(
     }
 
     /** 取得・パースのいずれかに失敗したら null(呼び出し側はローカルデータを使い続ける) */
-    fun refresh(): LoadedData? {
-        val merchantsJson = fetchRemote(MERCHANTS) ?: return null
-        val campaignsJson = fetchRemote(CAMPAIGNS) ?: return null
+    fun refresh(ref: String = "main"): LoadedData? {
+        val merchantsJson = fetchRemote(MERCHANTS, ref) ?: return null
+        val campaignsJson = fetchRemote(CAMPAIGNS, ref) ?: return null
         val data = runCatching {
             PoikatsuJson.parse(merchantsJson, campaignsJson, readAsset(PROFILE))
         }.getOrNull() ?: return null

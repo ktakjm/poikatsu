@@ -258,6 +258,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     cards = state.cardSettings,
                     dataStatus = dataStatusLabel(state.dataUpdatedAt, state.dataSource),
                     refreshing = state.refreshing,
+                    dataCommitRef = state.dataCommitRef,
                     onThemeModeChange = viewModel::onSetThemeMode,
                     onDynamicColorChange = viewModel::onSetDynamicColor,
                     onAutoRefreshChange = viewModel::onSetAutoRefresh,
@@ -266,6 +267,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     onCardBrandChange = viewModel::onSetCardBrand,
                     onCardWelcatsuChange = viewModel::onSetCardWelcatsu,
                     onRefresh = viewModel::onManualRefresh,
+                    onDataCommitRefChange = viewModel::onSetDataCommitRef,
                     onBack = viewModel::onCloseSettings,
                 )
                 state.storeCheck != null -> PaddedColumn {
@@ -364,6 +366,7 @@ private fun SettingsScreen(
     cards: List<MainViewModel.CardSetting>,
     dataStatus: String,
     refreshing: Boolean,
+    dataCommitRef: String,
     onThemeModeChange: (ThemeMode) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
     onAutoRefreshChange: (Boolean) -> Unit,
@@ -372,6 +375,7 @@ private fun SettingsScreen(
     onCardBrandChange: (String, String) -> Unit,
     onCardWelcatsuChange: (String, Boolean) -> Unit,
     onRefresh: () -> Unit,
+    onDataCommitRefChange: (String) -> Unit,
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
@@ -429,6 +433,10 @@ private fun SettingsScreen(
             },
             modifier = Modifier.clickable(enabled = !refreshing, onClick = onRefresh),
         )
+
+        // --- 開発者向け ---
+        SettingsSectionHeader("開発者向け")
+        CommitRefRow(value = dataCommitRef, onChange = onDataCommitRefChange)
 
         // --- このアプリ ---
         SettingsSectionHeader("このアプリ")
@@ -593,6 +601,29 @@ private fun SettingsSectionHeader(text: String) {
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun CommitRefRow(value: String, onChange: (String) -> Unit) {
+    var text by remember(value) { mutableStateOf(value) }
+    ListItem(
+        headlineContent = { Text("データ取得先 commit") },
+        supportingContent = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it.take(40) },
+                placeholder = { Text("空欄 = main") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            )
+        },
+        trailingContent = {
+            TextButton(
+                onClick = { onChange(text) },
+                enabled = text.trim() != value,
+            ) { Text("適用") }
+        },
     )
 }
 

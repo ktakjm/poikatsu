@@ -39,6 +39,8 @@ data class AppSettings(
     val dynamicColor: Boolean = true,
     val autoRefresh: Boolean = true,
     val cardOverrides: Map<String, CardOverride> = emptyMap(),
+    /** データ取得先の Git ref(short commit hash 等)。空文字列は main を使う */
+    val dataCommitRef: String = "",
 )
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore("settings")
@@ -57,6 +59,7 @@ class SettingsRepository(private val context: Context) {
         val DYNAMIC = booleanPreferencesKey("dynamic_color")
         val AUTO_REFRESH = booleanPreferencesKey("auto_refresh")
         val CARD_OVERRIDES = stringPreferencesKey("card_overrides")
+        val DATA_COMMIT_REF = stringPreferencesKey("data_commit_ref")
     }
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -67,6 +70,7 @@ class SettingsRepository(private val context: Context) {
             dynamicColor = prefs[Keys.DYNAMIC] ?: true,
             autoRefresh = prefs[Keys.AUTO_REFRESH] ?: true,
             cardOverrides = prefs.decodeOverrides(),
+            dataCommitRef = prefs[Keys.DATA_COMMIT_REF] ?: "",
         )
     }
 
@@ -80,6 +84,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setAutoRefresh(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.AUTO_REFRESH] = enabled }
+    }
+
+    suspend fun setDataCommitRef(ref: String) {
+        context.settingsDataStore.edit { it[Keys.DATA_COMMIT_REF] = ref.trim() }
     }
 
     suspend fun setOwned(campaignId: String, owned: Boolean) =

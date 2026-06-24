@@ -176,6 +176,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val autoRefresh: Boolean = true,
         /** 設定画面の「マイカード」用カタログ(未所有カードも含む全候補) */
         val cardSettings: List<CardSetting> = emptyList(),
+        val dataCommitRef: String = "",
     )
 
     /** 設定画面のカード1枚分の表示・編集状態(profile カタログ + ユーザー差分のマージ結果) */
@@ -207,7 +208,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             app.assets.open(name).bufferedReader().use { it.readText() }
         },
         cacheDir = File(app.filesDir, "remote_data"),
-        fetchRemote = GithubRawClient::fetch,
+        fetchRemote = { fileName, ref -> GithubRawClient.fetch(fileName, ref) },
     )
 
     private val settingsRepo = SettingsRepository(app)
@@ -242,7 +243,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // DataStore の設定変更を購読し、変わるたびにエンジン・状態を作り直す
     private val settingsJob: Job = settingsRepo.settings
-        .onEach { lastSettings = it; rebuild() }
+        .onEach { new ->
+            val refChanged = lastSettings.dataCommitRef != new.dataCommitRef
+            lastSettings = new
+            rebuild()
+            if (refChanged) refresh(force = true)
+        }
         .launchIn(viewModelScope)
 
     /** アプリがフォアグラウンドに来るたびに呼ぶ。自動更新 OFF のときは取得しない */
@@ -262,7 +268,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             initialLoad.join() // ローカルロード完了前にリモート結果で上書きされない順序を保証
             _state.update { it.copy(refreshing = true) }
-            val loaded = repository.refresh()
+            val ref = lastSettings.dataCommitRef.ifBlank { "main" }
+            val loaded = repository.refresh(ref)
             if (loaded != null) {
                 lastFetchSucceededAt = System.currentTimeMillis()
                 applyData(loaded)
@@ -367,6 +374,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 dynamicColor = settings.dynamicColor,
                 autoRefresh = settings.autoRefresh,
                 cardSettings = cardSettings,
+                dataCommitRef = settings.dataCommitRef,
             )
         }
     }
@@ -826,6 +834,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onSetDynamicColor(enabled: Boolean) = viewModelScope.launch { settingsRepo.setDynamicColor(enabled) }
 
     fun onSetAutoRefresh(enabled: Boolean) = viewModelScope.launch { settingsRepo.setAutoRefresh(enabled) }
+
+    fun onSetDataCommitRef(ref: String) = viewModelScope.launch { settingsRepo.setDataCommitRef(ref) }
 
     fun onSetCardOwned(campaignId: String, owned: Boolean) =
         viewModelScope.launch { settingsRepo.setOwned(campaignId, owned) }
