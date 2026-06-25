@@ -1,6 +1,7 @@
 package com.ktakjm.poikatsu.ui
 
 import android.app.Application
+import android.location.Address
 import android.location.Geocoder
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
@@ -734,6 +735,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // --- 地名検索(起点コントロール) ---
 
+    private suspend fun geocodeQuery(geocoder: Geocoder, query: String): List<Address> {
+        return if (Build.VERSION.SDK_INT >= 33) {
+            suspendCancellableCoroutine { cont ->
+                geocoder.getFromLocationName(query, 5) { addresses ->
+                    if (cont.isActive) cont.resume(addresses)
+                }
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            geocoder.getFromLocationName(query, 5) ?: emptyList()
+        }
+    }
+
     fun onGeocode(query: String) {
         if (query.isBlank()) {
             _state.update { it.copy(geocodeCandidates = emptyList(), isGeocoding = false) }
@@ -748,17 +762,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             val geocoder = Geocoder(app, Locale.JAPAN)
             val candidates = try {
-                val addresses = if (Build.VERSION.SDK_INT >= 33) {
-                    suspendCancellableCoroutine { cont ->
-                        geocoder.getFromLocationName(query, 5) { addresses ->
-                            if (cont.isActive) cont.resume(addresses)
-                        }
-                    }
+                val primary = geocodeQuery(geocoder, query)
+                val stationSuffix = "駅"
+                val extra = if (!query.endsWith(stationSuffix)) {
+                    geocodeQuery(geocoder, query + stationSuffix)
                 } else {
-                    @Suppress("DEPRECATION")
-                    geocoder.getFromLocationName(query, 5) ?: emptyList()
+                    emptyList()
                 }
-                addresses.mapNotNull { addr ->
+                val seen = mutableSetOf<Pair<Double, Double>>()
+                (primary + extra).mapNotNull { addr ->
+                    val key = Pair(
+                        (addr.latitude * 1e5).toLong() / 1e5,
+                        (addr.longitude * 1e5).toLong() / 1e5,
+                    )
+                    if (!seen.add(key)) return@mapNotNull null
                     val name = addr.featureName
                         ?: addr.getAddressLine(0)?.split(",")?.firstOrNull()?.trim()
                         ?: return@mapNotNull null
