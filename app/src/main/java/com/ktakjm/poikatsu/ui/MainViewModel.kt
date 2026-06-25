@@ -35,10 +35,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 
 /** 「近く」初回・「現在地で検索」時の既定半径(m)。以降の「このエリアを検索」は地図の可視範囲から算出する */
-private const val NEARBY_DEFAULT_RADIUS_M = 1000
+private const val NEARBY_DEFAULT_RADIUS_M = 2000
 
 /** 「近く」初回・「現在地で検索」時の既定ズーム。可視範囲検索では各回の地図ズームを引き継ぐ */
 private const val NEARBY_DEFAULT_ZOOM = 16.0
+
+/** 500m 以内の店舗がこの件数未満なら引きズーム(NEARBY_WIDE_ZOOM)にする */
+private const val NEARBY_DENSE_THRESHOLD = 10
+private const val NEARBY_DENSE_RADIUS_M = 500
+private const val NEARBY_WIDE_ZOOM = 15.0
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -428,6 +433,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 gen, location.latitude, location.longitude, location.latitude, location.longitude,
                 location.latitude, location.longitude,
                 radiusM = NEARBY_DEFAULT_RADIUS_M, zoom = NEARBY_DEFAULT_ZOOM,
+                adaptZoom = true,
             )
         }
     }
@@ -478,6 +484,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         originLon: Double,
         radiusM: Int,
         zoom: Double,
+        adaptZoom: Boolean = false,
     ) {
         val engine = engine ?: return
         val pois = YolpClient.fetchNearby(centerLat, centerLon, radiusM = radiusM)
@@ -516,6 +523,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val m = p.merchant
                 if (m == null) "?:${p.name}" else "${m.id}:${engine.normalizedBranch(m, p.name)}"
             }
+        val effectiveZoom = if (adaptZoom) {
+            val nearCount = places.count { it.distanceFromCenter <= NEARBY_DENSE_RADIUS_M }
+            if (nearCount < NEARBY_DENSE_THRESHOLD) NEARBY_WIDE_ZOOM else zoom
+        } else {
+            zoom
+        }
         applyNearbyIfCurrent(
             gen,
             NearbyUi(
@@ -524,7 +537,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 centerLon = centerLon,
                 userLat = userLat,
                 userLon = userLon,
-                zoom = zoom,
+                zoom = effectiveZoom,
             ),
         )
     }
@@ -791,6 +804,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 userLat ?: place.lat, userLon ?: place.lon,
                 place.lat, place.lon,
                 radiusM = NEARBY_DEFAULT_RADIUS_M, zoom = NEARBY_DEFAULT_ZOOM,
+                adaptZoom = true,
             )
         }
     }
