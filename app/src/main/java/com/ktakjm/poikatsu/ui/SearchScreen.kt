@@ -121,6 +121,7 @@ import com.ktakjm.poikatsu.data.ThemeMode
 import com.ktakjm.poikatsu.domain.Judgment
 import com.ktakjm.poikatsu.domain.StoreEligibility
 import com.ktakjm.poikatsu.domain.StoreVerdict
+import com.ktakjm.poikatsu.util.GeoMath
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningColor
 import com.ktakjm.poikatsu.ui.theme.warningContainerColor
@@ -861,8 +862,17 @@ private fun NearbyPane(
     topInset: Dp,
 ) {
     val selectedPlace = nearby.selectedPlace
-    // 戻る: プレビュー中なら一覧へ戻し、そうでなければ近くのお店モードを閉じる
-    BackHandler(onBack = { if (selectedPlace != null) onClearPreview() else onClose() })
+    // 同一地点の複合ピンをタップしたときの選択状態(BottomSheet でリスト表示)
+    var compoundPlaces by remember { mutableStateOf<List<MainViewModel.NearbyPlace>?>(null) }
+    LaunchedEffect(selectedPlace) { compoundPlaces = null }
+    // 戻る: プレビュー → 複合リスト → 一覧 → モード閉じ の順に遡る
+    BackHandler(onBack = {
+        when {
+            selectedPlace != null -> onClearPreview()
+            compoundPlaces != null -> compoundPlaces = null
+            else -> onClose()
+        }
+    })
 
     val center = if (nearby.centerLat != null && nearby.centerLon != null) {
         MapPoint(nearby.centerLat, nearby.centerLon)
@@ -926,17 +936,35 @@ private fun NearbyPane(
             .sortedWith(compareByDescending<Map.Entry<Merchant, Int>> { it.value }.thenBy { it.key.reading })
             .map { it.key to it.value }
     }
-    // ピンは位置が固定なので places に対して安定に作る(パン/ズームでは作り直さない)。
-    // 選択状態が変わったら強調ピンを描き直すため selectedPlace も remember キーに含める。
+    // 同一地点(5m 以内)の店舗をグルーピングし、複合マーカーで表示する。
+    // タップでズーム分解できない重なりを、クラスタバッジと同じ見た目で一つにまとめる。
     val markers = remember(visiblePlaces, selectedPlace) {
-        visiblePlaces.map { place ->
-            MapMarker(
-                point = MapPoint(place.lat, place.lon),
-                label = place.name,
-                colorHexes = place.brandColors,
-                selected = place == selectedPlace,
-                onClick = { onPreviewPlace(place) },
-            )
+        val groups = groupByProximity(visiblePlaces)
+        groups.flatMap { group ->
+            if (group.size == 1) {
+                val place = group[0]
+                listOf(
+                    MapMarker(
+                        point = MapPoint(place.lat, place.lon),
+                        label = place.name,
+                        colorHexes = place.brandColors,
+                        selected = place == selectedPlace,
+                        onClick = { onPreviewPlace(place) },
+                    ),
+                )
+            } else {
+                val rep = group[0]
+                listOf(
+                    MapMarker(
+                        point = MapPoint(rep.lat, rep.lon),
+                        label = "${group.size}件",
+                        colorHexes = group.flatMap { it.brandColors }.distinct(),
+                        selected = group.any { it == selectedPlace },
+                        onClick = { compoundPlaces = group },
+                        groupSize = group.size,
+                    ),
+                )
+            }
         }
     }
 
@@ -953,6 +981,13 @@ private fun NearbyPane(
     // レイアウト確定前に状態変更すると競合し、シートが peek より沈んで「詳細を確認」下端が欠ける。
     LaunchedEffect(selectedPlace) {
         if (selectedPlace != null &&
+            scaffoldState.bottomSheetState.currentValue != SheetValue.PartiallyExpanded
+        ) {
+            scaffoldState.bottomSheetState.partialExpand()
+        }
+    }
+    LaunchedEffect(compoundPlaces) {
+        if (compoundPlaces != null &&
             scaffoldState.bottomSheetState.currentValue != SheetValue.PartiallyExpanded
         ) {
             scaffoldState.bottomSheetState.partialExpand()
@@ -978,7 +1013,7 @@ private fun NearbyPane(
     val topControlsHeight = topInset + 208.dp
     val sheetMaxHeight = screenHeight - topControlsHeight
     var previewSheetPeek by remember { mutableStateOf<Dp?>(null) }
-    val sheetPeek = if (selectedPlace != null) {
+    val sheetPeek = if (selectedPlace != null || compoundPlaces != null) {
         previewSheetPeek?.let { maxOf(listPeek, it) } ?: listPeek
     } else {
         listPeek
@@ -1007,6 +1042,50 @@ private fun NearbyPane(
                         onOpenDetail = { onOpenDetail(selectedPlace) },
                         onClose = onClearPreview,
                     )
+                }
+            } else if (compoundPlaces != null) {
+                // 同一地点の複合ピンをタップ: グループ内の店舗をリストで見せる
+                Column(
+                    modifier = Modifier.onSizeChanged {
+                        previewSheetPeek = with(density) { it.height.toDp() } + COMPACT_HANDLE_HEIGHT
+                    },
+                ) {
+                    SheetAttribution()
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "同じ場所に ${compoundPlaces!!.size} 件",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            IconButton(onClick = { compoundPlaces = null }) {
+                                Icon(Icons.Default.Close, contentDescription = "閉じる")
+                            }
+                        }
+                        compoundPlaces!!.forEach { place ->
+                            ListItem(
+                                headlineContent = { Text(place.name) },
+                                supportingContent = {
+                                    Text("${distanceLabel(place.distanceMeters, originName)}・${place.merchant?.category.orEmpty()}")
+                                },
+                                trailingContent = {
+                                    place.bestRate?.let {
+                                        Text(
+                                            "${trimRate(it)}%",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onPreviewPlace(place) },
+                            )
+                        }
+                        Spacer(Modifier.height(12.dp))
+                    }
                 }
             } else {
                 Column(Modifier.heightIn(max = sheetMaxHeight)) {
@@ -1643,4 +1722,27 @@ private fun parseBrandColor(hex: String?): Color? {
     val digits = hex?.removePrefix("#") ?: return null
     if (digits.length != 6) return null
     return digits.toLongOrNull(16)?.let { Color(0xFF000000 or it) }
+}
+
+/** 同一地点(閾値メートル以内)の店舗をグルーピングする。同一ビル 1F/2F 等の重なり対策 */
+private fun groupByProximity(
+    places: List<MainViewModel.NearbyPlace>,
+    thresholdMeters: Int = 5,
+): List<List<MainViewModel.NearbyPlace>> {
+    val used = BooleanArray(places.size)
+    val groups = mutableListOf<List<MainViewModel.NearbyPlace>>()
+    for (i in places.indices) {
+        if (used[i]) continue
+        used[i] = true
+        val group = mutableListOf(places[i])
+        for (j in i + 1 until places.size) {
+            if (used[j]) continue
+            if (GeoMath.distanceMeters(places[i].lat, places[i].lon, places[j].lat, places[j].lon) <= thresholdMeters) {
+                group.add(places[j])
+                used[j] = true
+            }
+        }
+        groups.add(group)
+    }
+    return groups
 }

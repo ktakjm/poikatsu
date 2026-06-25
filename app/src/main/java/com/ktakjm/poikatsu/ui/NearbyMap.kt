@@ -105,6 +105,8 @@ data class MapMarker(
     /** 一覧/ピンで選択中の店舗。true のピンは大きく・白縁を太くして強調し、最前面に描く */
     val selected: Boolean = false,
     val onClick: () -> Unit,
+    /** 同一地点(同一ビル等)の店舗数。2 以上ならクラスタバッジと同じ見た目で描く */
+    val groupSize: Int = 1,
 )
 
 /**
@@ -275,42 +277,61 @@ fun NearbyMap(
                     }
                 },
                 clusterItemContent = { item ->
-                    val selected = item.marker.selected
-                    val sizeDp = if (selected) 34.dp else 24.dp
-                    val colors = item.marker.colorHexes.map { Color(parseColor(it)) }
-                        .ifEmpty { listOf(Color(parseColor(null))) }
-                    val strokeWidth = if (selected) 3.dp else 2.dp
-                    Box(
-                        modifier = Modifier
-                            .size(sizeDp)
-                            .drawBehind {
-                                val sw = strokeWidth.toPx()
-                                val inset = sw / 2f
-                                val ovalSize = Size(size.width - sw, size.height - sw)
-                                val ovalOffset = Offset(inset, inset)
-                                if (colors.size == 1) {
-                                    drawOval(colors[0], topLeft = ovalOffset, size = ovalSize)
-                                } else {
-                                    val sweep = 360f / colors.size
-                                    var start = -45f
-                                    colors.forEach { c ->
-                                        drawArc(
-                                            c, start, sweep,
-                                            useCenter = true,
-                                            topLeft = ovalOffset,
-                                            size = ovalSize,
-                                        )
-                                        start += sweep
-                                    }
-                                }
-                                drawOval(
-                                    Color.White,
-                                    topLeft = ovalOffset,
-                                    size = ovalSize,
-                                    style = Stroke(width = sw),
+                    if (item.marker.groupSize > 1) {
+                        // 同一地点の複合ピン: ライブラリクラスタと同じバッジで描く
+                        Surface(
+                            modifier = Modifier.size(40.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.inverseSurface,
+                            contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                            border = BorderStroke(2.dp, Color.White),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "${item.marker.groupSize}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
                                 )
-                            },
-                    )
+                            }
+                        }
+                    } else {
+                        val selected = item.marker.selected
+                        val sizeDp = if (selected) 34.dp else 24.dp
+                        val colors = item.marker.colorHexes.map { Color(parseColor(it)) }
+                            .ifEmpty { listOf(Color(parseColor(null))) }
+                        val strokeWidth = if (selected) 3.dp else 2.dp
+                        Box(
+                            modifier = Modifier
+                                .size(sizeDp)
+                                .drawBehind {
+                                    val sw = strokeWidth.toPx()
+                                    val inset = sw / 2f
+                                    val ovalSize = Size(size.width - sw, size.height - sw)
+                                    val ovalOffset = Offset(inset, inset)
+                                    if (colors.size == 1) {
+                                        drawOval(colors[0], topLeft = ovalOffset, size = ovalSize)
+                                    } else {
+                                        val sweep = 360f / colors.size
+                                        var start = -45f
+                                        colors.forEach { c ->
+                                            drawArc(
+                                                c, start, sweep,
+                                                useCenter = true,
+                                                topLeft = ovalOffset,
+                                                size = ovalSize,
+                                            )
+                                            start += sweep
+                                        }
+                                    }
+                                    drawOval(
+                                        Color.White,
+                                        topLeft = ovalOffset,
+                                        size = ovalSize,
+                                        style = Stroke(width = sw),
+                                    )
+                                },
+                        )
+                    }
                 },
             )
         }
