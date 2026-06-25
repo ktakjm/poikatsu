@@ -1,6 +1,7 @@
 package com.ktakjm.poikatsu
 
 import com.ktakjm.poikatsu.data.OverpassClient
+import com.ktakjm.poikatsu.data.Poi
 import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.YolpClient
 import com.ktakjm.poikatsu.domain.JudgmentEngine
@@ -195,6 +196,60 @@ class YolpParseTest {
     @Test
     fun `Feature が無い空レスポンスは空リスト`() {
         assertEquals(0, YolpClient.parse("""{ "ResultInfo": { "Count": 0 } }""").size)
+    }
+}
+
+class YolpClipTest {
+
+    // 中心(35.0, 135.0)から北に m メートルの POI(緯度1度≒111195m)
+    private fun poi(name: String, meters: Double) = Poi(
+        name = name, branch = null, brand = null,
+        lat = 35.0 + meters / 111195.0, lon = 135.0,
+    )
+
+    @Test
+    fun `打ち切りソースの最遠距離で全ソースを共通半径に切り捨てる`() {
+        // 高密度ソース: 上限到達(truncated)。最遠は 200m → 共通カバー半径 200m
+        val dense = YolpClient.SourceResult(
+            pois = listOf(poi("A", 100.0), poi("B", 200.0)),
+            truncated = true,
+        )
+        // 疎ソース: 上限未到達。近い C(150m)は残り、遠い D(5000m)は切り捨て
+        val sparse = YolpClient.SourceResult(
+            pois = listOf(poi("C", 150.0), poi("D", 5000.0)),
+            truncated = false,
+        )
+        val merged = YolpClient.mergeAndClip(35.0, 135.0, listOf(dense, sparse))
+        assertEquals(setOf("A", "B", "C"), merged.map { it.name }.toSet())
+    }
+
+    @Test
+    fun `打ち切りソースが無ければ切り捨てない`() {
+        val s = YolpClient.SourceResult(
+            pois = listOf(poi("X", 100.0), poi("Y", 8000.0)),
+            truncated = false,
+        )
+        val merged = YolpClient.mergeAndClip(35.0, 135.0, listOf(s))
+        assertEquals(2, merged.size)
+    }
+
+    @Test
+    fun `共通カバー半径は打ち切りソースの最遠距離の最小値`() {
+        // 2 つの打ち切りソース。最遠 300m と 150m → 共通半径は小さい方の 150m
+        val a = YolpClient.SourceResult(listOf(poi("A", 300.0)), truncated = true)
+        val b = YolpClient.SourceResult(listOf(poi("B", 150.0)), truncated = true)
+        // 別の疎ソースに 200m の点 → 150m 超で切り捨て、A(300m)も切り捨て、B(150m)は残る
+        val c = YolpClient.SourceResult(listOf(poi("C", 200.0)), truncated = false)
+        val merged = YolpClient.mergeAndClip(35.0, 135.0, listOf(a, b, c))
+        assertEquals(setOf("B"), merged.map { it.name }.toSet())
+    }
+
+    @Test
+    fun `座標と名前が同じ POI はソースを跨いで重複排除される`() {
+        val a = YolpClient.SourceResult(listOf(poi("Same", 100.0)), truncated = false)
+        val b = YolpClient.SourceResult(listOf(poi("Same", 100.0)), truncated = false)
+        val merged = YolpClient.mergeAndClip(35.0, 135.0, listOf(a, b))
+        assertEquals(1, merged.size)
     }
 }
 
