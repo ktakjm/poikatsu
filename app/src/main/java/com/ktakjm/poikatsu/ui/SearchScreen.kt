@@ -251,6 +251,11 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
         } else {
             innerPadding
         }
+        // ローディング中は前回の起点名を維持(新起点名+旧距離の不整合を避ける)
+        val stableOriginName = remember { mutableStateOf(state.nearbyOrigin?.name) }
+        if (state.nearby?.loading != true) {
+            stableOriginName.value = state.nearbyOrigin?.name
+        }
         Box(Modifier.fillMaxSize().padding(contentPadding)) {
             when {
                 state.loading -> Centered { CircularProgressIndicator() }
@@ -302,7 +307,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     selectedCategories = state.nearbySelectedCategories,
                     merchantFilter = state.nearbyMerchantFilter,
                     searchFailed = state.nearbySearchFailed,
-                    originName = state.nearbyOrigin?.name,
+                    originName = stableOriginName.value,
                     geocodeCandidates = state.geocodeCandidates,
                     isGeocoding = state.isGeocoding,
                     onClose = viewModel::onCloseNearby,
