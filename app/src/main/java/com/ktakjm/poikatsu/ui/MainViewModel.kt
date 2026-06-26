@@ -776,15 +776,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         (addr.longitude * 1e5).toLong() / 1e5,
                     )
                     if (!seen.add(key)) return@mapNotNull null
-                    val name = addr.featureName
+                    val rawName = addr.featureName
                         ?: addr.getAddressLine(0)?.split(",")?.firstOrNull()?.trim()
                         ?: return@mapNotNull null
-                    val fullAddress = buildString {
+                    // featureName が番地(数字+ハイフン)や国名なら施設名ではない
+                    val useFullAddress = addr.featureName?.all { c ->
+                        c in '0'..'9' || c in '０'..'９' || c == '-' || c == '−' || c == 'ー'
+                    } == true || addr.featureName == addr.countryName
+                    val componentAddress = buildString {
                         addr.adminArea?.let { append(it) }
                         addr.locality?.let { if (it != addr.adminArea) append(it) }
                         addr.subLocality?.let { append(it) }
                         addr.thoroughfare?.let { append(it) }
                         addr.subThoroughfare?.let { append(it) }
+                    }
+                    // 番地等の場合のみ getAddressLine(0) を優先(施設名付き住所の混入を避ける)
+                    val fullAddress = if (useFullAddress) {
+                        val addressLine = addr.getAddressLine(0)
+                            ?.replace(Regex("^日本[、,]\\s*"), "")
+                            ?.replace(Regex("〒[\\S]+\\s*"), "")
+                            ?.trim()
+                        if (addressLine != null && addressLine.length > componentAddress.length)
+                            addressLine
+                        else componentAddress
+                    } else {
+                        componentAddress
+                    }
+                    val name = if (useFullAddress && fullAddress.isNotBlank()) {
+                        fullAddress
+                    } else {
+                        rawName
                     }
                     GeocodedPlace(name, fullAddress, addr.latitude, addr.longitude)
                 }

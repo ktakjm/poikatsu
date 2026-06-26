@@ -1366,7 +1366,8 @@ private fun NearbyRetryState(
 
 private fun distanceLabel(meters: Int, originName: String?): String {
     val prefix = if (originName != null) {
-        val short = if (originName.length > 10) originName.take(10) + "…" else originName
+        val trimmed = originName.replace(Regex("^.{2,3}[都道府県]"), "")
+        val short = if (trimmed.length > 10) trimmed.take(10) + "…" else trimmed
         "${short}から"
     } else {
         "現在地から"
