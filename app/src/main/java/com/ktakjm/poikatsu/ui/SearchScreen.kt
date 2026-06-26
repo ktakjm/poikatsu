@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -1013,16 +1014,16 @@ private fun NearbyPane(
     // 「詳細を確認」下端が欠けないよう覗き高さを内容まで伸ばす。収まるなら従来どおり 220 のまま。
     val listPeek = 220.dp
     val density = LocalDensity.current
-    // シート展開時の最大高さ: 上部コントロール(検索バー+「このエリアを検索」)の下で止める
-    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-    val topControlsHeight = topInset + 208.dp
-    val sheetMaxHeight = screenHeight - topControlsHeight
     var previewSheetPeek by remember { mutableStateOf<Dp?>(null) }
     val sheetPeek = if (selectedPlace != null || compoundPlaces != null) {
         previewSheetPeek?.let { maxOf(listPeek, it) } ?: listPeek
     } else {
         listPeek
     }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // シート展開時の最大高さ: 検索バー上端まで(検索バーは覆う)。
+        // 検索バーは topInset + 8.dp から始まるので、そこをシートの上限にする。
+        val sheetMaxHeight = maxHeight - topInset - 16.dp
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
         sheetPeekHeight = sheetPeek,
@@ -1172,6 +1173,7 @@ private fun NearbyPane(
             topInset = topInset,
             bottomPadding = sheetPeek,
         )
+    }
     }
 }
 
