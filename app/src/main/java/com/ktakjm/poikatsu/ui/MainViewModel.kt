@@ -46,6 +46,14 @@ private const val NEARBY_DENSE_THRESHOLD = 10
 private const val NEARBY_DENSE_RADIUS_M = 500
 private const val NEARBY_WIDE_ZOOM = 15.0
 
+/** 位置情報を取得できないときのフォールバック地点(新宿駅) */
+private val FALLBACK_PLACE = MainViewModel.GeocodedPlace(
+    name = "新宿駅",
+    fullAddress = "東京都新宿区新宿三丁目",
+    lat = 35.6896,
+    lon = 139.7006,
+)
+
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     data class SearchResult(
@@ -402,10 +410,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** 位置情報パーミッション取得済みの前提で呼ぶ(UI側でリクエスト) */
     fun fetchNearby() {
         if (engine == null) return
+        val isInitial = _state.value.nearby?.centerLat == null
         val gen = ++nearbyGeneration
         // 再取得(📍)中も直前の地図・一覧は残し loading だけ立てる(画面をまっさらにしない)。
         // 初回は prev が無い=NearbyUi() なので center も null となり全画面ローディングになる。
-        // 📍 は現在地起点に戻すため nearbyOrigin もクリアする。
+        // nearbyOrigin は位置情報の取得に成功してからクリアする(失敗時に起点表示が変わらないように)。
         _state.update {
             val base = it.nearby ?: NearbyUi()
             it.copy(
@@ -417,25 +426,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ),
                 selection = null,
                 storeCheck = null,
-                nearbyOrigin = null,
                 geocodeCandidates = emptyList(),
                 isGeocoding = false,
             )
         }
         viewModelScope.launch(Dispatchers.IO) {
-            val location = locationProvider.currentLocation()
-            if (location == null) {
-                failNearby(gen, "現在地を取得できませんでした。位置情報設定を確認してください")
-                return@launch
+            val denied = !locationProvider.hasPermission()
+            val location = if (denied) null else locationProvider.currentLocation()
+            if (location != null) {
+                _state.update { it.copy(nearbyOrigin = null) }
+                setNearbyPhase(gen, NearbyLoadPhase.SEARCHING)
+                loadNearbyAround(
+                    gen, location.latitude, location.longitude, location.latitude, location.longitude,
+                    location.latitude, location.longitude,
+                    radiusM = NEARBY_DEFAULT_RADIUS_M, zoom = NEARBY_DEFAULT_ZOOM,
+                    adaptZoom = true,
+                )
+            } else {
+                val msg = if (denied) "位置情報の許可が必要です。端末の設定からこのアプリに位置情報を許可してください"
+                    else "現在地を取得できませんでした。位置情報設定を確認してください"
+                if (isInitial) fallbackToDefaultPlace(gen, msg) else failNearby(gen, msg)
             }
-            setNearbyPhase(gen, NearbyLoadPhase.SEARCHING)
-            // 起点も青ドットも現在地。初回/現在地検索は既定半径・既定ズームで取り直す
-            loadNearbyAround(
-                gen, location.latitude, location.longitude, location.latitude, location.longitude,
-                location.latitude, location.longitude,
-                radiusM = NEARBY_DEFAULT_RADIUS_M, zoom = NEARBY_DEFAULT_ZOOM,
-                adaptZoom = true,
-            )
         }
     }
 
@@ -581,7 +592,53 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onLocationDenied() {
-        _state.update { it.copy(nearby = NearbyUi(error = "位置情報の許可が必要です。端末の設定からこのアプリに位置情報を許可してください")) }
+        if (engine == null) return
+        val isInitial = _state.value.nearby?.centerLat == null
+        val message = "位置情報の許可が必要です。端末の設定からこのアプリに位置情報を許可してください"
+        if (!isInitial) {
+            failNearby(nearbyGeneration, message)
+            return
+        }
+        val gen = ++nearbyGeneration
+        _state.update {
+            val base = it.nearby ?: NearbyUi()
+            it.copy(
+                nearby = base.copy(
+                    loading = true,
+                    loadingPhase = NearbyLoadPhase.SEARCHING,
+                    error = null,
+                    selectedPlace = null,
+                ),
+                selection = null,
+                storeCheck = null,
+                nearbyOrigin = null,
+                geocodeCandidates = emptyList(),
+                isGeocoding = false,
+            )
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            fallbackToDefaultPlace(gen, message)
+        }
+    }
+
+    /**
+     * 位置情報が取れないとき、デフォルト地点(新宿駅)で地図を表示しつつ Snackbar で通知する。
+     * 起点は nearbyOrigin にセットし、距離表示は「新宿駅から○○m」になる。
+     */
+    private fun fallbackToDefaultPlace(gen: Int, message: String) {
+        val place = FALLBACK_PLACE
+        _state.update {
+            if (gen != nearbyGeneration) return@update it
+            it.copy(nearbyOrigin = place, nearbySearchFailed = message)
+        }
+        setNearbyPhase(gen, NearbyLoadPhase.SEARCHING)
+        loadNearbyAround(
+            gen, place.lat, place.lon,
+            place.lat, place.lon,
+            place.lat, place.lon,
+            radiusM = NEARBY_DEFAULT_RADIUS_M, zoom = NEARBY_DEFAULT_ZOOM,
+            adaptZoom = true,
+        )
     }
 
     fun onCloseNearby() {
