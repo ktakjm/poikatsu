@@ -27,27 +27,34 @@ class LocationProvider(private val context: Context) {
     suspend fun currentLocation(): Location? {
         if (!hasPermission()) return null
         val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        // GPS を優先し、なければ NETWORK(Wi-Fi/基地局)にフォールバック。
-        // エミュレータの位置注入は GPS プロバイダにのみ効くため GPS が先。
-        val provider = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
-            .firstOrNull { manager.isProviderEnabled(it) } ?: return null
+        // GPS → NETWORK の順に試行。GPS は屋内等でタイムアウトしやすいので
+        // 失敗したら NETWORK(Wi-Fi/基地局)にフォールバックする。
+        val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+            .filter { manager.isProviderEnabled(it) }
+        if (providers.isEmpty()) return null
 
-        val fresh = withTimeoutOrNull(15_000) {
-            suspendCancellableCoroutine { cont ->
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    manager.getCurrentLocation(provider, null, context.mainExecutor) { location ->
-                        if (cont.isActive) cont.resume(location)
+        for (provider in providers) {
+            val timeout = if (provider == LocationManager.GPS_PROVIDER) 5_000L else 10_000L
+            val fresh = withTimeoutOrNull(timeout) {
+                suspendCancellableCoroutine { cont ->
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        manager.getCurrentLocation(provider, null, context.mainExecutor) { location ->
+                            if (cont.isActive) cont.resume(location)
+                        }
+                    } else {
+                        @Suppress("DEPRECATION")
+                        manager.requestSingleUpdate(
+                            provider,
+                            { location -> if (cont.isActive) cont.resume(location) },
+                            Looper.getMainLooper(),
+                        )
                     }
-                } else {
-                    @Suppress("DEPRECATION")
-                    manager.requestSingleUpdate(
-                        provider,
-                        { location -> if (cont.isActive) cont.resume(location) },
-                        Looper.getMainLooper(),
-                    )
                 }
             }
+            if (fresh != null) return fresh
+            val cached = runCatching { manager.getLastKnownLocation(provider) }.getOrNull()
+            if (cached != null) return cached
         }
-        return fresh ?: runCatching { manager.getLastKnownLocation(provider) }.getOrNull()
+        return null
     }
 }
