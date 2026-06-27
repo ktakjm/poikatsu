@@ -26,6 +26,7 @@
 - 還元施策データ(data/*.json)は汎用に保ち、ユーザー固有の前提は data/profile.json に分離する
 - 各社ロゴ画像は商標・著作権の問題があるため使用しない。識別はブランドカラー(campaigns.json の brand_color)で行う
 - 判定ロジックは domain/ 配下に Android 非依存の純 Kotlin で書き、実データ(data/*.json)を使ったユニットテストを維持する
+- ログは **Timber** を使う(`android.util.Log` を直接使わない)。debug ビルドのみ Logcat 出力、release は無出力。domain/ は純 Kotlin を維持するため Timber を使わない。詳細は docs/code-guide.md「9. ログ方針」
 - ビルド確認は `./gradlew :app:testDebugUnitTest :app:assembleDebug`
 
 ## UI・デザイン方針(Material 3 追従)

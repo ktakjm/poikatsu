@@ -1,6 +1,5 @@
 package com.ktakjm.poikatsu.data
 
-import android.util.Log
 import com.ktakjm.poikatsu.BuildConfig
 import com.ktakjm.poikatsu.util.GeoMath
 import java.util.concurrent.TimeUnit
@@ -10,6 +9,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import timber.log.Timber
 
 /**
  * YOLP(Yahoo! ローカルサーチAPI)で周辺の店舗を取得する。現在の既定データ源。
@@ -35,7 +35,6 @@ import okhttp3.Request
  */
 object YolpClient {
 
-    private const val TAG = "YolpClient"
     private const val ENDPOINT = "https://map.yahooapis.jp/search/local/V1/localSearch"
 
     private const val PER_PAGE = 100 // YOLP の results 上限(1 リクエストの最大件数)
@@ -101,7 +100,7 @@ object YolpClient {
     fun fetchNearby(lat: Double, lon: Double, radiusM: Int): List<Poi>? {
         val appId = BuildConfig.YOLP_APP_ID
         if (appId.isBlank()) {
-            Log.w(TAG, "YOLP_APP_ID 未設定。local.properties に YOLP_APP_ID を記入してください")
+            Timber.w("YOLP_APP_ID 未設定。local.properties に YOLP_APP_ID を記入してください")
             return null
         }
         // YOLP の dist はキロメートル(最大 20、0 不可)。半径は 500m〜3km なので 0.5〜3.0。
@@ -167,7 +166,7 @@ object YolpClient {
             val start = 1 + page * PER_PAGE // YOLP の start は 1 始まり
             val pagePois = runCatching { requestPage(appId, lat, lon, distKm, gc, query, start) }
                 .getOrElse { e ->
-                    Log.w(TAG, "YOLP request error ($label start=$start)", e)
+                    Timber.w(e, "YOLP request error ($label start=$start)")
                     null
                 }
             if (pagePois == null) return if (anyPage) SourceResult(out, truncated) else null
@@ -176,7 +175,7 @@ object YolpClient {
             if (pagePois.size < PER_PAGE) break // これ以上ページが無い
             if (page == MAX_PAGES - 1) {
                 truncated = true
-                Log.i(TAG, "YOLP $label が上限 ${MAX_PAGES * PER_PAGE} 件に到達。さらに遠方は取りこぼしの可能性")
+                Timber.i("YOLP $label が上限 ${MAX_PAGES * PER_PAGE} 件に到達。さらに遠方は取りこぼしの可能性")
             }
         }
         return SourceResult(out, truncated)
@@ -209,7 +208,7 @@ object YolpClient {
         val request = Request.Builder().url(url).get().build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                Log.w(TAG, "YOLP HTTP ${response.code}")
+                Timber.w("YOLP HTTP %d", response.code)
                 return null
             }
             val body = response.body?.string() ?: return null

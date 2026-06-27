@@ -80,6 +80,7 @@ dependencies {
     implementation(libs.maps.compose.utils)
     implementation(libs.play.services.maps)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.timber)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

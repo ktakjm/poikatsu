@@ -24,6 +24,7 @@
 | com.google.maps.android:maps-compose-utils(+ 推移的な android-maps-utils) | 地図ピンのクラスタリング(密集ピンを件数バッジにまとめる。2026-06-24 追加) | Apache-2.0 |
 | com.google.android.gms:play-services-maps(+ 推移的な play-services-* / Google Maps SDK) | 地図描画 SDK 本体(maps-compose の依存) | **プロプライエタリ**(Google APIs Terms of Service。OSS ではない) |
 | androidx.datastore:datastore-preferences | 設定(テーマ・マイカード)の永続化(2026-06-19 追加) | Apache-2.0 |
+| com.jakewharton.timber:timber | ログ出力ラッパー(debug ビルドのみ Logcat 出力、release は無出力。2026-06-27 追加) | Apache-2.0 |
 
 **OSS 依存はすべて Apache License 2.0**(コピーレフト/GPL系は一切なし)。**唯一の例外が Google Maps SDK(`play-services-maps`)で、これは OSS ではなくプロプライエタリなサービス SDK**(Google APIs ToS 準拠)。バイナリ同梱はするが、Apache-2.0 §4 のような NOTICE 義務ではなく Google の規約・帰属表示(SDK が自動描画)に従う。判断の背景は下記「方針転換」と [map-data-stack.md](map-data-stack.md)。
 

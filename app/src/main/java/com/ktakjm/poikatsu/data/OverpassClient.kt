@@ -1,12 +1,12 @@
 package com.ktakjm.poikatsu.data
 
-import android.util.Log
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import timber.log.Timber
 
 /**
  * Overpass API(OSM)で周辺の飲食店・コンビニ・スーパーを検索する。無料・APIキー不要。
@@ -15,7 +15,6 @@ import okhttp3.Request
  */
 object OverpassClient {
 
-    private const val TAG = "OverpassClient"
     private const val USER_AGENT = "poikatsu/1.0 (personal use; https://github.com/ktakjm/poikatsu)"
     private const val MAX_RESULTS = 800
 
@@ -58,7 +57,7 @@ object OverpassClient {
         for (endpoint in ENDPOINTS) {
             val result = runCatching { requestPois(endpoint, query) }
                 .getOrElse { e ->
-                    Log.w(TAG, "Overpass request error: $endpoint", e)
+                    Timber.w(e, "Overpass request error: %s", endpoint)
                     null
                 }
             if (result != null) return result // 0件成功(emptyList)はここで返る。null は次のエンドポイントへ
@@ -92,7 +91,7 @@ object OverpassClient {
             .build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                Log.w(TAG, "Overpass HTTP ${response.code} from $endpoint")
+                Timber.w("Overpass HTTP %d from %s", response.code, endpoint)
                 return null
             }
             val body = response.body?.string() ?: return null

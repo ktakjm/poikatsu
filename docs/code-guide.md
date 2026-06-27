@@ -105,6 +105,7 @@ poikatsu/
 └── app/src/
     ├── main/java/com/ktakjm/poikatsu/
     │   ├── MainActivity.kt
+    │   ├── PoikatsuApplication.kt  # Timber 初期化（debug のみ DebugTree）
     │   ├── ui/             # MainViewModel, SearchScreen, NearbyMap, theme/
     │   ├── domain/         # JudgmentEngine（純 Kotlin）
     │   ├── data/           # Models, DataRepository, GithubRawClient,
@@ -394,8 +395,8 @@ sequenceDiagram
 
 - **既定は YOLP ローカルサーチ**。`OverpassClient.fetchNearby` と同一シグネチャの `YolpClient.fetchNearby(lat, lon, radiusM)` にしてあり、ViewModel は呼び先 1 行で差し替わる（`Poi` は `Models.kt` の中立な型）。
 - ⚠️ **YOLP データはキャッシュ禁止**（利用規約 第6条）。POI を Room/DataStore/ファイルへ永続化せず毎回ライブ取得する。アプリ下部に「Web Services by Yahoo! JAPAN」クレジットを常設する（`NearbyPane` のシート上部）。
-- **取りこぼし対策**（駅前など密集地）: YOLP は 1 リクエスト最大 100 件。業種コード `gc` で絞り、`start` で**ページング**（ソースごと最大 5 ページ＝500 件、`sort=dist` で近い順）して 100 件超を取得する。**`gc` はカンマ区切りで複数コードの OR 取得が 1 コールでできる**（実 API で確認済み。スペース区切りは誤動作するので不可）。グルメは `01`（全般）だと新宿駅 3km で 8459 件と過密で、500 件上限＋近い順により中心付近で打ち切られ、後述クリップの共通半径が潰れて密集地で検知数が激減する。そこで対象チェーンが集中する業種だけに **`gc="0123,0115,0101013"`**（ファミレス 0123001＋FF 0123002＋カフェ 0115＋回転寿司 0101013）へ絞り、同条件で約 1870 件まで下げて**コール数を増やさず**半径を確保する。スーパー・コンビニは `0205`（=0205002＋0205001）。`02`/`01` のような上位コードは広すぎて誤マッチ・密度過多の原因になるため使わない。**gc で確実に取れないチェーンは店名キーワード `query` で個別取得**（query は OR 不可・1 チェーン 1 コールだが別名辞書で表記揺れに強い: KFC=ケンタッキー=ｹﾝﾀｯｷｰ）：カーブス（ジム=0405）／アカチャンホンポ（店舗ごとにジャンルコードがバラバラ）／オーケー（ジャンルコードが空）／ピザハット（宅配系コード 0114/0102 で gc 外）／上島珈琲・はま寿司（過半数／一部が gc 空）。最終的なチェーン絞り込みは `matchStore`（gc 非依存・店名一致）。ページ上限到達は logcat に出す（サイレント truncation を避ける）。
-- **密度差クリップ `mergeAndClip`**: ズームアウトで半径が広がると、密なソース（gc）は 500 件上限で中心付近に打ち切られる一方、疎なキーワードチェーン（カーブス等）は半径いっぱいに広がり、周縁が疎チェーンばかりになる偏りが出る。そこで**上限に達したソースの最遠距離の最小値**を共通カバー半径とし、全ソースをその外側で切り捨てて密度を揃える（打ち切りソースが無ければ切り捨てない）。`GeoMath` 依存の純粋関数なので `android.util.Log` に触れずユニットテスト可。gc ソースと keyword ソースで重複する同一店は「緯度,経度,名前」一致（YOLP は同一店に同一 Name＋座標を返すことを実 API で確認）と、ViewModel 側 `distinctBy`（merchantId＋支店名）の二段で 1 件化され、二重ピンにはならない。
+- **取りこぼし対策**（駅前など密集地）: YOLP は 1 リクエスト最大 100 件。業種コード `gc` で絞り、`start` で**ページング**（ソースごと最大 5 ページ＝500 件、`sort=dist` で近い順）して 100 件超を取得する。**`gc` はカンマ区切りで複数コードの OR 取得が 1 コールでできる**（実 API で確認済み。スペース区切りは誤動作するので不可）。グルメは `01`（全般）だと新宿駅 3km で 8459 件と過密で、500 件上限＋近い順により中心付近で打ち切られ、後述クリップの共通半径が潰れて密集地で検知数が激減する。そこで対象チェーンが集中する業種だけに **`gc="0123,0115,0101013"`**（ファミレス 0123001＋FF 0123002＋カフェ 0115＋回転寿司 0101013）へ絞り、同条件で約 1870 件まで下げて**コール数を増やさず**半径を確保する。スーパー・コンビニは `0205`（=0205002＋0205001）。`02`/`01` のような上位コードは広すぎて誤マッチ・密度過多の原因になるため使わない。**gc で確実に取れないチェーンは店名キーワード `query` で個別取得**（query は OR 不可・1 チェーン 1 コールだが別名辞書で表記揺れに強い: KFC=ケンタッキー=ｹﾝﾀｯｷｰ）：カーブス（ジム=0405）／アカチャンホンポ（店舗ごとにジャンルコードがバラバラ）／オーケー（ジャンルコードが空）／ピザハット（宅配系コード 0114/0102 で gc 外）／上島珈琲・はま寿司（過半数／一部が gc 空）。最終的なチェーン絞り込みは `matchStore`（gc 非依存・店名一致）。ページ上限到達は `Timber.i` で logcat に出す（サイレント truncation を避ける）。
+- **密度差クリップ `mergeAndClip`**: ズームアウトで半径が広がると、密なソース（gc）は 500 件上限で中心付近に打ち切られる一方、疎なキーワードチェーン（カーブス等）は半径いっぱいに広がり、周縁が疎チェーンばかりになる偏りが出る。そこで**上限に達したソースの最遠距離の最小値**を共通カバー半径とし、全ソースをその外側で切り捨てて密度を揃える（打ち切りソースが無ければ切り捨てない）。`GeoMath` 依存の純粋関数なのでユニットテスト可。gc ソースと keyword ソースで重複する同一店は「緯度,経度,名前」一致（YOLP は同一店に同一 Name＋座標を返すことを実 API で確認）と、ViewModel 側 `distinctBy`（merchantId＋支店名）の二段で 1 件化され、二重ピンにはならない。
 - **`matchStore` の連結店名対応**: YOLP は支店名を区切りなく連結する（例「肉のハナマサひばりヶ丘店」）。`containsAsWord` の後方境界チェックは「マック」⊂「マックスバリュ」の誤マッチ防止用だが、正規化後にチェーン名の直後が同字種（はなまさ｜ひ…）で続くと正しい店も弾く。そこで**キーが 5 文字以上（≒完全なチェーン名）のときは後方境界を緩める**（短いキーは従来どおり厳格）。
 - YOLP は支店名を `Name` に内包するため `branch` は null（`displayName` は `Name` のまま）。公式に「対象外」と明示された店舗（`isExcludedStore`）は近隣リストに出さない（照合は `displayName` で行う）。
 - **休眠フォールバック `OverpassClient`**（OSM・無料・キー不要）はそのまま残置し、5万/日上限に当たる局面での再利用を想定する。Overpass 固有の判断（日本語名の正規表現はサーバ側で遅いため**カテゴリタグで広く取りクライアント側で照合** / 半径 1km 超は `node` のみ / 本家 overpass-api.de 失敗時はミラー `maps.mail.ru` へフォールバック）はコード内コメント参照。
@@ -412,13 +413,44 @@ sequenceDiagram
 
 「実データをテストに使う」のがこのプロジェクトの肝で、**データ更新（JSON 編集）だけの変更でも CI 的にテストを流せば参照切れやエイリアス衝突を検出できる**。
 
-## 9. 技術スタック早見表
+## 9. ログ方針
+
+[Timber](https://github.com/JakeWharton/timber)（Apache-2.0）を使用。`PoikatsuApplication.onCreate()` で debug ビルド時のみ `DebugTree` を plant し、release では Tree を植えない（= `Timber.*` 呼び出しが全て no-op になる）。
+
+### 使い方
+
+```kotlin
+Timber.d("検索結果: %d 件", results.size)   // debug 情報
+Timber.w("HTTP %d", response.code)          // 警告
+Timber.w(exception, "リクエスト失敗")         // 例外付き警告（スタックトレース出力）
+```
+
+TAG は `DebugTree` がクラス名から自動生成するため、手動定義は不要。
+
+### レイヤ別ガイドライン
+
+| レイヤ | 出すもの | レベル |
+|---|---|---|
+| data/（API クライアント） | HTTP エラー・リクエスト例外・ページネーション上限到達 | `Timber.w` / `Timber.i` |
+| ui/（ViewModel） | 状態遷移・ユーザー操作の起点（必要に応じて追加） | `Timber.d` |
+| domain/ | 純 Kotlin のため Timber を使わない（Android 依存を持ち込まない） | — |
+
+### Logcat でのフィルタリング
+
+Android Studio の Logcat で `package:com.ktakjm.poikatsu` を選択すれば、フレームワークの大量ノイズ（`ProxyAndroidLoggerBackend`・`HWUI`・`AdrenoGLES` 等）を除外してアプリのログだけを確認できる。正常動作時は data 層の警告が出ないのが期待値（出ていれば API エラー等の異常）。
+
+### 将来（Play Store 公開時）
+
+release ビルドで Crashlytics 等に送る場合は、`PoikatsuApplication` で `Timber.plant(CrashReportingTree())` を追加する（`CrashReportingTree` は `Timber.Tree` を継承し `w` / `e` を Crashlytics に転送する実装）。現時点では未導入。
+
+## 10. 技術スタック早見表
 
 | 項目 | 採用 | 備考 |
 |---|---|---|
 | 言語 / UI | Kotlin + Jetpack Compose (Material 3) | minSdk 29 / targetSdk 36 |
 | アーキテクチャ | MVVM + Repository、手動 DI | 単一 ViewModel・単一 UiState |
 | シリアライズ | kotlinx.serialization | ignoreUnknownKeys で前方互換 |
+| ログ | Timber | debug ビルドのみ Logcat 出力（`DebugTree`）。release は Tree 未植栽で無出力 |
 | HTTP | OkHttp（素のまま） | Retrofit/Ktor なし。YOLP・GitHub raw が GET、休眠の Overpass のみ POST |
 | ローカル保存 | ファイルキャッシュ（filesDir/remote_data/） | Room は見送り |
 | 設定の永続化 | DataStore Preferences（`SettingsRepository`） | テーマ・データ取得・カード差分。Apache-2.0 |
@@ -430,7 +462,7 @@ sequenceDiagram
 
 依存追加時は **ライセンス確認 → docs/licenses.md へ追記** が必須ルール（GPL/AGPL 不可。詳細は [CLAUDE.md](../CLAUDE.md)）。
 
-## 10. この構成から学べること
+## 11. この構成から学べること
 
 - **単方向データフロー（UDF）**: StateFlow + 不変 UiState + update のパターン
 - **依存注入をフレームワークなしでやる**: 関数型インターフェース（ラムダ）注入によるテスタブル設計
