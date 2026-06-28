@@ -3,7 +3,7 @@
 店舗名やカテゴリから「どの支払い方法が最も得か」を判定する Android アプリのコード解説ドキュメント。
 Kotlin + Jetpack Compose の標準的な構成（MVVM + Repository）を学ぶための題材として、各レイヤの責務・設計判断・データフローを説明する。
 
-- 対象リビジョン: Phase 1 完了 + Phase 2A（期間限定キャンペーン・QR 決済・クーポン割引のデータ基盤）実装済み時点
+- 対象リビジョン: Phase 1 完了 + Phase 2A（期間限定キャンペーン・QR 決済・クーポン割引のデータ基盤）+ Phase 2B（YOLP 検索のデータ駆動化）実装済み時点
 - 全体計画: [PLAN.md](../PLAN.md) / データ仕様: [data/README.md](../data/README.md) / プロジェクト規約: [CLAUDE.md](../CLAUDE.md)
 
 ## 1. 全体アーキテクチャ
@@ -114,7 +114,7 @@ poikatsu/
     └── test/java/com/ktakjm/poikatsu/
         ├── JudgmentEngineTest.kt   # 実データを使った検索・判定・店舗対象判定・期間フィルタ・QR判定テスト（47 件）
         ├── DataRepositoryTest.kt   # ロード戦略のテスト（5 件）
-        └── NearbyTest.kt           # Overpass パース・距離計算のテスト（10 件）
+        └── NearbyTest.kt           # チェーン特定・YOLP/Overpass パース・密度クリップ・YolpSearchConfig 構築・距離計算のテスト（27 件）
 ```
 
 ポイント: `data/` はリポジトリ直下にあり、`app/build.gradle.kts` の `assets.srcDir(rootProject.file("data"))` で **そのまま assets として同梱** される。同じファイルが GitHub raw 配信のソースでもあるため、「同梱データ」「リモートデータ」「テストデータ」が常に単一ソースで一致する。
@@ -202,7 +202,7 @@ erDiagram
 
 3 つの JSON の役割分担:
 
-- `merchants.json` — チェーンの正規化マスタ。検索ヒット率は `reading` / `aliases` の充実度で決まる。トップレベルに `yolp_config`（YOLP 検索の gc グループ定義）を持ち、各 merchant の `yolp_search`（`gc`/`keyword`/`none`）で検索方式を指定する（Phase B でデータ駆動化する際に `YolpClient` が参照する）
+- `merchants.json` — チェーンの正規化マスタ。検索ヒット率は `reading` / `aliases` の充実度で決まる。トップレベルに `yolp_config`（YOLP 検索の gc グループ定義・密度チューニング用の `max_pages`）を持ち、各 merchant の `yolp_search`（`gc`/`keyword`/`none`）で検索方式を指定する。`YolpClient` はこの設定から `YolpSearchConfig` を動的に構築し、アクティブな施策が参照する merchant だけを検索対象にする（該当 merchant がいない gc_group はスキップ）
 - `campaigns.json` — 汎用的な施策情報のみ。**ユーザー固有の前提を書かない**（規約）。`type` で常設カード（`card_program`）/ 期間限定（`card_promotion`）/ 自治体施策（`municipal`）を区分し、`benefit_type` でポイント還元（`rebate`）/ 定率即時割引（`coupon_percent`）/ 定額即時割引（`coupon_fixed`）を区分する。`store_scope` が `managed` ならチェーン検索・地図に表示、`external` ならキャンペーンタブのみ表示
 - `profile.json` — ユーザー前提（保有ブランド・エントリー済みか等）+ QR 決済カタログ（`qr_payments`）。常にローカル（assets）から読み、リモート更新の対象外
 
@@ -428,8 +428,10 @@ sequenceDiagram
     alt 位置情報取得失敗（初回）
         Note over VM: デフォルト地点（新宿駅）で<br/>地図を表示＋Snackbar 通知
     end
-    VM->>YC: fetchNearby(lat, lon, radiusM)
-    Note over YC: 業種コード gc（0123,0115,0101013=対象グルメ業種をカンマOR / 0205=スーパー・コンビニ）<br/>＋店名キーワードで POI を取得・start でページング<br/>（最大 500 件/ソース）。mergeAndClip で密度差を補正。結果はキャッシュせず毎回ライブ取得
+    VM->>JE: activeManagedMerchantIds(today)
+    Note over VM: アクティブな managed 施策の merchant_rules<br/>→ 検索対象 merchant IDs を収集<br/>→ yolp_config + yolp_search から<br/>YolpSearchConfig を動的構築<br/>（該当なし gc_group はスキップ）
+    VM->>YC: fetchNearby(config, lat, lon, radiusM)
+    Note over YC: config の gc_groups（グループごと maxPages）<br/>＋keywordQueries で POI を取得・start でページング<br/>mergeAndClip で密度差を補正。結果はキャッシュせず毎回ライブ取得
     YC-->>VM: List(Poi)
     loop 各 POI
         VM->>JE: matchStore(poi.name, poi.brand)
@@ -471,9 +473,9 @@ sequenceDiagram
 
 周辺店舗データの設計判断（既定＝`YolpClient` / 休眠フォールバック＝`OverpassClient`。docs/map-data-stack.md）:
 
-- **既定は YOLP ローカルサーチ**。`OverpassClient.fetchNearby` と同一シグネチャの `YolpClient.fetchNearby(lat, lon, radiusM)` にしてあり、ViewModel は呼び先 1 行で差し替わる（`Poi` は `Models.kt` の中立な型）。
+- **既定は YOLP ローカルサーチ**。`YolpClient.fetchNearby(config, lat, lon, radiusM)` は `YolpSearchConfig`（検索対象の gc グループ＋キーワード一覧）を受け取り、データ駆動で検索する。config は `MainViewModel` がアクティブな施策の merchant_rules → merchants.json の `yolp_search`/`yolp_config` から構築する（`YolpSearchConfig.build`）。出力の `Poi` は `Models.kt` の中立な型で、データ源の差し替えに影響しない。
 - ⚠️ **YOLP データはキャッシュ禁止**（利用規約 第6条）。POI を Room/DataStore/ファイルへ永続化せず毎回ライブ取得する。アプリ下部に「Web Services by Yahoo! JAPAN」クレジットを常設する（`NearbyPane` のシート上部）。
-- **取りこぼし対策**（駅前など密集地）: YOLP は 1 リクエスト最大 100 件。業種コード `gc` で絞り、`start` で**ページング**（ソースごと最大 5 ページ＝500 件、`sort=dist` で近い順）して 100 件超を取得する。**`gc` はカンマ区切りで複数コードの OR 取得が 1 コールでできる**（実 API で確認済み。スペース区切りは誤動作するので不可）。グルメは `01`（全般）だと新宿駅 3km で 8459 件と過密で、500 件上限＋近い順により中心付近で打ち切られ、後述クリップの共通半径が潰れて密集地で検知数が激減する。そこで対象チェーンが集中する業種だけに **`gc="0123,0115,0101013"`**（ファミレス 0123001＋FF 0123002＋カフェ 0115＋回転寿司 0101013）へ絞り、同条件で約 1870 件まで下げて**コール数を増やさず**半径を確保する。スーパー・コンビニは `0205`（=0205002＋0205001）。`02`/`01` のような上位コードは広すぎて誤マッチ・密度過多の原因になるため使わない。**gc で確実に取れないチェーンは店名キーワード `query` で個別取得**（query は OR 不可・1 チェーン 1 コールだが別名辞書で表記揺れに強い: KFC=ケンタッキー=ｹﾝﾀｯｷｰ）：カーブス（ジム=0405）／アカチャンホンポ（店舗ごとにジャンルコードがバラバラ）／オーケー（ジャンルコードが空）／ピザハット（宅配系コード 0114/0102 で gc 外）／上島珈琲・はま寿司（過半数／一部が gc 空）。最終的なチェーン絞り込みは `matchStore`（gc 非依存・店名一致）。ページ上限到達は `Timber.i` で logcat に出す（サイレント truncation を避ける）。
+- **取りこぼし対策**（駅前など密集地）: YOLP は 1 リクエスト最大 100 件。業種コード `gc` で絞り、`start` で**ページング**（`sort=dist` で近い順）して 100 件超を取得する。**gc グループとキーワードクエリは `merchants.json` の `yolp_config` から動的に決定**（Phase 2B でハードコードから分離）。gc グループは `gc_groups[]` で定義し、グループごとに `max_pages`（密度チューニング用。密度の低いグループはページ数を減らしてリクエスト節約）を持つ。各 merchant の `yolp_search` が `gc` → そのカテゴリが属する gc_group で取得、`keyword` → 店名キーワード `query` で個別取得、`none` → 検索しない。**アクティブな施策が参照する merchant だけを検索対象にし、該当 merchant がいない gc_group はスキップ**する（`YolpSearchConfig.build`）。**`gc` はカンマ区切りで複数コードの OR 取得が 1 コールでできる**（実 API で確認済み。スペース区切りは誤動作するので不可）。グルメは `01`（全般）だと新宿駅 3km で 8459 件と過密で、500 件上限＋近い順により中心付近で打ち切られ、後述クリップの共通半径が潰れて密集地で検知数が激減する。そこで対象チェーンが集中する業種だけに絞り（現在は `0123,0115,0101013` と `0205` の 2 グループ。gc コードの業種説明は `merchants.json` の `yolp_config.gc_groups[].note` を参照）、密度を制御する。`02`/`01` のような上位コードは広すぎて誤マッチ・密度過多の原因になるため使わない。**keyword 検索の理由**: gc で確実に取れないチェーン（ジャンルコードが gc 外・バラバラ・空のもの）を店名で個別取得する（query は OR 不可・1 チェーン 1 コールだが YOLP の別名辞書で表記揺れに強い: KFC=ケンタッキー=ｹﾝﾀｯｷｰ）。`merchants.json` で `yolp_search: "keyword"` を指定し、`yolp_keyword` で検索語を上書きできる（省略時は merchant の `name`）。最終的なチェーン絞り込みは `matchStore`（gc 非依存・店名一致）。ページ上限到達は `Timber.i` で logcat に出す（サイレント truncation を避ける）。**gc_groups の分割は密度チューニングの結果**であり、新グループを追加する際は実 API で密度を確認してから決める。新カテゴリの追加手順は `data/README.md` 参照。
 - **密度差クリップ `mergeAndClip`**: ズームアウトで半径が広がると、密なソース（gc）は 500 件上限で中心付近に打ち切られる一方、疎なキーワードチェーン（カーブス等）は半径いっぱいに広がり、周縁が疎チェーンばかりになる偏りが出る。そこで**上限に達したソースの最遠距離の最小値**を共通カバー半径とし、全ソースをその外側で切り捨てて密度を揃える（打ち切りソースが無ければ切り捨てない）。`GeoMath` 依存の純粋関数なのでユニットテスト可。gc ソースと keyword ソースで重複する同一店は「緯度,経度,名前」一致（YOLP は同一店に同一 Name＋座標を返すことを実 API で確認）と、ViewModel 側 `distinctBy`（merchantId＋支店名）の二段で 1 件化され、二重ピンにはならない。
 - **`matchStore` の連結店名対応**: YOLP は支店名を区切りなく連結する（例「肉のハナマサひばりヶ丘店」）。`containsAsWord` の後方境界チェックは「マック」⊂「マックスバリュ」の誤マッチ防止用だが、正規化後にチェーン名の直後が同字種（はなまさ｜ひ…）で続くと正しい店も弾く。そこで**キーが 5 文字以上（≒完全なチェーン名）のときは後方境界を緩める**（短いキーは従来どおり厳格）。
 - YOLP は支店名を `Name` に内包するため `branch` は null（`displayName` は `Name` のまま）。公式に「対象外」と明示された店舗（`isExcludedStore`）は近隣リストに出さない（照合は `displayName` で行う）。
@@ -481,13 +483,13 @@ sequenceDiagram
 
 ## 8. テスト戦略
 
-`./gradlew :app:testDebugUnitTest` で全 77 テストが JVM 上で実行される（エミュレータ不要）。
+`./gradlew :app:testDebugUnitTest` で全 87 テストが JVM 上で実行される（エミュレータ不要）。
 
 | テスト | 対象 | 特徴 |
 |---|---|---|
-| `JudgmentEngineTest`（48 件）+ `JapaneseTextTest`（3 件） | 検索・正規化・判定・店舗対象判定（3 状態）・近隣除外・**期間フィルタ・store_scope・QR判定・クーポン・judgeAll・BenefitType・データ検証** | **リポジトリ直下 `data/` の実データを読み込む**。「マック→マクドナルド」「マックスバリュは誤ヒットしない」等の振る舞いと、merchant_id 参照切れ等のデータ整合性チェックを兼ねる。アカチャンホンポの公式リストで対象/対象外/要確認の 3 状態も検証。Phase 2A で期間フィルタ（active/upcoming/expired・残日数警告）、store_scope フィルタ、QR 決済判定（rebate/coupon_percent/coupon_fixed）、judgeAll 統合、実データの新フィールド検証（type/benefitType/storeScope/qrPayments/yolpConfig/yolpSearch）を追加 |
+| `JudgmentEngineTest`（54 件）+ `JapaneseTextTest`（3 件） | 検索・正規化・判定・店舗対象判定（3 状態）・近隣除外・**期間フィルタ・store_scope・QR判定・クーポン・judgeAll・BenefitType・データ検証** | **リポジトリ直下 `data/` の実データを読み込む**。「マック→マクドナルド」「マックスバリュは誤ヒットしない」等の振る舞いと、merchant_id 参照切れ等のデータ整合性チェックを兼ねる。アカチャンホンポの公式リストで対象/対象外/要確認の 3 状態も検証。Phase 2A で期間フィルタ（active/upcoming/expired・残日数警告）、store_scope フィルタ、QR 決済判定（rebate/coupon_percent/coupon_fixed）、judgeAll 統合、実データの新フィールド検証（type/benefitType/storeScope/qrPayments/yolpConfig/yolpSearch）を追加 |
 | `DataRepositoryTest`（5 件） | ロード戦略 | ラムダ注入により、キャッシュあり/なし/破損、リモート成功/失敗の各経路を File システムだけで検証 |
-| `NearbyTest`（20 件） | Overpass/YOLP パース・距離計算・チェーン特定・施設テナント除外・重複排除キー・密度差クリップ | 固定 JSON フィクスチャでネットワーク非依存 |
+| `NearbyTest`（27 件） | Overpass/YOLP パース・距離計算・チェーン特定・施設テナント除外・重複排除キー・密度差クリップ・**YolpSearchConfig 構築（データ駆動化の等価性検証・gc_group スキップ・maxPages）** | 固定 JSON フィクスチャ＋実データでネットワーク非依存 |
 
 「実データをテストに使う」のがこのプロジェクトの肝で、**データ更新（JSON 編集）だけの変更でも CI 的にテストを流せば参照切れやエイリアス衝突を検出できる**。
 
