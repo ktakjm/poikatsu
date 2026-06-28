@@ -1,9 +1,12 @@
 {
-  "schema_version": 1,
-  "updated_at": "2026-06-12",
+  "schema_version": 2,
+  "updated_at": "2026-06-28",
   "campaigns": [
     {
       "id": "smcc_combini_restaurant",
+      "type": "card_program",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
       "issuer": "三井住友カード",
       "brand_color": "#00A94F",
       "name": "対象のコンビニ・飲食店で最大8%還元",
@@ -80,6 +83,9 @@
     },
     {
       "id": "mufg_point_up_program",
+      "type": "card_program",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
       "issuer": "三菱UFJカード",
       "brand_color": "#E60000",
       "name": "ポイントアッププログラム(最大20%還元)",

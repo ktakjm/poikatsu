@@ -5,7 +5,11 @@ import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.ProfileCard
+import com.ktakjm.poikatsu.data.QrPayment
 import com.ktakjm.poikatsu.util.JapaneseText
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
 /** ある店舗に対する 1 施策分の判定結果 */
 data class Judgment(
@@ -38,6 +42,50 @@ data class StoreVerdict(
     val sourceUrl: String?,
 )
 
+enum class BenefitType {
+    REBATE,
+    COUPON_PERCENT,
+    COUPON_FIXED;
+
+    companion object {
+        fun fromString(s: String): BenefitType = when (s) {
+            "coupon_percent" -> COUPON_PERCENT
+            "coupon_fixed" -> COUPON_FIXED
+            else -> REBATE
+        }
+    }
+}
+
+enum class CampaignStatus { ACTIVE, UPCOMING, EXPIRED }
+
+data class QrJudgment(
+    val campaign: Campaign,
+    val paymentMethod: QrPayment,
+    val benefitType: BenefitType,
+    val effectiveRate: Double?,
+    val discountAmount: Int?,
+    val minPurchase: Int?,
+    val usageLimit: Int?,
+    val daysRemaining: Int?,
+    val perTransactionCap: Int?,
+    val periodTotalCap: Int?,
+)
+
+data class BestPaymentOption(
+    val method: String,
+    val rate: Double?,
+    val discountAmount: Int?,
+    val benefitType: BenefitType,
+    val isTimeLimited: Boolean,
+    val daysRemaining: Int?,
+)
+
+data class JudgmentResult(
+    val cardJudgments: List<Judgment>,
+    val qrJudgments: List<QrJudgment>,
+    val bestOption: BestPaymentOption?,
+)
+
 class JudgmentEngine(private val data: PoikatsuData) {
 
     private val searchIndex: List<Pair<Merchant, List<String>>> = data.merchants.map { m ->
@@ -47,6 +95,9 @@ class JudgmentEngine(private val data: PoikatsuData) {
             m.aliases.forEach { add(JapaneseText.normalize(it)) }
         }.distinct()
     }
+
+    private val qrPaymentMap: Map<String, QrPayment> =
+        data.profile.qrPayments.associateBy { it.id }
 
     /** データ定義順のカテゴリ一覧 */
     val categories: List<String> = data.merchants.map { it.category }.distinct()
@@ -178,35 +229,149 @@ class JudgmentEngine(private val data: PoikatsuData) {
         return s.filterNot { it.isWhitespace() }
     }
 
+    // ---- 期間フィルタ ----
+
+    fun campaignStatus(campaign: Campaign, today: LocalDate): CampaignStatus {
+        val start = campaign.periodStart?.let { parseDate(it) }
+        val end = campaign.periodEnd?.let { parseDate(it) }
+        return when {
+            end != null && today > end -> CampaignStatus.EXPIRED
+            start != null && today < start -> CampaignStatus.UPCOMING
+            else -> CampaignStatus.ACTIVE
+        }
+    }
+
+    fun daysRemaining(campaign: Campaign, today: LocalDate): Int? {
+        val end = campaign.periodEnd?.let { parseDate(it) } ?: return null
+        val days = ChronoUnit.DAYS.between(today, end).toInt()
+        return if (days >= 0) days else null
+    }
+
+    /** アクティブな campaign のみ返す(store_scope フィルタなし) */
+    fun activeCampaigns(today: LocalDate): List<Campaign> =
+        data.campaigns.filter { campaignStatus(it, today) == CampaignStatus.ACTIVE }
+
+    /** もうすぐ開始の campaign を返す */
+    fun upcomingCampaigns(today: LocalDate): List<Campaign> =
+        data.campaigns.filter { campaignStatus(it, today) == CampaignStatus.UPCOMING }
+
     /** この施策におけるそのチェーンのルール(なければ対象外) */
     private fun Campaign.ruleFor(merchant: Merchant): MerchantRule? =
         merchantRules.firstOrNull { it.merchantId == merchant.id }
 
     /**
-     * 該当施策を還元率の高い順に返す。対象外ならば空リスト。
+     * カード施策の判定を還元率の高い順に返す。期間フィルタ適用済み。
+     * store_scope == "managed" の施策のみ対象。
      */
-    fun judge(merchant: Merchant): List<Judgment> =
-        data.campaigns.mapNotNull { campaign ->
-            val rule = campaign.ruleFor(merchant) ?: return@mapNotNull null
-            // 所有していないカードの施策は対象外。設定で所有 OFF にしたカードは
-            // VM のマージ層で profile から外れるため、ここに来ない(= null スキップ)。
-            val card = data.profile.cards.firstOrNull { it.campaignId == campaign.id }
-                ?: return@mapNotNull null
-            // Amex ブランドかつ店舗が amex_excluded のときは、その店ではこの施策を対象外にする
-            // (優遇還元の適用なし)。地図・検索・詳細すべてからこの施策が消える。
-            if (rule.amexExcluded && card.brand.equals("Amex", ignoreCase = true)) {
-                return@mapNotNull null
+    fun judge(merchant: Merchant, today: LocalDate): List<Judgment> =
+        data.campaigns
+            .filter { campaignStatus(it, today) == CampaignStatus.ACTIVE }
+            .filter { it.storeScope == "managed" }
+            .filter { it.type == "card_program" || it.type == "card_promotion" }
+            .filter { it.paymentMethodId == null }
+            .mapNotNull { campaign ->
+                val rule = campaign.ruleFor(merchant) ?: return@mapNotNull null
+                val card = data.profile.cards.firstOrNull { it.campaignId == campaign.id }
+                    ?: return@mapNotNull null
+                if (rule.amexExcluded && card.brand.equals("Amex", ignoreCase = true)) {
+                    return@mapNotNull null
+                }
+                Judgment(
+                    campaign = campaign,
+                    rule = rule,
+                    card = card,
+                    effectiveRate = card.effectiveRateDefault ?: campaign.rateBase ?: 0.0,
+                    warnings = buildList {
+                        val days = daysRemaining(campaign, today)
+                        if (days != null && days <= 3) add("残り${days}日")
+                    },
+                )
+            }.sortedByDescending { it.effectiveRate }
+
+    /**
+     * QR 決済の判定を返す。ユーザーが利用中の QR 決済でフィルタ済み。
+     * store_scope == "managed" のみ。municipal(external) は探すタブには含めない。
+     */
+    fun judgeQr(merchant: Merchant, today: LocalDate, enabledQrIds: Set<String>): List<QrJudgment> =
+        data.campaigns
+            .filter { campaignStatus(it, today) == CampaignStatus.ACTIVE }
+            .filter { it.storeScope == "managed" }
+            .filter { it.paymentMethodId != null && it.paymentMethodId in enabledQrIds }
+            .mapNotNull { campaign ->
+                campaign.ruleFor(merchant) ?: return@mapNotNull null
+                val qr = qrPaymentMap[campaign.paymentMethodId] ?: return@mapNotNull null
+                QrJudgment(
+                    campaign = campaign,
+                    paymentMethod = qr,
+                    benefitType = BenefitType.fromString(campaign.benefitType),
+                    effectiveRate = campaign.rateBase,
+                    discountAmount = campaign.discountAmount,
+                    minPurchase = campaign.minPurchase,
+                    usageLimit = campaign.usageLimit,
+                    daysRemaining = daysRemaining(campaign, today),
+                    perTransactionCap = campaign.perTransactionCap,
+                    periodTotalCap = campaign.periodTotalCap,
+                )
             }
-            Judgment(
-                campaign = campaign,
-                rule = rule,
-                card = card,
-                effectiveRate = card.effectiveRateDefault ?: campaign.rateBase,
-                // 還元率はユーザーが公式アプリの実効値を手入力する前提なので、エントリー要否の警告は持たない。
-                // warnings は将来の用途(例: period_end 期限切れ)のために残す。
-                warnings = emptyList(),
-            )
-        }.sortedByDescending { it.effectiveRate }
+
+    /**
+     * カード + QR をまとめた包括判定。
+     */
+    fun judgeAll(merchant: Merchant, today: LocalDate, enabledQrIds: Set<String> = emptySet()): JudgmentResult {
+        val cardJudgments = judge(merchant, today)
+        val qrJudgments = judgeQr(merchant, today, enabledQrIds)
+        val bestOption = determineBest(cardJudgments, qrJudgments, today)
+        return JudgmentResult(cardJudgments, qrJudgments, bestOption)
+    }
+
+    private fun determineBest(
+        cards: List<Judgment>,
+        qrs: List<QrJudgment>,
+        today: LocalDate,
+    ): BestPaymentOption? {
+        data class Candidate(
+            val method: String,
+            val rate: Double?,
+            val discountAmount: Int?,
+            val benefitType: BenefitType,
+            val isTimeLimited: Boolean,
+            val daysRemaining: Int?,
+        )
+
+        val candidates = buildList {
+            cards.forEach { j ->
+                add(
+                    Candidate(
+                        method = j.card?.cardName ?: j.campaign.issuer,
+                        rate = j.effectiveRate,
+                        discountAmount = null,
+                        benefitType = BenefitType.fromString(j.campaign.benefitType),
+                        isTimeLimited = j.campaign.periodEnd != null,
+                        daysRemaining = daysRemaining(j.campaign, today),
+                    ),
+                )
+            }
+            qrs.forEach { q ->
+                add(
+                    Candidate(
+                        method = q.paymentMethod.name,
+                        rate = q.effectiveRate,
+                        discountAmount = q.discountAmount,
+                        benefitType = q.benefitType,
+                        isTimeLimited = q.campaign.periodEnd != null,
+                        daysRemaining = q.daysRemaining,
+                    ),
+                )
+            }
+        }
+        // 定率(rebate/coupon_percent)で最高のものを選ぶ。定額(coupon_fixed)は比較不能なので並列表示
+        val bestRate = candidates
+            .filter { it.rate != null && it.benefitType != BenefitType.COUPON_FIXED }
+            .maxByOrNull { it.rate!! }
+        return bestRate?.let {
+            BestPaymentOption(it.method, it.rate, it.discountAmount, it.benefitType, it.isTimeLimited, it.daysRemaining)
+        }
+    }
 
     /**
      * 公式が対象/対象外を言い切っている店舗リスト(official_store_list)を持つ施策が
@@ -252,5 +417,10 @@ class JudgmentEngine(private val data: PoikatsuData) {
         val verdicts = checkStore(merchant, storeName)
         return verdicts.any { it.eligibility == StoreEligibility.INELIGIBLE } &&
             verdicts.none { it.eligibility == StoreEligibility.ELIGIBLE }
+    }
+
+    companion object {
+        private val dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
+        fun parseDate(s: String): LocalDate = LocalDate.parse(s, dateFormatter)
     }
 }

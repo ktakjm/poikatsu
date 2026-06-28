@@ -1,6 +1,25 @@
 {
-  "schema_version": 1,
-  "updated_at": "2026-06-12",
+  "schema_version": 2,
+  "updated_at": "2026-06-28",
+
+  "yolp_config": {
+    "gc_groups": [
+      {
+        "gc": "0123,0115,0101013",
+        "categories": ["ファストフード", "ファミレス", "カフェ", "回転寿司"],
+        "max_pages": 5,
+        "note": "グルメのうち対象チェーンが集中する業種。密度: 中〜高"
+      },
+      {
+        "gc": "0205",
+        "categories": ["コンビニ", "スーパー"],
+        "max_pages": 3,
+        "note": "スーパー+コンビニ。密度: 中。グルメ系のclip radius(~520m)に対し3pagesで728m以上カバーできるため3で十分"
+      }
+    ],
+    "max_keyword_sources": 20
+  },
+
   "merchants": [
     { "id": "seven_eleven", "name": "セブン-イレブン", "reading": "せぶんいれぶん", "aliases": ["セブンイレブン", "セブン", "7-Eleven", "711"], "category": "コンビニ" },
     { "id": "lawson", "name": "ローソン", "reading": "ろーそん", "aliases": ["LAWSON", "ナチュラルローソン", "ローソンストア100", "ローソンスリーエフ"], "category": "コンビニ" },
@@ -14,7 +33,7 @@
     { "id": "sukiya", "name": "すき家", "reading": "すきや", "aliases": ["SUKIYA"], "category": "ファストフード" },
     { "id": "zetteria", "name": "ゼッテリア", "reading": "ぜってりあ", "aliases": ["ZETTERIA"], "category": "ファストフード" },
     { "id": "matsuya", "name": "松屋", "reading": "まつや", "aliases": ["松のや", "マイカリー食堂", "ステーキ屋松", "松軒中華食堂", "すし松", "松弁ネット"], "category": "ファストフード" },
-    { "id": "pizza_hut", "name": "ピザハット", "reading": "ぴざはっと", "aliases": ["Pizza Hut"], "category": "ファストフード" },
+    { "id": "pizza_hut", "name": "ピザハット", "reading": "ぴざはっと", "aliases": ["Pizza Hut"], "category": "ファストフード", "yolp_search": "keyword" },
     { "id": "saizeriya", "name": "サイゼリヤ", "reading": "さいぜりや", "aliases": ["サイゼ", "サイゼリア"], "category": "ファミレス" },
     { "id": "gusto", "name": "ガスト", "reading": "がすと", "aliases": [], "category": "ファミレス" },
     { "id": "bamiyan", "name": "バーミヤン", "reading": "ばーみやん", "aliases": [], "category": "ファミレス" },
@@ -38,14 +57,14 @@
     { "id": "excelsior", "name": "エクセルシオール カフェ", "reading": "えくせるしおーるかふぇ", "aliases": ["エクセルシオール"], "category": "カフェ" },
     { "id": "musashino_mori", "name": "むさしの森珈琲", "reading": "むさしのもりこーひー", "aliases": [], "category": "カフェ" },
     { "id": "starbucks", "name": "スターバックス", "reading": "すたーばっくす", "aliases": ["スタバ", "Starbucks"], "category": "カフェ" },
-    { "id": "ueshima_coffee", "name": "上島珈琲店", "reading": "うえしまこーひーてん", "aliases": ["UCC Cafe Plaza"], "category": "カフェ" },
+    { "id": "ueshima_coffee", "name": "上島珈琲店", "reading": "うえしまこーひーてん", "aliases": ["UCC Cafe Plaza"], "category": "カフェ", "yolp_search": "keyword", "yolp_keyword": "上島珈琲" },
     { "id": "cafe_de_crie", "name": "カフェ・ド・クリエ", "reading": "かふぇどくりえ", "aliases": ["カフェドクリエ"], "category": "カフェ" },
-    { "id": "hamazushi", "name": "はま寿司", "reading": "はまずし", "aliases": ["はまずし"], "category": "回転寿司" },
+    { "id": "hamazushi", "name": "はま寿司", "reading": "はまずし", "aliases": ["はまずし"], "category": "回転寿司", "yolp_search": "keyword" },
     { "id": "kappazushi", "name": "かっぱ寿司", "reading": "かっぱずし", "aliases": ["かっぱずし"], "category": "回転寿司" },
     { "id": "kurazushi", "name": "くら寿司", "reading": "くらずし", "aliases": ["無添くら寿司", "くらずし"], "category": "回転寿司" },
     { "id": "sushiro", "name": "スシロー", "reading": "すしろー", "aliases": ["SUSHIRO"], "category": "回転寿司" },
-    { "id": "coke_on", "name": "コカ・コーラ自販機", "reading": "こかこーらじはんき", "aliases": ["Coke ON", "コークオン", "コカコーラ自販機"], "category": "その他", "location_hint": { "text": "Coke ON 公式アプリで対応自販機を探せます", "label": "Coke ON で探す", "url": "https://play.google.com/store/apps/details?id=com.coke.cokeon" } },
-    { "id": "ok_store", "name": "オーケー", "reading": "おーけー", "aliases": ["オーケーストア", "OKストア"], "category": "スーパー" },
+    { "id": "coke_on", "name": "コカ・コーラ自販機", "reading": "こかこーらじはんき", "aliases": ["Coke ON", "コークオン", "コカコーラ自販機"], "category": "その他", "location_hint": { "text": "Coke ON 公式アプリで対応自販機を探せます", "label": "Coke ON で探す", "url": "https://play.google.com/store/apps/details?id=com.coke.cokeon" }, "yolp_search": "none" },
+    { "id": "ok_store", "name": "オーケー", "reading": "おーけー", "aliases": ["オーケーストア", "OKストア"], "category": "スーパー", "yolp_search": "keyword", "yolp_keyword": "オーケー" },
     { "id": "ozeki", "name": "オオゼキ", "reading": "おおぜき", "aliases": [], "category": "スーパー" },
     { "id": "aoki_super", "name": "アオキスーパー", "reading": "あおきすーぱー", "aliases": ["フードストアあおき"], "category": "スーパー" },
     { "id": "sunlive", "name": "サンリブ", "reading": "さんりぶ", "aliases": ["マルショク", "リブホール", "サンク", "サンリブBUONO"], "category": "スーパー" },
@@ -59,7 +78,7 @@
     { "id": "japan_meat", "name": "ジャパンミート", "reading": "じゃぱんみーと", "aliases": ["MEATMeet", "パワーマート"], "category": "スーパー" },
     { "id": "feel", "name": "フィール", "reading": "ふぃーる", "aliases": [], "category": "スーパー" },
     { "id": "yamanaka", "name": "ヤマナカ", "reading": "やまなか", "aliases": ["フランテ", "フランテロゼ"], "category": "スーパー" },
-    { "id": "akachan_honpo", "name": "アカチャンホンポ", "reading": "あかちゃんほんぽ", "aliases": ["赤ちゃん本舗"], "category": "その他" },
-    { "id": "curves", "name": "カーブス", "reading": "かーぶす", "aliases": ["Curves"], "category": "その他" }
+    { "id": "akachan_honpo", "name": "アカチャンホンポ", "reading": "あかちゃんほんぽ", "aliases": ["赤ちゃん本舗"], "category": "その他", "yolp_search": "keyword" },
+    { "id": "curves", "name": "カーブス", "reading": "かーぶす", "aliases": ["Curves"], "category": "その他", "yolp_search": "keyword" }
   ]
 }

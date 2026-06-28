@@ -15,6 +15,8 @@ data class Merchant(
     // 位置情報を持たない発行体(自販機など)の案内。これがあると「近く」探索が行き止まりになるため、
     // 判定詳細では「近くのこの店を探す」を出さず、代わりに外部アプリ/サイトでの確認を促す。
     @SerialName("location_hint") val locationHint: LocationHint? = null,
+    @SerialName("yolp_search") val yolpSearch: String = "gc",
+    @SerialName("yolp_keyword") val yolpKeyword: String? = null,
 )
 
 /** 位置情報を持たない発行体で、店舗位置を確認できる外部導線(例: Coke ON 公式アプリ)を示す。 */
@@ -42,9 +44,24 @@ data class Poi(
 }
 
 @Serializable
+data class GcGroup(
+    val gc: String,
+    val categories: List<String> = emptyList(),
+    @SerialName("max_pages") val maxPages: Int = 5,
+    val note: String = "",
+)
+
+@Serializable
+data class YolpConfig(
+    @SerialName("gc_groups") val gcGroups: List<GcGroup> = emptyList(),
+    @SerialName("max_keyword_sources") val maxKeywordSources: Int = 20,
+)
+
+@Serializable
 data class MerchantsFile(
     @SerialName("schema_version") val schemaVersion: Int = 1,
     @SerialName("updated_at") val updatedAt: String = "",
+    @SerialName("yolp_config") val yolpConfig: YolpConfig? = null,
     val merchants: List<Merchant> = emptyList(),
 )
 
@@ -84,13 +101,20 @@ data class MerchantRule(
 )
 
 @Serializable
+data class Region(
+    val name: String,
+    val prefecture: String,
+    @SerialName("area_group") val areaGroup: String? = null,
+)
+
+@Serializable
 data class Campaign(
     val id: String,
     val issuer: String,
     @SerialName("brand_color") val brandColor: String? = null,
     val name: String,
-    @SerialName("payment_instruction") val paymentInstruction: String,
-    @SerialName("rate_base") val rateBase: Double,
+    @SerialName("payment_instruction") val paymentInstruction: String = "",
+    @SerialName("rate_base") val rateBase: Double? = null,
     @SerialName("rate_note") val rateNote: String = "",
     @SerialName("entry_required") val entryRequired: Boolean = false,
     @SerialName("period_start") val periodStart: String? = null,
@@ -104,6 +128,20 @@ data class Campaign(
     @SerialName("merchant_rules") val merchantRules: List<MerchantRule> = emptyList(),
     val sources: List<String> = emptyList(),
     @SerialName("verified_date") val verifiedDate: String = "",
+    val type: String = "card_program",
+    @SerialName("benefit_type") val benefitType: String = "rebate",
+    @SerialName("payment_method_id") val paymentMethodId: String? = null,
+    @SerialName("per_transaction_cap") val perTransactionCap: Int? = null,
+    @SerialName("period_total_cap") val periodTotalCap: Int? = null,
+    @SerialName("cap_note") val capNote: String? = null,
+    @SerialName("discount_amount") val discountAmount: Int? = null,
+    @SerialName("min_purchase") val minPurchase: Int? = null,
+    @SerialName("usage_limit") val usageLimit: Int? = null,
+    @SerialName("usage_limit_note") val usageLimitNote: String? = null,
+    val region: Region? = null,
+    @SerialName("campaign_url") val campaignUrl: String? = null,
+    @SerialName("store_search_url") val storeSearchUrl: String? = null,
+    @SerialName("store_scope") val storeScope: String = "managed",
 )
 
 @Serializable
@@ -139,7 +177,20 @@ data class ProfileCard(
 )
 
 @Serializable
-data class Profile(val cards: List<ProfileCard> = emptyList())
+data class QrPayment(
+    val id: String,
+    val name: String,
+    @SerialName("brand_color") val brandColor: String,
+    @SerialName("app_package") val appPackage: String = "",
+    @SerialName("store_search_label") val storeSearchLabel: String = "",
+    @SerialName("enabled_default") val enabledDefault: Boolean = false,
+)
+
+@Serializable
+data class Profile(
+    val cards: List<ProfileCard> = emptyList(),
+    @SerialName("qr_payments") val qrPayments: List<QrPayment> = emptyList(),
+)
 
 @Serializable
 data class ProfileFile(
@@ -153,6 +204,7 @@ data class PoikatsuData(
     val campaigns: List<Campaign>,
     val profile: Profile,
     val updatedAt: String,
+    val yolpConfig: YolpConfig? = null,
 )
 
 object PoikatsuJson {
@@ -170,6 +222,7 @@ object PoikatsuJson {
             campaigns = campaignsFile.campaigns,
             profile = profileFile.profile,
             updatedAt = campaignsFile.updatedAt,
+            yolpConfig = merchantsFile.yolpConfig,
         )
     }
 }

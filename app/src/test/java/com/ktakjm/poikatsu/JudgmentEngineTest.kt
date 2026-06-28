@@ -7,15 +7,22 @@ import com.ktakjm.poikatsu.data.OfficialStoreList
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.Profile
+import com.ktakjm.poikatsu.data.ProfileCard
+import com.ktakjm.poikatsu.data.QrPayment
+import com.ktakjm.poikatsu.data.Region
+import com.ktakjm.poikatsu.domain.BenefitType
+import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.StoreEligibility
 import com.ktakjm.poikatsu.util.JapaneseText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.time.LocalDate
 
 /**
  * リポジトリ直下 data/ の実データを読み込んで検証する。
@@ -29,6 +36,7 @@ class JudgmentEngineTest {
         profileJson = File("../data/profile.json").readText(),
     )
     private val engine = JudgmentEngine(data)
+    private val today = LocalDate.of(2026, 6, 28)
 
     @Test
     fun `エイリアスで検索できる`() {
@@ -58,21 +66,21 @@ class JudgmentEngineTest {
     @Test
     fun `セブンイレブンは両施策の対象`() {
         val merchant = data.merchants.first { it.id == "seven_eleven" }
-        val judgments = engine.judge(merchant)
+        val judgments = engine.judge(merchant, today)
         assertEquals(2, judgments.size)
     }
 
     @Test
     fun `マクドナルドは三井住友のみ対象`() {
         val merchant = data.merchants.first { it.id == "mcdonalds" }
-        val judgments = engine.judge(merchant)
+        val judgments = engine.judge(merchant, today)
         assertEquals(listOf("smcc_combini_restaurant"), judgments.map { it.campaign.id })
     }
 
     @Test
     fun `MUFGはプロファイル前提で還元率7パーセント・警告なし`() {
         val merchant = data.merchants.first { it.id == "sushiro" }
-        val judgment = engine.judge(merchant).single()
+        val judgment = engine.judge(merchant, today).single()
         assertEquals("mufg_point_up_program", judgment.campaign.id)
         assertEquals(7.0, judgment.effectiveRate, 0.001)
         assertTrue(judgment.warnings.isEmpty())
@@ -246,7 +254,7 @@ class JudgmentEngineTest {
     private fun engineWithProfile(profile: Profile) = JudgmentEngine(data.copy(profile = profile))
 
     private fun profileWithMufgBrand(brand: String) = Profile(
-        data.profile.cards.map {
+        cards = data.profile.cards.map {
             if (it.campaignId == "mufg_point_up_program") it.copy(brand = brand) else it
         },
     )
@@ -255,26 +263,369 @@ class JudgmentEngineTest {
     fun `Amex は amex_excluded の店舗で MUFG が対象外になる`() {
         val kurazushi = data.merchants.first { it.id == "kurazushi" } // amex_excluded = true
         val amexEngine = engineWithProfile(profileWithMufgBrand("Amex"))
-        assertTrue(amexEngine.judge(kurazushi).none { it.campaign.id == "mufg_point_up_program" })
+        assertTrue(amexEngine.judge(kurazushi, today).none { it.campaign.id == "mufg_point_up_program" })
         // 非 Amex(既定プロファイル=Mastercard)では従来どおり MUFG が出る
-        assertTrue(engine.judge(kurazushi).any { it.campaign.id == "mufg_point_up_program" })
+        assertTrue(engine.judge(kurazushi, today).any { it.campaign.id == "mufg_point_up_program" })
     }
 
     @Test
     fun `Amex でも amex_excluded でない店舗では MUFG が残る`() {
         val sevenEleven = data.merchants.first { it.id == "seven_eleven" } // amex_excluded = false
         val amexEngine = engineWithProfile(profileWithMufgBrand("Amex"))
-        assertTrue(amexEngine.judge(sevenEleven).any { it.campaign.id == "mufg_point_up_program" })
+        assertTrue(amexEngine.judge(sevenEleven, today).any { it.campaign.id == "mufg_point_up_program" })
     }
 
     @Test
     fun `未所有カードの施策は判定に出ない`() {
         val kurazushi = data.merchants.first { it.id == "kurazushi" }
         // MUFG カードを所有していない(profile から除外)ケース
-        val onlySmcc = Profile(data.profile.cards.filter { it.campaignId == "smcc_combini_restaurant" })
-        assertTrue(engineWithProfile(onlySmcc).judge(kurazushi).none { it.campaign.id == "mufg_point_up_program" })
+        val onlySmcc = Profile(cards = data.profile.cards.filter { it.campaignId == "smcc_combini_restaurant" })
+        assertTrue(engineWithProfile(onlySmcc).judge(kurazushi, today).none { it.campaign.id == "mufg_point_up_program" })
         // どのカードも所有していなければ判定は空
-        assertTrue(engineWithProfile(Profile()).judge(kurazushi).isEmpty())
+        assertTrue(engineWithProfile(Profile()).judge(kurazushi, today).isEmpty())
+    }
+
+    // ---- 期間フィルタのテスト ----
+
+    private fun campaignWithPeriod(
+        start: String? = null,
+        end: String? = null,
+        type: String = "card_program",
+        storeScope: String = "managed",
+        benefitType: String = "rebate",
+        paymentMethodId: String? = null,
+        rateBase: Double? = 10.0,
+        discountAmount: Int? = null,
+        minPurchase: Int? = null,
+        usageLimit: Int? = null,
+        perTransactionCap: Int? = null,
+        periodTotalCap: Int? = null,
+        region: Region? = null,
+    ) = Campaign(
+        id = "test_campaign",
+        issuer = "test",
+        name = "テスト",
+        paymentInstruction = "テスト",
+        rateBase = rateBase,
+        verifiedDate = "2026-06-01",
+        periodStart = start,
+        periodEnd = end,
+        type = type,
+        storeScope = storeScope,
+        benefitType = benefitType,
+        paymentMethodId = paymentMethodId,
+        discountAmount = discountAmount,
+        minPurchase = minPurchase,
+        usageLimit = usageLimit,
+        perTransactionCap = perTransactionCap,
+        periodTotalCap = periodTotalCap,
+        region = region,
+        merchantRules = listOf(MerchantRule(merchantId = "m1")),
+    )
+
+    private val testMerchant = Merchant(id = "m1", name = "テスト店", reading = "てすとてん")
+    private val testCard = ProfileCard(campaignId = "test_campaign", cardName = "テストカード", effectiveRateDefault = 10.0)
+
+    private fun periodTestEngine(campaign: Campaign, profile: Profile = Profile(cards = listOf(testCard))): JudgmentEngine =
+        JudgmentEngine(
+            PoikatsuData(
+                merchants = listOf(testMerchant),
+                campaigns = listOf(campaign),
+                profile = profile,
+                updatedAt = "2026-06-01",
+            ),
+        )
+
+    @Test
+    fun `常設施策(period null)はアクティブ`() {
+        val campaign = campaignWithPeriod()
+        val engine = periodTestEngine(campaign)
+        assertEquals(CampaignStatus.ACTIVE, engine.campaignStatus(campaign, today))
+        assertEquals(1, engine.judge(testMerchant, today).size)
+    }
+
+    @Test
+    fun `期間中の施策はアクティブ`() {
+        val campaign = campaignWithPeriod(start = "2026-06-01", end = "2026-07-31")
+        val engine = periodTestEngine(campaign)
+        assertEquals(CampaignStatus.ACTIVE, engine.campaignStatus(campaign, today))
+        assertEquals(1, engine.judge(testMerchant, today).size)
+    }
+
+    @Test
+    fun `期限切れの施策は非表示`() {
+        val campaign = campaignWithPeriod(start = "2026-05-01", end = "2026-06-15")
+        val engine = periodTestEngine(campaign)
+        assertEquals(CampaignStatus.EXPIRED, engine.campaignStatus(campaign, today))
+        assertTrue(engine.judge(testMerchant, today).isEmpty())
+    }
+
+    @Test
+    fun `未来開始の施策はもうすぐ開始`() {
+        val campaign = campaignWithPeriod(start = "2026-07-01", end = "2026-07-31")
+        val engine = periodTestEngine(campaign)
+        assertEquals(CampaignStatus.UPCOMING, engine.campaignStatus(campaign, today))
+        // judge からはフィルタされる(探す/近くタブには出さない)
+        assertTrue(engine.judge(testMerchant, today).isEmpty())
+        // upcomingCampaigns には含まれる
+        assertEquals(1, engine.upcomingCampaigns(today).size)
+    }
+
+    @Test
+    fun `開始日当日はアクティブ`() {
+        val campaign = campaignWithPeriod(start = "2026-06-28", end = "2026-07-31")
+        assertEquals(CampaignStatus.ACTIVE, periodTestEngine(campaign).campaignStatus(campaign, today))
+    }
+
+    @Test
+    fun `終了日当日はアクティブ`() {
+        val campaign = campaignWithPeriod(start = "2026-06-01", end = "2026-06-28")
+        assertEquals(CampaignStatus.ACTIVE, periodTestEngine(campaign).campaignStatus(campaign, today))
+    }
+
+    @Test
+    fun `終了日翌日は期限切れ`() {
+        val campaign = campaignWithPeriod(start = "2026-06-01", end = "2026-06-27")
+        assertEquals(CampaignStatus.EXPIRED, periodTestEngine(campaign).campaignStatus(campaign, today))
+    }
+
+    @Test
+    fun `残り日数の計算`() {
+        val engine = periodTestEngine(campaignWithPeriod(end = "2026-07-01"))
+        assertEquals(3, engine.daysRemaining(campaignWithPeriod(end = "2026-07-01"), today))
+        assertEquals(0, engine.daysRemaining(campaignWithPeriod(end = "2026-06-28"), today))
+        assertNull(engine.daysRemaining(campaignWithPeriod(), today))
+        assertNull(engine.daysRemaining(campaignWithPeriod(end = "2026-06-27"), today))
+    }
+
+    @Test
+    fun `残り3日以下で警告が出る`() {
+        val campaign = campaignWithPeriod(start = "2026-06-01", end = "2026-06-30")
+        val engine = periodTestEngine(campaign)
+        val judgments = engine.judge(testMerchant, LocalDate.of(2026, 6, 28))
+        assertTrue(judgments.first().warnings.any { it.contains("残り") })
+    }
+
+    @Test
+    fun `残り4日以上では警告なし`() {
+        val campaign = campaignWithPeriod(start = "2026-06-01", end = "2026-07-31")
+        val engine = periodTestEngine(campaign)
+        val judgments = engine.judge(testMerchant, today)
+        assertTrue(judgments.first().warnings.isEmpty())
+    }
+
+    // ---- store_scope フィルタのテスト ----
+
+    @Test
+    fun `store_scope_external は judge に含まれない`() {
+        val campaign = campaignWithPeriod(storeScope = "external", type = "municipal")
+        val engine = periodTestEngine(campaign)
+        assertTrue(engine.judge(testMerchant, today).isEmpty())
+    }
+
+    @Test
+    fun `store_scope_managed は judge に含まれる`() {
+        val campaign = campaignWithPeriod(storeScope = "managed")
+        val engine = periodTestEngine(campaign)
+        assertEquals(1, engine.judge(testMerchant, today).size)
+    }
+
+    // ---- QR 判定のテスト ----
+
+    @Test
+    fun `QR決済の判定_利用中のQRのみ返る`() {
+        val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
+        val campaign = campaignWithPeriod(
+            type = "card_promotion",
+            paymentMethodId = "paypay",
+            rateBase = 20.0,
+            start = "2026-07-01",
+            end = "2026-07-31",
+        )
+        val profile = Profile(qrPayments = listOf(paypay))
+        val engine = periodTestEngine(campaign, profile)
+
+        // 7月中はアクティブ
+        val julyToday = LocalDate.of(2026, 7, 15)
+        val results = engine.judgeQr(testMerchant, julyToday, setOf("paypay"))
+        assertEquals(1, results.size)
+        assertEquals("PayPay", results.first().paymentMethod.name)
+        assertEquals(20.0, results.first().effectiveRate!!, 0.001)
+        assertEquals(BenefitType.REBATE, results.first().benefitType)
+
+        // 未登録のQR決済では出ない
+        assertTrue(engine.judgeQr(testMerchant, julyToday, setOf("aupay")).isEmpty())
+
+        // 空セットでは出ない
+        assertTrue(engine.judgeQr(testMerchant, julyToday, emptySet()).isEmpty())
+    }
+
+    @Test
+    fun `クーポン割引の判定_coupon_fixed`() {
+        val dpay = QrPayment(id = "dpay", name = "d払い", brandColor = "#E60033")
+        val campaign = campaignWithPeriod(
+            type = "card_promotion",
+            benefitType = "coupon_fixed",
+            paymentMethodId = "dpay",
+            rateBase = null,
+            discountAmount = 100,
+            minPurchase = 200,
+            usageLimit = 1,
+            start = "2026-07-01",
+            end = "2026-07-15",
+        )
+        val profile = Profile(qrPayments = listOf(dpay))
+        val engine = periodTestEngine(campaign, profile)
+        val julyToday = LocalDate.of(2026, 7, 10)
+        val results = engine.judgeQr(testMerchant, julyToday, setOf("dpay"))
+        assertEquals(1, results.size)
+        val q = results.first()
+        assertEquals(BenefitType.COUPON_FIXED, q.benefitType)
+        assertEquals(100, q.discountAmount)
+        assertEquals(200, q.minPurchase)
+        assertEquals(1, q.usageLimit)
+        assertNull(q.effectiveRate)
+        assertEquals(5, q.daysRemaining)
+    }
+
+    @Test
+    fun `クーポン割引の判定_coupon_percent`() {
+        val dpay = QrPayment(id = "dpay", name = "d払い", brandColor = "#E60033")
+        val campaign = campaignWithPeriod(
+            type = "card_promotion",
+            benefitType = "coupon_percent",
+            paymentMethodId = "dpay",
+            rateBase = 10.0,
+            perTransactionCap = 500,
+            start = "2026-07-01",
+            end = "2026-07-31",
+        )
+        val profile = Profile(qrPayments = listOf(dpay))
+        val engine = periodTestEngine(campaign, profile)
+        val julyToday = LocalDate.of(2026, 7, 15)
+        val results = engine.judgeQr(testMerchant, julyToday, setOf("dpay"))
+        assertEquals(1, results.size)
+        val q = results.first()
+        assertEquals(BenefitType.COUPON_PERCENT, q.benefitType)
+        assertEquals(10.0, q.effectiveRate!!, 0.001)
+        assertEquals(500, q.perTransactionCap)
+    }
+
+    // ---- judgeAll のテスト ----
+
+    @Test
+    fun `judgeAll はカードとQRを統合する`() {
+        val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
+        val cardCampaign = campaignWithPeriod().copy(id = "card1")
+        val qrCampaign = campaignWithPeriod(
+            type = "card_promotion",
+            paymentMethodId = "paypay",
+            rateBase = 20.0,
+        ).copy(id = "qr1")
+        val testCardForCard1 = testCard.copy(campaignId = "card1")
+        val engine = JudgmentEngine(
+            PoikatsuData(
+                merchants = listOf(testMerchant),
+                campaigns = listOf(cardCampaign, qrCampaign),
+                profile = Profile(cards = listOf(testCardForCard1), qrPayments = listOf(paypay)),
+                updatedAt = "2026-06-01",
+            ),
+        )
+        val result = engine.judgeAll(testMerchant, today, setOf("paypay"))
+        assertEquals(1, result.cardJudgments.size)
+        assertEquals(1, result.qrJudgments.size)
+        assertNotNull(result.bestOption)
+        assertEquals("PayPay", result.bestOption!!.method)
+        assertEquals(20.0, result.bestOption!!.rate!!, 0.001)
+    }
+
+    @Test
+    fun `bestOption は定率で最高のものを選ぶ`() {
+        val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
+        val campaign5 = campaignWithPeriod(rateBase = 5.0).copy(id = "c5")
+        val campaign20 = campaignWithPeriod(
+            type = "card_promotion",
+            paymentMethodId = "paypay",
+            rateBase = 20.0,
+        ).copy(id = "c20")
+        val testCardForC5 = testCard.copy(campaignId = "c5", effectiveRateDefault = 5.0)
+        val engine = JudgmentEngine(
+            PoikatsuData(
+                merchants = listOf(testMerchant),
+                campaigns = listOf(campaign5, campaign20),
+                profile = Profile(cards = listOf(testCardForC5), qrPayments = listOf(paypay)),
+                updatedAt = "2026-06-01",
+            ),
+        )
+        val result = engine.judgeAll(testMerchant, today, setOf("paypay"))
+        assertEquals("PayPay", result.bestOption!!.method)
+        assertEquals(20.0, result.bestOption!!.rate!!, 0.001)
+    }
+
+    // ---- BenefitType のテスト ----
+
+    @Test
+    fun `BenefitType の文字列変換`() {
+        assertEquals(BenefitType.REBATE, BenefitType.fromString("rebate"))
+        assertEquals(BenefitType.COUPON_PERCENT, BenefitType.fromString("coupon_percent"))
+        assertEquals(BenefitType.COUPON_FIXED, BenefitType.fromString("coupon_fixed"))
+        assertEquals(BenefitType.REBATE, BenefitType.fromString("unknown"))
+    }
+
+    // ---- 実データの新フィールド検証 ----
+
+    @Test
+    fun `実データ_既存施策のtype_benefitType_storeScopeが設定されている`() {
+        data.campaigns.forEach { c ->
+            assertTrue("${c.id}: type should be card_program", c.type == "card_program")
+            assertTrue("${c.id}: benefitType should be rebate", c.benefitType == "rebate")
+            assertTrue("${c.id}: storeScope should be managed", c.storeScope == "managed")
+        }
+    }
+
+    @Test
+    fun `実データ_QR決済カタログが読み込めている`() {
+        val qr = data.profile.qrPayments
+        assertTrue(qr.isNotEmpty())
+        assertTrue(qr.any { it.id == "paypay" })
+        assertTrue(qr.any { it.id == "aupay" })
+        assertTrue(qr.any { it.id == "dpay" })
+        assertTrue(qr.any { it.id == "rakuten_pay" })
+    }
+
+    @Test
+    fun `実データ_yolpConfigが読み込めている`() {
+        val config = data.yolpConfig
+        assertNotNull(config)
+        assertEquals(2, config!!.gcGroups.size)
+        assertEquals("0123,0115,0101013", config.gcGroups[0].gc)
+        assertEquals("0205", config.gcGroups[1].gc)
+    }
+
+    @Test
+    fun `実データ_keyword検索のmerchantが正しく設定されている`() {
+        val keywordMerchants = data.merchants.filter { it.yolpSearch == "keyword" }
+        val keywordIds = keywordMerchants.map { it.id }.toSet()
+        assertTrue("curves" in keywordIds)
+        assertTrue("akachan_honpo" in keywordIds)
+        assertTrue("ok_store" in keywordIds)
+        assertTrue("pizza_hut" in keywordIds)
+        assertTrue("ueshima_coffee" in keywordIds)
+        assertTrue("hamazushi" in keywordIds)
+    }
+
+    @Test
+    fun `実データ_coke_onはyolp_search_none`() {
+        val cokeOn = data.merchants.first { it.id == "coke_on" }
+        assertEquals("none", cokeOn.yolpSearch)
+    }
+
+    @Test
+    fun `実データ_gc検索のmerchantはデフォルトのgc`() {
+        val gcMerchants = data.merchants.filter { it.yolpSearch == "gc" }
+        assertTrue(gcMerchants.any { it.id == "seven_eleven" })
+        assertTrue(gcMerchants.any { it.id == "mcdonalds" })
+        assertTrue(gcMerchants.any { it.id == "gusto" })
     }
 }
 

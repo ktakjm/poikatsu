@@ -23,6 +23,7 @@ import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.StoreVerdict
 import com.ktakjm.poikatsu.util.GeoMath
 import java.io.File
+import java.time.LocalDate
 import java.util.Locale
 import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
@@ -304,12 +305,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         merchant: Merchant,
         storeNameHint: String,
         displayName: String? = null,
-    ) = Selection(merchant, judge(merchant), canCheckStore(merchant), storeNameHint, displayName)
+    ) = Selection(merchant, judge(merchant, LocalDate.now()), canCheckStore(merchant), storeNameHint, displayName)
 
     /** 検索結果のうち、所有カードで対象になる施策が1つ以上あるチェーンだけ残す(reward 無しは一覧に出さない) */
     private fun JudgmentEngine.searchRewarded(query: String, categories: Set<String>): List<SearchResult> =
         search(query, categories).mapNotNull { merchant ->
-            val judgments = judge(merchant)
+            val judgments = judge(merchant, LocalDate.now())
             if (judgments.isEmpty()) return@mapNotNull null
             SearchResult(
                 merchant = merchant,
@@ -512,7 +513,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val merchant = engine.matchStore(poi.name, poi.brand) ?: return@mapNotNull null
                 if (engine.isFacilityTenant(merchant.name, poi.displayName)) return@mapNotNull null
                 if (engine.isExcludedStore(merchant, poi.displayName)) return@mapNotNull null
-                val judgments = engine.judge(merchant)
+                val judgments = engine.judge(merchant, LocalDate.now())
                 if (judgments.isEmpty()) return@mapNotNull null
                 NearbyPlace(
                     name = poi.displayName,

@@ -1,6 +1,6 @@
 {
-  "schema_version": 1,
-  "updated_at": "2026-06-12",
+  "schema_version": 2,
+  "updated_at": "2026-06-28",
   "profile": {
     "cards": [
       {
@@ -24,6 +24,40 @@
           "MastercardブランドなのでAmex除外店(amex_excluded=true)の制限は適用されない",
           "rate_breakdown の上乗せ条件(アプリログイン等)の達成状況は未設定。達成分を加味する場合は将来の設定画面で扱う"
         ]
+      }
+    ],
+    "qr_payments": [
+      {
+        "id": "paypay",
+        "name": "PayPay",
+        "brand_color": "#FF0033",
+        "app_package": "jp.ne.paypay.android.app",
+        "store_search_label": "PayPayアプリの「近くのおトク」で対象店舗を確認",
+        "enabled_default": false
+      },
+      {
+        "id": "aupay",
+        "name": "au PAY",
+        "brand_color": "#FF5722",
+        "app_package": "com.kddi.android.aupay",
+        "store_search_label": "au PAYアプリで対象店舗を確認",
+        "enabled_default": false
+      },
+      {
+        "id": "dpay",
+        "name": "d払い",
+        "brand_color": "#E60033",
+        "app_package": "com.nttdocomo.android.payment",
+        "store_search_label": "d払いアプリで対象店舗を確認",
+        "enabled_default": false
+      },
+      {
+        "id": "rakuten_pay",
+        "name": "楽天ペイ",
+        "brand_color": "#BF0000",
+        "app_package": "jp.co.rakuten.pay",
+        "store_search_label": "楽天ペイアプリで対象店舗を確認",
+        "enabled_default": false
       }
     ]
   }

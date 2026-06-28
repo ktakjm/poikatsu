@@ -3,7 +3,7 @@
 店舗名やカテゴリから「どの支払い方法が最も得か」を判定する Android アプリのコード解説ドキュメント。
 Kotlin + Jetpack Compose の標準的な構成（MVVM + Repository）を学ぶための題材として、各レイヤの責務・設計判断・データフローを説明する。
 
-- 対象リビジョン: Phase 1 完了 + 店舗単位の対象判定（公式リスト方式・3 状態）+ GPS 周辺検索 実装済み時点
+- 対象リビジョン: Phase 1 完了 + Phase 2A（期間限定キャンペーン・QR 決済・クーポン割引のデータ基盤）実装済み時点
 - 全体計画: [PLAN.md](../PLAN.md) / データ仕様: [data/README.md](../data/README.md) / プロジェクト規約: [CLAUDE.md](../CLAUDE.md)
 
 ## 1. 全体アーキテクチャ
@@ -94,9 +94,9 @@ poikatsu/
 ├── PLAN.md                 # 全体計画（フェーズ・マイルストーン）
 ├── CLAUDE.md               # プロジェクト規約（ライセンス方針ほか）
 ├── data/                   # 施策データ（単一ソース）
-│   ├── merchants.json      # チェーン店マスタ（59 件、読み・エイリアス付き）
-│   ├── campaigns.json      # 還元施策（三井住友・MUFG の 2 施策、計 62 ルール）
-│   ├── profile.json        # ユーザー前提条件（保有カード・エントリー状況）
+│   ├── merchants.json      # チェーン店マスタ（59 件）+ YOLP 検索設定（yolp_config）
+│   ├── campaigns.json      # 還元施策（常設 card_program + 期間限定 card_promotion + 自治体 municipal）
+│   ├── profile.json        # ユーザー前提条件（保有カード + QR 決済カタログ）
 │   └── README.md           # データスキーマ仕様・更新ルール
 ├── docs/
 │   ├── licenses.md         # 依存ライブラリのライセンス調査
@@ -112,7 +112,7 @@ poikatsu/
     │   │                   # OverpassClient, LocationProvider
     │   └── util/           # JapaneseText, GeoMath（純 Kotlin）
     └── test/java/com/ktakjm/poikatsu/
-        ├── JudgmentEngineTest.kt   # 実データを使った検索・判定・店舗対象判定テスト（27 件）
+        ├── JudgmentEngineTest.kt   # 実データを使った検索・判定・店舗対象判定・期間フィルタ・QR判定テスト（47 件）
         ├── DataRepositoryTest.kt   # ロード戦略のテスト（5 件）
         └── NearbyTest.kt           # Overpass パース・距離計算のテスト（10 件）
 ```
@@ -131,14 +131,31 @@ erDiagram
         string reading "ひらがな読み（検索用）"
         string_list aliases "略称・別表記"
         string category "コンビニ/ファミレス等"
+        string yolp_search "gc/keyword/none"
+        string yolp_keyword "keyword時の検索語(任意)"
     }
     CAMPAIGN {
         string id PK
+        string type "card_program/card_promotion/municipal"
+        string benefit_type "rebate/coupon_percent/coupon_fixed"
+        string store_scope "managed/external"
         string issuer "発行体"
         string brand_color "#RRGGBB"
-        double rate_base "基準還元率"
-        bool entry_required
+        double rate_base "基準還元率(定率時)"
+        int discount_amount "割引額(定額時)"
+        string period_start "開始日(ISO8601・nullで常設)"
+        string period_end "終了日(ISO8601・nullで常設)"
+        int per_transaction_cap "1回上限(円)"
+        int period_total_cap "期間合計上限(円)"
+        int min_purchase "最低購入額(円)"
+        int usage_limit "利用回数上限"
+        string payment_method_id "QR決済ID(カード施策はnull)"
         string verified_date "最終確認日"
+    }
+    REGION {
+        string name "自治体名"
+        string prefecture "都道府県"
+        string area_group "将来用グループ(null)"
     }
     MERCHANT_RULE {
         string merchant_id FK
@@ -158,20 +175,36 @@ erDiagram
         string campaign_id FK
         string card_name
         string brand "Visa/Mastercard/Amex"
-        bool entry_done
         double effective_rate_default
     }
+    QR_PAYMENT {
+        string id PK
+        string name "PayPay/auPAY等"
+        string brand_color "#RRGGBB"
+        string app_package "Android パッケージ名"
+        bool enabled_default
+    }
+    YOLP_CONFIG {
+        int max_keyword_sources "keyword上限"
+    }
+    GC_GROUP {
+        string gc "カンマOR gcコード"
+        string_list categories "対応カテゴリ"
+        int max_pages "ページ上限(密度チューニング)"
+    }
     CAMPAIGN ||--o{ MERCHANT_RULE : "merchant_rules[]"
+    CAMPAIGN ||--o| REGION : "region(自治体施策のみ)"
     MERCHANT_RULE }o--|| MERCHANT : "merchant_id で参照"
     MERCHANT_RULE ||--o| OFFICIAL_STORE_LIST : "official_store_list(任意)"
     PROFILE_CARD }o--|| CAMPAIGN : "campaign_id で参照"
+    YOLP_CONFIG ||--o{ GC_GROUP : "gc_groups[]"
 ```
 
 3 つの JSON の役割分担:
 
-- `merchants.json` — チェーンの正規化マスタ。検索ヒット率は `reading` / `aliases` の充実度で決まる
-- `campaigns.json` — 汎用的な施策情報のみ。**ユーザー固有の前提を書かない**（規約）
-- `profile.json` — ユーザー前提（保有ブランド・エントリー済みか等）。常にローカル（assets）から読み、リモート更新の対象外
+- `merchants.json` — チェーンの正規化マスタ。検索ヒット率は `reading` / `aliases` の充実度で決まる。トップレベルに `yolp_config`（YOLP 検索の gc グループ定義）を持ち、各 merchant の `yolp_search`（`gc`/`keyword`/`none`）で検索方式を指定する（Phase B でデータ駆動化する際に `YolpClient` が参照する）
+- `campaigns.json` — 汎用的な施策情報のみ。**ユーザー固有の前提を書かない**（規約）。`type` で常設カード（`card_program`）/ 期間限定（`card_promotion`）/ 自治体施策（`municipal`）を区分し、`benefit_type` でポイント還元（`rebate`）/ 定率即時割引（`coupon_percent`）/ 定額即時割引（`coupon_fixed`）を区分する。`store_scope` が `managed` ならチェーン検索・地図に表示、`external` ならキャンペーンタブのみ表示
+- `profile.json` — ユーザー前提（保有ブランド・エントリー済みか等）+ QR 決済カタログ（`qr_payments`）。常にローカル（assets）から読み、リモート更新の対象外
 
 パースは `PoikatsuJson.parse()` に集約。`ignoreUnknownKeys = true` + `coerceInputValues = true` により、スキーマに後からフィールドを追加しても旧アプリが壊れない（前方互換）。
 
@@ -242,38 +275,83 @@ flowchart TD
 3. 記号除去（スペース・中点・各種ハイフン等。長音「ー」は読みの一部なので残す）
 4. カタカナ→ひらがな（コードポイントを `-0x60` シフト）
 
-### 5.3 チェーン判定（judge）と店舗単位の対象判定（checkStore）
+### 5.3 期間フィルタ（campaignStatus / daysRemaining）
 
-`judge` はチェーン単位の判定（店舗名は受け取らない）。店舗単位の対象/対象外は別関数 `checkStore` が担う。
+`judge` に `today: LocalDate` パラメータを追加し、期間フィルタを適用する。`today` は外から渡す（`LocalDate.now()` をドメイン内で呼ばない＝純 Kotlin 維持）。
+
+```kotlin
+enum class CampaignStatus { ACTIVE, UPCOMING, EXPIRED }
+```
+
+| 状態 | 条件 | 判定への影響 |
+|---|---|---|
+| ACTIVE | `period_start` ≤ today ≤ `period_end`、または両方 null（常設） | `judge`/`judgeQr` に含まれる |
+| UPCOMING | `period_start` > today（未来開始） | キャンペーンタブにのみ表示（Phase C）。`judge` には含まれない |
+| EXPIRED | `period_end` < today（期限切れ） | **UI に一切表示しない** |
+
+`daysRemaining(campaign, today)` は残り日数を返す（`period_end` null なら null）。残り 3 日以下で `Judgment.warnings` に警告を追加する。
+
+### 5.4 チェーン判定（judge）と店舗単位の対象判定（checkStore）
+
+`judge(merchant, today)` はカード施策のチェーン単位判定。`judgeQr` は QR 決済施策の判定。`judgeAll` は両方を統合して `JudgmentResult` を返す。店舗単位の対象/対象外は別関数 `checkStore` が担う。
 
 ```mermaid
 flowchart LR
-    IN["Merchant"] --> LOOP["全 Campaign を走査"]
-    LOOP --> RULE{"merchant_rules に<br/>この店の rule あり?"}
-    RULE -- "なし" --> DROP(["対象外（リスト除外）"])
-    RULE -- "あり" --> CARD{"保有カードあり?<br/>(未所有=対象外)"}
+    IN["Merchant + today"] --> PERIOD{"期間フィルタ<br/>ACTIVE のみ通過"}
+    PERIOD -- "EXPIRED/UPCOMING" --> DROP(["除外"])
+    PERIOD -- "ACTIVE" --> SCOPE{"store_scope<br/>== managed?"}
+    SCOPE -- "external" --> DROP
+    SCOPE -- "managed" --> PMID{"paymentMethodId<br/>== null?"}
+    PMID -- "QR施策" --> QR["judgeQr へ"]
+    PMID -- "カード施策" --> RULE{"merchant_rules に<br/>この店の rule あり?"}
+    RULE -- "なし" --> DROP
+    RULE -- "あり" --> CARD{"保有カードあり?"}
     CARD -- "なし" --> DROP
     CARD -- "あり" --> AMEX{"Amex かつ<br/>amex_excluded?"}
     AMEX -- "はい" --> DROP
-    AMEX -- "いいえ" --> RATE["effectiveRate 決定"]
+    AMEX -- "いいえ" --> RATE["effectiveRate 決定<br/>+ 残日数警告"]
     RATE --> SORT["effectiveRate 降順で<br/>Judgment リスト返却"]
 
     style IN fill:#1565C0,stroke:#0D47A1,color:#fff
     style SORT fill:#2E7D32,stroke:#1B5E20,color:#fff
     style DROP fill:#E0E0E0,stroke:#9E9E9E,color:#333
+    style QR fill:#6A1B9A,stroke:#4A148C,color:#fff
 ```
 
 - `effectiveRate = card.effectiveRateDefault ?: campaign.rateBase` — ユーザー前提（profile）があればそれを優先
 - **保有カードのみ対象**: profile に対応カードが無い施策はスキップする。設定で「所有」OFF にしたカードは `MainViewModel` のマージ層で profile から外れるため、ここで自然に除外される。
+- **期間フィルタ**: `campaignStatus(campaign, today)` が ACTIVE の施策のみ。期限切れ・未来開始はスキップ。
+- **store_scope フィルタ**: `store_scope == "managed"` のみ。自治体施策（`external`）は「探す」「近く」に出さない。
+- **カード vs QR の分離**: `paymentMethodId == null` のカード施策のみ `judge` が返す。QR 決済施策は `judgeQr` が担当（`enabledQrIds` でユーザーの利用 QR をフィルタ）。
 - **Amex の対象外**: カードブランドが Amex で店舗 rule が `amex_excluded` のとき、その店ではこの施策を除外する（警告ではなく非表示。検索・判定詳細・地図ピン/件数すべてに波及）。非 Amex（Mastercard/Visa/JCB）は従来どおり。
 - **設定値の反映はマージ層**: 還元率の手入力・MUFG ブランド・ウエル活 ×1.5（`ProfileCard.point_multiplier` の係数）は `MainViewModel` が DataStore の差分（`CardOverride`）を profile に重ねてからエンジンへ渡す。`JudgmentEngine` は純 Kotlin・実データテストのまま保つ（4 章「設定の永続化」／6.1 参照）。
 - **reward の無いチェーンは一覧に出さない**: 判定が空（所有カードで対象になる施策が無い）チェーンは検索結果・近隣リストから除外する（`MainViewModel.searchRewarded` と `loadNearbyAround` で `judge` 非空のものだけ残す）。
-- **エントリー要否は持たない**: 還元率はユーザーが公式アプリの実効値（エントリー込み）を手入力する前提のため、`entry_done` フラグと未エントリー警告は廃止した。`Judgment.warnings` は将来の用途（例: `period_end` 期限切れ）に備えて空のまま残す。
+- **エントリー要否は持たない**: 還元率はユーザーが公式アプリの実効値（エントリー込み）を手入力する前提のため、`entry_done` フラグと未エントリー警告は廃止した。`Judgment.warnings` は期限切れ間近（残り 3 日以下）の警告に使われる。
 - **店舗単位の判定 `checkStore(merchant, storeName)`**: `official_store_list` を持つ施策ごとに、`ineligible_stores` 一致 → 対象外 / `eligible_stores` 一致 → 対象 / どちらにも無し → 要確認（`StoreEligibility.UNKNOWN`）の **3 状態**を返す（対象外を優先）。リスト網羅性を仮定せず、**公式が店舗名で明示した店だけ言い切る**設計（旧 `facility_risk_patterns` によるキーワード推測警告は実際の対象外店舗との乖離が大きく廃止）。
 - `canCheckStore(merchant)`: `official_store_list` を持つ施策が 1 つでもあれば、対象判定画面（`StoreCheckScreen`）に遷移できる。
 - `isExcludedStore(merchant, storeName)`: 近隣リスト用。`checkStore` の結果が INELIGIBLE を含み ELIGIBLE を含まないときだけ true（**明示的対象外のみ**近隣リストから除外する）。
 - チェーン rule の引き当ては `Campaign.ruleFor(merchant)`（private 拡張）に集約。
 - `matchStore(storeName, brand)` は GPS 検索用。OSM の POI 名（「マクドナルド 渋谷駅前店」）からチェーンを特定する。「ステーキガスト」が「ガスト」に負けないよう、**一致キーが最長のチェーンを採用**する
+
+### 5.5 QR 決済判定（judgeQr）と統合判定（judgeAll）
+
+`judgeQr(merchant, today, enabledQrIds)` はアクティブな `card_promotion`（`paymentMethodId != null`、`store_scope == "managed"`）のうち、ユーザーが利用中の QR 決済（`enabledQrIds`）に該当するものを `QrJudgment` として返す。
+
+```kotlin
+data class QrJudgment(
+    val campaign: Campaign,
+    val paymentMethod: QrPayment,
+    val benefitType: BenefitType,    // REBATE / COUPON_PERCENT / COUPON_FIXED
+    val effectiveRate: Double?,      // 定率の場合
+    val discountAmount: Int?,        // 定額の場合
+    val daysRemaining: Int?,         // 残り日数
+    // ... perTransactionCap, periodTotalCap, minPurchase, usageLimit
+)
+```
+
+`judgeAll(merchant, today, enabledQrIds)` は `judge` + `judgeQr` を統合して `JudgmentResult`（`cardJudgments` + `qrJudgments` + `bestOption`）を返す。`bestOption` は定率（rebate/coupon_percent）で最高還元率のものを選ぶ。定額（coupon_fixed）は購入額に依存するため比較せず並列表示とする。
+
+`BenefitType`（`REBATE` / `COUPON_PERCENT` / `COUPON_FIXED`）は `benefit_type` 文字列から `BenefitType.fromString()` で変換する。rebate と coupon の違い: rebate は後日ポイント付与（PayPay の「クーポン」含む）、coupon は即時値引き
 
 ## 6. UI レイヤ（ui/）
 
@@ -358,7 +436,7 @@ sequenceDiagram
         JE-->>VM: 該当チェーン or null（捨てる）
         VM->>JE: isExcludedStore(merchant, displayName)
         Note over JE: 公式に明示的「対象外」なら<br/>リストから除外
-        VM->>JE: judge(merchant) → 還元率順の施策（最高還元率・対応発行体の色一覧）
+        VM->>JE: judge(merchant, today) → 還元率順の施策（期間フィルタ済み・最高還元率・対応発行体の色一覧）
     end
     VM-->>SC: NearbyUi（地図中心からの距離昇順・対象チェーンのみ・明示的対象外は除外）
     U->>SC: 店舗をタップ（リスト行 / 地図ピン）
@@ -403,13 +481,13 @@ sequenceDiagram
 
 ## 8. テスト戦略
 
-`./gradlew :app:testDebugUnitTest` で全 52 テストが JVM 上で実行される（エミュレータ不要）。
+`./gradlew :app:testDebugUnitTest` で全 77 テストが JVM 上で実行される（エミュレータ不要）。
 
 | テスト | 対象 | 特徴 |
 |---|---|---|
-| `JudgmentEngineTest`（30 件） | 検索・正規化・判定・店舗対象判定（3 状態）・近隣除外 | **リポジトリ直下 `data/` の実データを読み込む**。「マック→マクドナルド」「マックスバリュは誤ヒットしない」等の振る舞いと、merchant_id 参照切れ等のデータ整合性チェックを兼ねる。アカチャンホンポの公式リストで対象/対象外/要確認の 3 状態も検証 |
+| `JudgmentEngineTest`（48 件）+ `JapaneseTextTest`（3 件） | 検索・正規化・判定・店舗対象判定（3 状態）・近隣除外・**期間フィルタ・store_scope・QR判定・クーポン・judgeAll・BenefitType・データ検証** | **リポジトリ直下 `data/` の実データを読み込む**。「マック→マクドナルド」「マックスバリュは誤ヒットしない」等の振る舞いと、merchant_id 参照切れ等のデータ整合性チェックを兼ねる。アカチャンホンポの公式リストで対象/対象外/要確認の 3 状態も検証。Phase 2A で期間フィルタ（active/upcoming/expired・残日数警告）、store_scope フィルタ、QR 決済判定（rebate/coupon_percent/coupon_fixed）、judgeAll 統合、実データの新フィールド検証（type/benefitType/storeScope/qrPayments/yolpConfig/yolpSearch）を追加 |
 | `DataRepositoryTest`（5 件） | ロード戦略 | ラムダ注入により、キャッシュあり/なし/破損、リモート成功/失敗の各経路を File システムだけで検証 |
-| `NearbyTest`（16 件） | Overpass/YOLP パース・距離計算・チェーン特定・施設テナント除外・重複排除キー | 固定 JSON フィクスチャでネットワーク非依存 |
+| `NearbyTest`（20 件） | Overpass/YOLP パース・距離計算・チェーン特定・施設テナント除外・重複排除キー・密度差クリップ | 固定 JSON フィクスチャでネットワーク非依存 |
 
 「実データをテストに使う」のがこのプロジェクトの肝で、**データ更新（JSON 編集）だけの変更でも CI 的にテストを流せば参照切れやエイリアス衝突を検出できる**。
 
