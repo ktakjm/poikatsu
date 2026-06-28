@@ -255,6 +255,14 @@ class JudgmentEngine(private val data: PoikatsuData) {
     fun upcomingCampaigns(today: LocalDate): List<Campaign> =
         data.campaigns.filter { campaignStatus(it, today) == CampaignStatus.UPCOMING }
 
+    /** アクティブな managed 施策が参照する merchant ID の集合(YOLP 検索対象の決定に使う) */
+    fun activeManagedMerchantIds(today: LocalDate): Set<String> =
+        activeCampaigns(today)
+            .filter { it.storeScope == "managed" }
+            .flatMap { it.merchantRules }
+            .map { it.merchantId }
+            .toSet()
+
     /** この施策におけるそのチェーンのルール(なければ対象外) */
     private fun Campaign.ruleFor(merchant: Merchant): MerchantRule? =
         merchantRules.firstOrNull { it.merchantId == merchant.id }

@@ -13,6 +13,7 @@ import com.ktakjm.poikatsu.data.LoadedData
 import com.ktakjm.poikatsu.data.LocationProvider
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.YolpClient
+import com.ktakjm.poikatsu.data.YolpSearchConfig
 import com.ktakjm.poikatsu.data.AppSettings
 import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.Profile
@@ -500,7 +501,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         adaptZoom: Boolean = false,
     ) {
         val engine = engine ?: return
-        val pois = YolpClient.fetchNearby(centerLat, centerLon, radiusM = radiusM)
+        val data = lastLoaded?.data
+        val config = data?.yolpConfig?.let { yolpConfig ->
+            YolpSearchConfig.build(yolpConfig, data.merchants, engine.activeManagedMerchantIds(LocalDate.now()))
+        }
+        if (config == null) {
+            failNearby(gen, "検索設定を構築できませんでした。データを更新してください")
+            return
+        }
+        val pois = YolpClient.fetchNearby(config, centerLat, centerLon, radiusM = radiusM)
         if (pois == null) {
             failNearby(
                 gen,

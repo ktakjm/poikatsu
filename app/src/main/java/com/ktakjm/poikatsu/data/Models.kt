@@ -57,6 +57,34 @@ data class YolpConfig(
     @SerialName("max_keyword_sources") val maxKeywordSources: Int = 20,
 )
 
+data class YolpSearchConfig(
+    val gcGroups: List<GcGroup>,
+    val keywordQueries: List<String>,
+    val maxKeywordSources: Int = 20,
+) {
+    companion object {
+        fun build(
+            yolpConfig: YolpConfig,
+            merchants: List<Merchant>,
+            activeMerchantIds: Set<String>,
+        ): YolpSearchConfig {
+            val activeMerchants = merchants.filter { it.id in activeMerchantIds }
+            val activeCategories = activeMerchants
+                .filter { it.yolpSearch == "gc" }
+                .map { it.category }
+                .toSet()
+            val gcGroups = yolpConfig.gcGroups.filter { group ->
+                group.categories.any { it in activeCategories }
+            }
+            val keywordQueries = activeMerchants
+                .filter { it.yolpSearch == "keyword" }
+                .map { it.yolpKeyword ?: it.name }
+                .take(yolpConfig.maxKeywordSources)
+            return YolpSearchConfig(gcGroups, keywordQueries, yolpConfig.maxKeywordSources)
+        }
+    }
+}
+
 @Serializable
 data class MerchantsFile(
     @SerialName("schema_version") val schemaVersion: Int = 1,
