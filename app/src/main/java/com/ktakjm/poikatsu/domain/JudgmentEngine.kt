@@ -247,6 +247,12 @@ class JudgmentEngine(private val data: PoikatsuData) {
         return if (days >= 0) days else null
     }
 
+    fun daysUntilStart(campaign: Campaign, today: LocalDate): Int? {
+        val start = campaign.periodStart?.let { parseDate(it) } ?: return null
+        val days = ChronoUnit.DAYS.between(today, start).toInt()
+        return if (days > 0) days else null
+    }
+
     /** アクティブな campaign のみ返す(store_scope フィルタなし) */
     fun activeCampaigns(today: LocalDate): List<Campaign> =
         data.campaigns.filter { campaignStatus(it, today) == CampaignStatus.ACTIVE }

@@ -6,6 +6,7 @@ import android.location.Geocoder
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.DataRepository
 import com.ktakjm.poikatsu.data.DataSource
 import com.ktakjm.poikatsu.data.GithubRawClient
@@ -55,6 +56,9 @@ private val FALLBACK_PLACE = MainViewModel.GeocodedPlace(
     lat = 35.6896,
     lon = 139.7006,
 )
+
+enum class AppTab { SEARCH, NEARBY, CAMPAIGNS, SETTINGS }
+enum class CampaignFilter { ALL, MUNICIPAL, CARD, QR }
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -186,8 +190,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val geocodeCandidates: List<GeocodedPlace> = emptyList(),
         /** ジオコーディング中フラグ */
         val isGeocoding: Boolean = false,
-        /** 設定オーバーレイの表示中フラグ。探す/近くのどちらの上にも重ねて開ける */
-        val showSettings: Boolean = false,
+        val selectedTab: AppTab = AppTab.SEARCH,
+        val campaignFilter: CampaignFilter = CampaignFilter.ALL,
+        val timeLimitedActive: List<Campaign> = emptyList(),
+        val timeLimitedUpcoming: List<Campaign> = emptyList(),
         // --- 設定値(DataStore 由来) ---
         val themeMode: ThemeMode = ThemeMode.SYSTEM,
         val dynamicColor: Boolean = true,
@@ -353,6 +359,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val newEngine = JudgmentEngine(engineData)
         engine = newEngine
 
+        val today = LocalDate.now()
+        val timeLimitedActive = newEngine.activeCampaigns(today)
+            .filter { it.type != "card_program" }
+        val timeLimitedUpcoming = newEngine.upcomingCampaigns(today)
+            .filter { it.type != "card_program" }
+
         // 設定画面「マイカード」カタログ: 未所有カードも含む全候補 + 現在の上書き値
         val cardSettings = baseCards.map { card ->
             val ov = settings.cardOverrides[card.campaignId]
@@ -393,6 +405,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 autoRefresh = settings.autoRefresh,
                 cardSettings = cardSettings,
                 dataCommitRef = settings.dataCommitRef,
+                timeLimitedActive = timeLimitedActive,
+                timeLimitedUpcoming = timeLimitedUpcoming,
             )
         }
     }
@@ -404,7 +418,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 results = engine?.searchRewarded(query, it.selectedCategories).orEmpty(),
                 selection = null,
                 storeCheck = null,
-                nearby = null,
             )
         }
     }
@@ -651,19 +664,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    fun onCloseNearby() {
-        // 進行中の近隣取得を無効化(世代を進める)。完了しても「近く」タブへ戻されない。
-        // 未表示の再検索失敗も破棄し、次に「近く」を開いたとき古い Snackbar が出ないようにする
-        nearbyGeneration++
-        _state.update {
-            it.copy(
-                nearby = null,
-                nearbySearchFailed = null,
-                nearbyOrigin = null,
-                geocodeCandidates = emptyList(),
-                isGeocoding = false,
+    fun onSelectTab(tab: AppTab) {
+        val prev = _state.value.selectedTab
+        if (prev == tab) return
+        if (prev == AppTab.NEARBY) nearbyGeneration++
+        _state.update { st ->
+            var s = st.copy(
+                selectedTab = tab,
+                selection = null,
+                storeCheck = null,
             )
+            if (prev == AppTab.NEARBY) {
+                s = s.copy(
+                    nearby = null,
+                    nearbySearchFailed = null,
+                    nearbyOrigin = null,
+                    geocodeCandidates = emptyList(),
+                    isGeocoding = false,
+                )
+            }
+            s
         }
+    }
+
+    fun onCloseNearby() {
+        onSelectTab(AppTab.SEARCH)
     }
 
     /**
@@ -743,16 +768,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * ブリッジ: 判定詳細(探す由来)から「近くのこの店を探す」。そのチェーンに絞った状態を作り、
-     * 判定詳細を閉じる。実際の「近く」突入(位置情報パーミッション→fetchNearby)は UI 側が続けて行う。
-     * ジャンル絞り込みはクリアしてチェーン1点に集中する(ピル解除で全件に戻る)。
+     * タブを NEARBY に切り替えて判定詳細を閉じる。実際の「近く」突入(位置情報パーミッション→fetchNearby)は
+     * UI 側が続けて行う。ジャンル絞り込みはクリアしてチェーン1点に集中する(ピル解除で全件に戻る)。
      */
     fun onFindNearby(merchant: Merchant) {
-        _state.update {
-            it.copy(
+        val prev = _state.value.selectedTab
+        if (prev == AppTab.NEARBY) nearbyGeneration++
+        _state.update { st ->
+            var s = st.copy(
+                selectedTab = AppTab.NEARBY,
                 nearbyMerchantFilter = merchant,
                 nearbySelectedCategories = emptySet(),
                 selection = null,
+                storeCheck = null,
             )
+            if (prev == AppTab.NEARBY) {
+                s = s.copy(
+                    nearby = null,
+                    nearbySearchFailed = null,
+                    nearbyOrigin = null,
+                    geocodeCandidates = emptyList(),
+                    isGeocoding = false,
+                )
+            }
+            s
         }
     }
 
@@ -939,11 +978,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(geocodeCandidates = emptyList(), isGeocoding = false) }
     }
 
-    /** 設定オーバーレイを開く(探す/近くのどちらからでも。下の画面状態は保持する) */
-    fun onOpenSettings() = _state.update { it.copy(showSettings = true) }
-
-    /** 設定オーバーレイを閉じ、開く前の画面(探す/近く)へ戻る */
-    fun onCloseSettings() = _state.update { it.copy(showSettings = false) }
+    fun onSetCampaignFilter(filter: CampaignFilter) {
+        _state.update { it.copy(campaignFilter = filter) }
+    }
 
     // --- 設定値の更新(DataStore へ書き込み → settings Flow 経由で rebuild される) ---
     fun onSetThemeMode(mode: ThemeMode) = viewModelScope.launch { settingsRepo.setThemeMode(mode) }

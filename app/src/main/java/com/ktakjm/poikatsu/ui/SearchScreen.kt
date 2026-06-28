@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -51,6 +52,7 @@ import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -115,13 +117,18 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ktakjm.poikatsu.BuildConfig
+import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.DataSource
 import com.ktakjm.poikatsu.data.LocationHint
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.ThemeMode
+import com.ktakjm.poikatsu.domain.BenefitType
+import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.domain.Judgment
 import com.ktakjm.poikatsu.domain.StoreEligibility
 import com.ktakjm.poikatsu.domain.StoreVerdict
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import com.ktakjm.poikatsu.util.GeoMath
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningColor
@@ -171,25 +178,16 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
         }
     }
 
-    // 下位画面(詳細/店舗判定/設定)やロード・エラーに重なっていない「ベースの2タブ表示」状態。
-    // 下部ナビの表示条件であり、地図モード(= この状態 かつ 近くタブ選択)の判定にもそのまま使う。
+    val selectedTab = state.selectedTab
+    // 下位画面(詳細/店舗判定)やロード・エラーに重なっていないベース状態。下部ナビの表示条件。
     val baseTabsVisible = !state.loading && state.error == null &&
-        state.selection == null && state.storeCheck == null && !state.showSettings
+        state.selection == null && state.storeCheck == null
 
     Scaffold(
-        // TopAppBar は表示中の画面に追従させる。分岐順は下の本文(when)と必ず一致させること
         topBar = {
             when {
                 state.loading -> Unit
                 state.error != null -> Unit
-                state.showSettings -> TopAppBar(
-                    title = { Text("設定") },
-                    navigationIcon = {
-                        IconButton(onClick = viewModel::onCloseSettings) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
-                        }
-                    },
-                )
                 state.storeCheck != null -> TopAppBar(
                     title = { Text("${state.storeCheck!!.merchant.name} 店舗判定") },
                     navigationIcon = {
@@ -206,53 +204,56 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         }
                     },
                 )
-                // 地図画面は NearbyPane 内の BottomSheetScaffold が独自バーを持つので外側は出さない
-                state.nearby != null -> Unit
-                else -> TopAppBar(
-                    title = { Text("ポイ活ナビ") },
-                    actions = {
-                        IconButton(onClick = viewModel::onOpenSettings) {
-                            Icon(Icons.Default.Settings, contentDescription = "設定")
-                        }
-                    },
-                )
+                selectedTab == AppTab.NEARBY -> Unit
+                selectedTab == AppTab.SEARCH -> TopAppBar(title = { Text("ポイ活ナビ") })
+                selectedTab == AppTab.CAMPAIGNS -> TopAppBar(title = { Text("キャンペーン") })
+                selectedTab == AppTab.SETTINGS -> TopAppBar(title = { Text("設定") })
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        // モード切替は下部ナビ。詳細・店舗判定などの下位画面に重なっている間は出さない
-        // (= ベースの2タブ表示時のみ)。nearby != null が「近くタブ選択中」を兼ねる
         bottomBar = {
             if (baseTabsVisible) {
-                // 標準 NavigationBar の内容高は 80dp。下部が厚いので 56dp まで詰める。
-                // システムバー inset は内部で消費されるぶんを足し戻し、安全領域を確保する
                 val barInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 NavigationBar(modifier = Modifier.height(56.dp + barInset)) {
                     NavigationBarItem(
-                        selected = state.nearby == null,
-                        onClick = { if (state.nearby != null) viewModel.onCloseNearby() },
+                        selected = selectedTab == AppTab.SEARCH,
+                        onClick = { if (selectedTab != AppTab.SEARCH) viewModel.onSelectTab(AppTab.SEARCH) },
                         icon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        label = { Text("検索") },
+                        label = { Text("探す") },
                     )
                     NavigationBarItem(
-                        selected = state.nearby != null,
-                        onClick = { if (state.nearby == null) onNearbyClick() },
+                        selected = selectedTab == AppTab.NEARBY,
+                        onClick = {
+                            if (selectedTab != AppTab.NEARBY) {
+                                viewModel.onSelectTab(AppTab.NEARBY)
+                                onNearbyClick()
+                            }
+                        },
                         icon = { Icon(Icons.Default.Place, contentDescription = null) },
-                        label = { Text("周辺") },
+                        label = { Text("近く") },
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == AppTab.CAMPAIGNS,
+                        onClick = { if (selectedTab != AppTab.CAMPAIGNS) viewModel.onSelectTab(AppTab.CAMPAIGNS) },
+                        icon = { Icon(Icons.Default.Star, contentDescription = null) },
+                        label = { Text("キャンペーン") },
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == AppTab.SETTINGS,
+                        onClick = { if (selectedTab != AppTab.SETTINGS) viewModel.onSelectTab(AppTab.SETTINGS) },
+                        icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                        label = { Text("設定") },
                     )
                 }
             }
         },
     ) { innerPadding ->
-        // 地図モードはステータスバー裏まで地図を全面表示(full-bleed)するため上端 inset を当てない。
-        // 上端 inset は NearbyPane に渡し、地図上の浮きコントロール(設定/このエリアを検索/現在地)だけが
-        // その分を避ける。地図以外(探す/設定/詳細/店舗判定/ロード/エラー)は従来どおり inset 分内側に寄せる。
-        val isMap = baseTabsVisible && state.nearby != null
+        val isMap = baseTabsVisible && selectedTab == AppTab.NEARBY && state.nearby != null
         val contentPadding = if (isMap) {
             PaddingValues(bottom = innerPadding.calculateBottomPadding())
         } else {
             innerPadding
         }
-        // ローディング中は前回の起点名を維持(新起点名+旧距離の不整合を避ける)
         val stableOriginName = remember { mutableStateOf(state.nearbyOrigin?.name) }
         if (state.nearby?.loading != true) {
             stableOriginName.value = state.nearbyOrigin?.name
@@ -261,7 +262,68 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
             when {
                 state.loading -> Centered { CircularProgressIndicator() }
                 state.error != null -> Centered { Text(state.error!!, color = MaterialTheme.colorScheme.error) }
-                state.showSettings -> SettingsScreen(
+                state.storeCheck != null -> PaddedColumn {
+                    StoreCheckScreen(
+                        storeCheck = state.storeCheck!!,
+                        onBack = viewModel::onCloseStoreCheck,
+                        onStoreNameChange = viewModel::onStoreNameChange,
+                    )
+                }
+                state.selection != null -> PaddedColumn {
+                    JudgmentDetail(
+                        selection = state.selection!!,
+                        onBack = viewModel::onBack,
+                        onOpenStoreCheck = viewModel::onOpenStoreCheck,
+                        onFindNearby = {
+                            state.selection?.merchant?.let {
+                                viewModel.onFindNearby(it)
+                                onNearbyClick()
+                            }
+                        },
+                    )
+                }
+                selectedTab == AppTab.NEARBY -> {
+                    val nearby = state.nearby
+                    if (nearby != null) {
+                        NearbyPane(
+                            nearby = nearby,
+                            categories = state.categories,
+                            selectedCategories = state.nearbySelectedCategories,
+                            merchantFilter = state.nearbyMerchantFilter,
+                            searchFailed = state.nearbySearchFailed,
+                            originName = stableOriginName.value,
+                            geocodeCandidates = state.geocodeCandidates,
+                            isGeocoding = state.isGeocoding,
+                            onClose = viewModel::onCloseNearby,
+                            onToggleCategory = viewModel::onToggleNearbyCategory,
+                            onSelectChain = viewModel::onSelectNearbyChain,
+                            onClearChain = viewModel::onClearNearbyChain,
+                            onReload = viewModel::fetchNearby,
+                            onSearchFailedShown = viewModel::onNearbySearchFailedShown,
+                            onPreviewPlace = viewModel::onPreviewNearby,
+                            onClearPreview = viewModel::onClearNearbyPreview,
+                            onClusterTap = viewModel::onClearNearbyPreview,
+                            onOpenDetail = viewModel::onSelectNearby,
+                            onSearchHere = viewModel::searchHere,
+                            onGeocode = viewModel::onGeocode,
+                            onSelectCandidate = viewModel::onSelectGeocodedPlace,
+                            onClearOrigin = viewModel::onClearOrigin,
+                            onDismissSearch = viewModel::onDismissGeocoding,
+                            topInset = innerPadding.calculateTopPadding(),
+                        )
+                    } else {
+                        Centered { CircularProgressIndicator() }
+                    }
+                }
+                selectedTab == AppTab.CAMPAIGNS -> PaddedColumn {
+                    CampaignPane(
+                        activeCampaigns = state.timeLimitedActive,
+                        upcomingCampaigns = state.timeLimitedUpcoming,
+                        filter = state.campaignFilter,
+                        onFilterChange = viewModel::onSetCampaignFilter,
+                    )
+                }
+                selectedTab == AppTab.SETTINGS -> SettingsScreen(
                     themeMode = state.themeMode,
                     dynamicColor = state.dynamicColor,
                     autoRefresh = state.autoRefresh,
@@ -278,57 +340,6 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     onCardWelcatsuChange = viewModel::onSetCardWelcatsu,
                     onRefresh = viewModel::onManualRefresh,
                     onDataCommitRefChange = viewModel::onSetDataCommitRef,
-                    onBack = viewModel::onCloseSettings,
-                )
-                state.storeCheck != null -> PaddedColumn {
-                    StoreCheckScreen(
-                        storeCheck = state.storeCheck!!,
-                        onBack = viewModel::onCloseStoreCheck,
-                        onStoreNameChange = viewModel::onStoreNameChange,
-                    )
-                }
-                state.selection != null -> PaddedColumn {
-                    JudgmentDetail(
-                        selection = state.selection!!,
-                        onBack = viewModel::onBack,
-                        onOpenStoreCheck = viewModel::onOpenStoreCheck,
-                        // ブリッジ: そのチェーンに絞ってから「近く」へ突入(パーミッションは onNearbyClick が担う)
-                        onFindNearby = {
-                            state.selection?.merchant?.let {
-                                viewModel.onFindNearby(it)
-                                onNearbyClick()
-                            }
-                        },
-                    )
-                }
-                // 地図画面はボトムシート・地図を端まで使うため全幅。横paddingは内部で個別に当てる
-                state.nearby != null -> NearbyPane(
-                    nearby = state.nearby!!,
-                    categories = state.categories,
-                    selectedCategories = state.nearbySelectedCategories,
-                    merchantFilter = state.nearbyMerchantFilter,
-                    searchFailed = state.nearbySearchFailed,
-                    originName = stableOriginName.value,
-                    geocodeCandidates = state.geocodeCandidates,
-                    isGeocoding = state.isGeocoding,
-                    onClose = viewModel::onCloseNearby,
-                    onToggleCategory = viewModel::onToggleNearbyCategory,
-                    onSelectChain = viewModel::onSelectNearbyChain,
-                    onClearChain = viewModel::onClearNearbyChain,
-                    onReload = viewModel::fetchNearby,
-                    onSearchFailedShown = viewModel::onNearbySearchFailedShown,
-                    onOpenSettings = viewModel::onOpenSettings,
-                    onPreviewPlace = viewModel::onPreviewNearby,
-                    onClearPreview = viewModel::onClearNearbyPreview,
-                    onClusterTap = viewModel::onClearNearbyPreview,
-                    onOpenDetail = viewModel::onSelectNearby,
-                    onSearchHere = viewModel::searchHere,
-                    onGeocode = viewModel::onGeocode,
-                    onSelectCandidate = viewModel::onSelectGeocodedPlace,
-                    onClearOrigin = viewModel::onClearOrigin,
-                    onDismissSearch = viewModel::onDismissGeocoding,
-                    // full-bleed 地図の浮きコントロール/ロード・エラー画面が避けるステータスバー高さ
-                    topInset = innerPadding.calculateTopPadding(),
                 )
                 else -> PaddedColumn {
                     SearchPane(
@@ -364,9 +375,9 @@ private fun Centered(content: @Composable () -> Unit) {
 }
 
 /**
- * 設定画面(探す/近く 両モードの TopAppBar 右肩の歯車から開く全画面オーバーレイ)。
- * ListItem は端まで使うため PaddedColumn を介さず直接置く。表示/マイカード/データ/このアプリの
- * 4 セクション。値は DataStore 由来(MainViewModel 経由)で、変更は即 ViewModel の setter へ流す。
+ * 設定画面(4 番目のタブ)。ListItem は端まで使うため PaddedColumn を介さず直接置く。
+ * 表示/マイカード/データ/このアプリの 4 セクション。
+ * 値は DataStore 由来(MainViewModel 経由)で、変更は即 ViewModel の setter へ流す。
  */
 @Composable
 private fun SettingsScreen(
@@ -386,9 +397,7 @@ private fun SettingsScreen(
     onCardWelcatsuChange: (String, Boolean) -> Unit,
     onRefresh: () -> Unit,
     onDataCommitRefChange: (String) -> Unit,
-    onBack: () -> Unit,
 ) {
-    BackHandler(onBack = onBack)
     val uriHandler = LocalUriHandler.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         // --- 表示 ---
@@ -761,6 +770,260 @@ private fun SearchPane(
     }
 }
 
+// ---- キャンペーンタブ ----
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CampaignPane(
+    activeCampaigns: List<Campaign>,
+    upcomingCampaigns: List<Campaign>,
+    filter: CampaignFilter,
+    onFilterChange: (CampaignFilter) -> Unit,
+) {
+    if (activeCampaigns.isEmpty() && upcomingCampaigns.isEmpty()) {
+        Centered {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = 32.dp),
+            ) {
+                Icon(
+                    Icons.Default.Star,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.outline,
+                )
+                Spacer(Modifier.height(16.dp))
+                Text("期間限定キャンペーンはありません", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "カード会社の期間限定キャンペーンや自治体のキャッシュレス還元施策が登録されると、ここに表示されます。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
+        }
+        return
+    }
+
+    val filterFn: (Campaign) -> Boolean = when (filter) {
+        CampaignFilter.ALL -> { _ -> true }
+        CampaignFilter.MUNICIPAL -> { c -> c.type == "municipal" }
+        CampaignFilter.CARD -> { c -> c.type == "card_promotion" && c.paymentMethodId == null }
+        CampaignFilter.QR -> { c -> c.paymentMethodId != null && c.type != "municipal" }
+    }
+    val activeGroups = remember(activeCampaigns, filter) {
+        groupCampaignsForDisplay(activeCampaigns.filter(filterFn))
+    }
+    val upcomingGroups = remember(upcomingCampaigns, filter) {
+        groupCampaignsForDisplay(upcomingCampaigns.filter(filterFn))
+    }
+
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(bottom = 16.dp),
+    ) {
+        item {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CampaignFilter.entries.forEach { f ->
+                    FilterChip(
+                        selected = filter == f,
+                        onClick = { onFilterChange(f) },
+                        label = { Text(campaignFilterLabel(f)) },
+                    )
+                }
+            }
+        }
+        if (activeGroups.isNotEmpty()) {
+            item {
+                Text(
+                    "開催中",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+            items(activeGroups, key = { it.first().id }) { group ->
+                CampaignCard(group, CampaignStatus.ACTIVE)
+            }
+        }
+        if (upcomingGroups.isNotEmpty()) {
+            item {
+                Text(
+                    "もうすぐ開始",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+            }
+            items(upcomingGroups, key = { "upcoming_${it.first().id}" }) { group ->
+                CampaignCard(group, CampaignStatus.UPCOMING)
+            }
+        }
+        if (activeGroups.isEmpty() && upcomingGroups.isEmpty()) {
+            item {
+                Text(
+                    "このフィルタに一致するキャンペーンはありません。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+            }
+        }
+    }
+}
+
+private fun groupCampaignsForDisplay(campaigns: List<Campaign>): List<List<Campaign>> {
+    val (municipal, others) = campaigns.partition { it.type == "municipal" }
+    val municipalGroups = municipal
+        .groupBy { it.region?.name ?: it.id }
+        .values.toList()
+    val otherGroups = others.map { listOf(it) }
+    return municipalGroups + otherGroups
+}
+
+private fun campaignFilterLabel(filter: CampaignFilter): String = when (filter) {
+    CampaignFilter.ALL -> "全て"
+    CampaignFilter.MUNICIPAL -> "自治体"
+    CampaignFilter.CARD -> "カード"
+    CampaignFilter.QR -> "QR"
+}
+
+@Composable
+private fun CampaignCard(campaigns: List<Campaign>, status: CampaignStatus) {
+    val today = LocalDate.now()
+    val first = campaigns.first()
+
+    val title = if (first.type == "municipal") {
+        first.region?.name?.let { "$it キャッシュレス還元" } ?: first.name
+    } else {
+        first.name
+    }
+
+    val allStarts = campaigns.mapNotNull { c -> c.periodStart?.let { LocalDate.parse(it) } }
+    val allEnds = campaigns.mapNotNull { c -> c.periodEnd?.let { LocalDate.parse(it) } }
+    val earliestStart = allStarts.minOrNull()
+    val latestEnd = allEnds.maxOrNull()
+    val periodLabel = buildString {
+        if (earliestStart != null) append("${earliestStart.monthValue}/${earliestStart.dayOfMonth}")
+        append("〜")
+        if (latestEnd != null) append("${latestEnd.monthValue}/${latestEnd.dayOfMonth}")
+    }
+
+    val daysInfo = when (status) {
+        CampaignStatus.ACTIVE -> latestEnd?.let { end ->
+            val days = ChronoUnit.DAYS.between(today, end).toInt()
+            if (days >= 0) "残り${days}日" to (days <= 3) else null
+        }
+        CampaignStatus.UPCOMING -> earliestStart?.let { start ->
+            val days = ChronoUnit.DAYS.between(today, start).toInt()
+            if (days > 0) "あと${days}日で開始" to false else null
+        }
+        else -> null
+    }
+    val daysLabel = daysInfo?.first
+    val isUrgent = daysInfo?.second == true
+
+    val brandColors = campaigns.mapNotNull { it.brandColor }.distinct()
+    val fallback = MaterialTheme.colorScheme.primary
+    val stripeColor = brandColors.firstNotNullOfOrNull { parseBrandColor(it) } ?: fallback
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Row(Modifier.height(IntrinsicSize.Min)) {
+            Box(Modifier.width(6.dp).fillMaxHeight().background(stripeColor))
+            Column(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(periodLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                    if (daysLabel != null) {
+                        Text(
+                            daysLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isUrgent) warningColor() else MaterialTheme.colorScheme.outline,
+                        )
+                    }
+                }
+                campaigns.forEach { campaign ->
+                    CampaignBenefitLine(campaign)
+                }
+                if (campaigns.size == 1) {
+                    first.capNote?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                    }
+                    first.usageLimitNote?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                    }
+                }
+                if (first.storeScope == "external") {
+                    val uriHandler = LocalUriHandler.current
+                    campaigns.forEach { campaign ->
+                        val url = campaign.storeSearchUrl ?: campaign.campaignUrl
+                        if (url != null) {
+                            val label = if (campaigns.size > 1) "${campaign.issuer}で対象店舗を確認 →" else "対象店舗を確認 →"
+                            Text(
+                                label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.clickable { uriHandler.openUri(url) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CampaignBenefitLine(campaign: Campaign) {
+    val brandColor = parseBrandColor(campaign.brandColor) ?: MaterialTheme.colorScheme.primary
+    val benefitText = campaignBenefitText(campaign)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(Modifier.size(10.dp).background(brandColor, CircleShape))
+        Text("${campaign.issuer} $benefitText", style = MaterialTheme.typography.bodyMedium)
+        campaign.perTransactionCap?.let { cap ->
+            Text(
+                "(上限${formatCap(cap)})",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+        }
+    }
+}
+
+private fun campaignBenefitText(campaign: Campaign): String {
+    val type = BenefitType.fromString(campaign.benefitType)
+    return when {
+        type == BenefitType.COUPON_FIXED && campaign.discountAmount != null ->
+            "${campaign.discountAmount}円引き"
+        type == BenefitType.COUPON_PERCENT && campaign.rateBase != null ->
+            "${trimRate(campaign.rateBase)}% OFF"
+        type == BenefitType.REBATE && campaign.discountAmount != null ->
+            "${campaign.discountAmount}円相当 還元"
+        campaign.rateBase != null ->
+            "${trimRate(campaign.rateBase)}% 還元"
+        else -> ""
+    }
+}
+
+private fun formatCap(yen: Int): String = when {
+    yen >= 10000 && yen % 10000 == 0 -> "${yen / 10000}万"
+    yen >= 1000 && yen % 1000 == 0 -> "${yen / 1000}千"
+    else -> "${yen}円"
+}
+
+// ---- 検索結果カード ----
+
 @Composable
 private fun SearchResultCard(result: MainViewModel.SearchResult, onClick: () -> Unit) {
     val fallback = MaterialTheme.colorScheme.primary
@@ -852,7 +1115,6 @@ private fun NearbyPane(
     onClose: () -> Unit,
     onReload: () -> Unit,
     onSearchFailedShown: () -> Unit,
-    onOpenSettings: () -> Unit,
     onToggleCategory: (String) -> Unit,
     onSelectChain: (Merchant) -> Unit,
     onClearChain: () -> Unit,
@@ -890,7 +1152,7 @@ private fun NearbyPane(
         // 地図なしの全画面状態(地図が出る前のロード/エラー)。地図モードはタイトルバーを持たない
         // (full-bleed)ので、ここでも「近くのお店」見出し・歯車は出さず内容だけを中央に出す。
         // 地図表示への切替で見出しが消える中途半端な見えを防ぐ。下部ナビは残るのでモード/設定への
-        // 導線は保たれる(設定は「探す」タブから)。
+        // 導線は保たれる(設定は「設定」タブから)。
         Centered {
             when {
                 nearby.loading -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1159,7 +1421,6 @@ private fun NearbyPane(
             selectedPoint = selectedPlace?.let { MapPoint(it.lat, it.lon) },
             onSearchHere = { p, r, z -> onSearchHere(p.lat, p.lon, r, z) },
             onSearchMyLocation = onReload,
-            onOpenSettings = onOpenSettings,
             onClusterTap = onClusterTap,
             loadingMessage = if (nearby.loading) nearbyLoadingText(nearby.loadingPhase) else null,
             originName = originName,

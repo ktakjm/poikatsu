@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -110,7 +109,7 @@ data class MapMarker(
 )
 
 /**
- * 対象店舗をピン表示する地図。浮きコントロールは上部(検索バー＋歯車)、
+ * 対象店舗をピン表示する地図。浮きコントロールは上部(検索バー)、
  * 条件付き「このエリアを検索」、右下の現在地ボタンで構成する。
  */
 @Composable
@@ -122,7 +121,6 @@ fun NearbyMap(
     selectedPoint: MapPoint?,
     onSearchHere: (MapPoint, Int, Double) -> Unit,
     onSearchMyLocation: () -> Unit,
-    onOpenSettings: () -> Unit,
     onClusterTap: () -> Unit,
     loadingMessage: String?,
     // 地名検索(起点コントロール)
@@ -336,7 +334,7 @@ fun NearbyMap(
             )
         }
 
-        // --- 上部コントロール: 検索バー + 歯車 + 候補リスト + 「このエリアを検索」/進捗ピル ---
+        // --- 上部コントロール: 検索バー + 候補リスト + 「このエリアを検索」/進捗ピル ---
         Column(
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -344,54 +342,41 @@ fun NearbyMap(
                 .fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // 検索バー + 歯車を1行に配置
-            Row(
+            PlaceSearchBar(
+                originName = originName,
+                active = searchActive,
+                query = searchQuery,
+                isGeocoding = isGeocoding,
+                onActivate = {
+                    searchActive = true
+                    searchQuery = ""
+                    searchSubmitted = false
+                    onDismissSearch()
+                },
+                onQueryChange = { searchQuery = it; searchSubmitted = false },
+                onSearch = {
+                    if (searchQuery.isNotBlank()) {
+                        searchSubmitted = true
+                        onGeocode(searchQuery)
+                        focusManager.clearFocus()
+                    }
+                },
+                onClearOrigin = {
+                    searchActive = false
+                    searchQuery = ""
+                    searchSubmitted = false
+                    onClearOrigin()
+                },
+                onDismiss = {
+                    searchActive = false
+                    searchQuery = ""
+                    searchSubmitted = false
+                    onDismissSearch()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                PlaceSearchBar(
-                    originName = originName,
-                    active = searchActive,
-                    query = searchQuery,
-                    isGeocoding = isGeocoding,
-                    onActivate = {
-                        searchActive = true
-                        searchQuery = ""
-                        searchSubmitted = false
-                        onDismissSearch()
-                    },
-                    onQueryChange = { searchQuery = it; searchSubmitted = false },
-                    onSearch = {
-                        if (searchQuery.isNotBlank()) {
-                            searchSubmitted = true
-                            onGeocode(searchQuery)
-                            focusManager.clearFocus()
-                        }
-                    },
-                    onClearOrigin = {
-                        searchActive = false
-                        searchQuery = ""
-                        searchSubmitted = false
-                        onClearOrigin()
-                    },
-                    onDismiss = {
-                        searchActive = false
-                        searchQuery = ""
-                        searchSubmitted = false
-                        onDismissSearch()
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(Modifier.width(8.dp))
-                FilledTonalIconButton(
-                    onClick = onOpenSettings,
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    Icon(Icons.Default.Settings, contentDescription = "設定")
-                }
-            }
+            )
 
             // 候補リスト(検索バーが活性でジオコーディング完了後に表示)
             if (searchActive && (geocodeCandidates.isNotEmpty() || (searchSubmitted && !isGeocoding))) {
