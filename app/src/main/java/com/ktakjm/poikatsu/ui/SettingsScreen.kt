@@ -3,18 +3,23 @@ package com.ktakjm.poikatsu.ui
 import android.os.Build
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.layout.Box
@@ -24,6 +29,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -38,17 +44,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.ktakjm.poikatsu.BuildConfig
+import com.ktakjm.poikatsu.data.RegisteredMunicipality
 import com.ktakjm.poikatsu.data.ThemeMode
 import com.ktakjm.poikatsu.ui.theme.warningColor
 
 /**
  * 設定画面(4 番目のタブ)。ListItem は端まで使うため PaddedColumn を介さず直接置く。
- * 表示/マイカード/データ/このアプリの 4 セクション。
+ * 表示/マイカード/QR決済/自治体/データ/このアプリのセクション。
  * 値は DataStore 由来(MainViewModel 経由)で、変更は即 ViewModel の setter へ流す。
  */
 @Composable
@@ -57,6 +65,9 @@ internal fun SettingsScreen(
     dynamicColor: Boolean,
     autoRefresh: Boolean,
     cards: List<MainViewModel.CardSetting>,
+    qrPayments: List<MainViewModel.QrPaymentSetting>,
+    registeredMunicipalities: List<RegisteredMunicipality>,
+    municipalityMaster: Map<String, List<String>>,
     dataStatus: String,
     refreshing: Boolean,
     dataCommitRef: String,
@@ -67,10 +78,15 @@ internal fun SettingsScreen(
     onCardRateChange: (String, Double?) -> Unit,
     onCardBrandChange: (String, String) -> Unit,
     onCardWelcatsuChange: (String, Boolean) -> Unit,
+    onQrEnabledChange: (String, Boolean) -> Unit,
+    onAddMunicipality: (RegisteredMunicipality) -> Unit,
+    onRemoveMunicipality: (RegisteredMunicipality) -> Unit,
+    onLoadMunicipalityMaster: () -> Unit,
     onRefresh: () -> Unit,
     onDataCommitRefChange: (String) -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
+    var showMunicipalityPicker by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         // --- 表示 ---
         SettingsSectionHeader("表示")
@@ -101,6 +117,70 @@ internal fun SettingsScreen(
                 onWelcatsuChange = { onCardWelcatsuChange(card.campaignId, it) },
             )
         }
+
+        // --- QR 決済 ---
+        SettingsSectionHeader("QR 決済")
+        if (qrPayments.isEmpty()) {
+            Text(
+                "利用可能な QR 決済がありません",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        } else {
+            Text(
+                "利用中の QR 決済にチェックを入れると、キャンペーン情報が判定に表示されます。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+            qrPayments.forEach { qr ->
+                ListItem(
+                    headlineContent = { Text(qr.name) },
+                    leadingContent = {
+                        Checkbox(
+                            checked = qr.enabled,
+                            onCheckedChange = { onQrEnabledChange(qr.id, it) },
+                        )
+                    },
+                    modifier = Modifier.clickable { onQrEnabledChange(qr.id, !qr.enabled) },
+                )
+            }
+        }
+
+        // --- 自治体 ---
+        SettingsSectionHeader("自治体")
+        Text(
+            "居住地・行動圏の自治体を登録すると、該当するキャンペーンがキャンペーン一覧に表示されます。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        registeredMunicipalities.forEach { m ->
+            ListItem(
+                headlineContent = { Text(m.name) },
+                supportingContent = { Text(m.prefecture) },
+                trailingContent = {
+                    IconButton(onClick = { onRemoveMunicipality(m) }) {
+                        Icon(Icons.Default.Close, contentDescription = "削除")
+                    }
+                },
+            )
+        }
+        ListItem(
+            headlineContent = { Text("自治体を追加") },
+            leadingContent = {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            },
+            modifier = Modifier.clickable {
+                onLoadMunicipalityMaster()
+                showMunicipalityPicker = true
+            },
+        )
 
         // --- データ ---
         SettingsSectionHeader("データ")
@@ -143,6 +223,15 @@ internal fun SettingsScreen(
             modifier = Modifier.clickable { uriHandler.openUri("https://github.com/ktakjm/poikatsu") },
         )
         Spacer(Modifier.height(24.dp))
+    }
+
+    if (showMunicipalityPicker) {
+        MunicipalityPickerDialog(
+            master = municipalityMaster,
+            registered = registeredMunicipalities,
+            onAdd = onAddMunicipality,
+            onDismiss = { showMunicipalityPicker = false },
+        )
     }
 }
 
@@ -259,6 +348,140 @@ private fun RateEditDialog(initial: Double, onDismiss: () -> Unit, onConfirm: (D
         },
         confirmButton = { TextButton(onClick = { onConfirm(text.toDoubleOrNull()) }) { Text("保存") } },
         dismissButton = { TextButton(onClick = { onConfirm(null) }) { Text("既定に戻す") } },
+    )
+}
+
+/**
+ * 自治体追加ダイアログ。都道府県選択→市区町村選択の2段ピッカー。
+ * 東京都は「23区」「市部」のグループ表示。
+ */
+@Composable
+private fun MunicipalityPickerDialog(
+    master: Map<String, List<String>>,
+    registered: List<RegisteredMunicipality>,
+    onAdd: (RegisteredMunicipality) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var selectedPrefecture by remember { mutableStateOf<String?>(null) }
+    val registeredKeys = remember(registered) {
+        registered.map { "${it.prefecture}:${it.name}" }.toSet()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (selectedPrefecture != null) {
+                    IconButton(onClick = { selectedPrefecture = null }) {
+                        Icon(Icons.Default.Close, contentDescription = "戻る")
+                    }
+                }
+                Text(selectedPrefecture ?: "都道府県を選択")
+            }
+        },
+        text = {
+            if (master.isEmpty()) {
+                Box(
+                    Modifier.fillMaxWidth().height(200.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else if (selectedPrefecture == null) {
+                LazyColumn(Modifier.fillMaxWidth().height(400.dp)) {
+                    val prefectures = master.keys.toList()
+                    items(prefectures) { pref ->
+                        ListItem(
+                            headlineContent = { Text(pref) },
+                            modifier = Modifier.clickable { selectedPrefecture = pref },
+                        )
+                    }
+                }
+            } else {
+                val municipalities = master[selectedPrefecture].orEmpty()
+                val isTokyoTo = selectedPrefecture == "東京都"
+                LazyColumn(Modifier.fillMaxWidth().height(400.dp)) {
+                    if (isTokyoTo) {
+                        val wards = municipalities.filter { it.endsWith("区") }
+                        val cities = municipalities.filter { !it.endsWith("区") }
+                        if (wards.isNotEmpty()) {
+                            item {
+                                Text(
+                                    "23区",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                )
+                            }
+                            items(wards) { name ->
+                                MunicipalityRow(
+                                    prefecture = selectedPrefecture!!,
+                                    name = name,
+                                    alreadyRegistered = "${selectedPrefecture}:$name" in registeredKeys,
+                                    onAdd = onAdd,
+                                )
+                            }
+                        }
+                        if (cities.isNotEmpty()) {
+                            item {
+                                Text(
+                                    "市部",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                )
+                            }
+                            items(cities) { name ->
+                                MunicipalityRow(
+                                    prefecture = selectedPrefecture!!,
+                                    name = name,
+                                    alreadyRegistered = "${selectedPrefecture}:$name" in registeredKeys,
+                                    onAdd = onAdd,
+                                )
+                            }
+                        }
+                    } else {
+                        items(municipalities) { name ->
+                            MunicipalityRow(
+                                prefecture = selectedPrefecture!!,
+                                name = name,
+                                alreadyRegistered = "${selectedPrefecture}:$name" in registeredKeys,
+                                onAdd = onAdd,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("閉じる") }
+        },
+    )
+}
+
+@Composable
+private fun MunicipalityRow(
+    prefecture: String,
+    name: String,
+    alreadyRegistered: Boolean,
+    onAdd: (RegisteredMunicipality) -> Unit,
+) {
+    ListItem(
+        headlineContent = {
+            Text(
+                name,
+                color = if (alreadyRegistered) MaterialTheme.colorScheme.outline
+                else MaterialTheme.colorScheme.onSurface,
+            )
+        },
+        trailingContent = {
+            if (alreadyRegistered) {
+                Text("登録済み", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+            }
+        },
+        modifier = Modifier.clickable(enabled = !alreadyRegistered) {
+            onAdd(RegisteredMunicipality(prefecture, name))
+        },
     )
 }
 

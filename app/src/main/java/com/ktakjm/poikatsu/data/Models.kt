@@ -227,6 +227,12 @@ data class ProfileFile(
     val profile: Profile = Profile(),
 )
 
+@Serializable
+data class RegisteredMunicipality(
+    val prefecture: String,
+    val name: String,
+)
+
 data class PoikatsuData(
     val merchants: List<Merchant>,
     val campaigns: List<Campaign>,

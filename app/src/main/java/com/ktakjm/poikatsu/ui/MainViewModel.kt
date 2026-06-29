@@ -18,6 +18,8 @@ import com.ktakjm.poikatsu.data.YolpSearchConfig
 import com.ktakjm.poikatsu.data.AppSettings
 import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.Profile
+import com.ktakjm.poikatsu.data.QrPayment
+import com.ktakjm.poikatsu.data.RegisteredMunicipality
 import com.ktakjm.poikatsu.data.SettingsRepository
 import com.ktakjm.poikatsu.data.ThemeMode
 import com.ktakjm.poikatsu.domain.BestPaymentOption
@@ -206,7 +208,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val autoRefresh: Boolean = true,
         /** 設定画面の「マイカード」用カタログ(未所有カードも含む全候補) */
         val cardSettings: List<CardSetting> = emptyList(),
+        /** 設定画面の「QR 決済」用カタログ(profile.json のカタログ + ユーザー差分) */
+        val qrPaymentSettings: List<QrPaymentSetting> = emptyList(),
+        /** 登録済み自治体 */
+        val registeredMunicipalities: List<RegisteredMunicipality> = emptyList(),
+        /** 自治体マスタ(都道府県→市区町村リスト)。設定画面の追加ピッカー用 */
+        val municipalityMaster: Map<String, List<String>> = emptyMap(),
         val dataCommitRef: String = "",
+    )
+
+    /** 設定画面の QR 決済1件分の表示・編集状態 */
+    data class QrPaymentSetting(
+        val id: String,
+        val name: String,
+        val brandColor: String,
+        val enabled: Boolean,
     )
 
     /** 設定画面のカード1枚分の表示・編集状態(profile カタログ + ユーザー差分のマージ結果) */
@@ -313,13 +329,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         private const val AUTO_REFRESH_MIN_INTERVAL_MS = 60 * 60_000L
     }
 
-    private fun enabledQrIds(): Set<String> {
-        val loaded = lastLoaded ?: return emptySet()
-        return loaded.data.profile.qrPayments
-            .filter { it.enabledDefault }
-            .map { it.id }
-            .toSet()
-    }
+    private fun enabledQrIds(): Set<String> = lastSettings.enabledQrPaymentIds
 
     /** チェーンと店舗名ヒントから判定詳細用の Selection を組む(判定・遷移可否をまとめて引く) */
     private fun JudgmentEngine.selectionFor(
@@ -413,6 +423,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
 
+        val qrPaymentSettings = loaded.data.profile.qrPayments.map { qr ->
+            QrPaymentSetting(
+                id = qr.id,
+                name = qr.name,
+                brandColor = qr.brandColor,
+                enabled = qr.id in settings.enabledQrPaymentIds,
+            )
+        }
+
         _state.update {
             it.copy(
                 loading = false,
@@ -421,12 +440,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 dataSource = loaded.source,
                 categories = newEngine.categories,
                 results = newEngine.searchRewarded(it.query, it.selectedCategories),
-                // 表示中の判定があればマージ後の内容で引き直す
                 selection = it.selection?.let { sel ->
                     loaded.data.merchants.firstOrNull { m -> m.id == sel.merchant.id }
                         ?.let { m -> newEngine.selectionFor(m, sel.storeNameHint, sel.displayName) }
                 },
-                // 店舗対象判定画面を開いていれば、新データで判定を引き直す
                 storeCheck = it.storeCheck?.let { sc ->
                     loaded.data.merchants.firstOrNull { m -> m.id == sc.merchant.id }
                         ?.takeIf { m -> newEngine.canCheckStore(m) }
@@ -436,6 +453,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 dynamicColor = settings.dynamicColor,
                 autoRefresh = settings.autoRefresh,
                 cardSettings = cardSettings,
+                qrPaymentSettings = qrPaymentSettings,
+                registeredMunicipalities = settings.registeredMunicipalities,
                 dataCommitRef = settings.dataCommitRef,
                 timeLimitedActive = timeLimitedActive,
                 timeLimitedUpcoming = timeLimitedUpcoming,
@@ -1040,4 +1059,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onSetCardWelcatsu(campaignId: String, enabled: Boolean) =
         viewModelScope.launch { settingsRepo.setWelcatsu(campaignId, enabled) }
+
+    fun onSetQrEnabled(id: String, enabled: Boolean) =
+        viewModelScope.launch { settingsRepo.setQrEnabled(id, enabled) }
+
+    fun onAddMunicipality(municipality: RegisteredMunicipality) =
+        viewModelScope.launch { settingsRepo.addMunicipality(municipality) }
+
+    fun onRemoveMunicipality(municipality: RegisteredMunicipality) =
+        viewModelScope.launch { settingsRepo.removeMunicipality(municipality) }
+
+    fun loadMunicipalityMaster() {
+        if (_state.value.municipalityMaster.isNotEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val master = try {
+                val app = getApplication<Application>()
+                val text = app.assets.open("municipalities.json").bufferedReader().use { it.readText() }
+                val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                json.decodeFromString<Map<String, List<String>>>(text)
+            } catch (_: Exception) {
+                emptyMap()
+            }
+            _state.update { it.copy(municipalityMaster = master) }
+        }
+    }
 }

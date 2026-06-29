@@ -41,6 +41,10 @@ data class AppSettings(
     val cardOverrides: Map<String, CardOverride> = emptyMap(),
     /** データ取得先の Git ref(short commit hash 等)。空文字列は main を使う */
     val dataCommitRef: String = "",
+    /** 利用中の QR 決済 ID。profile.json の qr_payments カタログからユーザーが選択 */
+    val enabledQrPaymentIds: Set<String> = emptySet(),
+    /** 登録自治体(都道府県+市区町村)。キャンペーンタブのフィルタに使う */
+    val registeredMunicipalities: List<RegisteredMunicipality> = emptyList(),
 )
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore("settings")
@@ -60,6 +64,8 @@ class SettingsRepository(private val context: Context) {
         val AUTO_REFRESH = booleanPreferencesKey("auto_refresh")
         val CARD_OVERRIDES = stringPreferencesKey("card_overrides")
         val DATA_COMMIT_REF = stringPreferencesKey("data_commit_ref")
+        val QR_ENABLED = stringPreferencesKey("qr_enabled")
+        val MUNICIPALITIES = stringPreferencesKey("municipalities")
     }
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -71,6 +77,8 @@ class SettingsRepository(private val context: Context) {
             autoRefresh = prefs[Keys.AUTO_REFRESH] ?: true,
             cardOverrides = prefs.decodeOverrides(),
             dataCommitRef = prefs[Keys.DATA_COMMIT_REF] ?: "",
+            enabledQrPaymentIds = prefs.decodeQrEnabled(),
+            registeredMunicipalities = prefs.decodeMunicipalities(),
         )
     }
 
@@ -111,8 +119,44 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    suspend fun setQrEnabled(id: String, enabled: Boolean) {
+        context.settingsDataStore.edit { prefs ->
+            val current = prefs.decodeQrEnabled().toMutableSet()
+            if (enabled) current.add(id) else current.remove(id)
+            prefs[Keys.QR_ENABLED] = json.encodeToString(current)
+        }
+    }
+
+    suspend fun addMunicipality(municipality: RegisteredMunicipality) {
+        context.settingsDataStore.edit { prefs ->
+            val current = prefs.decodeMunicipalities().toMutableList()
+            if (current.none { it.prefecture == municipality.prefecture && it.name == municipality.name }) {
+                current.add(municipality)
+            }
+            prefs[Keys.MUNICIPALITIES] = json.encodeToString(current)
+        }
+    }
+
+    suspend fun removeMunicipality(municipality: RegisteredMunicipality) {
+        context.settingsDataStore.edit { prefs ->
+            val current = prefs.decodeMunicipalities()
+                .filter { it.prefecture != municipality.prefecture || it.name != municipality.name }
+            prefs[Keys.MUNICIPALITIES] = json.encodeToString(current)
+        }
+    }
+
     private fun Preferences.decodeOverrides(): Map<String, CardOverride> =
         this[Keys.CARD_OVERRIDES]
             ?.let { runCatching { json.decodeFromString<Map<String, CardOverride>>(it) }.getOrNull() }
             ?: emptyMap()
+
+    private fun Preferences.decodeQrEnabled(): Set<String> =
+        this[Keys.QR_ENABLED]
+            ?.let { runCatching { json.decodeFromString<Set<String>>(it) }.getOrNull() }
+            ?: emptySet()
+
+    private fun Preferences.decodeMunicipalities(): List<RegisteredMunicipality> =
+        this[Keys.MUNICIPALITIES]
+            ?.let { runCatching { json.decodeFromString<List<RegisteredMunicipality>>(it) }.getOrNull() }
+            ?: emptyList()
 }
