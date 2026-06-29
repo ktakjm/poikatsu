@@ -397,7 +397,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 welcatsuApplied = welcatsuOn,
             )
         }
-        val engineData = loaded.data.copy(profile = Profile(mergedCards))
+        val engineData = loaded.data.copy(profile = loaded.data.profile.copy(cards = mergedCards))
         val newEngine = JudgmentEngine(engineData)
         engine = newEngine
 

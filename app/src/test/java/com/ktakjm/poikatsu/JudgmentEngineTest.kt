@@ -645,6 +645,36 @@ class JudgmentEngineTest {
     }
 
     @Test
+    fun `実データ_キャンペーンタブ用_upcoming campaigns が6月30日に存在する`() {
+        val june30 = LocalDate.of(2026, 6, 30)
+        assertEquals("total campaigns", 7, data.campaigns.size)
+        val allUpcoming = engine.upcomingCampaigns(june30)
+        assertTrue("upcomingCampaigns not empty: ${allUpcoming.map { it.id }}", allUpcoming.isNotEmpty())
+        val timeLimited = allUpcoming.filter { it.type != "card_program" }
+        assertTrue("time-limited upcoming not empty: ${timeLimited.map { it.id }}", timeLimited.isNotEmpty())
+        assertTrue("municipal upcoming exists", timeLimited.any { it.type == "municipal" })
+        assertTrue("card_promotion upcoming exists", timeLimited.any { it.type == "card_promotion" })
+    }
+
+    @Test
+    fun `実データ_キャンペーンタブ用_active campaigns が7月1日に存在する`() {
+        val july1 = LocalDate.of(2026, 7, 1)
+        val allActive = engine.activeCampaigns(july1)
+        val timeLimited = allActive.filter { it.type != "card_program" }
+        assertTrue("time-limited active not empty on 7/1: ${timeLimited.map { it.id }}", timeLimited.isNotEmpty())
+    }
+
+    @Test
+    fun `実データ_QRなしProfileでもupcomingCampaignsは動く`() {
+        val noQrProfile = data.profile.copy(cards = data.profile.cards)
+        val noQrData = data.copy(profile = Profile(cards = noQrProfile.cards))
+        val noQrEngine = JudgmentEngine(noQrData)
+        val june30 = LocalDate.of(2026, 6, 30)
+        val upcoming = noQrEngine.upcomingCampaigns(june30).filter { it.type != "card_program" }
+        assertTrue("upcoming should work without QR payments: ${upcoming.map { it.id }}", upcoming.isNotEmpty())
+    }
+
+    @Test
     fun `実データ_QR決済カタログが読み込めている`() {
         val qr = data.profile.qrPayments
         assertTrue(qr.isNotEmpty())
