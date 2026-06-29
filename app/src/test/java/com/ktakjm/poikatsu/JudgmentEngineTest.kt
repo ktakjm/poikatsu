@@ -576,12 +576,72 @@ class JudgmentEngineTest {
     // ---- 実データの新フィールド検証 ----
 
     @Test
-    fun `実データ_既存施策のtype_benefitType_storeScopeが設定されている`() {
+    fun `実データ_各施策のtype_benefitType_storeScopeが有効な値`() {
+        val validTypes = setOf("card_program", "card_promotion", "municipal")
+        val validBenefitTypes = setOf("rebate", "coupon_percent", "coupon_fixed")
+        val validScopes = setOf("managed", "external")
         data.campaigns.forEach { c ->
-            assertTrue("${c.id}: type should be card_program", c.type == "card_program")
-            assertTrue("${c.id}: benefitType should be rebate", c.benefitType == "rebate")
-            assertTrue("${c.id}: storeScope should be managed", c.storeScope == "managed")
+            assertTrue("${c.id}: invalid type '${c.type}'", c.type in validTypes)
+            assertTrue("${c.id}: invalid benefitType '${c.benefitType}'", c.benefitType in validBenefitTypes)
+            assertTrue("${c.id}: invalid storeScope '${c.storeScope}'", c.storeScope in validScopes)
         }
+    }
+
+    @Test
+    fun `実データ_常設施策はcard_program_managed`() {
+        data.campaigns.filter { it.type == "card_program" }.forEach { c ->
+            assertTrue("${c.id}: card_program should be managed", c.storeScope == "managed")
+            assertNull("${c.id}: card_program should not have period_end", c.periodEnd)
+        }
+    }
+
+    @Test
+    fun `実データ_自治体施策はmunicipal_external`() {
+        val municipal = data.campaigns.filter { it.type == "municipal" }
+        assertTrue("自治体施策が1件以上存在する", municipal.isNotEmpty())
+        municipal.forEach { c ->
+            assertTrue("${c.id}: municipal should be external", c.storeScope == "external")
+            assertNotNull("${c.id}: municipal should have region", c.region)
+            assertNotNull("${c.id}: municipal should have period_start", c.periodStart)
+            assertNotNull("${c.id}: municipal should have period_end", c.periodEnd)
+            assertNotNull("${c.id}: municipal should have payment_method_id", c.paymentMethodId)
+            assertTrue("${c.id}: municipal merchant_rules should be empty", c.merchantRules.isEmpty())
+        }
+    }
+
+    @Test
+    fun `実データ_同一自治体の複数決済手段がマージ可能`() {
+        val municipal = data.campaigns.filter { it.type == "municipal" }
+        val grouped = municipal.groupBy { it.region?.name }
+        val multiProvider = grouped.filter { it.value.size > 1 }
+        assertTrue("複数決済手段の自治体施策が存在する", multiProvider.isNotEmpty())
+        multiProvider.forEach { (name, campaigns) ->
+            val providers = campaigns.map { it.paymentMethodId }.distinct()
+            assertEquals("$name: 各レコードは異なる決済手段", campaigns.size, providers.size)
+        }
+    }
+
+    @Test
+    fun `実データ_card_promotionは期間とmerchant_rulesを持つ`() {
+        val promotions = data.campaigns.filter { it.type == "card_promotion" }
+        assertTrue("card_promotion が1件以上存在する", promotions.isNotEmpty())
+        promotions.forEach { c ->
+            assertTrue("${c.id}: card_promotion should be managed", c.storeScope == "managed")
+            assertNotNull("${c.id}: card_promotion should have period_start", c.periodStart)
+            assertNotNull("${c.id}: card_promotion should have period_end", c.periodEnd)
+            assertTrue("${c.id}: card_promotion should have merchant_rules", c.merchantRules.isNotEmpty())
+        }
+    }
+
+    @Test
+    fun `実データ_楽天ペイ松屋プロモーションのQR判定`() {
+        val matsuya = data.merchants.first { it.id == "matsuya" }
+        val julyToday = LocalDate.of(2026, 7, 10)
+        val results = engine.judgeQr(matsuya, julyToday, setOf("rakuten_pay"))
+        assertTrue("松屋で楽天ペイの判定が出る", results.any { it.paymentMethod.id == "rakuten_pay" })
+        val qr = results.first { it.paymentMethod.id == "rakuten_pay" }
+        assertEquals(15.0, qr.effectiveRate!!, 0.001)
+        assertEquals(800, qr.minPurchase)
     }
 
     @Test
