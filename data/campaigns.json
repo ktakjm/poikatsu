@@ -299,6 +299,40 @@
       ],
       "sources": ["https://www.matsuyafoods.co.jp/matsuya/whatsnew/campaign/160563.html"],
       "verified_date": "2026-06-30"
+    },
+    {
+      "id": "suginami_paypay_2026_06",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "issuer": "PayPay",
+      "payment_method_id": "paypay",
+      "brand_color": "#FF0033",
+      "name": "杉並区でお買い物！最大20%戻ってくるキャンペーン",
+      "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイント・PayPayデビットで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-06-01",
+      "period_end": "2026-07-10",
+      "per_transaction_cap": 1000,
+      "period_total_cap": 4000,
+      "cap_note": "1回あたり付与上限1,000円相当、期間合計4,000円相当",
+      "region": {
+        "name": "杉並区",
+        "prefecture": "東京都",
+        "area_group": null
+      },
+      "campaign_url": "https://paypay.ne.jp/event/tokyo-suginami-city-20260601/",
+      "store_search_url": null,
+      "conditions": [
+        "予定額に達した場合は早期終了",
+        "PayPay商品券・クレジットカードは対象外"
+      ],
+      "merchant_rules": [],
+      "sources": [
+        "https://paypay.ne.jp/event/tokyo-suginami-city-20260601/",
+        "https://www.city.suginami.tokyo.jp/s033/news/25505.html"
+      ],
+      "verified_date": "2026-06-30"
     }
   ]
 }

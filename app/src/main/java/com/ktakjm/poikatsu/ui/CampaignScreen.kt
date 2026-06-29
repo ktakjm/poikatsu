@@ -32,6 +32,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.ktakjm.poikatsu.data.Campaign
@@ -191,16 +193,51 @@ private fun CampaignCard(campaigns: List<Campaign>, status: CampaignStatus) {
     val daysLabel = daysInfo?.first
     val isUrgent = daysInfo?.second == true
 
-    val brandColors = campaigns.mapNotNull { it.brandColor }.distinct()
     val fallback = MaterialTheme.colorScheme.primary
-    val stripeColor = brandColors.firstNotNullOfOrNull { parseBrandColor(it) } ?: fallback
+    val stripeColors = campaigns.mapNotNull { it.brandColor }.distinct()
+        .mapNotNull { parseBrandColor(it) }
+        .ifEmpty { listOf(fallback) }
+    val separatorColor = MaterialTheme.colorScheme.surfaceContainerHigh
 
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Row(Modifier.height(IntrinsicSize.Min)) {
-            Box(Modifier.width(6.dp).fillMaxHeight().background(stripeColor))
+            Box(
+                Modifier
+                    .width(6.dp)
+                    .fillMaxHeight()
+                    .drawBehind {
+                        if (stripeColors.size == 1) {
+                            drawRect(stripeColors[0])
+                        } else {
+                            val gap = 1.dp.toPx()
+                            val n = stripeColors.size
+                            val segH = (size.height - gap * (n - 1)) / n
+                            val skew = size.width * 0.5f
+                            drawRect(separatorColor)
+                            stripeColors.forEachIndexed { i, c ->
+                                val segTop = i * (segH + gap)
+                                val segBot = segTop + segH
+                                val path = Path().apply {
+                                    if (i == 0) {
+                                        moveTo(0f, 0f); lineTo(size.width, 0f)
+                                    } else {
+                                        moveTo(0f, segTop + skew); lineTo(size.width, segTop - skew)
+                                    }
+                                    if (i == n - 1) {
+                                        lineTo(size.width, size.height); lineTo(0f, size.height)
+                                    } else {
+                                        lineTo(size.width, segBot - skew); lineTo(0f, segBot + skew)
+                                    }
+                                    close()
+                                }
+                                drawPath(path, c)
+                            }
+                        }
+                    },
+            )
             Column(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -221,12 +258,10 @@ private fun CampaignCard(campaigns: List<Campaign>, status: CampaignStatus) {
                 }
                 campaigns.forEach { campaign ->
                     CampaignBenefitLine(campaign)
-                }
-                if (campaigns.size == 1) {
-                    first.capNote?.let {
+                    campaign.capNote?.let {
                         Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                     }
-                    first.usageLimitNote?.let {
+                    campaign.usageLimitNote?.let {
                         Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                     }
                 }
@@ -260,13 +295,6 @@ private fun CampaignBenefitLine(campaign: Campaign) {
     ) {
         Box(Modifier.size(10.dp).background(brandColor, CircleShape))
         Text("${campaign.issuer} $benefitText", style = MaterialTheme.typography.bodyMedium)
-        campaign.perTransactionCap?.let { cap ->
-            Text(
-                "(上限${formatCap(cap)})",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
-        }
     }
 }
 
