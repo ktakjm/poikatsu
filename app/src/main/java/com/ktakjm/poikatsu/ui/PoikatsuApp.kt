@@ -458,7 +458,15 @@ private fun SearchResultCard(result: MainViewModel.SearchResult, onClick: () -> 
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(result.merchant.name, style = MaterialTheme.typography.bodyLarge)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(result.merchant.name, style = MaterialTheme.typography.bodyLarge)
+                        if (result.hasTimeLimited) {
+                            TimeLimitedBadge()
+                        }
+                    }
                     Text(
                         result.merchant.category,
                         style = MaterialTheme.typography.bodySmall,
@@ -839,7 +847,15 @@ private fun NearbyPreview(
     ) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
-                Text(place.name, style = MaterialTheme.typography.titleMedium)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(place.name, style = MaterialTheme.typography.titleMedium)
+                    if (place.hasTimeLimited) {
+                        TimeLimitedBadge()
+                    }
+                }
                 Text(
                     "${distanceLabel(place.distanceMeters, originName)}・${place.merchant?.category.orEmpty()}",
                     style = MaterialTheme.typography.bodyMedium,

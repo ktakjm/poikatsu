@@ -22,7 +22,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Arrangement
+import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.DataSource
+import com.ktakjm.poikatsu.domain.BenefitType
+import java.time.LocalDate
 
 internal fun trimRate(rate: Double): String =
     if (rate == rate.toLong().toDouble()) rate.toLong().toString() else rate.toString()
@@ -104,4 +107,60 @@ internal fun PaddedColumn(content: @Composable ColumnScope.() -> Unit) {
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         content = content,
     )
+}
+
+/** Campaign の特典テキスト(rate% / 円引き / % OFF / 円還元)。検索結果カード・判定詳細で共用 */
+internal fun benefitText(campaign: Campaign): String {
+    val type = BenefitType.fromString(campaign.benefitType)
+    return when {
+        type == BenefitType.COUPON_FIXED && campaign.discountAmount != null ->
+            "${campaign.discountAmount}円引き"
+        type == BenefitType.COUPON_PERCENT && campaign.rateBase != null ->
+            "${trimRate(campaign.rateBase)}% OFF"
+        type == BenefitType.REBATE && campaign.discountAmount != null ->
+            "${campaign.discountAmount}円相当 還元"
+        campaign.rateBase != null ->
+            "${trimRate(campaign.rateBase)}% 還元"
+        else -> ""
+    }
+}
+
+/** 期間テキスト("7/1〜7/31")。常設(period null)なら null を返す */
+internal fun formatPeriod(campaign: Campaign): String? {
+    if (campaign.periodStart == null && campaign.periodEnd == null) return null
+    return buildString {
+        campaign.periodStart?.let {
+            val d = LocalDate.parse(it)
+            append("${d.monthValue}/${d.dayOfMonth}")
+        }
+        append("〜")
+        campaign.periodEnd?.let {
+            val d = LocalDate.parse(it)
+            append("${d.monthValue}/${d.dayOfMonth}")
+        }
+    }
+}
+
+/** 上限額のフォーマット(1万 / 2千 / 500円) */
+internal fun formatCap(yen: Int): String = when {
+    yen >= 10000 && yen % 10000 == 0 -> "${yen / 10000}万"
+    yen >= 1000 && yen % 1000 == 0 -> "${yen / 1000}千"
+    else -> "${yen}円"
+}
+
+/** 期間限定バッジ */
+@Composable
+internal fun TimeLimitedBadge(modifier: Modifier = Modifier) {
+    Surface(
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        shape = RoundedCornerShape(4.dp),
+        modifier = modifier,
+    ) {
+        Text(
+            "期間限定",
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+        )
+    }
 }

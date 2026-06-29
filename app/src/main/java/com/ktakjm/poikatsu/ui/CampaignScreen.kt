@@ -270,23 +270,4 @@ private fun CampaignBenefitLine(campaign: Campaign) {
     }
 }
 
-private fun campaignBenefitText(campaign: Campaign): String {
-    val type = BenefitType.fromString(campaign.benefitType)
-    return when {
-        type == BenefitType.COUPON_FIXED && campaign.discountAmount != null ->
-            "${campaign.discountAmount}円引き"
-        type == BenefitType.COUPON_PERCENT && campaign.rateBase != null ->
-            "${trimRate(campaign.rateBase)}% OFF"
-        type == BenefitType.REBATE && campaign.discountAmount != null ->
-            "${campaign.discountAmount}円相当 還元"
-        campaign.rateBase != null ->
-            "${trimRate(campaign.rateBase)}% 還元"
-        else -> ""
-    }
-}
-
-private fun formatCap(yen: Int): String = when {
-    yen >= 10000 && yen % 10000 == 0 -> "${yen / 10000}万"
-    yen >= 1000 && yen % 1000 == 0 -> "${yen / 1000}千"
-    else -> "${yen}円"
-}
+private fun campaignBenefitText(campaign: Campaign): String = benefitText(campaign)

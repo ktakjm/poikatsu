@@ -20,8 +20,10 @@ import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.Profile
 import com.ktakjm.poikatsu.data.SettingsRepository
 import com.ktakjm.poikatsu.data.ThemeMode
+import com.ktakjm.poikatsu.domain.BestPaymentOption
 import com.ktakjm.poikatsu.domain.Judgment
 import com.ktakjm.poikatsu.domain.JudgmentEngine
+import com.ktakjm.poikatsu.domain.QrJudgment
 import com.ktakjm.poikatsu.domain.StoreVerdict
 import com.ktakjm.poikatsu.util.GeoMath
 import java.io.File
@@ -68,11 +70,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val campaignCount: Int,
         /** ブランドカラー("#RRGGBB")を還元率の高い順に最大3色 */
         val brandColors: List<String>,
+        val hasTimeLimited: Boolean = false,
     )
 
     data class Selection(
         val merchant: Merchant,
         val judgments: List<Judgment>,
+        val qrJudgments: List<QrJudgment> = emptyList(),
+        val bestOption: BestPaymentOption? = null,
         /** 公式が対象/対象外を言い切っているチェーンか。true のときだけ対象判定画面へ遷移できる */
         val canCheckStore: Boolean = false,
         /** 店舗対象判定画面を開くときのプリフィル(検索クエリやNearbyのPOI名の店舗名部分) */
@@ -105,6 +110,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          * 地図ピンの着色に使い、複数あれば発行体ごとに色を分けて描く(両対応なら 2 色)。
          */
         val brandColors: List<String> = emptyList(),
+        val hasTimeLimited: Boolean = false,
     )
 
     /**
@@ -307,23 +313,49 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         private const val AUTO_REFRESH_MIN_INTERVAL_MS = 60 * 60_000L
     }
 
+    private fun enabledQrIds(): Set<String> {
+        val loaded = lastLoaded ?: return emptySet()
+        return loaded.data.profile.qrPayments
+            .filter { it.enabledDefault }
+            .map { it.id }
+            .toSet()
+    }
+
     /** チェーンと店舗名ヒントから判定詳細用の Selection を組む(判定・遷移可否をまとめて引く) */
     private fun JudgmentEngine.selectionFor(
         merchant: Merchant,
         storeNameHint: String,
         displayName: String? = null,
-    ) = Selection(merchant, judge(merchant, LocalDate.now()), canCheckStore(merchant), storeNameHint, displayName)
+    ): Selection {
+        val result = judgeAll(merchant, LocalDate.now(), enabledQrIds())
+        return Selection(
+            merchant = merchant,
+            judgments = result.cardJudgments,
+            qrJudgments = result.qrJudgments,
+            bestOption = result.bestOption,
+            canCheckStore = canCheckStore(merchant),
+            storeNameHint = storeNameHint,
+            displayName = displayName,
+        )
+    }
 
     /** 検索結果のうち、所有カードで対象になる施策が1つ以上あるチェーンだけ残す(reward 無しは一覧に出さない) */
     private fun JudgmentEngine.searchRewarded(query: String, categories: Set<String>): List<SearchResult> =
         search(query, categories).mapNotNull { merchant ->
-            val judgments = judge(merchant, LocalDate.now())
-            if (judgments.isEmpty()) return@mapNotNull null
+            val today = LocalDate.now()
+            val result = judgeAll(merchant, today, enabledQrIds())
+            if (result.cardJudgments.isEmpty() && result.qrJudgments.isEmpty()) return@mapNotNull null
+            val allCampaigns = result.cardJudgments.map { it.campaign } + result.qrJudgments.map { it.campaign }
+            val bestRate = result.bestOption?.rate
+                ?: result.cardJudgments.firstOrNull()?.effectiveRate
+                ?: result.qrJudgments.firstOrNull()?.effectiveRate
+                ?: 0.0
             SearchResult(
                 merchant = merchant,
-                bestRate = judgments.first().effectiveRate,
-                campaignCount = judgments.size,
-                brandColors = judgments.mapNotNull { it.campaign.brandColor }.distinct().take(3),
+                bestRate = bestRate,
+                campaignCount = allCampaigns.distinctBy { it.id }.size,
+                brandColors = allCampaigns.mapNotNull { it.brandColor }.distinct().take(3),
+                hasTimeLimited = allCampaigns.any { it.periodEnd != null },
             )
         }
 
@@ -530,22 +562,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
             return
         }
+        val today = LocalDate.now()
+        val qrIds = enabledQrIds()
         val places = pois
             .mapNotNull { poi ->
                 val merchant = engine.matchStore(poi.name, poi.brand) ?: return@mapNotNull null
                 if (engine.isFacilityTenant(merchant.name, poi.displayName)) return@mapNotNull null
                 if (engine.isExcludedStore(merchant, poi.displayName)) return@mapNotNull null
-                val judgments = engine.judge(merchant, LocalDate.now())
-                if (judgments.isEmpty()) return@mapNotNull null
+                val result = engine.judgeAll(merchant, today, qrIds)
+                if (result.cardJudgments.isEmpty() && result.qrJudgments.isEmpty()) return@mapNotNull null
+                val allCampaigns = result.cardJudgments.map { it.campaign } + result.qrJudgments.map { it.campaign }
                 NearbyPlace(
                     name = poi.displayName,
                     distanceMeters = GeoMath.distanceMeters(originLat, originLon, poi.lat, poi.lon),
                     distanceFromCenter = GeoMath.distanceMeters(centerLat, centerLon, poi.lat, poi.lon),
                     merchant = merchant,
-                    bestRate = judgments.firstOrNull()?.effectiveRate,
+                    bestRate = result.bestOption?.rate
+                        ?: result.cardJudgments.firstOrNull()?.effectiveRate
+                        ?: result.qrJudgments.firstOrNull()?.effectiveRate,
                     lat = poi.lat,
                     lon = poi.lon,
-                    brandColors = judgments.mapNotNull { it.campaign.brandColor }.distinct(),
+                    brandColors = allCampaigns.mapNotNull { it.brandColor }.distinct(),
+                    hasTimeLimited = allCampaigns.any { it.periodEnd != null },
                 )
             }
             .sortedBy { it.distanceFromCenter }
