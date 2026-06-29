@@ -1,7 +1,6 @@
 package com.ktakjm.poikatsu.ui
 
 import android.Manifest
-import android.os.Build
 import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -10,8 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,7 +16,6 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -27,7 +23,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -43,34 +38,22 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
 import androidx.compose.material3.BottomSheetScaffold
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Switch
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -101,38 +84,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.core.content.ContextCompat
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.ktakjm.poikatsu.BuildConfig
-import com.ktakjm.poikatsu.data.Campaign
-import com.ktakjm.poikatsu.data.DataSource
-import com.ktakjm.poikatsu.data.LocationHint
 import com.ktakjm.poikatsu.data.Merchant
-import com.ktakjm.poikatsu.data.ThemeMode
-import com.ktakjm.poikatsu.domain.BenefitType
-import com.ktakjm.poikatsu.domain.CampaignStatus
-import com.ktakjm.poikatsu.domain.Judgment
-import com.ktakjm.poikatsu.domain.StoreEligibility
-import com.ktakjm.poikatsu.domain.StoreVerdict
-import java.time.LocalDate
-import java.time.temporal.ChronoUnit
 import com.ktakjm.poikatsu.util.GeoMath
-import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
-import com.ktakjm.poikatsu.ui.theme.warningColor
-import com.ktakjm.poikatsu.ui.theme.warningContainerColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -179,7 +142,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
     }
 
     val selectedTab = state.selectedTab
-    // 下位画面(詳細/店舗判定)やロード・エラーに重なっていないベース状態。下部ナビの表示条件。
+    // 下位画面(詳細/店舗判定)やロード・エラーに重なっていないベースのタブ表示状態。下部ナビの表示条件。
     val baseTabsVisible = !state.loading && state.error == null &&
         state.selection == null && state.storeCheck == null
 
@@ -360,335 +323,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
     }
 }
 
-/** 地図以外の画面共通の縦並びコンテナ。従来ルートにあった横16dpパディングをここに移譲 */
-@Composable
-private fun PaddedColumn(content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-        content = content,
-    )
-}
-
-@Composable
-private fun Centered(content: @Composable () -> Unit) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
-}
-
-/**
- * 設定画面(4 番目のタブ)。ListItem は端まで使うため PaddedColumn を介さず直接置く。
- * 表示/マイカード/データ/このアプリの 4 セクション。
- * 値は DataStore 由来(MainViewModel 経由)で、変更は即 ViewModel の setter へ流す。
- */
-@Composable
-private fun SettingsScreen(
-    themeMode: ThemeMode,
-    dynamicColor: Boolean,
-    autoRefresh: Boolean,
-    cards: List<MainViewModel.CardSetting>,
-    dataStatus: String,
-    refreshing: Boolean,
-    dataCommitRef: String,
-    onThemeModeChange: (ThemeMode) -> Unit,
-    onDynamicColorChange: (Boolean) -> Unit,
-    onAutoRefreshChange: (Boolean) -> Unit,
-    onCardOwnedChange: (String, Boolean) -> Unit,
-    onCardRateChange: (String, Double?) -> Unit,
-    onCardBrandChange: (String, String) -> Unit,
-    onCardWelcatsuChange: (String, Boolean) -> Unit,
-    onRefresh: () -> Unit,
-    onDataCommitRefChange: (String) -> Unit,
-) {
-    val uriHandler = LocalUriHandler.current
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        // --- 表示 ---
-        SettingsSectionHeader("表示")
-        ThemeModeRow(themeMode = themeMode, onChange = onThemeModeChange)
-        val dynamicSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-        val dynamicNote: (@Composable () -> Unit)? =
-            if (dynamicSupported) null else ({ Text("Android 12 以降で利用できます") })
-        ListItem(
-            headlineContent = { Text("壁紙の色を使う") },
-            supportingContent = dynamicNote,
-            trailingContent = {
-                Switch(
-                    checked = dynamicColor && dynamicSupported,
-                    onCheckedChange = onDynamicColorChange,
-                    enabled = dynamicSupported,
-                )
-            },
-        )
-
-        // --- マイカード ---
-        SettingsSectionHeader("マイカード")
-        cards.forEach { card ->
-            CardSettingItem(
-                card = card,
-                onOwnedChange = { onCardOwnedChange(card.campaignId, it) },
-                onRateChange = { onCardRateChange(card.campaignId, it) },
-                onBrandChange = { onCardBrandChange(card.campaignId, it) },
-                onWelcatsuChange = { onCardWelcatsuChange(card.campaignId, it) },
-            )
-        }
-
-        // --- データ ---
-        SettingsSectionHeader("データ")
-        ListItem(
-            headlineContent = { Text("データの状態") },
-            supportingContent = { Text(dataStatus) },
-        )
-        ListItem(
-            headlineContent = { Text("自動更新") },
-            supportingContent = { Text("起動・復帰時に最新データを取得(1時間に1回まで)") },
-            trailingContent = { Switch(checked = autoRefresh, onCheckedChange = onAutoRefreshChange) },
-        )
-        ListItem(
-            headlineContent = { Text("今すぐ更新") },
-            trailingContent = {
-                if (refreshing) {
-                    CircularProgressIndicator(Modifier.size(24.dp))
-                } else {
-                    Icon(Icons.Default.Refresh, contentDescription = null)
-                }
-            },
-            modifier = Modifier.clickable(enabled = !refreshing, onClick = onRefresh),
-        )
-
-        // --- 開発者向け ---
-        SettingsSectionHeader("開発者向け")
-        CommitRefRow(value = dataCommitRef, onChange = onDataCommitRefChange)
-
-        // --- このアプリ ---
-        SettingsSectionHeader("このアプリ")
-        ListItem(
-            headlineContent = { Text("バージョン") },
-            trailingContent = { Text(BuildConfig.VERSION_NAME) },
-        )
-        ListItem(
-            headlineContent = { Text("ソースコード(GitHub)") },
-            trailingContent = {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
-            },
-            modifier = Modifier.clickable { uriHandler.openUri("https://github.com/ktakjm/poikatsu") },
-        )
-        Spacer(Modifier.height(24.dp))
-    }
-}
-
-/** カード1枚分の設定行: 所有チェック + (所有時) ブランド選択 / 還元率 / ウエル活。 */
-@Composable
-private fun CardSettingItem(
-    card: MainViewModel.CardSetting,
-    onOwnedChange: (Boolean) -> Unit,
-    onRateChange: (Double?) -> Unit,
-    onBrandChange: (String) -> Unit,
-    onWelcatsuChange: (Boolean) -> Unit,
-) {
-    var showRateDialog by remember { mutableStateOf(false) }
-    ListItem(
-        headlineContent = { Text("${card.cardName}（${card.brand}）") },
-        leadingContent = { Checkbox(checked = card.owned, onCheckedChange = onOwnedChange) },
-        supportingContent = { Text(if (card.owned) "持っている" else "持っていない") },
-        modifier = Modifier.clickable { onOwnedChange(!card.owned) },
-    )
-    if (card.owned) {
-        if (card.showBrandPicker) {
-            ListItem(
-                headlineContent = { Text("ブランド") },
-                trailingContent = { BrandDropdown(brand = card.brand, onChange = onBrandChange) },
-                modifier = Modifier.padding(start = 24.dp),
-            )
-            if (card.brand.equals("Amex", ignoreCase = true)) {
-                Text(
-                    "Amex は一部店舗が優遇対象外になります",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = warningColor(),
-                    modifier = Modifier.padding(start = 24.dp, end = 16.dp, bottom = 8.dp),
-                )
-            }
-        }
-        ListItem(
-            headlineContent = { Text("還元率（公式アプリの表示値）") },
-            trailingContent = {
-                Text("${trimRate(card.rate)}%", style = MaterialTheme.typography.titleMedium)
-            },
-            modifier = Modifier.padding(start = 24.dp).clickable { showRateDialog = true },
-        )
-        card.pointMultiplier?.let { pm ->
-            val welcatsuNote: (@Composable () -> Unit)? = if (card.welcatsu) {
-                ({ Text("${trimRate(card.rate * pm.factor)}% で表示中") })
-            } else {
-                null
-            }
-            ListItem(
-                headlineContent = { Text(pm.label) },
-                leadingContent = { Checkbox(checked = card.welcatsu, onCheckedChange = onWelcatsuChange) },
-                supportingContent = welcatsuNote,
-                modifier = Modifier.padding(start = 24.dp).clickable { onWelcatsuChange(!card.welcatsu) },
-            )
-        }
-    }
-    if (showRateDialog) {
-        RateEditDialog(
-            initial = card.rate,
-            onDismiss = { showRateDialog = false },
-            onConfirm = {
-                onRateChange(it)
-                showRateDialog = false
-            },
-        )
-    }
-}
-
-/** ブランド選択(Amex/Mastercard/Visa/JCB)。Amex のときだけ判定挙動が変わる。 */
-@Composable
-private fun BrandDropdown(brand: String, onChange: (String) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        TextButton(onClick = { expanded = true }) {
-            Text(brand.ifBlank { "選択" })
-            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            listOf("Amex", "Mastercard", "Visa", "JCB").forEach { b ->
-                DropdownMenuItem(
-                    text = { Text(b) },
-                    onClick = {
-                        onChange(b)
-                        expanded = false
-                    },
-                )
-            }
-        }
-    }
-}
-
-/** 還元率の数値入力ダイアログ。空/「既定に戻す」で上書きを解除する(null を返す)。 */
-@Composable
-private fun RateEditDialog(initial: Double, onDismiss: () -> Unit, onConfirm: (Double?) -> Unit) {
-    var text by remember { mutableStateOf(trimRate(initial)) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("還元率を入力") },
-        text = {
-            Column {
-                Text(
-                    "公式アプリに表示される実効還元率(%)を入力してください。",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    suffix = { Text("%") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                )
-            }
-        },
-        confirmButton = { TextButton(onClick = { onConfirm(text.toDoubleOrNull()) }) { Text("保存") } },
-        dismissButton = { TextButton(onClick = { onConfirm(null) }) { Text("既定に戻す") } },
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ThemeModeRow(themeMode: ThemeMode, onChange: (ThemeMode) -> Unit) {
-    val options = listOf(
-        ThemeMode.SYSTEM to "システム",
-        ThemeMode.LIGHT to "ライト",
-        ThemeMode.DARK to "ダーク",
-    )
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text("テーマ", style = MaterialTheme.typography.bodyLarge)
-        Spacer(Modifier.height(8.dp))
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-            options.forEachIndexed { index, (mode, label) ->
-                SegmentedButton(
-                    selected = themeMode == mode,
-                    onClick = { onChange(mode) },
-                    shape = SegmentedButtonDefaults.itemShape(index, options.size),
-                ) { Text(label) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingsSectionHeader(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
-    )
-}
-
-@Composable
-private fun CommitRefRow(value: String, onChange: (String) -> Unit) {
-    var text by remember(value) { mutableStateOf(value) }
-    ListItem(
-        headlineContent = { Text("データ取得先 commit") },
-        supportingContent = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it.take(40) },
-                placeholder = { Text("空欄 = main") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            )
-        },
-        trailingContent = {
-            TextButton(
-                onClick = { onChange(text) },
-                enabled = text.trim() != value,
-            ) { Text("適用") }
-        },
-    )
-}
-
-/** 非インタラクティブなカテゴリ表示。押せる見た目(Chip)を持たせない静的タグ */
-@Composable
-private fun CategoryTag(text: String) {
-    Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        shape = RoundedCornerShape(8.dp),
-    ) {
-        Text(
-            text,
-            style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-        )
-    }
-}
-
-/**
- * 警告・注意のトーナル面表示(アイコン + 文)。container/content の対で error(致命) / warning(注意) を出し分ける。
- * グレーのカード地に色文字を直接乗せるとコントラストが不足するため、専用の淡い面の上に濃い文字で出す。
- * アイコン/文字の色は Surface の contentColor から自動で引き継ぐ。
- */
-@Composable
-private fun NoticeRow(text: String, containerColor: Color, contentColor: Color) {
-    Surface(
-        color = containerColor,
-        contentColor = contentColor,
-        shape = RoundedCornerShape(10.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.Top,
-        ) {
-            Icon(
-                Icons.Default.Warning,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp).padding(top = 2.dp),
-            )
-            Text(text, style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
+// ---- 探す(検索)タブ ----
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -770,258 +405,6 @@ private fun SearchPane(
     }
 }
 
-// ---- キャンペーンタブ ----
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun CampaignPane(
-    activeCampaigns: List<Campaign>,
-    upcomingCampaigns: List<Campaign>,
-    filter: CampaignFilter,
-    onFilterChange: (CampaignFilter) -> Unit,
-) {
-    if (activeCampaigns.isEmpty() && upcomingCampaigns.isEmpty()) {
-        Centered {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(horizontal = 32.dp),
-            ) {
-                Icon(
-                    Icons.Default.Star,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.outline,
-                )
-                Spacer(Modifier.height(16.dp))
-                Text("期間限定キャンペーンはありません", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "カード会社の期間限定キャンペーンや自治体のキャッシュレス還元施策が登録されると、ここに表示されます。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.outline,
-                )
-            }
-        }
-        return
-    }
-
-    val filterFn: (Campaign) -> Boolean = when (filter) {
-        CampaignFilter.ALL -> { _ -> true }
-        CampaignFilter.MUNICIPAL -> { c -> c.type == "municipal" }
-        CampaignFilter.CARD -> { c -> c.type == "card_promotion" && c.paymentMethodId == null }
-        CampaignFilter.QR -> { c -> c.paymentMethodId != null && c.type != "municipal" }
-    }
-    val activeGroups = remember(activeCampaigns, filter) {
-        groupCampaignsForDisplay(activeCampaigns.filter(filterFn))
-    }
-    val upcomingGroups = remember(upcomingCampaigns, filter) {
-        groupCampaignsForDisplay(upcomingCampaigns.filter(filterFn))
-    }
-
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(bottom = 16.dp),
-    ) {
-        item {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CampaignFilter.entries.forEach { f ->
-                    FilterChip(
-                        selected = filter == f,
-                        onClick = { onFilterChange(f) },
-                        label = { Text(campaignFilterLabel(f)) },
-                    )
-                }
-            }
-        }
-        if (activeGroups.isNotEmpty()) {
-            item {
-                Text(
-                    "開催中",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            }
-            items(activeGroups, key = { it.first().id }) { group ->
-                CampaignCard(group, CampaignStatus.ACTIVE)
-            }
-        }
-        if (upcomingGroups.isNotEmpty()) {
-            item {
-                Text(
-                    "もうすぐ開始",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.padding(top = 16.dp),
-                )
-            }
-            items(upcomingGroups, key = { "upcoming_${it.first().id}" }) { group ->
-                CampaignCard(group, CampaignStatus.UPCOMING)
-            }
-        }
-        if (activeGroups.isEmpty() && upcomingGroups.isEmpty()) {
-            item {
-                Text(
-                    "このフィルタに一致するキャンペーンはありません。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 16.dp),
-                )
-            }
-        }
-    }
-}
-
-private fun groupCampaignsForDisplay(campaigns: List<Campaign>): List<List<Campaign>> {
-    val (municipal, others) = campaigns.partition { it.type == "municipal" }
-    val municipalGroups = municipal
-        .groupBy { it.region?.name ?: it.id }
-        .values.toList()
-    val otherGroups = others.map { listOf(it) }
-    return municipalGroups + otherGroups
-}
-
-private fun campaignFilterLabel(filter: CampaignFilter): String = when (filter) {
-    CampaignFilter.ALL -> "全て"
-    CampaignFilter.MUNICIPAL -> "自治体"
-    CampaignFilter.CARD -> "カード"
-    CampaignFilter.QR -> "QR"
-}
-
-@Composable
-private fun CampaignCard(campaigns: List<Campaign>, status: CampaignStatus) {
-    val today = LocalDate.now()
-    val first = campaigns.first()
-
-    val title = if (first.type == "municipal") {
-        first.region?.name?.let { "$it キャッシュレス還元" } ?: first.name
-    } else {
-        first.name
-    }
-
-    val allStarts = campaigns.mapNotNull { c -> c.periodStart?.let { LocalDate.parse(it) } }
-    val allEnds = campaigns.mapNotNull { c -> c.periodEnd?.let { LocalDate.parse(it) } }
-    val earliestStart = allStarts.minOrNull()
-    val latestEnd = allEnds.maxOrNull()
-    val periodLabel = buildString {
-        if (earliestStart != null) append("${earliestStart.monthValue}/${earliestStart.dayOfMonth}")
-        append("〜")
-        if (latestEnd != null) append("${latestEnd.monthValue}/${latestEnd.dayOfMonth}")
-    }
-
-    val daysInfo = when (status) {
-        CampaignStatus.ACTIVE -> latestEnd?.let { end ->
-            val days = ChronoUnit.DAYS.between(today, end).toInt()
-            if (days >= 0) "残り${days}日" to (days <= 3) else null
-        }
-        CampaignStatus.UPCOMING -> earliestStart?.let { start ->
-            val days = ChronoUnit.DAYS.between(today, start).toInt()
-            if (days > 0) "あと${days}日で開始" to false else null
-        }
-        else -> null
-    }
-    val daysLabel = daysInfo?.first
-    val isUrgent = daysInfo?.second == true
-
-    val brandColors = campaigns.mapNotNull { it.brandColor }.distinct()
-    val fallback = MaterialTheme.colorScheme.primary
-    val stripeColor = brandColors.firstNotNullOfOrNull { parseBrandColor(it) } ?: fallback
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-    ) {
-        Row(Modifier.height(IntrinsicSize.Min)) {
-            Box(Modifier.width(6.dp).fillMaxHeight().background(stripeColor))
-            Column(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(periodLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-                    if (daysLabel != null) {
-                        Text(
-                            daysLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isUrgent) warningColor() else MaterialTheme.colorScheme.outline,
-                        )
-                    }
-                }
-                campaigns.forEach { campaign ->
-                    CampaignBenefitLine(campaign)
-                }
-                if (campaigns.size == 1) {
-                    first.capNote?.let {
-                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-                    }
-                    first.usageLimitNote?.let {
-                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-                    }
-                }
-                if (first.storeScope == "external") {
-                    val uriHandler = LocalUriHandler.current
-                    campaigns.forEach { campaign ->
-                        val url = campaign.storeSearchUrl ?: campaign.campaignUrl
-                        if (url != null) {
-                            val label = if (campaigns.size > 1) "${campaign.issuer}で対象店舗を確認 →" else "対象店舗を確認 →"
-                            Text(
-                                label,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.clickable { uriHandler.openUri(url) },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CampaignBenefitLine(campaign: Campaign) {
-    val brandColor = parseBrandColor(campaign.brandColor) ?: MaterialTheme.colorScheme.primary
-    val benefitText = campaignBenefitText(campaign)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Box(Modifier.size(10.dp).background(brandColor, CircleShape))
-        Text("${campaign.issuer} $benefitText", style = MaterialTheme.typography.bodyMedium)
-        campaign.perTransactionCap?.let { cap ->
-            Text(
-                "(上限${formatCap(cap)})",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
-        }
-    }
-}
-
-private fun campaignBenefitText(campaign: Campaign): String {
-    val type = BenefitType.fromString(campaign.benefitType)
-    return when {
-        type == BenefitType.COUPON_FIXED && campaign.discountAmount != null ->
-            "${campaign.discountAmount}円引き"
-        type == BenefitType.COUPON_PERCENT && campaign.rateBase != null ->
-            "${trimRate(campaign.rateBase)}% OFF"
-        type == BenefitType.REBATE && campaign.discountAmount != null ->
-            "${campaign.discountAmount}円相当 還元"
-        campaign.rateBase != null ->
-            "${trimRate(campaign.rateBase)}% 還元"
-        else -> ""
-    }
-}
-
-private fun formatCap(yen: Int): String = when {
-    yen >= 10000 && yen % 10000 == 0 -> "${yen / 10000}万"
-    yen >= 1000 && yen % 1000 == 0 -> "${yen / 1000}千"
-    else -> "${yen}円"
-}
-
 // ---- 検索結果カード ----
 
 @Composable
@@ -1101,6 +484,8 @@ private fun SearchResultCard(result: MainViewModel.SearchResult, onClick: () -> 
     }
 }
 
+// ---- 近く(地図)タブ ----
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NearbyPane(
@@ -1150,7 +535,7 @@ private fun NearbyPane(
     // 中心が既にあれば再検索中でも地図・一覧は残し、進捗は地図上に小さく重ねる(NearbyMap の loadingMessage)。
     if (center == null || nearby.error != null) {
         // 地図なしの全画面状態(地図が出る前のロード/エラー)。地図モードはタイトルバーを持たない
-        // (full-bleed)ので、ここでも「近くのお店」見出し・歯車は出さず内容だけを中央に出す。
+        // (full-bleed)ので、ここでも見出しは出さず内容だけを中央に出す。
         // 地図表示への切替で見出しが消える中途半端な見えを防ぐ。下部ナビは残るのでモード/設定への
         // 導線は保たれる(設定は「設定」タブから)。
         Centered {
@@ -1158,7 +543,7 @@ private fun NearbyPane(
                 nearby.loading -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator()
                     Spacer(Modifier.height(16.dp))
-                    // リングは地図ではなく「現在地の測位」→「Overpass で周辺店舗取得」を待っている。
+                    // リングは地図ではなく「現在地の測位」→「YOLP で周辺店舗取得」を待っている。
                     // どちらの待ちかを出して長い待ち時間の理由を示す。
                     Text(
                         nearbyLoadingText(nearby.loadingPhase),
@@ -1292,8 +677,7 @@ private fun NearbyPane(
         // 既定ハンドルは上下余白が厚く直下のクレジットが間延びするため、縦を詰めた小ぶりのものにする
         sheetDragHandle = { CompactDragHandle() },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        // 地図を画面上端(ステータスバー裏)まで全面表示する full-bleed。タイトルバーは持たず、
-        // 設定への入口(歯車)は地図上の浮きコントロールへ移した(NearbyMap)。
+        // 地図を画面上端(ステータスバー裏)まで全面表示する full-bleed。タイトルバーは持たない。
         sheetContent = {
             if (selectedPlace != null) {
                 // 選択中: 地図を残したまま店舗情報をプレビュー。判定詳細へはここから明示遷移する。
@@ -1602,7 +986,7 @@ private fun ChainFilterDropdown(
 
 /**
  * 近隣取得の待ち文言。全画面ローディング(初回)と地図上の進捗ピル(再検索)で同じ文言を使う。
- * リングは地図タイルではなく「現在地の測位」/「Overpass で周辺店舗取得」を待っている。
+ * リングは地図タイルではなく「現在地の測位」/「YOLP で周辺店舗取得」を待っている。
  */
 private fun nearbyLoadingText(phase: MainViewModel.NearbyLoadPhase): String = when (phase) {
     MainViewModel.NearbyLoadPhase.LOCATING -> "現在地を確認しています…"
@@ -1647,350 +1031,6 @@ private fun distanceLabel(meters: Int, originName: String?): String {
         "${meters}m"
     }
     return "$prefix$dist"
-}
-
-@Composable
-private fun JudgmentDetail(
-    selection: MainViewModel.Selection,
-    onBack: () -> Unit,
-    onOpenStoreCheck: () -> Unit,
-    onFindNearby: () -> Unit,
-) {
-    BackHandler(onBack = onBack)
-    // 店名は TopAppBar に表示済み。ここではカテゴリを静的タグで補足する
-    CategoryTag(selection.merchant.category)
-    Spacer(Modifier.height(12.dp))
-    // 近隣(YOLP)由来で開いた場合のみ、店舗名は YOLP データなので帰属表示を出す。
-    // 名前検索由来(displayName == null)は merchants.json のデータなのでクレジットは出さない。
-    if (selection.displayName != null) {
-        Text(
-            "店舗情報: Web Services by Yahoo! JAPAN",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
-    }
-    // ブリッジ(探す→近く): 名前検索から来たとき(displayName == null)だけ「近くで探す」を出す。
-    // 近隣由来(displayName != null)は既に地図上にいるので出さない。
-    if (selection.displayName == null) {
-        val locationHint = selection.merchant.locationHint
-        if (locationHint == null) {
-            FilledTonalButton(onClick = onFindNearby, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Default.Place, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("近くのこの店を探す")
-            }
-        } else {
-            // 位置情報を持たない発行体(自販機など)は「近く」が行き止まりになるので、
-            // 代わりに位置を確認できる外部アプリ/サイトへ案内する
-            LocationHintNote(locationHint)
-        }
-        Spacer(Modifier.height(8.dp))
-    }
-    // 公式が対象/対象外を言い切っているチェーンだけ、店舗単位の判定画面へ遷移できる。
-    // 遷移元で文言を出し分ける: 地図ピン由来(displayName != null)は特定の1店舗を見ているので
-    // 「この店舗が対象か」、名前検索由来(displayName == null)はチェーン全体なので「対象店舗を調べる」。
-    if (selection.canCheckStore) {
-        Button(onClick = onOpenStoreCheck, modifier = Modifier.fillMaxWidth()) {
-            val storeCheckLabel =
-                if (selection.displayName != null) "この店舗が対象か調べる →" else "対象店舗を調べる →"
-            Text(storeCheckLabel)
-        }
-        Spacer(Modifier.height(8.dp))
-    }
-
-    if (selection.judgments.isEmpty()) {
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                "登録済みの高還元施策の対象外です。通常還元率のカード・QR決済を利用してください。",
-                modifier = Modifier.padding(16.dp),
-            )
-        }
-        return
-    }
-
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(selection.judgments, key = { it.campaign.id }) { judgment ->
-            JudgmentCard(judgment)
-        }
-    }
-}
-
-/**
- * 位置情報を持たない発行体(自販機など)向けの案内行。「近くのこの店を探す」の代わりに、
- * 位置を確認できる外部アプリ/サイト(例: Coke ON 公式アプリ)への導線を出す。
- * 失敗・警告ではなく案内なので Info アイコン+onSurfaceVariant 系の控えめな見せ方にする。
- */
-@Composable
-private fun LocationHintNote(hint: LocationHint) {
-    val uriHandler = LocalUriHandler.current
-    Row(verticalAlignment = Alignment.Top) {
-        Icon(
-            Icons.Default.Info,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp).padding(top = 2.dp),
-        )
-        Spacer(Modifier.width(8.dp))
-        Column {
-            Text(
-                "自販機の位置はこのアプリでは取得できません",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                hint.text,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "${hint.label} →",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { uriHandler.openUri(hint.url) },
-            )
-        }
-    }
-}
-
-@Composable
-private fun JudgmentCard(judgment: Judgment) {
-    val brandColor = parseBrandColor(judgment.campaign.brandColor) ?: MaterialTheme.colorScheme.primary
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-    ) {
-        Row(Modifier.height(IntrinsicSize.Min)) {
-            Box(
-                Modifier
-                    .width(8.dp)
-                    .fillMaxHeight()
-                    .background(brandColor)
-            )
-            JudgmentCardBody(judgment, brandColor)
-        }
-    }
-}
-
-@Composable
-private fun JudgmentCardBody(judgment: Judgment, brandColor: Color) {
-    val campaign = judgment.campaign
-    val rule = judgment.rule
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "${trimRate(judgment.effectiveRate)}%",
-                    style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Surface(
-                            color = brandColor,
-                            shape = RoundedCornerShape(4.dp),
-                        ) {
-                            Text(
-                                judgment.card?.cardName ?: campaign.issuer,
-                                style = MaterialTheme.typography.labelMedium,
-                                // ブランドカラーは任意の色なので、白固定ではなく輝度から読める文字色を選ぶ
-                                color = onColorFor(brandColor),
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            )
-                        }
-                        // ウエル活フラグを持つ決済手段は、ON/OFF によらず常に識別バッジを付ける(色=ウエルシアのロゴ色)
-                        val pm = judgment.card?.pointMultiplier
-                        if (pm != null) {
-                            val welciaColor = parseBrandColor(pm.color) ?: MaterialTheme.colorScheme.tertiary
-                            Surface(color = welciaColor, shape = RoundedCornerShape(4.dp)) {
-                                Text(
-                                    "ウエル活利用可",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = onColorFor(welciaColor),
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                )
-                            }
-                        }
-                    }
-                    Text(
-                        campaign.name,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                }
-            }
-            Text("支払い方法: ${campaign.paymentInstruction}", style = MaterialTheme.typography.bodyMedium)
-            rule.note?.let {
-                Text("この店の条件: $it", style = MaterialTheme.typography.bodyMedium)
-            }
-            // 致命的な注意(警告)は errorContainer、対象外があり得る等の注意は warningContainer で出し分ける
-            judgment.warnings.forEach {
-                NoticeRow(it, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
-            }
-            rule.exclusionNote?.let {
-                NoticeRow(it, warningContainerColor(), onWarningContainerColor())
-            }
-            rule.storeListUrl?.let { url ->
-                val uriHandler = LocalUriHandler.current
-                Text(
-                    "公式の対象店舗一覧を開く →",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable { uriHandler.openUri(url) },
-                )
-            }
-            campaign.monthlyCapNote?.let {
-                Text("上限: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-            }
-            // ウエル活フラグのある決済手段は、ON/OFF で実質還元率の意味づけを補足する
-            judgment.card?.takeIf { it.pointMultiplier != null }?.let { card ->
-                Text(
-                    if (card.welcatsuApplied) "※還元率はウエル活利用時の実質還元率"
-                    else "※WAONポイントに交換する事でウエル活利用可能",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline,
-                )
-            }
-            Text(
-                "情報確認日: ${campaign.verifiedDate} / 最新の条件は公式サイトで確認してください",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
-    }
-}
-
-/** 公式が対象/対象外を言い切っているチェーン専用の、店舗単位の対象判定画面 */
-@Composable
-private fun StoreCheckScreen(
-    storeCheck: MainViewModel.StoreCheckState,
-    onBack: () -> Unit,
-    onStoreNameChange: (String) -> Unit,
-) {
-    BackHandler(onBack = onBack)
-    // 画面タイトル(○○ 店舗判定)は TopAppBar 側に表示済み
-    OutlinedTextField(
-        value = storeCheck.input,
-        onValueChange = onStoreNameChange,
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text("店舗名を入力") },
-        placeholder = { Text("例: ○○駅前店") },
-        singleLine = true,
-    )
-    Spacer(Modifier.height(8.dp))
-
-    if (storeCheck.verdicts.isEmpty()) {
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                "対象か調べたい店舗名を入力してください。公式が対象/対象外を公表している店舗のみ判定します。",
-                modifier = Modifier.padding(16.dp),
-            )
-        }
-        return
-    }
-
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(storeCheck.verdicts, key = { it.campaign.id }) { verdict ->
-            StoreVerdictCard(verdict)
-        }
-    }
-}
-
-@Composable
-private fun StoreVerdictCard(verdict: StoreVerdict) {
-    // 状態は絵文字ではなく Material アイコン + セマンティックカラーのトーナル面(ピル)で表す。
-    // 色文字をカード地に直接乗せず、container/content の対で出すことでコントラストを担保する(テーマにも追従)。
-    val icon: ImageVector
-    val label: String
-    val containerColor: Color
-    val contentColor: Color
-    when (verdict.eligibility) {
-        StoreEligibility.ELIGIBLE -> {
-            icon = Icons.Default.CheckCircle; label = "対象"
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-        }
-        StoreEligibility.INELIGIBLE -> {
-            icon = Icons.Default.Close; label = "対象外"
-            containerColor = MaterialTheme.colorScheme.errorContainer
-            contentColor = MaterialTheme.colorScheme.onErrorContainer
-        }
-        StoreEligibility.UNKNOWN -> {
-            icon = Icons.Default.Info; label = "要確認"
-            containerColor = warningContainerColor()
-            contentColor = onWarningContainerColor()
-        }
-    }
-    val reason = when (verdict.eligibility) {
-        StoreEligibility.ELIGIBLE -> "「${verdict.matched}」は公式の対象店舗です"
-        StoreEligibility.INELIGIBLE -> "「${verdict.matched}」は公式の対象外店舗です"
-        StoreEligibility.UNKNOWN ->
-            "公式の対象/対象外リストに掲載がない店舗です。一部対象外店舗があるため、店頭・公式サイトでご確認ください"
-    }
-    Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(verdict.campaign.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-            Surface(
-                color = containerColor,
-                contentColor = contentColor,
-                shape = RoundedCornerShape(10.dp),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Icon(icon, contentDescription = null)
-                    Text(label, style = MaterialTheme.typography.titleLarge)
-                }
-            }
-            Text(reason, style = MaterialTheme.typography.bodyMedium)
-            if (verdict.updatedDate.isNotBlank()) {
-                val dateLabel = if (verdict.dateIsOfficial) {
-                    "公式情報の更新日: ${verdict.updatedDate}"
-                } else {
-                    "公式リスト確認日: ${verdict.updatedDate}(公式に更新日記載なし)"
-                }
-                Text(dateLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-            }
-            verdict.sourceUrl?.let { url ->
-                val uriHandler = LocalUriHandler.current
-                Text(
-                    "公式の店舗情報を開く →",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable { uriHandler.openUri(url) },
-                )
-            }
-        }
-    }
-}
-
-private fun trimRate(rate: Double): String =
-    if (rate == rate.toLong().toDouble()) rate.toLong().toString() else rate.toString()
-
-private fun dataStatusLabel(updatedAt: String, source: DataSource?): String {
-    val sourceLabel = when (source) {
-        DataSource.REMOTE -> "最新データ取得済み"
-        DataSource.CACHE -> "前回取得データ(オフライン?)"
-        DataSource.BUNDLED -> "同梱データ(オフライン?)"
-        null -> ""
-    }
-    return "データ更新日: $updatedAt $sourceLabel"
-}
-
-/** 背景色に対して読めるコンテンツ色(黒/白)を輝度から選ぶ */
-private fun onColorFor(background: Color): Color =
-    if (background.luminance() > 0.5f) Color.Black else Color.White
-
-/** "#RRGGBB" を Color に変換。形式が不正なら null */
-private fun parseBrandColor(hex: String?): Color? {
-    val digits = hex?.removePrefix("#") ?: return null
-    if (digits.length != 6) return null
-    return digits.toLongOrNull(16)?.let { Color(0xFF000000 or it) }
 }
 
 /** 同一地点(閾値メートル以内)の店舗をグルーピングする。同一ビル 1F/2F 等の重なり対策 */
