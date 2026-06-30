@@ -22,7 +22,7 @@ flowchart LR
 |---|---|
 | Phase 1（MVP） | ✅ 完了（2026-06-12） |
 | Phase 2 | 🔶 進行中（4 項目中 2 項目完了） |
-| design-campaigns Phase A〜E | ✅ 完了（2026-06-30）。Phase F（データ投入・実機検証）は未着手 |
+| design-campaigns Phase A〜F | Phase A〜E ✅ 完了。Phase F 🔶 データ投入完了・実機検証待ち（2026-06-30） |
 | Phase 3 | ⬜ 未着手 |
 
 ## 2. 完了した作業
@@ -136,7 +136,7 @@ flowchart TD
 
 ### 期間限定キャンペーン対応（design-campaigns Phase A〜E）
 
-詳細設計は [design-campaigns.md](design-campaigns.md) を参照。Phase F（データ投入・実機検証）は未着手。
+詳細設計は [design-campaigns.md](design-campaigns.md) を参照。
 
 | フェーズ | 内容 | 状態 |
 |---|---|---|
@@ -145,7 +145,7 @@ flowchart TD
 | Phase C | キャンペーンタブ + 4 タブナビゲーション | ✅ 完了 |
 | Phase D | 検索・判定画面の期間限定対応（QR 判定・ベストオプション・期間限定バッジ） | ✅ 完了 |
 | Phase E | 設定画面の拡張（QR 決済の利用登録 UI、自治体の登録 UI、DataStore への保存・ViewModel へのマージ、`data/municipalities.json` 新規作成） | ✅ 完了（2026-06-30） |
-| Phase F | データ投入と実機検証 | ⬜ 未着手 |
+| Phase F | データ投入と実機検証 | 🔶 データ投入完了・実機検証待ち（2026-06-30） |
 
 ### Phase 3: 最適化アドバイス（未着手）
 

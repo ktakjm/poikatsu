@@ -1,5 +1,6 @@
 package com.ktakjm.poikatsu.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,7 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
@@ -27,13 +27,12 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.ktakjm.poikatsu.data.Campaign
@@ -43,13 +42,17 @@ import com.ktakjm.poikatsu.ui.theme.warningColor
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
+// ==================== 一覧画面 ====================
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun CampaignPane(
     activeCampaigns: List<Campaign>,
     upcomingCampaigns: List<Campaign>,
+    merchantNames: Map<String, String>,
     filter: CampaignFilter,
     onFilterChange: (CampaignFilter) -> Unit,
+    onSelectGroup: (List<Campaign>) -> Unit,
 ) {
     if (activeCampaigns.isEmpty() && upcomingCampaigns.isEmpty()) {
         Centered {
@@ -79,6 +82,7 @@ internal fun CampaignPane(
     val filterFn: (Campaign) -> Boolean = when (filter) {
         CampaignFilter.ALL -> { _ -> true }
         CampaignFilter.MUNICIPAL -> { c -> c.type == "municipal" }
+        CampaignFilter.NON_MUNICIPAL -> { c -> c.type != "municipal" }
         CampaignFilter.CARD -> { c -> c.type == "card_promotion" && c.paymentMethodId == null }
         CampaignFilter.QR -> { c -> c.paymentMethodId != null && c.type != "municipal" }
     }
@@ -114,7 +118,7 @@ internal fun CampaignPane(
                 )
             }
             items(activeGroups, key = { it.first().id }) { group ->
-                CampaignCard(group, CampaignStatus.ACTIVE)
+                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, onClick = { onSelectGroup(group) })
             }
         }
         if (upcomingGroups.isNotEmpty()) {
@@ -127,7 +131,7 @@ internal fun CampaignPane(
                 )
             }
             items(upcomingGroups, key = { "upcoming_${it.first().id}" }) { group ->
-                CampaignCard(group, CampaignStatus.UPCOMING)
+                CampaignSummaryCard(group, CampaignStatus.UPCOMING, merchantNames, onClick = { onSelectGroup(group) })
             }
         }
         if (activeGroups.isEmpty() && upcomingGroups.isEmpty()) {
@@ -142,6 +146,252 @@ internal fun CampaignPane(
     }
 }
 
+/**
+ * サマリーカード: SearchResultCard と同じレイアウト。
+ * 左: 名前 + 期間限定バッジ / 期間
+ * 右: 最大還元率
+ */
+@Composable
+private fun CampaignSummaryCard(
+    campaigns: List<Campaign>,
+    status: CampaignStatus,
+    merchantNames: Map<String, String>,
+    onClick: () -> Unit,
+) {
+    val today = LocalDate.now()
+    val first = campaigns.first()
+    val title = campaignGroupDisplayTitle(first, merchantNames)
+    val hasTimeLimited = campaigns.any { it.periodEnd != null }
+    val maxBenefit = campaignGroupMaxBenefit(campaigns)
+
+    val allEnds = campaigns.mapNotNull { c -> c.periodEnd?.let { LocalDate.parse(it) } }
+    val allStarts = campaigns.mapNotNull { c -> c.periodStart?.let { LocalDate.parse(it) } }
+    val earliestStart = allStarts.minOrNull()
+    val latestEnd = allEnds.maxOrNull()
+    val periodLabel = buildPeriodLabel(earliestStart, latestEnd)
+    val daysInfo = daysInfo(status, today, earliestStart, latestEnd)
+
+    val fallback = MaterialTheme.colorScheme.primary
+    val stripeColors = campaigns.mapNotNull { it.brandColor }.distinct()
+        .mapNotNull { parseBrandColor(it) }
+        .ifEmpty { listOf(fallback) }
+    val separatorColor = MaterialTheme.colorScheme.surfaceContainerHigh
+
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Row(Modifier.height(IntrinsicSize.Min)) {
+            StripeBar(stripeColors, separatorColor)
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(title, style = MaterialTheme.typography.bodyLarge)
+                        if (hasTimeLimited) {
+                            TimeLimitedBadge()
+                        }
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(periodLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        daysInfo?.let { (label, urgent) ->
+                            Text(
+                                label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (urgent) warningColor() else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                if (maxBenefit != null) {
+                    Text(
+                        maxBenefit,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ==================== 詳細画面 ====================
+
+@Composable
+internal fun CampaignDetail(
+    campaigns: List<Campaign>,
+    onBack: () -> Unit,
+) {
+    BackHandler(onBack = onBack)
+
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(bottom = 16.dp),
+    ) {
+        items(campaigns, key = { it.id }) { campaign ->
+            CampaignDetailCard(campaign)
+        }
+    }
+}
+
+/** 個別キャンペーン詳細カード: 探すタブの判定カードと同じヘッダーレイアウト */
+@Composable
+private fun CampaignDetailCard(campaign: Campaign) {
+    val brandColor = parseBrandColor(campaign.brandColor) ?: MaterialTheme.colorScheme.primary
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Row(Modifier.height(IntrinsicSize.Min)) {
+            Box(
+                Modifier
+                    .width(8.dp)
+                    .fillMaxHeight()
+                    .background(brandColor),
+            )
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CampaignBenefitDisplay(campaign)
+                    Spacer(Modifier.width(12.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            BrandBadge(campaign.issuer, brandColor)
+                            if (campaign.periodEnd != null) {
+                                TimeLimitedBadge()
+                            }
+                        }
+                        Text(
+                            campaign.name,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
+                }
+                PeriodRow(campaign)
+                if (campaign.paymentInstruction.isNotBlank()) {
+                    Text("支払い方法: ${campaign.paymentInstruction}", style = MaterialTheme.typography.bodyMedium)
+                }
+                MinPurchaseRow(campaign.minPurchase)
+                CapRow(campaign.perTransactionCap, campaign.periodTotalCap, campaign.capNote)
+                campaign.usageLimitNote?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+                }
+                ConditionsList(campaign.conditions, campaign.minPurchase)
+                val uriHandler = LocalUriHandler.current
+                if (campaign.storeScope == "external") {
+                    campaign.storeSearchUrl?.let { url ->
+                        Text(
+                            "対象店舗を確認 →",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.clickable { uriHandler.openUri(url) },
+                        )
+                    }
+                }
+                campaign.campaignUrl?.let { url ->
+                    Text(
+                        "キャンペーン詳細 →",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable { uriHandler.openUri(url) },
+                    )
+                }
+                VerifiedDateRow(campaign.verifiedDate)
+            }
+        }
+    }
+}
+
+/** 探すタブの QrBenefitDisplay と同じレイアウト */
+@Composable
+private fun CampaignBenefitDisplay(campaign: Campaign) {
+    val type = BenefitType.fromString(campaign.benefitType)
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        when {
+            type == BenefitType.COUPON_FIXED && campaign.discountAmount != null -> {
+                Text(
+                    "${campaign.discountAmount}円",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text("引き", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            }
+            type == BenefitType.COUPON_PERCENT && campaign.rateBase != null -> {
+                Text(
+                    "${trimRate(campaign.rateBase)}%",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text("OFF", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            }
+            type == BenefitType.REBATE && campaign.discountAmount != null -> {
+                Text(
+                    "${campaign.discountAmount}円",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text("還元", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            }
+            campaign.rateBase != null -> {
+                Text(
+                    "${trimRate(campaign.rateBase)}%",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    }
+}
+
+// ==================== 共通ヘルパー ====================
+
+/** グループの最大還元率/特典テキスト(サマリーカード右側用) */
+private fun campaignGroupMaxBenefit(campaigns: List<Campaign>): String? {
+    val type = BenefitType.fromString(campaigns.first().benefitType)
+    val maxRate = campaigns.mapNotNull { it.rateBase }.maxOrNull()
+    val maxDiscount = campaigns.mapNotNull { it.discountAmount }.maxOrNull()
+    return when {
+        type == BenefitType.COUPON_FIXED && maxDiscount != null -> "${maxDiscount}円引き"
+        type == BenefitType.COUPON_PERCENT && maxRate != null -> "${trimRate(maxRate)}% OFF"
+        maxRate != null -> "${trimRate(maxRate)}%"
+        maxDiscount != null -> "${maxDiscount}円"
+        else -> null
+    }
+}
+
+private fun buildPeriodLabel(earliestStart: LocalDate?, latestEnd: LocalDate?): String = buildString {
+    if (earliestStart != null) append("${earliestStart.monthValue}/${earliestStart.dayOfMonth}")
+    append("〜")
+    if (latestEnd != null) append("${latestEnd.monthValue}/${latestEnd.dayOfMonth}")
+}
+
+private fun daysInfo(status: CampaignStatus, today: LocalDate, earliestStart: LocalDate?, latestEnd: LocalDate?): Pair<String, Boolean>? =
+    when (status) {
+        CampaignStatus.ACTIVE -> latestEnd?.let { end ->
+            val days = ChronoUnit.DAYS.between(today, end).toInt()
+            if (days >= 0) "残り${days}日" to (days <= 3) else null
+        }
+        CampaignStatus.UPCOMING -> earliestStart?.let { start ->
+            val days = ChronoUnit.DAYS.between(today, start).toInt()
+            if (days > 0) "あと${days}日で開始" to false else null
+        }
+        else -> null
+    }
+
 private fun groupCampaignsForDisplay(campaigns: List<Campaign>): List<List<Campaign>> {
     val (municipal, others) = campaigns.partition { it.type == "municipal" }
     val municipalGroups = municipal
@@ -154,148 +404,7 @@ private fun groupCampaignsForDisplay(campaigns: List<Campaign>): List<List<Campa
 private fun campaignFilterLabel(filter: CampaignFilter): String = when (filter) {
     CampaignFilter.ALL -> "全て"
     CampaignFilter.MUNICIPAL -> "自治体"
+    CampaignFilter.NON_MUNICIPAL -> "自治体以外"
     CampaignFilter.CARD -> "カード"
     CampaignFilter.QR -> "QR"
 }
-
-@Composable
-private fun CampaignCard(campaigns: List<Campaign>, status: CampaignStatus) {
-    val today = LocalDate.now()
-    val first = campaigns.first()
-
-    val title = if (first.type == "municipal") {
-        first.region?.name?.let { "$it キャッシュレス還元" } ?: first.name
-    } else {
-        first.name
-    }
-
-    val allStarts = campaigns.mapNotNull { c -> c.periodStart?.let { LocalDate.parse(it) } }
-    val allEnds = campaigns.mapNotNull { c -> c.periodEnd?.let { LocalDate.parse(it) } }
-    val earliestStart = allStarts.minOrNull()
-    val latestEnd = allEnds.maxOrNull()
-    val periodLabel = buildString {
-        if (earliestStart != null) append("${earliestStart.monthValue}/${earliestStart.dayOfMonth}")
-        append("〜")
-        if (latestEnd != null) append("${latestEnd.monthValue}/${latestEnd.dayOfMonth}")
-    }
-
-    val daysInfo = when (status) {
-        CampaignStatus.ACTIVE -> latestEnd?.let { end ->
-            val days = ChronoUnit.DAYS.between(today, end).toInt()
-            if (days >= 0) "残り${days}日" to (days <= 3) else null
-        }
-        CampaignStatus.UPCOMING -> earliestStart?.let { start ->
-            val days = ChronoUnit.DAYS.between(today, start).toInt()
-            if (days > 0) "あと${days}日で開始" to false else null
-        }
-        else -> null
-    }
-    val daysLabel = daysInfo?.first
-    val isUrgent = daysInfo?.second == true
-
-    val fallback = MaterialTheme.colorScheme.primary
-    val stripeColors = campaigns.mapNotNull { it.brandColor }.distinct()
-        .mapNotNull { parseBrandColor(it) }
-        .ifEmpty { listOf(fallback) }
-    val separatorColor = MaterialTheme.colorScheme.surfaceContainerHigh
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-    ) {
-        Row(Modifier.height(IntrinsicSize.Min)) {
-            Box(
-                Modifier
-                    .width(6.dp)
-                    .fillMaxHeight()
-                    .drawBehind {
-                        if (stripeColors.size == 1) {
-                            drawRect(stripeColors[0])
-                        } else {
-                            val gap = 1.dp.toPx()
-                            val n = stripeColors.size
-                            val segH = (size.height - gap * (n - 1)) / n
-                            val skew = size.width * 0.5f
-                            drawRect(separatorColor)
-                            stripeColors.forEachIndexed { i, c ->
-                                val segTop = i * (segH + gap)
-                                val segBot = segTop + segH
-                                val path = Path().apply {
-                                    if (i == 0) {
-                                        moveTo(0f, 0f); lineTo(size.width, 0f)
-                                    } else {
-                                        moveTo(0f, segTop + skew); lineTo(size.width, segTop - skew)
-                                    }
-                                    if (i == n - 1) {
-                                        lineTo(size.width, size.height); lineTo(0f, size.height)
-                                    } else {
-                                        lineTo(size.width, segBot - skew); lineTo(0f, segBot + skew)
-                                    }
-                                    close()
-                                }
-                                drawPath(path, c)
-                            }
-                        }
-                    },
-            )
-            Column(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(periodLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-                    if (daysLabel != null) {
-                        Text(
-                            daysLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isUrgent) warningColor() else MaterialTheme.colorScheme.outline,
-                        )
-                    }
-                }
-                campaigns.forEach { campaign ->
-                    CampaignBenefitLine(campaign)
-                    campaign.capNote?.let {
-                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-                    }
-                    campaign.usageLimitNote?.let {
-                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-                    }
-                }
-                if (first.storeScope == "external") {
-                    val uriHandler = LocalUriHandler.current
-                    campaigns.forEach { campaign ->
-                        val url = campaign.storeSearchUrl ?: campaign.campaignUrl
-                        if (url != null) {
-                            val label = if (campaigns.size > 1) "${campaign.issuer}で対象店舗を確認 →" else "対象店舗を確認 →"
-                            Text(
-                                label,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.clickable { uriHandler.openUri(url) },
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CampaignBenefitLine(campaign: Campaign) {
-    val brandColor = parseBrandColor(campaign.brandColor) ?: MaterialTheme.colorScheme.primary
-    val benefitText = campaignBenefitText(campaign)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Box(Modifier.size(10.dp).background(brandColor, CircleShape))
-        Text("${campaign.issuer} $benefitText", style = MaterialTheme.typography.bodyMedium)
-    }
-}
-
-private fun campaignBenefitText(campaign: Campaign): String = benefitText(campaign)

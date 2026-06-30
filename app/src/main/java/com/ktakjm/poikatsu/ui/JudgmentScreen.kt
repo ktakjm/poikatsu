@@ -211,28 +211,11 @@ private fun JudgmentCardBody(judgment: Judgment, brandColor: Color) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Surface(
-                            color = brandColor,
-                            shape = RoundedCornerShape(4.dp),
-                        ) {
-                            Text(
-                                judgment.card?.cardName ?: campaign.issuer,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = onColorFor(brandColor),
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            )
-                        }
+                        BrandBadge(judgment.card?.cardName ?: campaign.issuer, brandColor)
                         val pm = judgment.card?.pointMultiplier
                         if (pm != null) {
                             val welciaColor = parseBrandColor(pm.color) ?: MaterialTheme.colorScheme.tertiary
-                            Surface(color = welciaColor, shape = RoundedCornerShape(4.dp)) {
-                                Text(
-                                    "ウエル活利用可",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = onColorFor(welciaColor),
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                )
-                            }
+                            BrandBadge("ウエル活利用可", welciaColor)
                         }
                         if (campaign.periodEnd != null) {
                             TimeLimitedBadge()
@@ -266,6 +249,7 @@ private fun JudgmentCardBody(judgment: Judgment, brandColor: Color) {
                 )
             }
             CapRow(campaign.perTransactionCap, campaign.periodTotalCap, campaign.capNote ?: campaign.monthlyCapNote)
+            ConditionsList(campaign.conditions, campaign.minPurchase)
             judgment.card?.takeIf { it.pointMultiplier != null }?.let { card ->
                 Text(
                     if (card.welcatsuApplied) "※還元率はウエル活利用時の実質還元率"
@@ -274,11 +258,7 @@ private fun JudgmentCardBody(judgment: Judgment, brandColor: Color) {
                     color = MaterialTheme.colorScheme.outline,
                 )
             }
-            Text(
-                "情報確認日: ${campaign.verifiedDate} / 最新の条件は公式サイトで確認してください",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
+            VerifiedDateRow(campaign.verifiedDate)
     }
 }
 
@@ -315,14 +295,7 @@ private fun QrJudgmentCardBody(judgment: QrJudgment, brandColor: Color) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Surface(color = brandColor, shape = RoundedCornerShape(4.dp)) {
-                        Text(
-                            judgment.paymentMethod.name,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = onColorFor(brandColor),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        )
-                    }
+                    BrandBadge(judgment.paymentMethod.name, brandColor)
                     if (campaign.periodEnd != null) {
                         TimeLimitedBadge()
                     }
@@ -338,9 +311,7 @@ private fun QrJudgmentCardBody(judgment: QrJudgment, brandColor: Color) {
         if (campaign.paymentInstruction.isNotBlank()) {
             Text("支払い方法: ${campaign.paymentInstruction}", style = MaterialTheme.typography.bodyMedium)
         }
-        judgment.minPurchase?.let {
-            Text("${it}円以上の決済で適用", style = MaterialTheme.typography.bodyMedium)
-        }
+        MinPurchaseRow(judgment.minPurchase)
         campaign.usageLimitNote?.let {
             Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
         } ?: judgment.usageLimit?.let {
@@ -352,12 +323,9 @@ private fun QrJudgmentCardBody(judgment: QrJudgment, brandColor: Color) {
             }
         }
         CapRow(judgment.perTransactionCap, judgment.periodTotalCap, campaign.capNote)
+        ConditionsList(campaign.conditions, judgment.minPurchase)
         QrExternalLinks(campaign, judgment)
-        Text(
-            "情報確認日: ${campaign.verifiedDate} / 最新の条件は公式サイトで確認してください",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.outline,
-        )
+        VerifiedDateRow(campaign.verifiedDate)
     }
 }
 
@@ -428,34 +396,6 @@ private fun QrExternalLinks(campaign: Campaign, judgment: QrJudgment) {
                 }
             },
         )
-    }
-}
-
-// ---- 共通: 期間・上限 ----
-
-@Composable
-private fun PeriodRow(campaign: Campaign) {
-    val period = formatPeriod(campaign) ?: return
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text("期間: $period", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-    }
-}
-
-@Composable
-private fun CapRow(perTransaction: Int?, periodTotal: Int?, capNote: String?) {
-    val text = capNote ?: buildCapText(perTransaction, periodTotal) ?: return
-    Text("上限: $text", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-}
-
-private fun buildCapText(perTransaction: Int?, periodTotal: Int?): String? {
-    if (perTransaction == null && periodTotal == null) return null
-    return buildString {
-        perTransaction?.let { append("1回あたり${formatCap(it)}") }
-        if (perTransaction != null && periodTotal != null) append("、")
-        periodTotal?.let { append("期間合計${formatCap(it)}") }
     }
 }
 

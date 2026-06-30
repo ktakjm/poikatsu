@@ -62,7 +62,7 @@ private val FALLBACK_PLACE = MainViewModel.GeocodedPlace(
 )
 
 enum class AppTab { SEARCH, NEARBY, CAMPAIGNS, SETTINGS }
-enum class CampaignFilter { ALL, MUNICIPAL, CARD, QR }
+enum class CampaignFilter { ALL, MUNICIPAL, NON_MUNICIPAL, CARD, QR }
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -202,6 +202,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val campaignFilter: CampaignFilter = CampaignFilter.ALL,
         val timeLimitedActive: List<Campaign> = emptyList(),
         val timeLimitedUpcoming: List<Campaign> = emptyList(),
+        val merchantNames: Map<String, String> = emptyMap(),
+        val selectedCampaignGroup: List<Campaign>? = null,
         // --- 設定値(DataStore 由来) ---
         val themeMode: ThemeMode = ThemeMode.SYSTEM,
         val dynamicColor: Boolean = true,
@@ -458,6 +460,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 dataCommitRef = settings.dataCommitRef,
                 timeLimitedActive = timeLimitedActive,
                 timeLimitedUpcoming = timeLimitedUpcoming,
+                merchantNames = loaded.data.merchants.associate { it.id to it.name },
             )
         }
     }
@@ -730,6 +733,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 selectedTab = tab,
                 selection = null,
                 storeCheck = null,
+                selectedCampaignGroup = null,
             )
             if (prev == AppTab.NEARBY) {
                 s = s.copy(
@@ -1037,6 +1041,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onSetCampaignFilter(filter: CampaignFilter) {
         _state.update { it.copy(campaignFilter = filter) }
+    }
+
+    fun onSelectCampaignGroup(group: List<Campaign>) {
+        _state.update { it.copy(selectedCampaignGroup = group) }
+    }
+
+    fun onCloseCampaignDetail() {
+        _state.update { it.copy(selectedCampaignGroup = null) }
     }
 
     // --- 設定値の更新(DataStore へ書き込み → settings Flow 経由で rebuild される) ---

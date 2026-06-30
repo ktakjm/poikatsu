@@ -14,10 +14,8 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -83,7 +81,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -142,9 +139,10 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
     }
 
     val selectedTab = state.selectedTab
-    // 下位画面(詳細/店舗判定)やロード・エラーに重なっていないベースのタブ表示状態。下部ナビの表示条件。
+    // 下位画面(詳細/店舗判定/キャンペーン詳細)やロード・エラーに重なっていないベースのタブ表示状態。下部ナビの表示条件。
     val baseTabsVisible = !state.loading && state.error == null &&
-        state.selection == null && state.storeCheck == null
+        state.selection == null && state.storeCheck == null &&
+        state.selectedCampaignGroup == null
 
     Scaffold(
         topBar = {
@@ -167,6 +165,19 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         }
                     },
                 )
+                selectedTab == AppTab.CAMPAIGNS && state.selectedCampaignGroup != null -> {
+                    val group = state.selectedCampaignGroup!!
+                    val first = group.first()
+                    val title = campaignGroupDisplayTitle(first, state.merchantNames)
+                    TopAppBar(
+                        title = { Text(title) },
+                        navigationIcon = {
+                            IconButton(onClick = viewModel::onCloseCampaignDetail) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+                            }
+                        },
+                    )
+                }
                 selectedTab == AppTab.NEARBY -> Unit
                 selectedTab == AppTab.SEARCH -> TopAppBar(title = { Text("ポイ活ナビ") })
                 selectedTab == AppTab.CAMPAIGNS -> TopAppBar(title = { Text("キャンペーン") })
@@ -279,12 +290,22 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     }
                 }
                 selectedTab == AppTab.CAMPAIGNS -> PaddedColumn {
-                    CampaignPane(
-                        activeCampaigns = state.timeLimitedActive,
-                        upcomingCampaigns = state.timeLimitedUpcoming,
-                        filter = state.campaignFilter,
-                        onFilterChange = viewModel::onSetCampaignFilter,
-                    )
+                    val selectedGroup = state.selectedCampaignGroup
+                    if (selectedGroup != null) {
+                        CampaignDetail(
+                            campaigns = selectedGroup,
+                            onBack = viewModel::onCloseCampaignDetail,
+                        )
+                    } else {
+                        CampaignPane(
+                            activeCampaigns = state.timeLimitedActive,
+                            upcomingCampaigns = state.timeLimitedUpcoming,
+                            merchantNames = state.merchantNames,
+                            filter = state.campaignFilter,
+                            onFilterChange = viewModel::onSetCampaignFilter,
+                            onSelectGroup = viewModel::onSelectCampaignGroup,
+                        )
+                    }
                 }
                 selectedTab == AppTab.SETTINGS -> SettingsScreen(
                     themeMode = state.themeMode,
@@ -426,40 +447,7 @@ private fun SearchResultCard(result: MainViewModel.SearchResult, onClick: () -> 
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Row(Modifier.height(IntrinsicSize.Min)) {
-            Box(
-                Modifier
-                    .width(6.dp)
-                    .fillMaxHeight()
-                    .drawBehind {
-                        if (stripeColors.size == 1) {
-                            drawRect(stripeColors[0])
-                        } else {
-                            val gap = 1.dp.toPx()
-                            val n = stripeColors.size
-                            val segH = (size.height - gap * (n - 1)) / n
-                            val skew = size.width * 0.5f
-                            drawRect(separatorColor)
-                            stripeColors.forEachIndexed { i, c ->
-                                val segTop = i * (segH + gap)
-                                val segBot = segTop + segH
-                                val path = Path().apply {
-                                    if (i == 0) {
-                                        moveTo(0f, 0f); lineTo(size.width, 0f)
-                                    } else {
-                                        moveTo(0f, segTop + skew); lineTo(size.width, segTop - skew)
-                                    }
-                                    if (i == n - 1) {
-                                        lineTo(size.width, size.height); lineTo(0f, size.height)
-                                    } else {
-                                        lineTo(size.width, segBot - skew); lineTo(0f, segBot + skew)
-                                    }
-                                    close()
-                                }
-                                drawPath(path, c)
-                            }
-                        }
-                    },
-            )
+            StripeBar(stripeColors, separatorColor)
             Row(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,

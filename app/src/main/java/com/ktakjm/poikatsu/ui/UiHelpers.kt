@@ -22,6 +22,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Path
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.DataSource
 import com.ktakjm.poikatsu.domain.BenefitType
@@ -159,8 +163,132 @@ internal fun TimeLimitedBadge(modifier: Modifier = Modifier) {
     ) {
         Text(
             "期間限定",
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
         )
     }
+}
+
+// ---- 共通カード部品 ----
+
+/** カード左端のブランドカラーストライプ(単色 or 斜め分割マルチカラー) */
+@Composable
+internal fun StripeBar(stripeColors: List<Color>, separatorColor: Color) {
+    Box(
+        Modifier
+            .width(6.dp)
+            .fillMaxHeight()
+            .drawBehind {
+                if (stripeColors.size == 1) {
+                    drawRect(stripeColors[0])
+                } else {
+                    val gap = 1.dp.toPx()
+                    val n = stripeColors.size
+                    val segH = (size.height - gap * (n - 1)) / n
+                    val skew = size.width * 0.5f
+                    drawRect(separatorColor)
+                    stripeColors.forEachIndexed { i, c ->
+                        val segTop = i * (segH + gap)
+                        val segBot = segTop + segH
+                        val path = Path().apply {
+                            if (i == 0) {
+                                moveTo(0f, 0f); lineTo(size.width, 0f)
+                            } else {
+                                moveTo(0f, segTop + skew); lineTo(size.width, segTop - skew)
+                            }
+                            if (i == n - 1) {
+                                lineTo(size.width, size.height); lineTo(0f, size.height)
+                            } else {
+                                lineTo(size.width, segBot - skew); lineTo(0f, segBot + skew)
+                            }
+                            close()
+                        }
+                        drawPath(path, c)
+                    }
+                }
+            },
+    )
+}
+
+/** ブランドカラー背景の決済手段バッジ */
+@Composable
+internal fun BrandBadge(label: String, brandColor: Color) {
+    Surface(color = brandColor, shape = RoundedCornerShape(4.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = onColorFor(brandColor),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+    }
+}
+
+// ---- 共通: 期間・上限・条件 (CampaignScreen / JudgmentScreen 共用) ----
+
+@Composable
+internal fun PeriodRow(campaign: Campaign) {
+    val period = formatPeriod(campaign) ?: return
+    PeriodRow(period)
+}
+
+@Composable
+internal fun PeriodRow(periodText: String) {
+    Text("期間: $periodText", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+}
+
+@Composable
+internal fun CapRow(perTransaction: Int?, periodTotal: Int?, capNote: String?) {
+    val text = capNote ?: buildCapText(perTransaction, periodTotal) ?: return
+    Text("上限: $text", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+}
+
+internal fun buildCapText(perTransaction: Int?, periodTotal: Int?): String? {
+    if (perTransaction == null && periodTotal == null) return null
+    return buildString {
+        perTransaction?.let { append("1回あたり${formatCap(it)}") }
+        if (perTransaction != null && periodTotal != null) append("、")
+        periodTotal?.let { append("期間合計${formatCap(it)}") }
+    }
+}
+
+@Composable
+internal fun MinPurchaseRow(minPurchase: Int?) {
+    if (minPurchase == null) return
+    Text("${minPurchase}円(税込)以上の決済で適用", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+}
+
+@Composable
+internal fun ConditionsList(conditions: List<String>, minPurchase: Int?) {
+    if (conditions.isEmpty()) return
+    val minPurchaseStr = minPurchase?.let { "${it}円" }
+    conditions
+        .filter { cond -> minPurchaseStr == null || !cond.contains(minPurchaseStr) }
+        .forEach { condition ->
+            Text("・$condition", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+        }
+}
+
+/**
+ * キャンペーングループの表示タイトル。
+ * 自治体: "都道府県名 自治体名"、それ以外: merchant_rules の先頭 merchant 名(なければ campaign.name)
+ */
+internal fun campaignGroupDisplayTitle(first: Campaign, merchantNames: Map<String, String>): String =
+    if (first.type == "municipal") {
+        val prefecture = first.region?.prefecture ?: ""
+        val name = first.region?.name ?: first.name
+        if (prefecture.isNotBlank()) "$prefecture $name" else name
+    } else {
+        first.merchantRules.firstOrNull()?.merchantId
+            ?.let { merchantNames[it] }
+            ?: first.name
+    }
+
+@Composable
+internal fun VerifiedDateRow(verifiedDate: String) {
+    if (verifiedDate.isBlank()) return
+    Text(
+        "情報確認日: $verifiedDate / 最新の条件は公式サイトで確認してください",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.outline,
+    )
 }
