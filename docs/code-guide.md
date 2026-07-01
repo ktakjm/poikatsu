@@ -327,15 +327,15 @@ enum class CampaignStatus { ACTIVE, UPCOMING, EXPIRED }
 
 | 状態 | 条件 | 判定への影響 |
 |---|---|---|
-| ACTIVE | `period_start` ≤ today ≤ `period_end`、または両方 null（常設） | `judge`/`judgeQr` に含まれる |
-| UPCOMING | `period_start` > today（未来開始） | キャンペーンタブにのみ表示（Phase C）。`judge` には含まれない |
+| ACTIVE | `period_start` ≤ today ≤ `period_end`、または両方 null（常設） | `judgeCards`/`judgeQr` に含まれる |
+| UPCOMING | `period_start` > today（未来開始） | キャンペーンタブにのみ表示（Phase C）。`judgeCards` には含まれない |
 | EXPIRED | `period_end` < today（期限切れ） | **UI に一切表示しない** |
 
-`daysRemaining(campaign, today)` は残り日数を返す（`period_end` null なら null）。残り 3 日以下で `Judgment.warnings` に警告を追加する。
+`daysRemaining(campaign, today)` は残り日数を返す（`period_end` null なら null）。残り 3 日以下で `CampaignJudgment.warnings` に警告を追加する。
 
-### 5.4 チェーン判定（judge）と店舗単位の対象判定（checkStore）
+### 5.4 チェーン判定（judgeCards / judgeQr / judgeAll）と店舗単位の対象判定（checkStore）
 
-`judge(merchant, today)` はカード施策のチェーン単位判定。`judgeQr` は QR 決済施策の判定。`judgeAll` は両方を統合して `JudgmentResult` を返す。店舗単位の対象/対象外は別関数 `checkStore` が担う。
+`judgeCards(merchant, today)` はカード施策のチェーン単位判定。`judgeQr` は QR 決済施策の判定。どちらも統一型 `CampaignJudgment` を返す。`judgeAll` は両方を統合して `JudgmentResult`（`judgments` + `bestOption`）を返す。店舗単位の対象/対象外は別関数 `checkStore` が担う。
 
 ```mermaid
 flowchart LR
@@ -344,7 +344,7 @@ flowchart LR
     PERIOD -- "ACTIVE" --> SCOPE{"store_scope<br/>== managed?"}
     SCOPE -- "external" --> DROP
     SCOPE -- "managed" --> PMID{"paymentMethodId<br/>== null?"}
-    PMID -- "QR施策" --> QR["judgeQr へ"]
+    PMID -- "QR施策" --> QR["judgeQr へ（CampaignJudgment で返却）"]
     PMID -- "カード施策" --> RULE{"merchant_rules に<br/>この店の rule あり?"}
     RULE -- "なし" --> DROP
     RULE -- "あり" --> CARD{"保有カードあり?"}
@@ -352,7 +352,7 @@ flowchart LR
     CARD -- "あり" --> AMEX{"Amex かつ<br/>amex_excluded?"}
     AMEX -- "はい" --> DROP
     AMEX -- "いいえ" --> RATE["effectiveRate 決定<br/>+ 残日数警告"]
-    RATE --> SORT["effectiveRate 降順で<br/>Judgment リスト返却"]
+    RATE --> SORT["effectiveRate 降順で<br/>CampaignJudgment リスト返却"]
 
     style IN fill:#1565C0,stroke:#0D47A1,color:#fff
     style SORT fill:#2E7D32,stroke:#1B5E20,color:#fff
@@ -364,36 +364,45 @@ flowchart LR
 - **保有カードのみ対象**: profile に対応カードが無い施策はスキップする。設定で「所有」OFF にしたカードは `MainViewModel` のマージ層で profile から外れるため、ここで自然に除外される。
 - **期間フィルタ**: `campaignStatus(campaign, today)` が ACTIVE の施策のみ。期限切れ・未来開始はスキップ。
 - **store_scope フィルタ**: `store_scope == "managed"` のみ。自治体施策（`external`）は「探す」「近く」に出さない。
-- **カード vs QR の分離**: `paymentMethodId == null` のカード施策のみ `judge` が返す。QR 決済施策は `judgeQr` が担当（`enabledQrIds` でユーザーの利用 QR をフィルタ）。
+- **カード vs QR の分離**: `paymentMethodId == null` のカード施策のみ `judgeCards` が返す。QR 決済施策は `judgeQr` が担当（`enabledQrIds` でユーザーの利用 QR をフィルタ）。どちらも統一型 `CampaignJudgment` を返す。
 - **Amex の対象外**: カードブランドが Amex で店舗 rule が `amex_excluded` のとき、その店ではこの施策を除外する（警告ではなく非表示。検索・判定詳細・地図ピン/件数すべてに波及）。非 Amex（Mastercard/Visa/JCB）は従来どおり。
 - **設定値の反映はマージ層**: 還元率の手入力・MUFG ブランド・ウエル活 ×1.5（`ProfileCard.point_multiplier` の係数）は `MainViewModel` が DataStore の差分（`CardOverride`）を profile に重ねてからエンジンへ渡す。`JudgmentEngine` は純 Kotlin・実データテストのまま保つ（4 章「設定の永続化」／6.1 参照）。
-- **reward の無いチェーンは一覧に出さない**: 判定が空（所有カードで対象になる施策が無い）チェーンは検索結果・近隣リストから除外する（`MainViewModel.searchRewarded` と `loadNearbyAround` で `judge` 非空のものだけ残す）。
-- **エントリー要否は持たない**: 還元率はユーザーが公式アプリの実効値（エントリー込み）を手入力する前提のため、`entry_done` フラグと未エントリー警告は廃止した。`Judgment.warnings` は期限切れ間近（残り 3 日以下）の警告に使われる。
+- **reward の無いチェーンは一覧に出さない**: 判定が空（所有カードで対象になる施策が無い）チェーンは検索結果・近隣リストから除外する（`MainViewModel.searchRewarded` と `loadNearbyAround` で `judgeAll` 非空のものだけ残す）。
+- **エントリー要否は持たない**: 還元率はユーザーが公式アプリの実効値（エントリー込み）を手入力する前提のため、`entry_done` フラグと未エントリー警告は廃止した。`CampaignJudgment.warnings` は期限切れ間近（残り 3 日以下）の警告に使われる。
 - **店舗単位の判定 `checkStore(merchant, storeName)`**: `official_store_list` を持つ施策ごとに、`ineligible_stores` 一致 → 対象外 / `eligible_stores` 一致 → 対象 / どちらにも無し → 要確認（`StoreEligibility.UNKNOWN`）の **3 状態**を返す（対象外を優先）。リスト網羅性を仮定せず、**公式が店舗名で明示した店だけ言い切る**設計（旧 `facility_risk_patterns` によるキーワード推測警告は実際の対象外店舗との乖離が大きく廃止）。
 - `canCheckStore(merchant)`: `official_store_list` を持つ施策が 1 つでもあれば、対象判定画面（`StoreCheckScreen`）に遷移できる。
 - `isExcludedStore(merchant, storeName)`: 近隣リスト用。`checkStore` の結果が INELIGIBLE を含み ELIGIBLE を含まないときだけ true（**明示的対象外のみ**近隣リストから除外する）。
 - チェーン rule の引き当ては `Campaign.ruleFor(merchant)`（private 拡張）に集約。
 - `matchStore(storeName, brand)` は GPS 検索用。OSM の POI 名（「マクドナルド 渋谷駅前店」）からチェーンを特定する。「ステーキガスト」が「ガスト」に負けないよう、**一致キーが最長のチェーンを採用**する
 
-### 5.5 QR 決済判定（judgeQr）と統合判定（judgeAll）
+### 5.5 統一判定型 CampaignJudgment と統合判定（judgeAll）
 
-`judgeQr(merchant, today, enabledQrIds)` はアクティブな `card_promotion`（`paymentMethodId != null`、`store_scope == "managed"`）のうち、ユーザーが利用中の QR 決済（`enabledQrIds`）に該当するものを `QrJudgment` として返す。
+`judgeCards` と `judgeQr` はどちらも統一型 `CampaignJudgment` を返す。カード決済・QR 決済・キャンペーン詳細で共用でき、各フィールドが null / 空なら UI 側で非表示になるため、カード種別ごとの分岐は不要。
 
 ```kotlin
-data class QrJudgment(
+data class CampaignJudgment(
     val campaign: Campaign,
-    val paymentMethod: QrPayment,
+    val badgeLabel: String,          // カード名 / QR決済名 / issuer
+    val brandColor: String?,
     val benefitType: BenefitType,    // REBATE / COUPON_PERCENT / COUPON_FIXED
-    val effectiveRate: Double?,      // 定率の場合
-    val discountAmount: Int?,        // 定額の場合
-    val daysRemaining: Int?,         // 残り日数
-    // ... perTransactionCap, periodTotalCap, minPurchase, usageLimit
+    val effectiveRate: Double?,
+    val discountAmount: Int?,
+    val daysRemaining: Int?,
+    val storeNote: String?,          // rule.note（カード施策のみ）
+    val exclusionNote: String?,      // rule.exclusionNote（カード施策のみ）
+    val warnings: List<String>,      // 残り3日以下等
+    val minPurchase: Int?,
+    val usageLimitText: String?,     // usageLimitNote ?: "お一人様N回まで"
+    val appPackage: String?,         // QR決済のアプリ起動用
+    val pointMultiplier: PointMultiplier?,  // ポイント倍率（バッジ・注記はデータ駆動）
+    val welcatsuApplied: Boolean,
+    // ... perTransactionCap, periodTotalCap, capNote, conditions, storeSearchUrl, storeListUrl, detailUrl
 )
 ```
 
-`judgeAll(merchant, today, enabledQrIds)` は `judge` + `judgeQr` を統合して `JudgmentResult`（`cardJudgments` + `qrJudgments` + `bestOption`）を返す。`bestOption` は定率（rebate/coupon_percent）で最高還元率のものを選ぶ。定額（coupon_fixed）は購入額に依存するため比較せず並列表示とする。
+`judgeAll(merchant, today, enabledQrIds)` は `judgeCards` + `judgeQr` を統合して `JudgmentResult`（`judgments` + `bestOption`）を返す。`bestOption` は定率（rebate/coupon_percent）で最高還元率のものを選ぶ。定額（coupon_fixed）は購入額に依存するため比較せず並列表示とする。
 
-`BenefitType`（`REBATE` / `COUPON_PERCENT` / `COUPON_FIXED`）は `benefit_type` 文字列から `BenefitType.fromString()` で変換する。rebate と coupon の違い: rebate は後日ポイント付与（PayPay の「クーポン」含む）、coupon は即時値引き
+`BenefitType`（`REBATE` / `COUPON_PERCENT` / `COUPON_FIXED`）は `benefit_type` 文字列から `BenefitType.fromString()` で変換する。rebate は後日ポイント付与（PayPay の「クーポン」含む）、coupon は即時値引き
 
 ## 6. UI レイヤ（ui/）
 
@@ -435,7 +444,7 @@ stateDiagram-v2
 
 ### 6.2 判定カード表示
 
-`JudgmentCard` は施策ごとに 1 枚。左端のストライプとカード名バッジに `brand_color` を使い、ロゴ画像なしで発行体を識別する。表示要素は「還元率（大）→ 条件達成時最大 → 支払い方法 → 店固有条件 → 公式店舗一覧リンク → 上限 → **情報確認日**」の順。**ウエル活**フラグ（`ProfileCard.point_multiplier`）を持つカードは、ウエル活の ON/OFF によらずカード名バッジの右に「ウエル活利用可」バッジ（色は profile の `point_multiplier.color`＝ウエルシアのロゴ色を `parseBrandColor`＋`onColorFor` で表示）を常時添え、上限の直後に注記を出す（ON＝「※還元率はウエル活利用時の実質還元率」／OFF＝「※WAONポイントに交換する事でウエル活利用可能」）。ON/OFF の状態は実行時フラグ `ProfileCard.welcatsuApplied`（VM のマージで付与・`@Transient`）で判定カードへ運ぶ。`verified_date` の表示は必須ルール（データが古くなるリスクへの対処）。
+`CampaignJudgmentCard` は施策ごとに 1 枚の統一カード。カード決済・QR 決済・キャンペーン詳細で共用し、各フィールドの null / 空チェックだけで表示を出し分ける。左端のストライプとバッジに `brand_color` を使い、ロゴ画像なしで発行体を識別する。表示要素は「特典表示（benefitType で分岐: 率% / 円引き / % OFF / 円還元）→ バッジ（badgeLabel）→ 期間 → 支払い方法 → 店固有条件 → 警告 → 除外注記 → 公式店舗一覧リンク → 最低購入額 → 利用回数制限 → 上限 → 対象店舗確認 → 詳細リンク → アプリ起動 → ポイント倍率注記 → **情報確認日**」の順。**ポイント倍率**（`PointMultiplier`）を持つカードは、バッジの右に `badge_label`（例: 「ウエル活利用可」）を表示し、適用時は `applied_note`（例: 「還元率はウエル活利用時の実質還元率」）を末尾に注記する。文言は `PointMultiplier` のデータから取り、UI にハードコードしない。`verified_date` の表示は必須ルール（データが古くなるリスクへの対処）。
 
 公式リストを持つチェーン（`canCheckStore` が true）では判定詳細に「この店舗が対象か調べる →」ボタンを出し、別画面 `StoreCheckScreen` へ遷移する。同画面は店舗名入力に対し `StoreVerdictCard` で 対象（`CheckCircle`）/ 対象外（`Close`）/ 要確認（`Info`）を Material アイコン＋**トーナル面のステータスピル**（`Surface` の container/content 対：対象＝`primaryContainer`、対象外＝`errorContainer`、要確認＝`warningContainerColor()`）で表示し、断定の鮮度（`date_is_official` に応じて「公式情報の更新日」or「確認日」）を併記する。色をカード地（`surfaceVariant`）に直接乗せず container 対で出すのは、コントラスト担保のため（6.4 警告色 参照）。公式リストの無いチェーンはボタンを出さない（判定画面を意識させない）。
 
@@ -487,7 +496,7 @@ sequenceDiagram
         JE-->>VM: 該当チェーン or null（捨てる）
         VM->>JE: isExcludedStore(merchant, displayName)
         Note over JE: 公式に明示的「対象外」なら<br/>リストから除外
-        VM->>JE: judge(merchant, today) → 還元率順の施策（期間フィルタ済み・最高還元率・対応発行体の色一覧）
+        VM->>JE: judgeAll(merchant, today, qrIds) → CampaignJudgment リスト（期間フィルタ済み・最高還元率・対応発行体の色一覧）
     end
     VM-->>SC: NearbyUi（地図中心からの距離昇順・対象チェーンのみ・明示的対象外は除外）
     U->>SC: 店舗をタップ（リスト行 / 地図ピン）
