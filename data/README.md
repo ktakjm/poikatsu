@@ -30,12 +30,12 @@
   - **`rate_base` と `discount_amount` は排他(どちらか一方が non-null)**
 - `per_transaction_cap` — 1 回あたりの付与/割引上限(円相当)。null = 上限なし
 - `period_total_cap` — 期間合計の付与/割引上限(円相当)。null = 上限なし
-- `cap_note` — 上限の人間向け補足
+- `cap_note` — 上限の人間向け補足（全タイプ共通。旧 `monthly_cap_note` を統合）
 - `min_purchase` — 適用条件の最低購入額(円)。例: 200 →「200 円以上の決済で」
 - `usage_limit` — 利用回数上限。null = 期間中無制限、1 = 1 回限り
 - `usage_limit_note` — 利用条件の人間向け補足
 - `region` — 自治体施策用。`{ name, prefecture, area_group }`。`area_group` は将来のグループフィルタ用(現在 null)
-- `campaign_url` — キャンペーン公式ページ URL
+- `detail_url` — 施策の詳細ページ URL（全タイプ共通。ユーザーに「詳細はこちら」として案内する先）
 - `store_search_url` — 対象店舗検索ページ URL(PayPay 等の公式)
 - `period_start` / `period_end` — 施策期間(ISO 8601 日付)。null = 常設
 - `rate_base` — 現実的な基準還元率。判定画面で主表示する。理論上の最大還元率(家族ポイント等の積み上げ)は「キリがなく本質から外れる」ため持たない。

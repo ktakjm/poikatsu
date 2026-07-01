@@ -302,9 +302,9 @@ private fun CampaignDetailCard(campaign: Campaign) {
                         )
                     }
                 }
-                campaign.campaignUrl?.let { url ->
+                campaign.detailUrl?.let { url ->
                     Text(
-                        "キャンペーン詳細 →",
+                        "詳細はこちら →",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.clickable { uriHandler.openUri(url) },

@@ -161,7 +161,6 @@ erDiagram
         int per_transaction_cap "1回上限(円)"
         int period_total_cap "期間合計上限(円)"
         string cap_note "上限の補足(表示用)"
-        string monthly_cap_note "月間上限の補足"
         int min_purchase "最低購入額(円)"
         int usage_limit "利用回数上限"
         string usage_limit_note "回数上限の補足(表示用)"
@@ -170,7 +169,7 @@ erDiagram
         string_list conditions "条件リスト"
         string_list global_exclusions "全チェーン共通の除外条件"
         string payment_method_id "QR決済ID(カード施策はnull)"
-        string campaign_url "施策の公式ページURL"
+        string detail_url "施策の詳細ページURL"
         string store_search_url "対象店舗検索URL"
         string_list sources "ソースURL"
         string verified_date "最終確認日"
@@ -246,7 +245,7 @@ erDiagram
 3 つの JSON の役割分担:
 
 - `merchants.json` — チェーンの正規化マスタ。検索ヒット率は `reading` / `aliases` の充実度で決まる。トップレベルに `yolp_config`（YOLP 検索の gc グループ定義・密度チューニング用の `max_pages`）を持ち、各 merchant の `yolp_search`（`gc`/`keyword`/`none`）で検索方式を指定する。`YolpClient` はこの設定から `YolpSearchConfig` を動的に構築し、アクティブな施策が参照する merchant だけを検索対象にする（該当 merchant がいない gc_group はスキップ）。位置情報を持たない発行体（自販機など）は `location_hint` で外部導線（Coke ON アプリ等）を案内し、「近くのこの店を探す」を出さない
-- `campaigns.json` — 汎用的な施策情報のみ。**ユーザー固有の前提を書かない**（規約）。`type` で常設カード（`card_program`）/ 期間限定（`card_promotion`）/ 自治体施策（`municipal`）を区分し、`benefit_type` でポイント還元（`rebate`）/ 定率即時割引（`coupon_percent`）/ 定額即時割引（`coupon_fixed`）を区分する。`store_scope` が `managed` ならチェーン検索・地図に表示、`external` ならキャンペーンタブのみ表示（`campaign_url`/`store_search_url` で公式ページへリンク）
+- `campaigns.json` — 汎用的な施策情報のみ。**ユーザー固有の前提を書かない**（規約）。`type` で常設カード（`card_program`）/ 期間限定（`card_promotion`）/ 自治体施策（`municipal`）を区分し、`benefit_type` でポイント還元（`rebate`）/ 定率即時割引（`coupon_percent`）/ 定額即時割引（`coupon_fixed`）を区分する。`store_scope` が `managed` ならチェーン検索・地図に表示、`external` ならキャンペーンタブのみ表示（`detail_url`/`store_search_url` で公式ページへリンク）
 - `profile.json` — ユーザー前提（保有ブランド・エントリー済みか等）+ QR 決済カタログ（`qr_payments`）。常にローカル（assets）から読み、リモート更新の対象外。`point_multiplier`（`PointMultiplier`）を持つカードはポイント価値の倍率（例: ウエル活 ×1.5）を設定画面で ON/OFF でき、ON 時は `effectiveRateDefault × factor` が実質還元率になる。`point_multiplier.color` はウエルシアのロゴ色など識別バッジに使う
 
 パースは `PoikatsuJson.parse()` に集約。`ignoreUnknownKeys = true` + `coerceInputValues = true` により、スキーマに後からフィールドを追加しても旧アプリが壊れない（前方互換）。

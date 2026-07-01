@@ -248,7 +248,7 @@ private fun JudgmentCardBody(judgment: Judgment, brandColor: Color) {
                     modifier = Modifier.clickable { uriHandler.openUri(url) },
                 )
             }
-            CapRow(campaign.perTransactionCap, campaign.periodTotalCap, campaign.capNote ?: campaign.monthlyCapNote)
+            CapRow(campaign.perTransactionCap, campaign.periodTotalCap, campaign.capNote)
             ConditionsList(campaign.conditions, campaign.minPurchase)
             judgment.card?.takeIf { it.pointMultiplier != null }?.let { card ->
                 Text(
@@ -373,9 +373,9 @@ private fun QrBenefitDisplay(judgment: QrJudgment) {
 private fun QrExternalLinks(campaign: Campaign, judgment: QrJudgment) {
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
-    campaign.campaignUrl?.let { url ->
+    campaign.detailUrl?.let { url ->
         Text(
-            "キャンペーン詳細 →",
+            "詳細はこちら →",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.clickable { uriHandler.openUri(url) },

@@ -16,7 +16,8 @@
       "entry_required": false,
       "period_start": null,
       "period_end": null,
-      "monthly_cap_note": "公式に月間ポイント上限の記載なし。ただし原則1万円超(店舗により異なる)はタッチ決済にならずカード差し込みとなり、その分は加算対象外",
+      "cap_note": "公式に月間ポイント上限の記載なし。ただし原則1万円超(店舗により異なる)はタッチ決済にならずカード差し込みとなり、その分は加算対象外",
+      "detail_url": "https://www.smbc-card.com/nyukai/merit/proper_p5.jsp",
       "eligible_cards": [
         "三井住友カード(NL)",
         "三井住友カード ゴールド(NL)",
@@ -95,7 +96,8 @@
       "entry_required": true,
       "period_start": null,
       "period_end": null,
-      "monthly_cap_note": "スペシャルポイント対象となる対象店舗利用は集計期間(毎月16日〜翌月15日)あたり合計5万円まで。超過分は基本0.5%のみ",
+      "cap_note": "スペシャルポイント対象となる対象店舗利用は集計期間(毎月16日〜翌月15日)あたり合計5万円まで。超過分は基本0.5%のみ",
+      "detail_url": "https://www.cr.mufg.jp/apply/card/mucard/pup/index03.html",
       "eligible_cards": [
         "三菱UFJカード",
         "三菱UFJカード ゴールド",
@@ -185,7 +187,7 @@
         "prefecture": "秋田県",
         "area_group": null
       },
-      "campaign_url": "https://paypay.ne.jp/event/akita-yuzawa-city/",
+      "detail_url": "https://paypay.ne.jp/event/akita-yuzawa-city/",
       "store_search_url": null,
       "merchant_rules": [],
       "sources": ["https://paypay.ne.jp/event/akita-yuzawa-city/"],
@@ -212,7 +214,7 @@
         "prefecture": "秋田県",
         "area_group": null
       },
-      "campaign_url": "https://media.aupay.wallet.auone.jp/articles/5059",
+      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5059",
       "store_search_url": null,
       "merchant_rules": [],
       "sources": ["https://media.aupay.wallet.auone.jp/articles/5059"],
@@ -239,7 +241,7 @@
         "prefecture": "岩手県",
         "area_group": null
       },
-      "campaign_url": "https://paypay.ne.jp/event/iwate-oshu-city-20260701/",
+      "detail_url": "https://paypay.ne.jp/event/iwate-oshu-city-20260701/",
       "store_search_url": null,
       "merchant_rules": [],
       "sources": ["https://paypay.ne.jp/event/iwate-oshu-city-20260701/"],
@@ -266,7 +268,7 @@
         "prefecture": "島根県",
         "area_group": null
       },
-      "campaign_url": "https://paypay.ne.jp/notice/20260529/cp-jichitai/",
+      "detail_url": "https://paypay.ne.jp/notice/20260529/cp-jichitai/",
       "store_search_url": null,
       "merchant_rules": [],
       "sources": ["https://paypay.ne.jp/notice/20260529/cp-jichitai/"],
@@ -297,6 +299,7 @@
       "merchant_rules": [
         { "merchant_id": "matsuya", "note": "松弁ネット・モバイルオーダー・松弁デリバリーも対象(松のや・マイカリー食堂等のグループブランド含む)", "exclusion_note": null }
       ],
+      "detail_url": "https://www.matsuyafoods.co.jp/matsuya/whatsnew/campaign/160563.html",
       "sources": ["https://www.matsuyafoods.co.jp/matsuya/whatsnew/campaign/160563.html"],
       "verified_date": "2026-06-30"
     },
@@ -321,7 +324,7 @@
         "prefecture": "東京都",
         "area_group": null
       },
-      "campaign_url": "https://paypay.ne.jp/event/tokyo-suginami-city-20260601/",
+      "detail_url": "https://paypay.ne.jp/event/tokyo-suginami-city-20260601/",
       "store_search_url": null,
       "conditions": [
         "予定額に達した場合は早期終了",

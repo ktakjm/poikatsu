@@ -147,7 +147,6 @@ data class Campaign(
     @SerialName("entry_required") val entryRequired: Boolean = false,
     @SerialName("period_start") val periodStart: String? = null,
     @SerialName("period_end") val periodEnd: String? = null,
-    @SerialName("monthly_cap_note") val monthlyCapNote: String? = null,
     @SerialName("eligible_cards") val eligibleCards: List<String> = emptyList(),
     @SerialName("ineligible_cards") val ineligibleCards: List<String> = emptyList(),
     val conditions: List<String> = emptyList(),
@@ -167,7 +166,7 @@ data class Campaign(
     @SerialName("usage_limit") val usageLimit: Int? = null,
     @SerialName("usage_limit_note") val usageLimitNote: String? = null,
     val region: Region? = null,
-    @SerialName("campaign_url") val campaignUrl: String? = null,
+    @SerialName("detail_url") val detailUrl: String? = null,
     @SerialName("store_search_url") val storeSearchUrl: String? = null,
     @SerialName("store_scope") val storeScope: String = "managed",
 )
