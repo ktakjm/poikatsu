@@ -116,7 +116,7 @@ poikatsu/
     │   │                   # SettingsRepository
     │   └── util/           # JapaneseText, GeoMath（純 Kotlin）
     └── test/java/com/ktakjm/poikatsu/
-        ├── JudgmentEngineTest.kt   # 実データを使った検索・判定・店舗対象判定・期間フィルタ・QR判定テスト（54 件、JapaneseTextTest 含む）
+        ├── JudgmentEngineTest.kt   # 実データを使った検索・判定・店舗対象判定・期間フィルタ・QR判定テスト（65 件、MunicipalitiesTest・JapaneseTextTest 含む）
         ├── DataRepositoryTest.kt   # ロード戦略のテスト（5 件）
         └── NearbyTest.kt           # チェーン特定・YOLP/Overpass パース・密度クリップ・YolpSearchConfig 構築・距離計算のテスト（27 件）
 ```
@@ -206,11 +206,14 @@ erDiagram
         string brand "Visa/Mastercard/Amex"
         double effective_rate_default
         string_list notes "補足情報"
+        PointMultiplier point_multiplier "ポイント倍率(任意)"
     }
     POINT_MULTIPLIER {
         string label "表示名(例: ウエル活)"
         double factor "倍率(例: 1.5)"
         string color "識別色 #RRGGBB"
+        string badge_label "バッジ表示名(例: ウエル活利用可)"
+        string applied_note "適用時の注記(例: 還元率はウエル活利用時…)"
     }
     QR_PAYMENT {
         string id PK
@@ -541,11 +544,11 @@ sequenceDiagram
 
 ## 8. テスト戦略
 
-`./gradlew :app:testDebugUnitTest` で全 87 テストが JVM 上で実行される（エミュレータ不要）。
+`./gradlew :app:testDebugUnitTest` で全 98 テストが JVM 上で実行される（エミュレータ不要）。
 
 | テスト | 対象 | 特徴 |
 |---|---|---|
-| `JudgmentEngineTest`（51 件）+ `MunicipalitiesTest`（3 件）+ `JapaneseTextTest`（3 件）＝計 57 件 | 検索・正規化・判定・店舗対象判定（3 状態）・近隣除外・**期間フィルタ・store_scope・QR判定・クーポン・judgeAll・BenefitType・データ検証・自治体マスタ検証** | **リポジトリ直下 `data/` の実データを読み込む**。「マック→マクドナルド」「マックスバリュは誤ヒットしない」等の振る舞いと、merchant_id 参照切れ等のデータ整合性チェックを兼ねる。アカチャンホンポの公式リストで対象/対象外/要確認の 3 状態も検証。Phase A で期間フィルタ（active/upcoming/expired・残日数警告）、store_scope フィルタ、QR 決済判定（rebate/coupon_percent/coupon_fixed）、judgeAll 統合、実データの新フィールド検証を追加。Phase E で `MunicipalitiesTest`（47 都道府県・23 区の検証、`RegisteredMunicipality` シリアライズ往復）を追加 |
+| `JudgmentEngineTest`（59 件）+ `MunicipalitiesTest`（3 件）+ `JapaneseTextTest`（3 件）＝計 65 件 | 検索・正規化・判定・店舗対象判定（3 状態）・近隣除外・**期間フィルタ・store_scope・QR判定・クーポン・judgeAll・BenefitType・データ検証・自治体マスタ検証** | **リポジトリ直下 `data/` の実データを読み込む**。「マック→マクドナルド」「マックスバリュは誤ヒットしない」等の振る舞いと、merchant_id 参照切れ等のデータ整合性チェックを兼ねる。アカチャンホンポの公式リストで対象/対象外/要確認の 3 状態も検証。Phase A で期間フィルタ（active/upcoming/expired・残日数警告）、store_scope フィルタ、QR 決済判定（rebate/coupon_percent/coupon_fixed）、judgeAll 統合、実データの新フィールド検証を追加。Phase E で `MunicipalitiesTest`（47 都道府県・23 区の検証、`RegisteredMunicipality` シリアライズ往復）を追加 |
 | `DataRepositoryTest`（5 件） | ロード戦略 | ラムダ注入により、キャッシュあり/なし/破損、リモート成功/失敗の各経路を File システムだけで検証 |
 | `NearbyTest`（27 件） | Overpass/YOLP パース・距離計算・チェーン特定・施設テナント除外・重複排除キー・密度差クリップ・**YolpSearchConfig 構築（データ駆動化の等価性検証・gc_group スキップ・maxPages）** | 固定 JSON フィクスチャ＋実データでネットワーク非依存 |
 
