@@ -7,22 +7,21 @@
 
 ## 1. 現在地サマリ
 
-**Phase 1（MVP）は完了**（2026-06-12）。Phase 2 の優先項目 2 つ（個別店舗の対象外判定・GPS 周辺検索）も前倒しで実装済み。期間限定キャンペーン対応（design-campaigns Phase A〜E）が完了し、Phase F（データ投入・実機検証）を残すのみ。
+**Phase 1（MVP）は完了**（2026-06-12）。Phase 2（店舗単位判定・GPS 周辺検索・期間限定キャンペーン・自治体施策・QR 決済クーポン・設定画面拡張）も完了（2026-06-30）。Phase F のデータ投入が済み実機検証待ち。
 
 ```mermaid
 flowchart LR
     P1["Phase 1: MVP<br/>検索→判定表示<br/>リモートデータ化"] --> P2["Phase 2: 拡張<br/>店舗単位判定 / GPS /<br/>自治体施策 / QRクーポン"] --> P3["Phase 3: 最適化<br/>期待価値スコア<br/>ウエル活・期限ポイント"]
 
     style P1 fill:#2E7D32,stroke:#1B5E20,color:#fff
-    style P2 fill:#E65100,stroke:#BF360C,color:#fff
+    style P2 fill:#2E7D32,stroke:#1B5E20,color:#fff
     style P3 fill:#E0E0E0,stroke:#9E9E9E,color:#333
 ```
 
 | フェーズ | 状態 |
 |---|---|
 | Phase 1（MVP） | ✅ 完了（2026-06-12） |
-| Phase 2 | 🔶 進行中（4 項目中 2 項目完了） |
-| design-campaigns Phase A〜F | Phase A〜E ✅ 完了。Phase F 🔶 データ投入完了・実機検証待ち（2026-06-30） |
+| Phase 2（拡張 + キャンペーン Phase A〜F） | ✅ 完了（2026-06-30）。実機検証待ち |
 | Phase 3 | ⬜ 未着手 |
 
 ## 2. 完了した作業
@@ -56,42 +55,32 @@ flowchart LR
 
 ## 3. 今後のロードマップ
 
-### Phase 2 残り（優先順）
+### Phase 2 完了済み
 
 ```mermaid
 flowchart TD
     subgraph done["完了済み"]
         T1["✅ 個別店舗の対象判定<br/>（official_store_list / 公式断定リスト）"]
-        T4["✅ GPS 店舗候補<br/>（Overpass API）"]
-    end
-    subgraph todo["残りタスク"]
-        T2["自治体還元施策<br/>（○○市 × auPAY 20% 型）"]
-        T3["QR 決済クーポン導線<br/>（PayPay 等への確認リンク）"]
+        T4["✅ GPS 店舗候補<br/>（YOLP + Google Maps）"]
+        T2["✅ 自治体還元施策<br/>（キャンペーン Phase A〜F）"]
+        T3["✅ QR 決済クーポン導線<br/>（キャンペーン Phase A〜F）"]
     end
     T1 --> T2
     T2 --> T3
 
     style T1 fill:#2E7D32,stroke:#1B5E20,color:#fff
     style T4 fill:#2E7D32,stroke:#1B5E20,color:#fff
-    style T2 fill:#E65100,stroke:#BF360C,color:#fff
-    style T3 fill:#E65100,stroke:#BF360C,color:#fff
+    style T2 fill:#2E7D32,stroke:#1B5E20,color:#fff
+    style T3 fill:#2E7D32,stroke:#1B5E20,color:#fff
 ```
 
-#### 3.1 自治体還元施策（Phase 2-2）
+#### 3.1 自治体還元施策（Phase 2-2）✅ 完了
 
-「○○市 × auPAY 20%還元」型の施策を Campaign として扱えるようにする。
+キャンペーン Phase A〜E で実装済み。`type: "municipal"` / `store_scope: "external"` / `region` フィールド / 設定画面の自治体登録 / キャンペーンタブでの一覧表示 / 期間フィルタ。
 
-- [ ] スキーマ拡張: Campaign に地域フィールド（自治体コード or 名称）を追加
-- [ ] 設定画面の新設: 居住地・行動圏の自治体を登録（profile.json の編集 UI を兼ねる第一歩）
-- [ ] 判定エンジン: 登録自治体に該当する施策のみ表示するフィルタ
-- [ ] データ運用: 自治体施策は期間が短いため、`period_start` / `period_end` による期限切れ自動非表示の実装が事実上必須になる
+#### 3.2 QR 決済クーポン導線（Phase 2-3）✅ 完了
 
-#### 3.2 QR 決済クーポン導線（Phase 2-3）
-
-完全な自動判定は不可能（ユーザーごとに配布が異なり API もない）と割り切り済み。
-
-- [ ] 全員配布系の大型クーポンのみ手動でデータ化（スキーマ追加）
-- [ ] 判定結果画面に「PayPay アプリでこの店のクーポンを確認」のディープリンク/導線を設置
+キャンペーン Phase A〜E で実装済み。`benefit_type`（rebate/coupon_percent/coupon_fixed）/ QR 決済の利用登録 / 判定画面での QR セクション表示 / 外部アプリ誘導。
 
 #### 3.3 UI 刷新：ナビゲーション整理・GPS 地図・設定画面
 
@@ -134,9 +123,9 @@ flowchart TD
 - [x] **設定の中身（軽スコープ）を実装**（2026-06-19 実装）：**DataStore Preferences**（`SettingsRepository`）を採用し設定を永続化。(1) 表示＝テーマ3択（システム/ライト/ダーク・`MainActivity` で `PoikatsuTheme` に注入）＋ dynamic color トグル（Android 12+ のみ有効）。(2) マイカード＝カード所有チェック／還元率の手入力（公式アプリ表示値）／MUFG のブランド選択（Amex・Mastercard・Visa・JCB）／三井住友の「ウエル活 ×1.5」チェック（`point_multiplier` を profile.json に追加。係数・ラベルをデータ側に持たせ UI 文言をハードコードしない）。(3) データ＝自動更新トグル＋今すぐ更新。(4) このアプリ＝バージョン（`BuildConfig.VERSION_NAME`）/ GitHub リンク。ユーザー差分は DataStore に overlay 保存し、ViewModel のマージ層で profile に重ねてエンジンへ渡す（`JudgmentEngine` は純 Kotlin・実データテストを維持）。**判定エンジンを2点変更**：未所有カードの施策はスキップ／`amex_excluded`×Amex を警告→真の除外（検索・判定詳細・地図ピン/件数すべてに波及）。実データテスト追加（Amex 除外・所有絞り込み）。**reward の無いチェーンは検索・近隣に出さない**よう絞り込み、`entry_done` フラグと未エントリー警告は廃止（公式アプリ表示値の手入力が実効値のため）。OSS ライセンス一覧画面・カードの追加/削除・`rate_breakdown` 自動計算は今後。
 - [x] **近くのお店モード: 地図操作の役割整理＋再検索の体験改善**（2026-06-19 実装）：地図上の操作が「更新（⟳）／現在地へ戻す（📍）／このエリアを検索」で役割が重なっていたのを、**検索の起点をどこにするかの 2 択**に整理した。(1) 📍 を「**現在地で検索**」へ格上げ（カメラ移動だけ→現在地を取り直してその周辺で再検索）、地図中心起点の「このエリアを検索」と対にし、重複していた ⟳ 再読み込みボタン（半径チップ右端）を撤去。(2) **再検索中も地図・一覧を残す**（直前の `NearbyUi` を `copy` して `loading` だけ立て、`NearbyPane` のゲートを「`center` があれば地図を出す」に変更）。全画面ローディングにせず、「このエリアを検索」を進捗ピルに差し替え 📍 は無効化。初回ロードのみ従来どおり全画面。(3) **再検索の一時失敗は Snackbar**（地図を残す。`failNearby` が `center` の有無で Snackbar／全画面エラーを出し分け、初回失敗は「再試行」付き全画面）。Snackbar は外側 `Scaffold` の host だとシート裏に隠れるため `BottomSheetScaffold` 自身の host に出す。(4) **地図をシート背面まで下端いっぱいに描画**し、ボトムシート角丸から背景が覗く見栄えを解消（下端 inset を当てず上端 `TopAppBar` 分だけ避ける）。背景・実装は code-guide.md 7.1。
 
-### 期間限定キャンペーン対応（design-campaigns Phase A〜E）
+### 期間限定キャンペーン対応（Phase A〜F）✅ 完了
 
-詳細設計は [design-campaigns.md](design-campaigns.md) を参照。
+実装の技術詳細は [code-guide.md](code-guide.md) を参照。
 
 | フェーズ | 内容 | 状態 |
 |---|---|---|
@@ -145,7 +134,7 @@ flowchart TD
 | Phase C | キャンペーンタブ + 4 タブナビゲーション | ✅ 完了 |
 | Phase D | 検索・判定画面の期間限定対応（QR 判定・ベストオプション・期間限定バッジ） | ✅ 完了 |
 | Phase E | 設定画面の拡張（QR 決済の利用登録 UI、自治体の登録 UI、DataStore への保存・ViewModel へのマージ、`data/municipalities.json` 新規作成） | ✅ 完了（2026-06-30） |
-| Phase F | データ投入と実機検証 | 🔶 データ投入完了・実機検証待ち（2026-06-30） |
+| Phase F | データ投入と実機検証 | ✅ データ投入完了・実機検証待ち（2026-06-30） |
 
 ### Phase 3: 最適化アドバイス（未着手）
 
@@ -158,25 +147,32 @@ flowchart TD
 
 ### フェーズ外の改善候補（バックログ）
 
-計画には明記されていないが、実装中に見えてきた改善候補。
+実装中に見えてきた改善候補。
 
 | 候補 | 背景 | 優先度 |
 |---|---|---|
 | GitHub Actions によるデータ検証 CI | PLAN.md の構想図にあり未実装。push 時に `testDebugUnitTest`（実データ整合性チェック兼用）を流すだけで実現できる | 高（低コスト） |
-| profile.json の設定画面化 | カード所有・還元率・MUFG ブランド・ウエル活は設定画面で編集可能に（2026-06-19・DataStore overlay）。QR 決済の利用登録・自治体の登録も Phase E で実装済み（2026-06-30）。**残るはカードの追加/削除**（候補カードの集合自体は profile.json 管理のまま） | 中 |
-| 期限切れ施策の自動扱い | `period_end` がスキーマにあるが判定エンジンは未参照。自治体施策（短期）導入時に必須化 | 中（Phase 2-2 と同時） |
-| YOLP 取りこぼし対策 | 極端なズームアウト時に YOLP 500件/ソース上限で遠方が落ちる可能性。gc 絞り込み＋`mergeAndClip` で緩和済みだが完全ではない（旧 Overpass の way 取りこぼしは YOLP 移行で解消） | 低（不満が出たら） |
+| カードの追加/削除 | 所有・還元率・ブランド・ウエル活・QR 決済・自治体は設定済み。**残るはカードの追加/削除**（候補カードの集合自体は profile.json 管理のまま） | 中 |
+| 探すタブでの自治体施策表示 | 「この店は ○○区の施策対象かも」の表示。初回は非表示（`store_scope == "managed"` のみ）としたが、運用で需要と精度を見てから判断 | 中（需要次第） |
+| 自治体グループ登録 | 「東京23区をまとめて登録」。`region.area_group` はデータに用意済み（現在 null）。グループの定義（「都下」「島嶼部」等）は自治体ごとに標準が異なるため要検討 | 低 |
+| rebate vs coupon の自動比較 | 「○○円の買い物なら還元が得、○○円ならクーポンが得」の計算。Phase 3（期待価値スコア）と統合 | 低（Phase 3 と同時） |
+| キャンペーン開始/終了の通知 | プッシュ通知基盤（Firebase Messaging 等）の導入が前提。当面はアプリ起動時の Snackbar が候補 | 低 |
+| カスタムキャンペーン | ユーザーが自分でキャンペーン情報を追加・編集。運用負荷が高まり「自分でやりたい」需要が出たとき | 低 |
+| クーポン収集の半自動化 | PayPay/auPAY/d払い等のクーポン情報を定期収集するスキル。規約確認が前提 | 低 |
+| YOLP 取りこぼし対策 | 極端なズームアウト時に YOLP 500件/ソース上限で遠方が落ちる可能性。gc 絞り込み＋`mergeAndClip` で緩和済みだが完全ではない | 低（不満が出たら） |
+| 自治体マスタの自動更新 | `data/municipalities.json` は現在手動生成。総務省オープンデータから自動生成する仕組み。GitHub Actions での定期生成が候補 | 低（合併等でデータが陳腐化したとき） |
 | Google Play 公開の判断 | 開発者登録 $25。当面は実機直接インストールで運用 | 保留 |
-| M3 Expressive ローダー（波形プログレス） | `*WavyProgressIndicator` / モーフィング `LoadingIndicator` は material3 1.5.0-alpha 専用（現行 BOM は 1.4.0 stable で未収録）。安定版重視の方針のため見送り | 保留（1.5 stable 化で再検討） |
-| 自治体マスタの自動更新 | `data/municipalities.json` は現在手動生成。総務省の全国地方公共団体コード等のオープンデータから自動生成する仕組みを作れば、市町村合併・名称変更時の手動対応が不要になる。GitHub Actions での定期生成が候補 | 低（合併等でデータが陳腐化したとき） |
+| M3 Expressive ローダー（波形プログレス） | `*WavyProgressIndicator` / `LoadingIndicator` は material3 1.5.0-alpha 専用。安定版重視の方針のため見送り | 保留（1.5 stable 化で再検討） |
 
 ## 4. 定常運用タスク
 
 | タスク | 頻度 | 内容 |
 |---|---|---|
-| 施策データの確認 | 月 1 回 | `sources` の公式 URL を確認し `verified_date` を更新。改定があれば率・店舗リスト・`updated_at` を修正 |
+| 常設施策データの確認 | 月 1 回 | `sources` の公式 URL を確認し `verified_date` を更新。改定があれば率・店舗リスト・`updated_at` を修正 |
+| 期間限定キャンペーンの追加 | 月末 | 翌月の自治体施策・カード会社期間限定・クーポンを収集し campaigns.json に追加。収録基準・情報源・運用フローは [data/README.md](../data/README.md) の「期間限定キャンペーン・クーポンの運用」参照 |
+| 期限切れデータの削除 | 月 1 回 | 終了後 30 日経過したキャンペーンを campaigns.json から手動削除 |
 | 整合性チェック | データ更新のたび | `./gradlew :app:testDebugUnitTest`（merchant_id 参照切れ・エイリアス衝突を検出） |
-| 店舗単位の対象情報の追記 | 発見ベース | 公式が対象/対象外を**言い切っている**完全なリストを見つけたら `official_store_list`(mode/stores/official_updated_date) に追記。例示レベルの情報は `exclusion_note` に文章で残すにとどめる |
+| 店舗単位の対象情報の追記 | 発見ベース | 公式が対象/対象外を**言い切っている**完全なリストを見つけたら `official_store_list` に追記。例示レベルの情報は `exclusion_note` に文章で残すにとどめる |
 
 ## 5. リスクと割り切り（再掲・現状評価）
 
@@ -184,5 +180,5 @@ flowchart TD
 |---|---|
 | 施策情報が古くなり誤判定 | ✅ 対応済み: `verified_date` を判定画面に必ず表示 + 「最新の条件は公式で確認」注記 + データ鮮度（REMOTE/CACHE/BUNDLED）表示 |
 | 対象外店舗リストの網羅が困難 | ✅ 対応済み: キーワード推測による曖昧警告は廃止。**公式が言い切っているリストがあるチェーンだけ**断定表示し、無いチェーンは `exclusion_note` の但し書きにとどめる（誤った断定を避ける） |
-| クーポンの個人差 | 🔶 方針決定済み（自動判定せず確認導線）。実装は Phase 2-3 |
+| クーポンの個人差 | ✅ 対応済み: 全員配布系の大型クーポンのみ手動データ化。個人配布は自動判定せず QR アプリへの確認導線で対応 |
 | スクレイピング自動化の規約リスク | ✅ 手動収集を継続。月 1 回の運用ルール化済み |
