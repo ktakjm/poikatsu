@@ -3,6 +3,7 @@ package com.ktakjm.poikatsu.domain
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.MerchantRule
+import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.ProfileCard
 import com.ktakjm.poikatsu.data.QrPayment
@@ -11,13 +12,33 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
-/** ある店舗に対する 1 施策分の判定結果 */
-data class Judgment(
+/**
+ * ある店舗に対する 1 施策分の判定結果。カード決済・QR 決済・キャンペーン詳細で共用する。
+ * 各フィールドは null / 空ならカード側で非表示になるため、カード種別ごとの分岐は不要。
+ */
+data class CampaignJudgment(
     val campaign: Campaign,
-    val rule: MerchantRule,
-    val card: ProfileCard?,
-    val effectiveRate: Double,
+    val badgeLabel: String,
+    val brandColor: String?,
+    val benefitType: BenefitType,
+    val effectiveRate: Double?,
+    val discountAmount: Int?,
+    val daysRemaining: Int?,
+    val storeNote: String?,
+    val exclusionNote: String?,
+    val storeListUrl: String?,
     val warnings: List<String>,
+    val minPurchase: Int?,
+    val usageLimitText: String?,
+    val perTransactionCap: Int?,
+    val periodTotalCap: Int?,
+    val capNote: String?,
+    val conditions: List<String>,
+    val storeSearchUrl: String?,
+    val detailUrl: String?,
+    val appPackage: String?,
+    val pointMultiplier: PointMultiplier?,
+    val welcatsuApplied: Boolean,
 )
 
 enum class StoreEligibility {
@@ -58,19 +79,6 @@ enum class BenefitType {
 
 enum class CampaignStatus { ACTIVE, UPCOMING, EXPIRED }
 
-data class QrJudgment(
-    val campaign: Campaign,
-    val paymentMethod: QrPayment,
-    val benefitType: BenefitType,
-    val effectiveRate: Double?,
-    val discountAmount: Int?,
-    val minPurchase: Int?,
-    val usageLimit: Int?,
-    val daysRemaining: Int?,
-    val perTransactionCap: Int?,
-    val periodTotalCap: Int?,
-)
-
 data class BestPaymentOption(
     val method: String,
     val rate: Double?,
@@ -81,8 +89,7 @@ data class BestPaymentOption(
 )
 
 data class JudgmentResult(
-    val cardJudgments: List<Judgment>,
-    val qrJudgments: List<QrJudgment>,
+    val judgments: List<CampaignJudgment>,
     val bestOption: BestPaymentOption?,
 )
 
@@ -273,11 +280,55 @@ class JudgmentEngine(private val data: PoikatsuData) {
     private fun Campaign.ruleFor(merchant: Merchant): MerchantRule? =
         merchantRules.firstOrNull { it.merchantId == merchant.id }
 
+    private fun usageLimitText(campaign: Campaign): String? =
+        campaign.usageLimitNote
+            ?: campaign.usageLimit?.let { "お一人様${it}回まで" }
+
+    private fun buildJudgment(
+        campaign: Campaign,
+        rule: MerchantRule?,
+        badgeLabel: String,
+        effectiveRate: Double?,
+        discountAmount: Int?,
+        pointMultiplier: PointMultiplier?,
+        welcatsuApplied: Boolean,
+        appPackage: String?,
+        today: LocalDate,
+    ): CampaignJudgment {
+        val days = daysRemaining(campaign, today)
+        return CampaignJudgment(
+            campaign = campaign,
+            badgeLabel = badgeLabel,
+            brandColor = campaign.brandColor,
+            benefitType = BenefitType.fromString(campaign.benefitType),
+            effectiveRate = effectiveRate,
+            discountAmount = discountAmount,
+            daysRemaining = days,
+            storeNote = rule?.note,
+            exclusionNote = rule?.exclusionNote,
+            storeListUrl = rule?.storeListUrl,
+            warnings = buildList {
+                if (days != null && days <= 3) add("残り${days}日")
+            },
+            minPurchase = campaign.minPurchase,
+            usageLimitText = usageLimitText(campaign),
+            perTransactionCap = campaign.perTransactionCap,
+            periodTotalCap = campaign.periodTotalCap,
+            capNote = campaign.capNote,
+            conditions = campaign.conditions,
+            storeSearchUrl = if (campaign.storeScope == "external") campaign.storeSearchUrl else null,
+            detailUrl = campaign.detailUrl,
+            appPackage = appPackage,
+            pointMultiplier = pointMultiplier,
+            welcatsuApplied = welcatsuApplied,
+        )
+    }
+
     /**
      * カード施策の判定を還元率の高い順に返す。期間フィルタ適用済み。
      * store_scope == "managed" の施策のみ対象。
      */
-    fun judge(merchant: Merchant, today: LocalDate): List<Judgment> =
+    fun judgeCards(merchant: Merchant, today: LocalDate): List<CampaignJudgment> =
         data.campaigns
             .filter { campaignStatus(it, today) == CampaignStatus.ACTIVE }
             .filter { it.storeScope == "managed" }
@@ -290,15 +341,16 @@ class JudgmentEngine(private val data: PoikatsuData) {
                 if (rule.amexExcluded && card.brand.equals("Amex", ignoreCase = true)) {
                     return@mapNotNull null
                 }
-                Judgment(
+                buildJudgment(
                     campaign = campaign,
                     rule = rule,
-                    card = card,
+                    badgeLabel = card.cardName,
                     effectiveRate = card.effectiveRateDefault ?: campaign.rateBase ?: 0.0,
-                    warnings = buildList {
-                        val days = daysRemaining(campaign, today)
-                        if (days != null && days <= 3) add("残り${days}日")
-                    },
+                    discountAmount = campaign.discountAmount,
+                    pointMultiplier = card.pointMultiplier,
+                    welcatsuApplied = card.welcatsuApplied,
+                    appPackage = null,
+                    today = today,
                 )
             }.sortedByDescending { it.effectiveRate }
 
@@ -306,7 +358,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
      * QR 決済の判定を返す。ユーザーが利用中の QR 決済でフィルタ済み。
      * store_scope == "managed" のみ。municipal(external) は探すタブには含めない。
      */
-    fun judgeQr(merchant: Merchant, today: LocalDate, enabledQrIds: Set<String>): List<QrJudgment> =
+    fun judgeQr(merchant: Merchant, today: LocalDate, enabledQrIds: Set<String>): List<CampaignJudgment> =
         data.campaigns
             .filter { campaignStatus(it, today) == CampaignStatus.ACTIVE }
             .filter { it.storeScope == "managed" }
@@ -314,17 +366,16 @@ class JudgmentEngine(private val data: PoikatsuData) {
             .mapNotNull { campaign ->
                 campaign.ruleFor(merchant) ?: return@mapNotNull null
                 val qr = qrPaymentMap[campaign.paymentMethodId] ?: return@mapNotNull null
-                QrJudgment(
+                buildJudgment(
                     campaign = campaign,
-                    paymentMethod = qr,
-                    benefitType = BenefitType.fromString(campaign.benefitType),
+                    rule = campaign.ruleFor(merchant),
+                    badgeLabel = qr.name,
                     effectiveRate = campaign.rateBase,
                     discountAmount = campaign.discountAmount,
-                    minPurchase = campaign.minPurchase,
-                    usageLimit = campaign.usageLimit,
-                    daysRemaining = daysRemaining(campaign, today),
-                    perTransactionCap = campaign.perTransactionCap,
-                    periodTotalCap = campaign.periodTotalCap,
+                    pointMultiplier = null,
+                    welcatsuApplied = false,
+                    appPackage = qr.appPackage.ifBlank { null },
+                    today = today,
                 )
             }
 
@@ -332,59 +383,24 @@ class JudgmentEngine(private val data: PoikatsuData) {
      * カード + QR をまとめた包括判定。
      */
     fun judgeAll(merchant: Merchant, today: LocalDate, enabledQrIds: Set<String> = emptySet()): JudgmentResult {
-        val cardJudgments = judge(merchant, today)
-        val qrJudgments = judgeQr(merchant, today, enabledQrIds)
-        val bestOption = determineBest(cardJudgments, qrJudgments, today)
-        return JudgmentResult(cardJudgments, qrJudgments, bestOption)
+        val all = judgeCards(merchant, today) + judgeQr(merchant, today, enabledQrIds)
+        val bestOption = determineBest(all)
+        return JudgmentResult(all, bestOption)
     }
 
-    private fun determineBest(
-        cards: List<Judgment>,
-        qrs: List<QrJudgment>,
-        today: LocalDate,
-    ): BestPaymentOption? {
-        data class Candidate(
-            val method: String,
-            val rate: Double?,
-            val discountAmount: Int?,
-            val benefitType: BenefitType,
-            val isTimeLimited: Boolean,
-            val daysRemaining: Int?,
+    private fun determineBest(judgments: List<CampaignJudgment>): BestPaymentOption? {
+        val best = judgments
+            .filter { it.effectiveRate != null && it.benefitType != BenefitType.COUPON_FIXED }
+            .maxByOrNull { it.effectiveRate!! }
+            ?: return null
+        return BestPaymentOption(
+            method = best.badgeLabel,
+            rate = best.effectiveRate,
+            discountAmount = best.discountAmount,
+            benefitType = best.benefitType,
+            isTimeLimited = best.campaign.periodEnd != null,
+            daysRemaining = best.daysRemaining,
         )
-
-        val candidates = buildList {
-            cards.forEach { j ->
-                add(
-                    Candidate(
-                        method = j.card?.cardName ?: j.campaign.issuer,
-                        rate = j.effectiveRate,
-                        discountAmount = null,
-                        benefitType = BenefitType.fromString(j.campaign.benefitType),
-                        isTimeLimited = j.campaign.periodEnd != null,
-                        daysRemaining = daysRemaining(j.campaign, today),
-                    ),
-                )
-            }
-            qrs.forEach { q ->
-                add(
-                    Candidate(
-                        method = q.paymentMethod.name,
-                        rate = q.effectiveRate,
-                        discountAmount = q.discountAmount,
-                        benefitType = q.benefitType,
-                        isTimeLimited = q.campaign.periodEnd != null,
-                        daysRemaining = q.daysRemaining,
-                    ),
-                )
-            }
-        }
-        // 定率(rebate/coupon_percent)で最高のものを選ぶ。定額(coupon_fixed)は比較不能なので並列表示
-        val bestRate = candidates
-            .filter { it.rate != null && it.benefitType != BenefitType.COUPON_FIXED }
-            .maxByOrNull { it.rate!! }
-        return bestRate?.let {
-            BestPaymentOption(it.method, it.rate, it.discountAmount, it.benefitType, it.isTimeLimited, it.daysRemaining)
-        }
     }
 
     /**

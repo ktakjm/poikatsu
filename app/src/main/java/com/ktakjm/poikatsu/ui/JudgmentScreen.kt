@@ -41,12 +41,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
-import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.LocationHint
 import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.BestPaymentOption
-import com.ktakjm.poikatsu.domain.Judgment
-import com.ktakjm.poikatsu.domain.QrJudgment
+import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.StoreEligibility
 import com.ktakjm.poikatsu.domain.StoreVerdict
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
@@ -93,7 +91,7 @@ internal fun JudgmentDetail(
         Spacer(Modifier.height(8.dp))
     }
 
-    if (selection.judgments.isEmpty() && selection.qrJudgments.isEmpty()) {
+    if (selection.judgments.isEmpty()) {
         Card(modifier = Modifier.fillMaxWidth()) {
             Text(
                 "登録済みの高還元施策の対象外です。通常還元率のカード・QR決済を利用してください。",
@@ -103,38 +101,14 @@ internal fun JudgmentDetail(
         return
     }
 
-    val totalCount = selection.judgments.size + selection.qrJudgments.size
-    val hasBothSections = selection.judgments.isNotEmpty() && selection.qrJudgments.isNotEmpty()
-
     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (selection.bestOption != null && totalCount >= 2) {
+        if (selection.bestOption != null && selection.judgments.size >= 2) {
             item(key = "__best") { BestOptionBanner(selection.bestOption) }
         }
-        if (selection.judgments.isNotEmpty()) {
-            if (hasBothSections) {
-                item(key = "__card_header") { SectionHeader("カード決済") }
-            }
-            items(selection.judgments, key = { it.campaign.id }) { judgment ->
-                JudgmentCard(judgment)
-            }
-        }
-        if (selection.qrJudgments.isNotEmpty()) {
-            item(key = "__qr_header") { SectionHeader("QR 決済") }
-            items(selection.qrJudgments, key = { "qr_${it.campaign.id}" }) { qrJudgment ->
-                QrJudgmentCard(qrJudgment)
-            }
+        items(selection.judgments, key = { it.campaign.id }) { judgment ->
+            CampaignJudgmentCard(judgment)
         }
     }
-}
-
-@Composable
-private fun SectionHeader(title: String) {
-    Text(
-        title,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 4.dp),
-    )
 }
 
 @Composable
@@ -173,11 +147,11 @@ private fun BestOptionBanner(best: BestPaymentOption) {
     }
 }
 
-// ---- カード判定カード ----
+// ---- 統一判定カード ----
 
 @Composable
-private fun JudgmentCard(judgment: Judgment) {
-    val brandColor = parseBrandColor(judgment.campaign.brandColor) ?: MaterialTheme.colorScheme.primary
+internal fun CampaignJudgmentCard(judgment: CampaignJudgment) {
+    val brandColor = parseBrandColor(judgment.brandColor) ?: MaterialTheme.colorScheme.primary
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -189,113 +163,31 @@ private fun JudgmentCard(judgment: Judgment) {
                     .fillMaxHeight()
                     .background(brandColor)
             )
-            JudgmentCardBody(judgment, brandColor)
+            CampaignJudgmentCardBody(judgment, brandColor)
         }
     }
 }
 
 @Composable
-private fun JudgmentCardBody(judgment: Judgment, brandColor: Color) {
+private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Color) {
     val campaign = judgment.campaign
-    val rule = judgment.rule
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "${trimRate(judgment.effectiveRate)}%",
-                    style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        BrandBadge(judgment.card?.cardName ?: campaign.issuer, brandColor)
-                        val pm = judgment.card?.pointMultiplier
-                        if (pm != null) {
-                            val welciaColor = parseBrandColor(pm.color) ?: MaterialTheme.colorScheme.tertiary
-                            BrandBadge("ウエル活利用可", welciaColor)
-                        }
-                        if (campaign.periodEnd != null) {
-                            TimeLimitedBadge()
-                        }
-                    }
-                    Text(
-                        campaign.name,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                }
-            }
-            PeriodRow(campaign)
-            Text("支払い方法: ${campaign.paymentInstruction}", style = MaterialTheme.typography.bodyMedium)
-            rule.note?.let {
-                Text("この店の条件: $it", style = MaterialTheme.typography.bodyMedium)
-            }
-            judgment.warnings.forEach {
-                NoticeRow(it, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
-            }
-            rule.exclusionNote?.let {
-                NoticeRow(it, warningContainerColor(), onWarningContainerColor())
-            }
-            rule.storeListUrl?.let { url ->
-                val uriHandler = LocalUriHandler.current
-                Text(
-                    "公式の対象店舗一覧を開く →",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable { uriHandler.openUri(url) },
-                )
-            }
-            CapRow(campaign.perTransactionCap, campaign.periodTotalCap, campaign.capNote)
-            ConditionsList(campaign.conditions, campaign.minPurchase)
-            judgment.card?.takeIf { it.pointMultiplier != null }?.let { card ->
-                Text(
-                    if (card.welcatsuApplied) "※還元率はウエル活利用時の実質還元率"
-                    else "※WAONポイントに交換する事でウエル活利用可能",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline,
-                )
-            }
-            VerifiedDateRow(campaign.verifiedDate)
-    }
-}
-
-// ---- QR 判定カード ----
-
-@Composable
-private fun QrJudgmentCard(judgment: QrJudgment) {
-    val brandColor = parseBrandColor(judgment.campaign.brandColor) ?: MaterialTheme.colorScheme.primary
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-    ) {
-        Row(Modifier.height(IntrinsicSize.Min)) {
-            Box(
-                Modifier
-                    .width(8.dp)
-                    .fillMaxHeight()
-                    .background(brandColor)
-            )
-            QrJudgmentCardBody(judgment, brandColor)
-        }
-    }
-}
-
-@Composable
-private fun QrJudgmentCardBody(judgment: QrJudgment, brandColor: Color) {
-    val campaign = judgment.campaign
+    val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            QrBenefitDisplay(judgment)
+            BenefitDisplay(judgment)
             Spacer(Modifier.width(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    BrandBadge(judgment.paymentMethod.name, brandColor)
+                    BrandBadge(judgment.badgeLabel, brandColor)
+                    val pm = judgment.pointMultiplier
+                    if (pm != null && pm.badgeLabel.isNotBlank()) {
+                        val pmColor = parseBrandColor(pm.color) ?: MaterialTheme.colorScheme.tertiary
+                        BrandBadge(pm.badgeLabel, pmColor)
+                    }
                     if (campaign.periodEnd != null) {
                         TimeLimitedBadge()
                     }
@@ -311,91 +203,106 @@ private fun QrJudgmentCardBody(judgment: QrJudgment, brandColor: Color) {
         if (campaign.paymentInstruction.isNotBlank()) {
             Text("支払い方法: ${campaign.paymentInstruction}", style = MaterialTheme.typography.bodyMedium)
         }
+        judgment.storeNote?.let {
+            Text("この店の条件: $it", style = MaterialTheme.typography.bodyMedium)
+        }
+        judgment.warnings.forEach {
+            NoticeRow(it, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
+        }
+        judgment.exclusionNote?.let {
+            NoticeRow(it, warningContainerColor(), onWarningContainerColor())
+        }
+        judgment.storeListUrl?.let { url ->
+            Text(
+                "公式の対象店舗一覧を開く →",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { uriHandler.openUri(url) },
+            )
+        }
         MinPurchaseRow(judgment.minPurchase)
-        campaign.usageLimitNote?.let {
+        judgment.usageLimitText?.let {
             Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
-        } ?: judgment.usageLimit?.let {
-            Text("お一人様${it}回まで", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
         }
-        judgment.daysRemaining?.let { days ->
-            if (days <= 3) {
-                NoticeRow("残り${days}日", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
-            }
+        CapRow(judgment.perTransactionCap, judgment.periodTotalCap, judgment.capNote)
+        judgment.storeSearchUrl?.let { url ->
+            Text(
+                "対象店舗を確認 →",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { uriHandler.openUri(url) },
+            )
         }
-        CapRow(judgment.perTransactionCap, judgment.periodTotalCap, campaign.capNote)
-        ConditionsList(campaign.conditions, judgment.minPurchase)
-        QrExternalLinks(campaign, judgment)
+        judgment.detailUrl?.let { url ->
+            Text(
+                "詳細はこちら →",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { uriHandler.openUri(url) },
+            )
+        }
+        judgment.appPackage?.let { pkg ->
+            Text(
+                "${judgment.badgeLabel}アプリを開く →",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable {
+                    val intent = context.packageManager.getLaunchIntentForPackage(pkg)
+                    if (intent != null) {
+                        context.startActivity(intent)
+                    } else {
+                        uriHandler.openUri("https://play.google.com/store/apps/details?id=$pkg")
+                    }
+                },
+            )
+        }
+        judgment.pointMultiplier?.takeIf { judgment.welcatsuApplied && it.appliedNote.isNotBlank() }?.let { pm ->
+            Text(
+                "※${pm.appliedNote}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+        }
         VerifiedDateRow(campaign.verifiedDate)
     }
 }
 
 @Composable
-private fun QrBenefitDisplay(judgment: QrJudgment) {
+private fun BenefitDisplay(judgment: CampaignJudgment) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        when (judgment.benefitType) {
-            BenefitType.COUPON_FIXED -> {
+        when {
+            judgment.benefitType == BenefitType.COUPON_FIXED && judgment.discountAmount != null -> {
                 Text(
-                    "${judgment.discountAmount ?: 0}円",
+                    "${judgment.discountAmount}円",
                     style = MaterialTheme.typography.displaySmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Text("引き", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             }
-            BenefitType.COUPON_PERCENT -> {
+            judgment.benefitType == BenefitType.COUPON_PERCENT && judgment.effectiveRate != null -> {
                 Text(
-                    "${trimRate(judgment.effectiveRate ?: 0.0)}%",
+                    "${trimRate(judgment.effectiveRate)}%",
                     style = MaterialTheme.typography.displaySmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Text("OFF", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             }
-            BenefitType.REBATE -> {
-                if (judgment.discountAmount != null) {
-                    Text(
-                        "${judgment.discountAmount}円",
-                        style = MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text("還元", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                } else {
-                    Text(
-                        "${trimRate(judgment.effectiveRate ?: 0.0)}%",
-                        style = MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
+            judgment.benefitType == BenefitType.REBATE && judgment.discountAmount != null -> {
+                Text(
+                    "${judgment.discountAmount}円",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text("還元", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            }
+            judgment.effectiveRate != null -> {
+                Text(
+                    "${trimRate(judgment.effectiveRate)}%",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
         }
-    }
-}
-
-@Composable
-private fun QrExternalLinks(campaign: Campaign, judgment: QrJudgment) {
-    val uriHandler = LocalUriHandler.current
-    val context = LocalContext.current
-    campaign.detailUrl?.let { url ->
-        Text(
-            "詳細はこちら →",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clickable { uriHandler.openUri(url) },
-        )
-    }
-    val appPackage = judgment.paymentMethod.appPackage
-    if (appPackage.isNotBlank()) {
-        Text(
-            "${judgment.paymentMethod.name}アプリを開く →",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clickable {
-                val intent = context.packageManager.getLaunchIntentForPackage(appPackage)
-                if (intent != null) {
-                    context.startActivity(intent)
-                } else {
-                    uriHandler.openUri("https://play.google.com/store/apps/details?id=$appPackage")
-                }
-            },
-        )
     }
 }
 

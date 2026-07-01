@@ -8,7 +8,7 @@
         "card_name": "三井住友カード",
         "brand": "Visa",
         "effective_rate_default": 7.0,
-        "point_multiplier": { "label": "ウエル活利用時の還元率を表示", "factor": 1.5, "color": "#00A0E9" },
+        "point_multiplier": { "label": "ウエル活利用時の還元率を表示", "factor": 1.5, "color": "#00A0E9", "badge_label": "ウエル活利用可", "applied_note": "還元率はウエル活利用時の実質還元率" },
         "notes": [
           "Visaブランドなので Google Pay / Samsung Wallet のスマホタッチ決済も利用可(Mastercard制限の影響なし)",
           "Oliveフレキシブルペイではない前提のため8%ではなく7%を既定値とする"

@@ -167,8 +167,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                 )
                 selectedTab == AppTab.CAMPAIGNS && state.selectedCampaignGroup != null -> {
                     val group = state.selectedCampaignGroup!!
-                    val first = group.first()
-                    val title = campaignGroupDisplayTitle(first, state.merchantNames)
+                    val title = campaignGroupDisplayTitle(group.first().campaign, state.merchantNames)
                     TopAppBar(
                         title = { Text(title) },
                         navigationIcon = {
@@ -293,7 +292,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     val selectedGroup = state.selectedCampaignGroup
                     if (selectedGroup != null) {
                         CampaignDetail(
-                            campaigns = selectedGroup,
+                            judgments = selectedGroup,
                             onBack = viewModel::onCloseCampaignDetail,
                         )
                     } else {

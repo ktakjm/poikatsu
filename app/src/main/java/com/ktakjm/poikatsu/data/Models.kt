@@ -180,8 +180,8 @@ data class CampaignsFile(
 
 /**
  * ポイント価値の倍率(例: 三井住友カードの V ポイントはウエル活で 1.5 倍価値)。
- * 設定画面でこのカードに「ウエル活利用時の還元率を表示」チェックを出すかどうかと、
- * ON 時に掛ける係数を担う。label/factor をデータ側に持たせ UI に文言をハードコードしない。
+ * 設定画面でこのカードに表示するチェック(label)、判定カードに出すバッジ(badgeLabel)・
+ * 適用時注記(appliedNote)をデータ側に持たせ、UI に特定施策名をハードコードしない。
  */
 @Serializable
 data class PointMultiplier(
@@ -189,6 +189,8 @@ data class PointMultiplier(
     val factor: Double,
     /** バッジ等に使う識別色(例: ウエルシアのコーポレートカラー)。"#RRGGBB" 形式 */
     val color: String? = null,
+    @SerialName("badge_label") val badgeLabel: String = "",
+    @SerialName("applied_note") val appliedNote: String = "",
 )
 
 @Serializable

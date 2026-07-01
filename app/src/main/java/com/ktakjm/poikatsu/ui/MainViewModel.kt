@@ -23,9 +23,8 @@ import com.ktakjm.poikatsu.data.RegisteredMunicipality
 import com.ktakjm.poikatsu.data.SettingsRepository
 import com.ktakjm.poikatsu.data.ThemeMode
 import com.ktakjm.poikatsu.domain.BestPaymentOption
-import com.ktakjm.poikatsu.domain.Judgment
+import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.JudgmentEngine
-import com.ktakjm.poikatsu.domain.QrJudgment
 import com.ktakjm.poikatsu.domain.StoreVerdict
 import com.ktakjm.poikatsu.util.GeoMath
 import java.io.File
@@ -77,8 +76,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     data class Selection(
         val merchant: Merchant,
-        val judgments: List<Judgment>,
-        val qrJudgments: List<QrJudgment> = emptyList(),
+        val judgments: List<CampaignJudgment>,
         val bestOption: BestPaymentOption? = null,
         /** 公式が対象/対象外を言い切っているチェーンか。true のときだけ対象判定画面へ遷移できる */
         val canCheckStore: Boolean = false,
@@ -203,7 +201,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val timeLimitedActive: List<Campaign> = emptyList(),
         val timeLimitedUpcoming: List<Campaign> = emptyList(),
         val merchantNames: Map<String, String> = emptyMap(),
-        val selectedCampaignGroup: List<Campaign>? = null,
+        val selectedCampaignGroup: List<CampaignJudgment>? = null,
         // --- 設定値(DataStore 由来) ---
         val themeMode: ThemeMode = ThemeMode.SYSTEM,
         val dynamicColor: Boolean = true,
@@ -342,8 +340,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val result = judgeAll(merchant, LocalDate.now(), enabledQrIds())
         return Selection(
             merchant = merchant,
-            judgments = result.cardJudgments,
-            qrJudgments = result.qrJudgments,
+            judgments = result.judgments,
             bestOption = result.bestOption,
             canCheckStore = canCheckStore(merchant),
             storeNameHint = storeNameHint,
@@ -356,11 +353,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         search(query, categories).mapNotNull { merchant ->
             val today = LocalDate.now()
             val result = judgeAll(merchant, today, enabledQrIds())
-            if (result.cardJudgments.isEmpty() && result.qrJudgments.isEmpty()) return@mapNotNull null
-            val allCampaigns = result.cardJudgments.map { it.campaign } + result.qrJudgments.map { it.campaign }
+            if (result.judgments.isEmpty()) return@mapNotNull null
+            val allCampaigns = result.judgments.map { it.campaign }
             val bestRate = result.bestOption?.rate
-                ?: result.cardJudgments.firstOrNull()?.effectiveRate
-                ?: result.qrJudgments.firstOrNull()?.effectiveRate
+                ?: result.judgments.firstOrNull()?.effectiveRate
                 ?: 0.0
             SearchResult(
                 merchant = merchant,
@@ -592,16 +588,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (engine.isFacilityTenant(merchant.name, poi.displayName)) return@mapNotNull null
                 if (engine.isExcludedStore(merchant, poi.displayName)) return@mapNotNull null
                 val result = engine.judgeAll(merchant, today, qrIds)
-                if (result.cardJudgments.isEmpty() && result.qrJudgments.isEmpty()) return@mapNotNull null
-                val allCampaigns = result.cardJudgments.map { it.campaign } + result.qrJudgments.map { it.campaign }
+                if (result.judgments.isEmpty()) return@mapNotNull null
+                val allCampaigns = result.judgments.map { it.campaign }
                 NearbyPlace(
                     name = poi.displayName,
                     distanceMeters = GeoMath.distanceMeters(originLat, originLon, poi.lat, poi.lon),
                     distanceFromCenter = GeoMath.distanceMeters(centerLat, centerLon, poi.lat, poi.lon),
                     merchant = merchant,
                     bestRate = result.bestOption?.rate
-                        ?: result.cardJudgments.firstOrNull()?.effectiveRate
-                        ?: result.qrJudgments.firstOrNull()?.effectiveRate,
+                        ?: result.judgments.firstOrNull()?.effectiveRate,
                     lat = poi.lat,
                     lon = poi.lon,
                     brandColors = allCampaigns.mapNotNull { it.brandColor }.distinct(),
@@ -1044,7 +1039,41 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onSelectCampaignGroup(group: List<Campaign>) {
-        _state.update { it.copy(selectedCampaignGroup = group) }
+        val e = engine ?: return
+        val today = LocalDate.now()
+        val qrMap = lastLoaded?.data?.profile?.qrPayments?.associateBy { it.id }.orEmpty()
+        val judgments = group.map { campaign ->
+            val qr = campaign.paymentMethodId?.let { qrMap[it] }
+            CampaignJudgment(
+                campaign = campaign,
+                badgeLabel = qr?.name ?: campaign.issuer,
+                brandColor = campaign.brandColor,
+                benefitType = com.ktakjm.poikatsu.domain.BenefitType.fromString(campaign.benefitType),
+                effectiveRate = campaign.rateBase,
+                discountAmount = campaign.discountAmount,
+                daysRemaining = e.daysRemaining(campaign, today),
+                storeNote = null,
+                exclusionNote = null,
+                storeListUrl = null,
+                warnings = buildList {
+                    val days = e.daysRemaining(campaign, today)
+                    if (days != null && days <= 3) add("残り${days}日")
+                },
+                minPurchase = campaign.minPurchase,
+                usageLimitText = campaign.usageLimitNote
+                    ?: campaign.usageLimit?.let { "お一人様${it}回まで" },
+                perTransactionCap = campaign.perTransactionCap,
+                periodTotalCap = campaign.periodTotalCap,
+                capNote = campaign.capNote,
+                conditions = campaign.conditions,
+                storeSearchUrl = if (campaign.storeScope == "external") campaign.storeSearchUrl else null,
+                detailUrl = campaign.detailUrl,
+                appPackage = qr?.appPackage?.ifBlank { null },
+                pointMultiplier = null,
+                welcatsuApplied = false,
+            )
+        }
+        _state.update { it.copy(selectedCampaignGroup = judgments) }
     }
 
     fun onCloseCampaignDetail() {

@@ -67,23 +67,23 @@ class JudgmentEngineTest {
     @Test
     fun `セブンイレブンは両施策の対象`() {
         val merchant = data.merchants.first { it.id == "seven_eleven" }
-        val judgments = engine.judge(merchant, today)
+        val judgments = engine.judgeCards(merchant, today)
         assertEquals(2, judgments.size)
     }
 
     @Test
     fun `マクドナルドは三井住友のみ対象`() {
         val merchant = data.merchants.first { it.id == "mcdonalds" }
-        val judgments = engine.judge(merchant, today)
+        val judgments = engine.judgeCards(merchant, today)
         assertEquals(listOf("smcc_combini_restaurant"), judgments.map { it.campaign.id })
     }
 
     @Test
     fun `MUFGはプロファイル前提で還元率7パーセント・警告なし`() {
         val merchant = data.merchants.first { it.id == "sushiro" }
-        val judgment = engine.judge(merchant, today).single()
+        val judgment = engine.judgeCards(merchant, today).single()
         assertEquals("mufg_point_up_program", judgment.campaign.id)
-        assertEquals(7.0, judgment.effectiveRate, 0.001)
+        assertEquals(7.0, judgment.effectiveRate!!, 0.001)
         assertTrue(judgment.warnings.isEmpty())
     }
 
@@ -264,16 +264,16 @@ class JudgmentEngineTest {
     fun `Amex は amex_excluded の店舗で MUFG が対象外になる`() {
         val kurazushi = data.merchants.first { it.id == "kurazushi" } // amex_excluded = true
         val amexEngine = engineWithProfile(profileWithMufgBrand("Amex"))
-        assertTrue(amexEngine.judge(kurazushi, today).none { it.campaign.id == "mufg_point_up_program" })
+        assertTrue(amexEngine.judgeCards(kurazushi, today).none { it.campaign.id == "mufg_point_up_program" })
         // 非 Amex(既定プロファイル=Mastercard)では従来どおり MUFG が出る
-        assertTrue(engine.judge(kurazushi, today).any { it.campaign.id == "mufg_point_up_program" })
+        assertTrue(engine.judgeCards(kurazushi, today).any { it.campaign.id == "mufg_point_up_program" })
     }
 
     @Test
     fun `Amex でも amex_excluded でない店舗では MUFG が残る`() {
         val sevenEleven = data.merchants.first { it.id == "seven_eleven" } // amex_excluded = false
         val amexEngine = engineWithProfile(profileWithMufgBrand("Amex"))
-        assertTrue(amexEngine.judge(sevenEleven, today).any { it.campaign.id == "mufg_point_up_program" })
+        assertTrue(amexEngine.judgeCards(sevenEleven, today).any { it.campaign.id == "mufg_point_up_program" })
     }
 
     @Test
@@ -281,9 +281,9 @@ class JudgmentEngineTest {
         val kurazushi = data.merchants.first { it.id == "kurazushi" }
         // MUFG カードを所有していない(profile から除外)ケース
         val onlySmcc = Profile(cards = data.profile.cards.filter { it.campaignId == "smcc_combini_restaurant" })
-        assertTrue(engineWithProfile(onlySmcc).judge(kurazushi, today).none { it.campaign.id == "mufg_point_up_program" })
+        assertTrue(engineWithProfile(onlySmcc).judgeCards(kurazushi, today).none { it.campaign.id == "mufg_point_up_program" })
         // どのカードも所有していなければ判定は空
-        assertTrue(engineWithProfile(Profile()).judge(kurazushi, today).isEmpty())
+        assertTrue(engineWithProfile(Profile()).judgeCards(kurazushi, today).isEmpty())
     }
 
     // ---- 期間フィルタのテスト ----
@@ -342,7 +342,7 @@ class JudgmentEngineTest {
         val campaign = campaignWithPeriod()
         val engine = periodTestEngine(campaign)
         assertEquals(CampaignStatus.ACTIVE, engine.campaignStatus(campaign, today))
-        assertEquals(1, engine.judge(testMerchant, today).size)
+        assertEquals(1, engine.judgeCards(testMerchant, today).size)
     }
 
     @Test
@@ -350,7 +350,7 @@ class JudgmentEngineTest {
         val campaign = campaignWithPeriod(start = "2026-06-01", end = "2026-07-31")
         val engine = periodTestEngine(campaign)
         assertEquals(CampaignStatus.ACTIVE, engine.campaignStatus(campaign, today))
-        assertEquals(1, engine.judge(testMerchant, today).size)
+        assertEquals(1, engine.judgeCards(testMerchant, today).size)
     }
 
     @Test
@@ -358,7 +358,7 @@ class JudgmentEngineTest {
         val campaign = campaignWithPeriod(start = "2026-05-01", end = "2026-06-15")
         val engine = periodTestEngine(campaign)
         assertEquals(CampaignStatus.EXPIRED, engine.campaignStatus(campaign, today))
-        assertTrue(engine.judge(testMerchant, today).isEmpty())
+        assertTrue(engine.judgeCards(testMerchant, today).isEmpty())
     }
 
     @Test
@@ -367,7 +367,7 @@ class JudgmentEngineTest {
         val engine = periodTestEngine(campaign)
         assertEquals(CampaignStatus.UPCOMING, engine.campaignStatus(campaign, today))
         // judge からはフィルタされる(探す/近くタブには出さない)
-        assertTrue(engine.judge(testMerchant, today).isEmpty())
+        assertTrue(engine.judgeCards(testMerchant, today).isEmpty())
         // upcomingCampaigns には含まれる
         assertEquals(1, engine.upcomingCampaigns(today).size)
     }
@@ -403,7 +403,7 @@ class JudgmentEngineTest {
     fun `残り3日以下で警告が出る`() {
         val campaign = campaignWithPeriod(start = "2026-06-01", end = "2026-06-30")
         val engine = periodTestEngine(campaign)
-        val judgments = engine.judge(testMerchant, LocalDate.of(2026, 6, 28))
+        val judgments = engine.judgeCards(testMerchant, LocalDate.of(2026, 6, 28))
         assertTrue(judgments.first().warnings.any { it.contains("残り") })
     }
 
@@ -411,7 +411,7 @@ class JudgmentEngineTest {
     fun `残り4日以上では警告なし`() {
         val campaign = campaignWithPeriod(start = "2026-06-01", end = "2026-07-31")
         val engine = periodTestEngine(campaign)
-        val judgments = engine.judge(testMerchant, today)
+        val judgments = engine.judgeCards(testMerchant, today)
         assertTrue(judgments.first().warnings.isEmpty())
     }
 
@@ -421,14 +421,14 @@ class JudgmentEngineTest {
     fun `store_scope_external は judge に含まれない`() {
         val campaign = campaignWithPeriod(storeScope = "external", type = "municipal")
         val engine = periodTestEngine(campaign)
-        assertTrue(engine.judge(testMerchant, today).isEmpty())
+        assertTrue(engine.judgeCards(testMerchant, today).isEmpty())
     }
 
     @Test
     fun `store_scope_managed は judge に含まれる`() {
         val campaign = campaignWithPeriod(storeScope = "managed")
         val engine = periodTestEngine(campaign)
-        assertEquals(1, engine.judge(testMerchant, today).size)
+        assertEquals(1, engine.judgeCards(testMerchant, today).size)
     }
 
     // ---- QR 判定のテスト ----
@@ -450,7 +450,7 @@ class JudgmentEngineTest {
         val julyToday = LocalDate.of(2026, 7, 15)
         val results = engine.judgeQr(testMerchant, julyToday, setOf("paypay"))
         assertEquals(1, results.size)
-        assertEquals("PayPay", results.first().paymentMethod.name)
+        assertEquals("PayPay", results.first().badgeLabel)
         assertEquals(20.0, results.first().effectiveRate!!, 0.001)
         assertEquals(BenefitType.REBATE, results.first().benefitType)
 
@@ -484,7 +484,7 @@ class JudgmentEngineTest {
         assertEquals(BenefitType.COUPON_FIXED, q.benefitType)
         assertEquals(100, q.discountAmount)
         assertEquals(200, q.minPurchase)
-        assertEquals(1, q.usageLimit)
+        assertEquals("お一人様1回まで", q.usageLimitText)
         assertNull(q.effectiveRate)
         assertEquals(5, q.daysRemaining)
     }
@@ -533,8 +533,7 @@ class JudgmentEngineTest {
             ),
         )
         val result = engine.judgeAll(testMerchant, today, setOf("paypay"))
-        assertEquals(1, result.cardJudgments.size)
-        assertEquals(1, result.qrJudgments.size)
+        assertEquals(2, result.judgments.size)
         assertNotNull(result.bestOption)
         assertEquals("PayPay", result.bestOption!!.method)
         assertEquals(20.0, result.bestOption!!.rate!!, 0.001)
@@ -638,8 +637,8 @@ class JudgmentEngineTest {
         val matsuya = data.merchants.first { it.id == "matsuya" }
         val julyToday = LocalDate.of(2026, 7, 10)
         val results = engine.judgeQr(matsuya, julyToday, setOf("rakuten_pay"))
-        assertTrue("松屋で楽天ペイの判定が出る", results.any { it.paymentMethod.id == "rakuten_pay" })
-        val qr = results.first { it.paymentMethod.id == "rakuten_pay" }
+        assertTrue("松屋で楽天ペイの判定が出る", results.any { it.campaign.paymentMethodId == "rakuten_pay" })
+        val qr = results.first { it.campaign.paymentMethodId == "rakuten_pay" }
         assertEquals(15.0, qr.effectiveRate!!, 0.001)
         assertEquals(800, qr.minPurchase)
     }

@@ -1,10 +1,8 @@
 package com.ktakjm.poikatsu.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -12,12 +10,10 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -27,16 +23,15 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.domain.BenefitType
+import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.ui.theme.warningColor
 import java.time.LocalDate
@@ -227,7 +222,7 @@ private fun CampaignSummaryCard(
 
 @Composable
 internal fun CampaignDetail(
-    campaigns: List<Campaign>,
+    judgments: List<CampaignJudgment>,
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
@@ -236,123 +231,8 @@ internal fun CampaignDetail(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(bottom = 16.dp),
     ) {
-        items(campaigns, key = { it.id }) { campaign ->
-            CampaignDetailCard(campaign)
-        }
-    }
-}
-
-/** 個別キャンペーン詳細カード: 探すタブの判定カードと同じヘッダーレイアウト */
-@Composable
-private fun CampaignDetailCard(campaign: Campaign) {
-    val brandColor = parseBrandColor(campaign.brandColor) ?: MaterialTheme.colorScheme.primary
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-    ) {
-        Row(Modifier.height(IntrinsicSize.Min)) {
-            Box(
-                Modifier
-                    .width(8.dp)
-                    .fillMaxHeight()
-                    .background(brandColor),
-            )
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CampaignBenefitDisplay(campaign)
-                    Spacer(Modifier.width(12.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            BrandBadge(campaign.issuer, brandColor)
-                            if (campaign.periodEnd != null) {
-                                TimeLimitedBadge()
-                            }
-                        }
-                        Text(
-                            campaign.name,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                    }
-                }
-                PeriodRow(campaign)
-                if (campaign.paymentInstruction.isNotBlank()) {
-                    Text("支払い方法: ${campaign.paymentInstruction}", style = MaterialTheme.typography.bodyMedium)
-                }
-                MinPurchaseRow(campaign.minPurchase)
-                CapRow(campaign.perTransactionCap, campaign.periodTotalCap, campaign.capNote)
-                campaign.usageLimitNote?.let {
-                    Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
-                }
-                ConditionsList(campaign.conditions, campaign.minPurchase)
-                val uriHandler = LocalUriHandler.current
-                if (campaign.storeScope == "external") {
-                    campaign.storeSearchUrl?.let { url ->
-                        Text(
-                            "対象店舗を確認 →",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.clickable { uriHandler.openUri(url) },
-                        )
-                    }
-                }
-                campaign.detailUrl?.let { url ->
-                    Text(
-                        "詳細はこちら →",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.clickable { uriHandler.openUri(url) },
-                    )
-                }
-                VerifiedDateRow(campaign.verifiedDate)
-            }
-        }
-    }
-}
-
-/** 探すタブの QrBenefitDisplay と同じレイアウト */
-@Composable
-private fun CampaignBenefitDisplay(campaign: Campaign) {
-    val type = BenefitType.fromString(campaign.benefitType)
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        when {
-            type == BenefitType.COUPON_FIXED && campaign.discountAmount != null -> {
-                Text(
-                    "${campaign.discountAmount}円",
-                    style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text("引き", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            }
-            type == BenefitType.COUPON_PERCENT && campaign.rateBase != null -> {
-                Text(
-                    "${trimRate(campaign.rateBase)}%",
-                    style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text("OFF", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            }
-            type == BenefitType.REBATE && campaign.discountAmount != null -> {
-                Text(
-                    "${campaign.discountAmount}円",
-                    style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text("還元", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            }
-            campaign.rateBase != null -> {
-                Text(
-                    "${trimRate(campaign.rateBase)}%",
-                    style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
+        items(judgments, key = { it.campaign.id }) { judgment ->
+            CampaignJudgmentCard(judgment)
         }
     }
 }
