@@ -520,7 +520,7 @@ private fun NearbyPane(
     val selectedPlace = nearby.selectedPlace
     // 同一地点の複合ピンをタップしたときの選択状態(BottomSheet でリスト表示)
     var compoundPlaces by remember { mutableStateOf<List<MainViewModel.NearbyPlace>?>(null) }
-    LaunchedEffect(selectedPlace) { compoundPlaces = null }
+    LaunchedEffect(selectedPlace) { if (selectedPlace != null) compoundPlaces = null }
     // 戻る: プレビュー → 複合リスト → 一覧 → モード閉じ の順に遡る
     BackHandler(onBack = {
         when {
@@ -616,7 +616,7 @@ private fun NearbyPane(
                         label = "${group.size}件",
                         colorHexes = group.flatMap { it.brandColors }.distinct(),
                         selected = group.any { it == selectedPlace },
-                        onClick = { compoundPlaces = group },
+                        onClick = { onClearPreview(); compoundPlaces = group },
                         groupSize = group.size,
                     ),
                 )
