@@ -116,7 +116,7 @@ poikatsu/
     │   │                   # SettingsRepository
     │   └── util/           # JapaneseText, GeoMath（純 Kotlin）
     └── test/java/com/ktakjm/poikatsu/
-        ├── JudgmentEngineTest.kt   # 実データを使った検索・判定・店舗対象判定・期間フィルタ・QR判定テスト（65 件、MunicipalitiesTest・JapaneseTextTest 含む）
+        ├── JudgmentEngineTest.kt   # 実データを使った検索・判定・店舗対象判定・期間フィルタ・QR判定テスト（72 件、MunicipalitiesTest・JapaneseTextTest 含む）
         ├── DataRepositoryTest.kt   # ロード戦略のテスト（5 件）
         └── NearbyTest.kt           # チェーン特定・YOLP/Overpass パース・密度クリップ・YolpSearchConfig 構築・距離計算のテスト（27 件）
 ```
@@ -280,7 +280,7 @@ flowchart TD
 
 ### 設定の永続化（data/SettingsRepository.kt）
 
-テーマ・データ取得・マイカード・QR 決済・自治体の設定は **DataStore Preferences**（`SettingsRepository`）に保存する。テーマ／dynamic color／自動更新は型付きキー、カード差分（`CardOverride`：所有・還元率・ブランド・ウエル活）は `campaign_id` をキーにした Map を JSON 文字列として 1 キーに格納する（キー数が可変でも Preferences のキーを増やさない）。QR 決済の有効 ID（`Set<String>`）と登録自治体（`List<RegisteredMunicipality>`）も同様に JSON 文字列として格納する。`MainViewModel` は `settings` Flow を購読し、変更のたびに **profile.json（カタログ＝既定値）へユーザー差分を重ねて**エンジンを作り直す（マージは VM 層、`JudgmentEngine` は純 Kotlin のまま）。profile.json 自体は書き換えない。テーマは描画前に必要なので `MainActivity` が `state.themeMode`/`dynamicColor` を `PoikatsuTheme` に渡す（6.1 参照）。
+テーマ・データ取得・マイカード・QR 決済・自治体の設定は **DataStore Preferences**（`SettingsRepository`）に保存する。テーマ／dynamic color／自動更新は型付きキー、カード差分（`CardOverride`：所有・還元率・ブランド・ウエル活）は `campaign_id` をキーにした Map を JSON 文字列として 1 キーに格納する（キー数が可変でも Preferences のキーを増やさない）。QR 決済の有効 ID（`Set<String>`）と登録自治体（`List<RegisteredMunicipality>`）も同様に JSON 文字列として格納する（登録自治体は保存のみで、キャンペーンタブのフィルタリングは未実装）。`MainViewModel` は `settings` Flow を購読し、変更のたびに **profile.json（カタログ＝既定値）へユーザー差分を重ねて**エンジンを作り直す（マージは VM 層、`JudgmentEngine` は純 Kotlin のまま）。profile.json 自体は書き換えない。テーマは描画前に必要なので `MainActivity` が `state.themeMode`/`dynamicColor` を `PoikatsuTheme` に渡す（6.1 参照）。
 
 ## 5. 判定エンジン（domain/JudgmentEngine.kt）
 
@@ -392,7 +392,9 @@ data class CampaignJudgment(
 
 `judgeAll(merchant, today, enabledQrIds)` は `judgeCards` + `judgeQr` を統合して `JudgmentResult`（`judgments` + `bestOption`）を返す。`bestOption` は定率（rebate/coupon_percent）で最高還元率のものを選ぶ。定額（coupon_fixed）は購入額に依存するため比較せず並列表示とする。
 
-`BenefitType`（`REBATE` / `COUPON_PERCENT` / `COUPON_FIXED`）は `benefit_type` 文字列から `BenefitType.fromString()` で変換する。rebate は後日ポイント付与（PayPay の「クーポン」含む）、coupon は即時値引き
+`BenefitType`（`REBATE` / `COUPON_PERCENT` / `COUPON_FIXED`）と `CampaignType`（`CARD_PROGRAM` / `CARD_PROMOTION` / `MUNICIPAL`）はそれぞれ `jsonValue` プロパティを持つ enum で、`fromString()` で JSON 文字列から変換する。`Campaign.campaignType` 拡張プロパティで `type` 文字列を enum に変換でき、コード中で生 String 比較を排除している。rebate は後日ポイント付与（PayPay の「クーポン」含む）、coupon は即時値引き。
+
+特典の表示ラベルは `formatBenefit(benefitType, rate, discount): BenefitLabel?` に集約されている。`BenefitLabel`（`value` + `suffix`）が 2×2 のラベル行列（`%還元` / `円還元` / `% OFF` / `円引き`）を返し、UI 層はこれを `toString()` するだけで統一的に表示できる
 
 ## 6. UI レイヤ（ui/）
 
@@ -426,7 +428,7 @@ stateDiagram-v2
 
 下部ナビ（`NavigationBar`）で対等に切り替わる **4 タブ**（探す / 近く / キャンペーン / 設定）を `selectedTab`（`AppTab` enum: `SEARCH` / `NEARBY` / `CAMPAIGNS` / `SETTINGS`）で管理する。`Detail`（判定詳細）/`StoreCheck`（店舗判定）は探す・近くタブに**重なるオーバーレイ**で、`selectedTab` を変更しないため戻ると元のタブへ復帰する（近くで選んだ店の詳細から戻れば近くに戻る）。
 
-**設定**は 4 タブの 1 つ（`AppTab.SETTINGS`）として独立した `SettingsScreen` に分離されている。設定値（`themeMode`/`dynamicColor`/`autoRefresh`/`cardSettings`/`qrPaymentSettings`/`registeredMunicipalities`）は `SettingsRepository`（DataStore）の Flow を購読して `UiState` に載せ、変更は VM の setter→DataStore へ書く（`onEach { rebuild() }` で再判定）。テーマだけは描画前にテーマ層へ渡す必要があるため、`MainActivity` で VM を生成し `state.themeMode`/`dynamicColor` を `PoikatsuTheme` に注入してから `PoikatsuApp` を包む。設定画面のセクション: 表示（テーマ・dynamic color）/ マイカード（所有・還元率・ブランド・ウエル活）/ **QR 決済**（利用中の QR 決済にチェック→判定に反映）/ **自治体**（居住地・行動圏の自治体を登録→キャンペーンタブに反映。都道府県→市区町村の 2 段ピッカー。マスタは `data/municipalities.json` から遅延ロード）/ データ（自動更新・手動更新）/ 開発者向け / このアプリ。
+**設定**は 4 タブの 1 つ（`AppTab.SETTINGS`）として独立した `SettingsScreen` に分離されている。設定値（`themeMode`/`dynamicColor`/`autoRefresh`/`cardSettings`/`qrPaymentSettings`/`registeredMunicipalities`）は `SettingsRepository`（DataStore）の Flow を購読して `UiState` に載せ、変更は VM の setter→DataStore へ書く（`onEach { rebuild() }` で再判定）。テーマだけは描画前にテーマ層へ渡す必要があるため、`MainActivity` で VM を生成し `state.themeMode`/`dynamicColor` を `PoikatsuTheme` に注入してから `PoikatsuApp` を包む。設定画面のセクション: 表示（テーマ・dynamic color）/ マイカード（所有・還元率・ブランド・ウエル活）/ **QR 決済**（利用中の QR 決済にチェック→判定に反映）/ **自治体**（居住地・行動圏の自治体を登録。都道府県→市区町村の 2 段ピッカー。マスタは `data/municipalities.json` から遅延ロード。※登録データは DataStore に保存されるが、キャンペーンタブのフィルタリングは未実装）/ データ（自動更新・手動更新）/ 開発者向け / このアプリ。
 
 戻る操作は Compose の `BackHandler` で実装。`storeCheck` 分岐は `selection` より先に評価する（両方非 null のとき対象判定画面を優先表示）。データ差し替え時（リモート更新成功時）は、表示中の `selection` / `storeCheck` があれば新データで判定を引き直す（`applyData` 内）。Selection の組み立ては `JudgmentEngine.selectionFor(merchant, hint)`（private 拡張）に集約し、判定・遷移可否・プリフィルをまとめて引く。
 
@@ -434,7 +436,7 @@ stateDiagram-v2
 
 ### 6.2 判定カード表示
 
-`CampaignJudgmentCard` は施策ごとに 1 枚の統一カード。カード決済・QR 決済・キャンペーン詳細で共用し、各フィールドの null / 空チェックだけで表示を出し分ける。左端のストライプとバッジに `brand_color` を使い、ロゴ画像なしで発行体を識別する。表示要素は「特典表示（benefitType で分岐: 率% / 円引き / % OFF / 円還元）→ バッジ（badgeLabel）→ 期間 → 支払い方法 → 店固有条件 → 警告 → 除外注記 → 公式店舗一覧リンク → 最低購入額 → 利用回数制限 → 上限 → 対象店舗確認 → 詳細リンク → アプリ起動 → ポイント倍率注記 → **情報確認日**」の順。**ポイント倍率**（`PointMultiplier`）を持つカードは、バッジの右に `badge_label`（例: 「ウエル活利用可」）を表示し、適用時は `applied_note`（例: 「還元率はウエル活利用時の実質還元率」）を末尾に注記する。文言は `PointMultiplier` のデータから取り、UI にハードコードしない。`verified_date` の表示は必須ルール（データが古くなるリスクへの対処）。
+`CampaignJudgmentCard` は施策ごとに 1 枚の統一カード。カード決済・QR 決済・キャンペーン詳細で共用し、各フィールドの null / 空チェックだけで表示を出し分ける。左端のストライプとバッジに `brand_color` を使い、ロゴ画像なしで発行体を識別する。表示要素は「特典表示（`formatBenefit()` で統一生成）→ バッジ（badgeLabel）→ 期間 → 支払い方法 → 店固有条件 → 警告 → 除外注記 → 公式店舗一覧リンク → 最低購入額 → 利用回数制限 → 上限 → 対象店舗確認 → 詳細リンク → アプリ起動 → ポイント倍率注記 → **情報確認日**」の順。**ポイント倍率**（`PointMultiplier`）を持つカードは、バッジの右に `badge_label`（例: 「ウエル活利用可」）を表示し、適用時は `applied_note`（例: 「還元率はウエル活利用時の実質還元率」）を末尾に注記する。文言は `PointMultiplier` のデータから取り、UI にハードコードしない。`verified_date` の表示は必須ルール（データが古くなるリスクへの対処）。
 
 公式リストを持つチェーン（`canCheckStore` が true）では判定詳細に「この店舗が対象か調べる →」ボタンを出し、別画面 `StoreCheckScreen` へ遷移する。同画面は店舗名入力に対し `StoreVerdictCard` で 対象（`CheckCircle`）/ 対象外（`Close`）/ 要確認（`Info`）を Material アイコン＋**トーナル面のステータスピル**（`Surface` の container/content 対：対象＝`primaryContainer`、対象外＝`errorContainer`、要確認＝`warningContainerColor()`）で表示し、断定の鮮度（`date_is_official` に応じて「公式情報の更新日」or「確認日」）を併記する。色をカード地（`surfaceVariant`）に直接乗せず container 対で出すのは、コントラスト担保のため（6.4 警告色 参照）。公式リストの無いチェーンはボタンを出さない（判定画面を意識させない）。
 
@@ -531,11 +533,11 @@ sequenceDiagram
 
 ## 8. テスト戦略
 
-`./gradlew :app:testDebugUnitTest` で全 98 テストが JVM 上で実行される（エミュレータ不要）。
+`./gradlew :app:testDebugUnitTest` で全 105 テストが JVM 上で実行される（エミュレータ不要）。
 
 | テスト | 対象 | 特徴 |
 |---|---|---|
-| `JudgmentEngineTest`（59 件）+ `MunicipalitiesTest`（3 件）+ `JapaneseTextTest`（3 件）＝計 65 件 | 検索・正規化・判定・店舗対象判定（3 状態）・近隣除外・**期間フィルタ・store_scope・QR判定・クーポン・judgeAll・BenefitType・データ検証・自治体マスタ検証** | **リポジトリ直下 `data/` の実データを読み込む**。「マック→マクドナルド」「マックスバリュは誤ヒットしない」等の振る舞いと、merchant_id 参照切れ等のデータ整合性チェックを兼ねる。アカチャンホンポの公式リストで対象/対象外/要確認の 3 状態も検証。Phase A で期間フィルタ（active/upcoming/expired・残日数警告）、store_scope フィルタ、QR 決済判定（rebate/coupon_percent/coupon_fixed）、judgeAll 統合、実データの新フィールド検証を追加。Phase E で `MunicipalitiesTest`（47 都道府県・23 区の検証、`RegisteredMunicipality` シリアライズ往復）を追加 |
+| `JudgmentEngineTest`（66 件）+ `MunicipalitiesTest`（3 件）+ `JapaneseTextTest`（3 件）＝計 72 件 | 検索・正規化・判定・店舗対象判定（3 状態）・近隣除外・**期間フィルタ・store_scope・QR判定・クーポン・judgeAll・BenefitType・formatBenefit 4象限・データ検証・自治体マスタ検証** | **リポジトリ直下 `data/` の実データを読み込む**。「マック→マクドナルド」「マックスバリュは誤ヒットしない」等の振る舞いと、merchant_id 参照切れ等のデータ整合性チェックを兼ねる。アカチャンホンポの公式リストで対象/対象外/要確認の 3 状態も検証。期間フィルタ（active/upcoming/expired・残日数警告）、store_scope フィルタ、QR 決済判定（rebate/coupon_percent/coupon_fixed）、judgeAll 統合、実データの新フィールド検証、formatBenefit 4象限網羅（%還元/円還元/% OFF/円引き）、rebate+定額判定、rate_base/discount_amount 排他制約を検証。`MunicipalitiesTest`（47 都道府県・23 区の検証、`RegisteredMunicipality` シリアライズ往復）を含む |
 | `DataRepositoryTest`（5 件） | ロード戦略 | ラムダ注入により、キャッシュあり/なし/破損、リモート成功/失敗の各経路を File システムだけで検証 |
 | `NearbyTest`（27 件） | Overpass/YOLP パース・距離計算・チェーン特定・施設テナント除外・重複排除キー・密度差クリップ・**YolpSearchConfig 構築（データ駆動化の等価性検証・gc_group スキップ・maxPages）** | 固定 JSON フィクスチャ＋実データでネットワーク非依存 |
 

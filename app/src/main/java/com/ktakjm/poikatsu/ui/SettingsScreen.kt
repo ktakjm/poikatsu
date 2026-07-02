@@ -152,7 +152,7 @@ internal fun SettingsScreen(
         // --- 自治体 ---
         SettingsSectionHeader("自治体")
         Text(
-            "居住地・行動圏の自治体を登録すると、該当するキャンペーンがキャンペーン一覧に表示されます。",
+            "居住地・行動圏の自治体を登録できます。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
