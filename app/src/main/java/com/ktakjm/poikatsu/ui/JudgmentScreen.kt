@@ -2,7 +2,6 @@ package com.ktakjm.poikatsu.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
@@ -33,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,8 +87,14 @@ internal fun JudgmentDetail(
     if (selection.canCheckStore) {
         Button(onClick = onOpenStoreCheck, modifier = Modifier.fillMaxWidth()) {
             val storeCheckLabel =
-                if (selection.displayName != null) "この店舗が対象か調べる →" else "対象店舗を調べる →"
+                if (selection.displayName != null) "この店舗が対象か調べる" else "対象店舗を調べる"
             Text(storeCheckLabel)
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
         }
         Spacer(Modifier.height(8.dp))
     }
@@ -127,7 +135,7 @@ private fun BestOptionBanner(best: BestPaymentOption) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(20.dp))
-            Text("最もお得: $benefitLabel", style = MaterialTheme.typography.titleSmall)
+            Text("最もお得：$benefitLabel", style = MaterialTheme.typography.titleSmall)
             if (best.isTimeLimited && best.daysRemaining != null) {
                 Text(
                     "残り${best.daysRemaining}日",
@@ -194,10 +202,10 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
         }
         PeriodRow(campaign)
         if (campaign.paymentInstruction.isNotBlank()) {
-            Text("支払い方法: ${campaign.paymentInstruction}", style = MaterialTheme.typography.bodyMedium)
+            Text("支払い方法：${campaign.paymentInstruction}", style = MaterialTheme.typography.bodyMedium)
         }
         judgment.storeNote?.let {
-            Text("この店の条件: $it", style = MaterialTheme.typography.bodyMedium)
+            Text("条件：$it", style = MaterialTheme.typography.bodyMedium)
         }
         judgment.warnings.forEach {
             NoticeRow(it, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
@@ -205,49 +213,29 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
         judgment.exclusionNote?.let {
             NoticeRow(it, warningContainerColor(), onWarningContainerColor())
         }
-        judgment.storeListUrl?.let { url ->
-            Text(
-                "公式の対象店舗一覧を開く →",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { uriHandler.openUri(url) },
-            )
-        }
         MinPurchaseRow(judgment.minPurchase)
         judgment.usageLimitText?.let {
             Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
         }
         CapRow(judgment.perTransactionCap, judgment.periodTotalCap, judgment.capNote)
         judgment.storeSearchUrl?.let { url ->
-            Text(
-                "対象店舗を確認 →",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { uriHandler.openUri(url) },
-            )
+            ExternalLinkButton("対象店舗を確認") { uriHandler.openUri(url) }
+        }
+        judgment.storeListUrl?.let { url ->
+            ExternalLinkButton("公式の対象店舗一覧") { uriHandler.openUri(url) }
         }
         judgment.detailUrl?.let { url ->
-            Text(
-                "詳細はこちら →",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { uriHandler.openUri(url) },
-            )
+            ExternalLinkButton("詳細を見る") { uriHandler.openUri(url) }
         }
         judgment.appPackage?.let { pkg ->
-            Text(
-                "${judgment.badgeLabel}アプリを開く →",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable {
-                    val intent = context.packageManager.getLaunchIntentForPackage(pkg)
-                    if (intent != null) {
-                        context.startActivity(intent)
-                    } else {
-                        uriHandler.openUri("https://play.google.com/store/apps/details?id=$pkg")
-                    }
-                },
-            )
+            ExternalLinkButton("${judgment.badgeLabel}アプリを開く") {
+                val intent = context.packageManager.getLaunchIntentForPackage(pkg)
+                if (intent != null) {
+                    context.startActivity(intent)
+                } else {
+                    uriHandler.openUri("https://play.google.com/store/apps/details?id=$pkg")
+                }
+            }
         }
         judgment.pointMultiplier?.takeIf { judgment.welcatsuApplied && it.appliedNote.isNotBlank() }?.let { pm ->
             Text(
@@ -301,13 +289,7 @@ private fun LocationHintNote(hint: LocationHint) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "${hint.label} →",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { uriHandler.openUri(hint.url) },
-            )
+            ExternalLinkButton(hint.label) { uriHandler.openUri(hint.url) }
         }
     }
 }
@@ -397,21 +379,32 @@ private fun StoreVerdictCard(verdict: StoreVerdict) {
             Text(reason, style = MaterialTheme.typography.bodyMedium)
             if (verdict.updatedDate.isNotBlank()) {
                 val dateLabel = if (verdict.dateIsOfficial) {
-                    "公式情報の更新日: ${verdict.updatedDate}"
+                    "公式情報の更新日：${verdict.updatedDate}"
                 } else {
-                    "公式リスト確認日: ${verdict.updatedDate}(公式に更新日記載なし)"
+                    "公式リスト確認日：${verdict.updatedDate}（公式に更新日記載なし）"
                 }
                 Text(dateLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
             }
             verdict.sourceUrl?.let { url ->
                 val uriHandler = LocalUriHandler.current
-                Text(
-                    "公式の店舗情報を開く →",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable { uriHandler.openUri(url) },
-                )
+                ExternalLinkButton("公式の店舗情報を開く") { uriHandler.openUri(url) }
             }
         }
+    }
+}
+
+@Composable
+private fun ExternalLinkButton(label: String, onClick: () -> Unit) {
+    TextButton(
+        onClick = onClick,
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.width(4.dp))
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }

@@ -53,7 +53,7 @@ internal fun dataStatusLabel(updatedAt: String, source: DataSource?): String {
         DataSource.BUNDLED -> "同梱データ(オフライン?)"
         null -> ""
     }
-    return "データ更新日: $updatedAt $sourceLabel"
+    return "データ更新日：$updatedAt $sourceLabel"
 }
 
 /**
@@ -283,7 +283,7 @@ internal fun campaignGroupDisplayTitle(first: Campaign, merchantNames: Map<Strin
 internal fun VerifiedDateRow(verifiedDate: String) {
     if (verifiedDate.isBlank()) return
     Text(
-        "情報確認日: $verifiedDate / 最新の条件は公式サイトで確認してください",
+        "情報確認日：$verifiedDate / 最新の条件は公式サイトで確認してください",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.outline,
     )
