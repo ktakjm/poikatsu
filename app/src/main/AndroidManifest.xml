@@ -9,6 +9,16 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
+    <!-- Android 11+ のパッケージ可視性制限対応。QR決済アプリ起動(JudgmentScreen)で
+         getLaunchIntentForPackage() が正しく検出できるよう、対象アプリを明示する。
+         未宣言だとインストール済みでも null が返り Play Store フォールバックに落ちる。 -->
+    <queries>
+        <package android:name="jp.ne.paypay.android.app" />
+        <package android:name="com.kddi.android.aupay" />
+        <package android:name="com.nttdocomo.android.payment" />
+        <package android:name="jp.co.rakuten.pay" />
+    </queries>
+
     <application
         android:name=".PoikatsuApplication"
         android:allowBackup="true"
