@@ -92,6 +92,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ktakjm.poikatsu.data.Merchant
+import com.ktakjm.poikatsu.domain.trimRate
 import com.ktakjm.poikatsu.util.GeoMath
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -469,7 +470,7 @@ private fun SearchResultCard(result: MainViewModel.SearchResult, onClick: () -> 
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        "${trimRate(result.bestRate)}%",
+                        "${trimRate(result.bestRate)}% 還元",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -727,7 +728,7 @@ private fun NearbyPane(
                                 trailingContent = {
                                     place.bestRate?.let {
                                         Text(
-                                            "${trimRate(it)}%",
+                                            "${trimRate(it)}% 還元",
                                             style = MaterialTheme.typography.titleMedium,
                                             color = MaterialTheme.colorScheme.primary,
                                         )
@@ -780,7 +781,7 @@ private fun NearbyPane(
                                     trailingContent = {
                                         place.bestRate?.let {
                                             Text(
-                                                "${trimRate(it)}%",
+                                                "${trimRate(it)}% 還元",
                                                 style = MaterialTheme.typography.titleMedium,
                                                 color = MaterialTheme.colorScheme.primary,
                                             )

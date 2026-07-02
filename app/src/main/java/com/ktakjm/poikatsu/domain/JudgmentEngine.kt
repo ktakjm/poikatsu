@@ -63,19 +63,45 @@ data class StoreVerdict(
     val sourceUrl: String?,
 )
 
-enum class BenefitType {
-    REBATE,
-    COUPON_PERCENT,
-    COUPON_FIXED;
+enum class BenefitType(val jsonValue: String) {
+    REBATE("rebate"),
+    COUPON_PERCENT("coupon_percent"),
+    COUPON_FIXED("coupon_fixed");
 
     companion object {
-        fun fromString(s: String): BenefitType = when (s) {
-            "coupon_percent" -> COUPON_PERCENT
-            "coupon_fixed" -> COUPON_FIXED
-            else -> REBATE
-        }
+        fun fromString(s: String): BenefitType = entries.find { it.jsonValue == s } ?: REBATE
     }
 }
+
+enum class CampaignType(val jsonValue: String) {
+    CARD_PROGRAM("card_program"),
+    CARD_PROMOTION("card_promotion"),
+    MUNICIPAL("municipal");
+
+    companion object {
+        fun fromString(s: String): CampaignType = entries.find { it.jsonValue == s } ?: CARD_PROGRAM
+    }
+}
+
+val Campaign.campaignType: CampaignType get() = CampaignType.fromString(type)
+
+data class BenefitLabel(val value: String, val suffix: String) {
+    override fun toString() = "$value$suffix"
+}
+
+fun formatBenefit(benefitType: BenefitType, rate: Double?, discount: Int?): BenefitLabel? =
+    when (benefitType) {
+        BenefitType.COUPON_FIXED -> discount?.let { BenefitLabel("${it}円", "引き") }
+        BenefitType.COUPON_PERCENT -> rate?.let { BenefitLabel("${trimRate(it)}%", " OFF") }
+        BenefitType.REBATE -> when {
+            discount != null -> BenefitLabel("${discount}円", "還元")
+            rate != null -> BenefitLabel("${trimRate(rate)}%", " 還元")
+            else -> null
+        }
+    }
+
+fun trimRate(rate: Double): String =
+    if (rate == rate.toLong().toDouble()) rate.toLong().toString() else rate.toString()
 
 enum class CampaignStatus { ACTIVE, UPCOMING, EXPIRED }
 
@@ -332,7 +358,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
         data.campaigns
             .filter { campaignStatus(it, today) == CampaignStatus.ACTIVE }
             .filter { it.storeScope == "managed" }
-            .filter { it.type == "card_program" || it.type == "card_promotion" }
+            .filter { it.campaignType != CampaignType.MUNICIPAL }
             .filter { it.paymentMethodId == null }
             .mapNotNull { campaign ->
                 val rule = campaign.ruleFor(merchant) ?: return@mapNotNull null

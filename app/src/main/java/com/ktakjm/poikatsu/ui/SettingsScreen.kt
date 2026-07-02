@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import com.ktakjm.poikatsu.BuildConfig
 import com.ktakjm.poikatsu.data.RegisteredMunicipality
 import com.ktakjm.poikatsu.data.ThemeMode
+import com.ktakjm.poikatsu.domain.trimRate
 import com.ktakjm.poikatsu.ui.theme.warningColor
 
 /**

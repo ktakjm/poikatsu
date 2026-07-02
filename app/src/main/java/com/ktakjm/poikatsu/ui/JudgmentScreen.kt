@@ -42,11 +42,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.ktakjm.poikatsu.data.LocationHint
-import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.BestPaymentOption
 import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.StoreEligibility
 import com.ktakjm.poikatsu.domain.StoreVerdict
+import com.ktakjm.poikatsu.domain.formatBenefit
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningColor
 import com.ktakjm.poikatsu.ui.theme.warningContainerColor
@@ -113,15 +113,8 @@ internal fun JudgmentDetail(
 
 @Composable
 private fun BestOptionBanner(best: BestPaymentOption) {
-    val benefitLabel = when {
-        best.benefitType == BenefitType.COUPON_FIXED && best.discountAmount != null ->
-            "${best.method} ${best.discountAmount}円引き"
-        best.benefitType == BenefitType.COUPON_PERCENT && best.rate != null ->
-            "${best.method} ${trimRate(best.rate)}% OFF"
-        best.rate != null ->
-            "${best.method} ${trimRate(best.rate)}% 還元"
-        else -> return
-    }
+    val label = formatBenefit(best.benefitType, best.rate, best.discountAmount) ?: return
+    val benefitLabel = "${best.method} $label"
     Surface(
         color = MaterialTheme.colorScheme.primaryContainer,
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -269,40 +262,18 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
 
 @Composable
 private fun BenefitDisplay(judgment: CampaignJudgment) {
+    val label = formatBenefit(judgment.benefitType, judgment.effectiveRate, judgment.discountAmount) ?: return
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        when {
-            judgment.benefitType == BenefitType.COUPON_FIXED && judgment.discountAmount != null -> {
-                Text(
-                    "${judgment.discountAmount}円",
-                    style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text("引き", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            }
-            judgment.benefitType == BenefitType.COUPON_PERCENT && judgment.effectiveRate != null -> {
-                Text(
-                    "${trimRate(judgment.effectiveRate)}%",
-                    style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text("OFF", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            }
-            judgment.benefitType == BenefitType.REBATE && judgment.discountAmount != null -> {
-                Text(
-                    "${judgment.discountAmount}円",
-                    style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text("還元", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            }
-            judgment.effectiveRate != null -> {
-                Text(
-                    "${trimRate(judgment.effectiveRate)}%",
-                    style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
+        Text(
+            label.value,
+            style = MaterialTheme.typography.displaySmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            label.suffix.trim(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }
 

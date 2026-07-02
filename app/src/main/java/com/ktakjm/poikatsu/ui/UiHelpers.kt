@@ -29,10 +29,11 @@ import androidx.compose.ui.graphics.Path
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.DataSource
 import com.ktakjm.poikatsu.domain.BenefitType
+import com.ktakjm.poikatsu.domain.CampaignType
+import com.ktakjm.poikatsu.domain.campaignType
+import com.ktakjm.poikatsu.domain.formatBenefit
+import com.ktakjm.poikatsu.domain.trimRate
 import java.time.LocalDate
-
-internal fun trimRate(rate: Double): String =
-    if (rate == rate.toLong().toDouble()) rate.toLong().toString() else rate.toString()
 
 /** "#RRGGBB" を Color に変換。形式が不正なら null */
 internal fun parseBrandColor(hex: String?): Color? {
@@ -114,20 +115,9 @@ internal fun PaddedColumn(content: @Composable ColumnScope.() -> Unit) {
 }
 
 /** Campaign の特典テキスト(rate% / 円引き / % OFF / 円還元)。検索結果カード・判定詳細で共用 */
-internal fun benefitText(campaign: Campaign): String {
-    val type = BenefitType.fromString(campaign.benefitType)
-    return when {
-        type == BenefitType.COUPON_FIXED && campaign.discountAmount != null ->
-            "${campaign.discountAmount}円引き"
-        type == BenefitType.COUPON_PERCENT && campaign.rateBase != null ->
-            "${trimRate(campaign.rateBase)}% OFF"
-        type == BenefitType.REBATE && campaign.discountAmount != null ->
-            "${campaign.discountAmount}円相当 還元"
-        campaign.rateBase != null ->
-            "${trimRate(campaign.rateBase)}% 還元"
-        else -> ""
-    }
-}
+internal fun benefitText(campaign: Campaign): String =
+    formatBenefit(BenefitType.fromString(campaign.benefitType), campaign.rateBase, campaign.discountAmount)
+        ?.toString() ?: ""
 
 /** 期間テキスト("7/1〜7/31")。常設(period null)なら null を返す */
 internal fun formatPeriod(campaign: Campaign): String? {
@@ -273,7 +263,7 @@ internal fun ConditionsList(conditions: List<String>, minPurchase: Int?) {
  * 自治体: "都道府県名 自治体名"、それ以外: merchant_rules の先頭 merchant 名(なければ campaign.name)
  */
 internal fun campaignGroupDisplayTitle(first: Campaign, merchantNames: Map<String, String>): String =
-    if (first.type == "municipal") {
+    if (first.campaignType == CampaignType.MUNICIPAL) {
         val prefecture = first.region?.prefecture ?: ""
         val name = first.region?.name ?: first.name
         if (prefecture.isNotBlank()) "$prefecture $name" else name

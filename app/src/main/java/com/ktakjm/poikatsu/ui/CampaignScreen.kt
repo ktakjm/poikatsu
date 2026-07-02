@@ -33,6 +33,9 @@ import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.CampaignStatus
+import com.ktakjm.poikatsu.domain.CampaignType
+import com.ktakjm.poikatsu.domain.campaignType
+import com.ktakjm.poikatsu.domain.formatBenefit
 import com.ktakjm.poikatsu.ui.theme.warningColor
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -76,10 +79,10 @@ internal fun CampaignPane(
 
     val filterFn: (Campaign) -> Boolean = when (filter) {
         CampaignFilter.ALL -> { _ -> true }
-        CampaignFilter.MUNICIPAL -> { c -> c.type == "municipal" }
-        CampaignFilter.NON_MUNICIPAL -> { c -> c.type != "municipal" }
-        CampaignFilter.CARD -> { c -> c.type == "card_promotion" && c.paymentMethodId == null }
-        CampaignFilter.QR -> { c -> c.paymentMethodId != null && c.type != "municipal" }
+        CampaignFilter.MUNICIPAL -> { c -> c.campaignType == CampaignType.MUNICIPAL }
+        CampaignFilter.NON_MUNICIPAL -> { c -> c.campaignType != CampaignType.MUNICIPAL }
+        CampaignFilter.CARD -> { c -> c.campaignType == CampaignType.CARD_PROMOTION && c.paymentMethodId == null }
+        CampaignFilter.QR -> { c -> c.paymentMethodId != null && c.campaignType != CampaignType.MUNICIPAL }
     }
     val activeGroups = remember(activeCampaigns, filter) {
         groupCampaignsForDisplay(activeCampaigns.filter(filterFn))
@@ -244,13 +247,7 @@ private fun campaignGroupMaxBenefit(campaigns: List<Campaign>): String? {
     val type = BenefitType.fromString(campaigns.first().benefitType)
     val maxRate = campaigns.mapNotNull { it.rateBase }.maxOrNull()
     val maxDiscount = campaigns.mapNotNull { it.discountAmount }.maxOrNull()
-    return when {
-        type == BenefitType.COUPON_FIXED && maxDiscount != null -> "${maxDiscount}円引き"
-        type == BenefitType.COUPON_PERCENT && maxRate != null -> "${trimRate(maxRate)}% OFF"
-        maxRate != null -> "${trimRate(maxRate)}%"
-        maxDiscount != null -> "${maxDiscount}円"
-        else -> null
-    }
+    return formatBenefit(type, maxRate, maxDiscount)?.toString()
 }
 
 private fun buildPeriodLabel(earliestStart: LocalDate?, latestEnd: LocalDate?): String = buildString {
@@ -273,7 +270,7 @@ private fun daysInfo(status: CampaignStatus, today: LocalDate, earliestStart: Lo
     }
 
 private fun groupCampaignsForDisplay(campaigns: List<Campaign>): List<List<Campaign>> {
-    val (municipal, others) = campaigns.partition { it.type == "municipal" }
+    val (municipal, others) = campaigns.partition { it.campaignType == CampaignType.MUNICIPAL }
     val municipalGroups = municipal
         .groupBy { it.region?.name ?: it.id }
         .values.toList()

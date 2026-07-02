@@ -13,8 +13,11 @@ import com.ktakjm.poikatsu.data.Region
 import com.ktakjm.poikatsu.data.RegisteredMunicipality
 import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.CampaignStatus
+import com.ktakjm.poikatsu.domain.CampaignType
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.StoreEligibility
+import com.ktakjm.poikatsu.domain.campaignType
+import com.ktakjm.poikatsu.domain.formatBenefit
 import com.ktakjm.poikatsu.util.JapaneseText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -291,9 +294,9 @@ class JudgmentEngineTest {
     private fun campaignWithPeriod(
         start: String? = null,
         end: String? = null,
-        type: String = "card_program",
+        type: CampaignType = CampaignType.CARD_PROGRAM,
         storeScope: String = "managed",
-        benefitType: String = "rebate",
+        benefitType: BenefitType = BenefitType.REBATE,
         paymentMethodId: String? = null,
         rateBase: Double? = 10.0,
         discountAmount: Int? = null,
@@ -311,9 +314,9 @@ class JudgmentEngineTest {
         verifiedDate = "2026-06-01",
         periodStart = start,
         periodEnd = end,
-        type = type,
+        type = type.jsonValue,
         storeScope = storeScope,
-        benefitType = benefitType,
+        benefitType = benefitType.jsonValue,
         paymentMethodId = paymentMethodId,
         discountAmount = discountAmount,
         minPurchase = minPurchase,
@@ -419,7 +422,7 @@ class JudgmentEngineTest {
 
     @Test
     fun `store_scope_external は judge に含まれない`() {
-        val campaign = campaignWithPeriod(storeScope = "external", type = "municipal")
+        val campaign = campaignWithPeriod(storeScope = "external", type = CampaignType.MUNICIPAL)
         val engine = periodTestEngine(campaign)
         assertTrue(engine.judgeCards(testMerchant, today).isEmpty())
     }
@@ -437,7 +440,7 @@ class JudgmentEngineTest {
     fun `QR決済の判定_利用中のQRのみ返る`() {
         val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
         val campaign = campaignWithPeriod(
-            type = "card_promotion",
+            type = CampaignType.CARD_PROMOTION,
             paymentMethodId = "paypay",
             rateBase = 20.0,
             start = "2026-07-01",
@@ -465,8 +468,8 @@ class JudgmentEngineTest {
     fun `クーポン割引の判定_coupon_fixed`() {
         val dpay = QrPayment(id = "dpay", name = "d払い", brandColor = "#E60033")
         val campaign = campaignWithPeriod(
-            type = "card_promotion",
-            benefitType = "coupon_fixed",
+            type = CampaignType.CARD_PROMOTION,
+            benefitType = BenefitType.COUPON_FIXED,
             paymentMethodId = "dpay",
             rateBase = null,
             discountAmount = 100,
@@ -493,8 +496,8 @@ class JudgmentEngineTest {
     fun `クーポン割引の判定_coupon_percent`() {
         val dpay = QrPayment(id = "dpay", name = "d払い", brandColor = "#E60033")
         val campaign = campaignWithPeriod(
-            type = "card_promotion",
-            benefitType = "coupon_percent",
+            type = CampaignType.CARD_PROMOTION,
+            benefitType = BenefitType.COUPON_PERCENT,
             paymentMethodId = "dpay",
             rateBase = 10.0,
             perTransactionCap = 500,
@@ -519,7 +522,7 @@ class JudgmentEngineTest {
         val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
         val cardCampaign = campaignWithPeriod().copy(id = "card1")
         val qrCampaign = campaignWithPeriod(
-            type = "card_promotion",
+            type = CampaignType.CARD_PROMOTION,
             paymentMethodId = "paypay",
             rateBase = 20.0,
         ).copy(id = "qr1")
@@ -544,7 +547,7 @@ class JudgmentEngineTest {
         val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
         val campaign5 = campaignWithPeriod(rateBase = 5.0).copy(id = "c5")
         val campaign20 = campaignWithPeriod(
-            type = "card_promotion",
+            type = CampaignType.CARD_PROMOTION,
             paymentMethodId = "paypay",
             rateBase = 20.0,
         ).copy(id = "c20")
@@ -562,7 +565,7 @@ class JudgmentEngineTest {
         assertEquals(20.0, result.bestOption!!.rate!!, 0.001)
     }
 
-    // ---- BenefitType のテスト ----
+    // ---- BenefitType / CampaignType のテスト ----
 
     @Test
     fun `BenefitType の文字列変換`() {
@@ -572,12 +575,78 @@ class JudgmentEngineTest {
         assertEquals(BenefitType.REBATE, BenefitType.fromString("unknown"))
     }
 
+    @Test
+    fun `CampaignType の文字列変換`() {
+        assertEquals(CampaignType.CARD_PROGRAM, CampaignType.fromString("card_program"))
+        assertEquals(CampaignType.CARD_PROMOTION, CampaignType.fromString("card_promotion"))
+        assertEquals(CampaignType.MUNICIPAL, CampaignType.fromString("municipal"))
+        assertEquals(CampaignType.CARD_PROGRAM, CampaignType.fromString("unknown"))
+    }
+
+    // ---- formatBenefit のテスト ----
+
+    @Test
+    fun `formatBenefit_4象限の網羅`() {
+        assertEquals("20% 還元", formatBenefit(BenefitType.REBATE, 20.0, null).toString())
+        assertEquals("500円還元", formatBenefit(BenefitType.REBATE, null, 500).toString())
+        assertEquals("10% OFF", formatBenefit(BenefitType.COUPON_PERCENT, 10.0, null).toString())
+        assertEquals("300円引き", formatBenefit(BenefitType.COUPON_FIXED, null, 300).toString())
+    }
+
+    @Test
+    fun `formatBenefit_rebate定額は円還元`() {
+        val label = formatBenefit(BenefitType.REBATE, null, 500)
+        assertNotNull(label)
+        assertEquals("500円", label!!.value)
+        assertEquals("還元", label.suffix)
+        assertEquals("500円還元", label.toString())
+    }
+
+    @Test
+    fun `formatBenefit_両方nullならnull`() {
+        assertNull(formatBenefit(BenefitType.REBATE, null, null))
+        assertNull(formatBenefit(BenefitType.COUPON_PERCENT, null, null))
+        assertNull(formatBenefit(BenefitType.COUPON_FIXED, null, null))
+    }
+
+    @Test
+    fun `formatBenefit_rebate両方ありならdiscountを優先`() {
+        val label = formatBenefit(BenefitType.REBATE, 10.0, 500)
+        assertEquals("500円還元", label.toString())
+    }
+
+    // ---- rebate+定額の判定テスト ----
+
+    @Test
+    fun `rebate定額の判定_discountAmountで判定結果が出る`() {
+        val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
+        val campaign = campaignWithPeriod(
+            type = CampaignType.CARD_PROMOTION,
+            benefitType = BenefitType.REBATE,
+            paymentMethodId = "paypay",
+            rateBase = null,
+            discountAmount = 500,
+            start = "2026-07-01",
+            end = "2026-07-31",
+        )
+        val profile = Profile(qrPayments = listOf(paypay))
+        val engine = periodTestEngine(campaign, profile)
+        val julyToday = LocalDate.of(2026, 7, 15)
+        val results = engine.judgeQr(testMerchant, julyToday, setOf("paypay"))
+        assertEquals(1, results.size)
+        val q = results.first()
+        assertEquals(BenefitType.REBATE, q.benefitType)
+        assertEquals(500, q.discountAmount)
+        assertNull(q.effectiveRate)
+        assertEquals("500円還元", formatBenefit(q.benefitType, q.effectiveRate, q.discountAmount).toString())
+    }
+
     // ---- 実データの新フィールド検証 ----
 
     @Test
     fun `実データ_各施策のtype_benefitType_storeScopeが有効な値`() {
-        val validTypes = setOf("card_program", "card_promotion", "municipal")
-        val validBenefitTypes = setOf("rebate", "coupon_percent", "coupon_fixed")
+        val validTypes = CampaignType.entries.map { it.jsonValue }.toSet()
+        val validBenefitTypes = BenefitType.entries.map { it.jsonValue }.toSet()
         val validScopes = setOf("managed", "external")
         data.campaigns.forEach { c ->
             assertTrue("${c.id}: invalid type '${c.type}'", c.type in validTypes)
@@ -587,8 +656,20 @@ class JudgmentEngineTest {
     }
 
     @Test
+    fun `実データ_rate_baseとdiscount_amountはちょうど一方がnon-null`() {
+        data.campaigns.forEach { c ->
+            val hasRate = c.rateBase != null
+            val hasDiscount = c.discountAmount != null
+            assertTrue(
+                "${c.id}: rate_base(${c.rateBase}) と discount_amount(${c.discountAmount}) はちょうど一方が non-null",
+                hasRate xor hasDiscount,
+            )
+        }
+    }
+
+    @Test
     fun `実データ_常設施策はcard_program_managed`() {
-        data.campaigns.filter { it.type == "card_program" }.forEach { c ->
+        data.campaigns.filter { it.campaignType == CampaignType.CARD_PROGRAM }.forEach { c ->
             assertTrue("${c.id}: card_program should be managed", c.storeScope == "managed")
             assertNull("${c.id}: card_program should not have period_end", c.periodEnd)
         }
@@ -596,7 +677,7 @@ class JudgmentEngineTest {
 
     @Test
     fun `実データ_自治体施策はmunicipal_external`() {
-        val municipal = data.campaigns.filter { it.type == "municipal" }
+        val municipal = data.campaigns.filter { it.campaignType == CampaignType.MUNICIPAL }
         assertTrue("自治体施策が1件以上存在する", municipal.isNotEmpty())
         municipal.forEach { c ->
             assertTrue("${c.id}: municipal should be external", c.storeScope == "external")
@@ -610,7 +691,7 @@ class JudgmentEngineTest {
 
     @Test
     fun `実データ_同一自治体の複数決済手段がマージ可能`() {
-        val municipal = data.campaigns.filter { it.type == "municipal" }
+        val municipal = data.campaigns.filter { it.campaignType == CampaignType.MUNICIPAL }
         val grouped = municipal.groupBy { it.region?.name }
         val multiProvider = grouped.filter { it.value.size > 1 }
         assertTrue("複数決済手段の自治体施策が存在する", multiProvider.isNotEmpty())
@@ -622,7 +703,7 @@ class JudgmentEngineTest {
 
     @Test
     fun `実データ_card_promotionは期間とmerchant_rulesを持つ`() {
-        val promotions = data.campaigns.filter { it.type == "card_promotion" }
+        val promotions = data.campaigns.filter { it.campaignType == CampaignType.CARD_PROMOTION }
         assertTrue("card_promotion が1件以上存在する", promotions.isNotEmpty())
         promotions.forEach { c ->
             assertTrue("${c.id}: card_promotion should be managed", c.storeScope == "managed")
@@ -646,15 +727,15 @@ class JudgmentEngineTest {
     @Test
     fun `実データ_キャンペーンタブ用_6月30日にactiveとupcomingが存在する`() {
         val june30 = LocalDate.of(2026, 6, 30)
-        val active = engine.activeCampaigns(june30).filter { it.type != "card_program" }
-        val upcoming = engine.upcomingCampaigns(june30).filter { it.type != "card_program" }
+        val active = engine.activeCampaigns(june30).filter { it.campaignType != CampaignType.CARD_PROGRAM }
+        val upcoming = engine.upcomingCampaigns(june30).filter { it.campaignType != CampaignType.CARD_PROGRAM }
         assertTrue("6/30にactiveまたはupcomingが存在する", active.isNotEmpty() || upcoming.isNotEmpty())
     }
 
     @Test
     fun `実データ_キャンペーンタブ用_7月1日にactive campaignsが存在する`() {
         val july1 = LocalDate.of(2026, 7, 1)
-        val timeLimited = engine.activeCampaigns(july1).filter { it.type != "card_program" }
+        val timeLimited = engine.activeCampaigns(july1).filter { it.campaignType != CampaignType.CARD_PROGRAM }
         assertTrue("time-limited active not empty on 7/1: ${timeLimited.map { it.id }}", timeLimited.isNotEmpty())
     }
 
@@ -664,7 +745,7 @@ class JudgmentEngineTest {
         val noQrData = data.copy(profile = Profile(cards = noQrProfile.cards))
         val noQrEngine = JudgmentEngine(noQrData)
         val june30 = LocalDate.of(2026, 6, 30)
-        val upcoming = noQrEngine.upcomingCampaigns(june30).filter { it.type != "card_program" }
+        val upcoming = noQrEngine.upcomingCampaigns(june30).filter { it.campaignType != CampaignType.CARD_PROGRAM }
         assertTrue("upcoming should work without QR payments: ${upcoming.map { it.id }}", upcoming.isNotEmpty())
     }
 

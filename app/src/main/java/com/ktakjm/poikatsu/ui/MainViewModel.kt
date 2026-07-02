@@ -24,8 +24,10 @@ import com.ktakjm.poikatsu.data.SettingsRepository
 import com.ktakjm.poikatsu.data.ThemeMode
 import com.ktakjm.poikatsu.domain.BestPaymentOption
 import com.ktakjm.poikatsu.domain.CampaignJudgment
+import com.ktakjm.poikatsu.domain.CampaignType
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.StoreVerdict
+import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.util.GeoMath
 import java.io.File
 import java.time.LocalDate
@@ -401,9 +403,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
         val today = LocalDate.now()
         val timeLimitedActive = newEngine.activeCampaigns(today)
-            .filter { it.type != "card_program" }
+            .filter { it.campaignType != CampaignType.CARD_PROGRAM }
         val timeLimitedUpcoming = newEngine.upcomingCampaigns(today)
-            .filter { it.type != "card_program" }
+            .filter { it.campaignType != CampaignType.CARD_PROGRAM }
 
         // 設定画面「マイカード」カタログ: 未所有カードも含む全候補 + 現在の上書き値
         val cardSettings = baseCards.map { card ->
