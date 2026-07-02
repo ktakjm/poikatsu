@@ -93,13 +93,6 @@ data class MerchantsFile(
     val merchants: List<Merchant> = emptyList(),
 )
 
-@Serializable
-data class RateBreakdown(
-    val group: String = "",
-    val condition: String,
-    val rate: Double,
-)
-
 /**
  * 公式が対象/対象外を店舗名で言い切っているリスト。これがある merchant_rule だけ、
  * 別画面で店舗名を入力して判定する。
@@ -143,17 +136,10 @@ data class Campaign(
     val name: String,
     @SerialName("payment_instruction") val paymentInstruction: String = "",
     @SerialName("rate_base") val rateBase: Double? = null,
-    @SerialName("rate_note") val rateNote: String = "",
-    @SerialName("entry_required") val entryRequired: Boolean = false,
     @SerialName("period_start") val periodStart: String? = null,
     @SerialName("period_end") val periodEnd: String? = null,
-    @SerialName("eligible_cards") val eligibleCards: List<String> = emptyList(),
-    @SerialName("ineligible_cards") val ineligibleCards: List<String> = emptyList(),
     val conditions: List<String> = emptyList(),
-    @SerialName("rate_breakdown") val rateBreakdown: List<RateBreakdown> = emptyList(),
-    @SerialName("global_exclusions") val globalExclusions: List<String> = emptyList(),
     @SerialName("merchant_rules") val merchantRules: List<MerchantRule> = emptyList(),
-    val sources: List<String> = emptyList(),
     @SerialName("verified_date") val verifiedDate: String = "",
     val type: String = "card_program",
     @SerialName("benefit_type") val benefitType: String = "rebate",
@@ -202,7 +188,6 @@ data class ProfileCard(
     @SerialName("point_multiplier") val pointMultiplier: PointMultiplier? = null,
     /** 実行時フラグ: ウエル活(×factor)を適用済みか。VM のマージで設定し JSON には現れない */
     @Transient val welcatsuApplied: Boolean = false,
-    val notes: List<String> = emptyList(),
 )
 
 @Serializable

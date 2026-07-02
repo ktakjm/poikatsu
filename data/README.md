@@ -14,23 +14,23 @@
 ### campaigns.json
 
 - `type` — 施策種別。判定エンジン・UI の分岐に使う:
-  - `"card_program"`: 常設カードプログラム(既存の SMCC/MUFG)
-  - `"card_promotion"`: カード/QR 会社の期間限定(特定チェーン対象)
-  - `"municipal"`: 自治体施策(店舗データなし)
+  - `"card_program"`: 常設カードプログラム(既存の SMCC/MUFG)。`merchant_rules` で管理、「探す」「近く」タブに表示
+  - `"card_promotion"`: カード/QR 会社の期間限定(特定チェーン対象)。`merchant_rules` で管理、「探す」「近く」タブに表示
+  - `"municipal"`: 自治体施策(店舗データなし)。キャンペーンタブにのみ表示(`detail_url`/`store_search_url` で公式ページへリンク)
 - `benefit_type` — 特典の形態。省略時は `"rebate"`:
   - `"rebate"`: ポイント還元(後日ポイント付与)。PayPay の「クーポン」も実態は後日ポイント付与のため rebate に分類
   - `"coupon_percent"`: 即時割引(定率)。`rate_base` が割引率(%)
   - `"coupon_fixed"`: 即時割引(定額)。`discount_amount` が割引額(円)
 - `store_scope` — 店舗データの有無:
-  - `"managed"`: `merchant_rules` で管理(card_program / card_promotion)。「探す」「近く」タブに表示
-  - `"external"`: 外部参照のみ(municipal)。キャンペーンタブにのみ表示
+  - `"managed"`: `merchant_rules` で管理。「探す」「近く」タブに表示
+  - `"external"`: 外部参照のみ。キャンペーンタブにのみ表示
 - `payment_method_id` — QR 決済の識別子(`profile.json` の `qr_payments.id` と対応)。カード施策は null
 - `rate_base` — 定率(rebate/coupon_percent)の場合の率(%)。定額の場合は null。常設カード施策では現実的な基準還元率
 - `discount_amount` — 定額(rebate 固定額/coupon_fixed)の場合の金額(円)。定率の場合は null
   - **`rate_base` と `discount_amount` は排他(どちらか一方が non-null)**
 - `per_transaction_cap` — 1 回あたりの付与/割引上限(円相当)。null = 上限なし
 - `period_total_cap` — 期間合計の付与/割引上限(円相当)。null = 上限なし
-- `cap_note` — 上限の人間向け補足（全タイプ共通。旧 `monthly_cap_note` を統合）
+- `cap_note` — 上限の但し書き（数値で表せない補足専用）。`per_transaction_cap` / `period_total_cap` と重複する情報は書かない（UI で数値から自動生成する）
 - `min_purchase` — 適用条件の最低購入額(円)。例: 200 →「200 円以上の決済で」
 - `usage_limit` — 利用回数上限。null = 期間中無制限、1 = 1 回限り
 - `usage_limit_note` — 利用条件の人間向け補足
@@ -38,8 +38,6 @@
 - `detail_url` — 施策の詳細ページ URL（全タイプ共通。ユーザーに「詳細はこちら」として案内する先）
 - `store_search_url` — 対象店舗検索ページ URL(PayPay 等の公式)
 - `period_start` / `period_end` — 施策期間(ISO 8601 日付)。null = 常設
-- `rate_base` — 現実的な基準還元率。判定画面で主表示する。理論上の最大還元率(家族ポイント等の積み上げ)は「キリがなく本質から外れる」ため持たない。
-- `entry_required` — エントリー必須か(施策メタデータ)。MUFG はエントリー+三菱UFJ銀行口座がないと 0.5% に落ちる。**還元率はユーザーが公式アプリの実効値を手入力する方針のため、現在この値による警告は出していない**(将来の汎用「要エントリー」表示の余地として残す)。
 - `merchant_rules[].note` — その店でのみ成立する条件(例: スタバはモバイルオーダーのみ)。
 - `merchant_rules[].exclusion_note` — 対象外になるケースの説明文(人間向け)。「一部対象外店舗があります」程度の但し書きとして判定詳細に表示する。**公式が店舗単位で対象/対象外を言い切っていない情報(「例: ○○店」レベルの例示)はここに文章で書くにとどめ、`official_store_list` には入れない**。
 - `merchant_rules[].store_list_url` — 「一部店舗のみ対象」のチェーン(サイゼリヤ・KFC等)で、公式の対象店舗一覧へのリンク。判定詳細から開ける。

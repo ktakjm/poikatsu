@@ -1,6 +1,6 @@
 {
-  "schema_version": 2,
-  "updated_at": "2026-06-30",
+  "schema_version": 3,
+  "updated_at": "2026-07-03",
   "campaigns": [
     {
       "id": "smcc_combini_restaurant",
@@ -12,31 +12,19 @@
       "name": "対象のコンビニ・飲食店で最大8%還元",
       "payment_instruction": "スマホのVisaタッチ決済 / Mastercardタッチ決済、または対象チェーンのモバイルオーダーで支払う",
       "rate_base": 7.0,
-      "rate_note": "三井住友カード(NL)・ゴールド(NL)等は7%(通常0.5%+加算6.5%)。Oliveフレキシブルペイのクレジットモードは2026年2月利用分から8%。Oliveデビットモードは1.5%(プラチナプリファード/Visa Infiniteデビットは2%)",
-      "entry_required": false,
       "period_start": null,
       "period_end": null,
       "cap_note": "公式に月間ポイント上限の記載なし。ただし原則1万円超(店舗により異なる)はタッチ決済にならずカード差し込みとなり、その分は加算対象外",
       "detail_url": "https://www.smbc-card.com/nyukai/merit/proper_p5.jsp",
-      "eligible_cards": [
-        "三井住友カード(NL)",
-        "三井住友カード ゴールド(NL)",
-        "Oliveフレキシブルペイ各種",
-        "プラチナプリファード",
-        "プロミスVisaカード ほか公式リスト掲載カード(家族カード含む)"
-      ],
-      "ineligible_cards": ["三井住友カード ビジネスオーナーズ(一般・ゴールド)"],
       "conditions": [
         "対象になるのはスマホのタッチ決済とモバイルオーダーのみ(2025年12月利用分から)。カード現物のタッチ決済・iD・ICチップ差し込み・磁気は対象外",
         "セルフレジで「Apple Pay」ボタンを選ぶとiD払いになり対象外。「クレジットカード」を選んでからスマホをタッチする",
         "Google Pay / Samsung WalletではMastercardタッチ決済は使えない(Visaのみ)。Apple Watchは対象",
         "モバイルオーダー対象はマクドナルド・モスバーガー・KFC・吉野家・すき家・スターバックスの6チェーン",
         "楽天ペイ・PayPay経由の支払い、スターバックスカードへのチャージは対象外",
-        "事前エントリー不要。加算ポイントは利用月の原則3ヶ月以内に付与"
-      ],
-      "global_exclusions": [
+        "事前エントリー不要。加算ポイントは利用月の原則3ヶ月以内に付与",
         "商業施設内(空港・遊園地・スタジアム・駅ビル等)の一部店舗は対象外",
-        "デリバリー利用は対象外(モス・KFCの自社配達モバイルオーダーは対象)"
+        "デリバリー利用は対象外(モスバーガー・KFCの自社配達モバイルオーダーは対象)"
       ],
       "merchant_rules": [
         { "merchant_id": "seven_eleven", "note": null, "exclusion_note": "スマホレジ(セブンスマホレジ)は対象外" },
@@ -75,11 +63,6 @@
         { "merchant_id": "hamazushi", "note": null, "exclusion_note": null },
         { "merchant_id": "kappazushi", "note": null, "exclusion_note": null }
       ],
-      "sources": [
-        "https://www.smbc-card.com/nyukai/merit/proper_p5.jsp",
-        "https://qa.smbc-card.com/mem/detail?site=4H4A00IO&id=1510",
-        "https://www.smbc.co.jp/kojin/vpoint-up/"
-      ],
       "verified_date": "2026-06-12"
     },
     {
@@ -92,41 +75,17 @@
       "name": "ポイントアッププログラム(最大20%還元)",
       "payment_instruction": "クレジットカード払い・カードのタッチ決済・Apple Pay(QUICPay)で支払う ※スマホのタッチ決済は対象外",
       "rate_base": 7.0,
-      "rate_note": "エントリー+支払口座を三菱UFJ銀行に設定で7%(基本0.5%+スペシャル6.5%)。以降は条件達成の積み上げで最大20%。未エントリーまたは口座が他行のままだと基本0.5%のみ。1ポイント=5円相当換算(キャッシュバック交換は4円)",
-      "entry_required": true,
       "period_start": null,
       "period_end": null,
       "cap_note": "スペシャルポイント対象となる対象店舗利用は集計期間(毎月16日〜翌月15日)あたり合計5万円まで。超過分は基本0.5%のみ",
       "detail_url": "https://www.cr.mufg.jp/apply/card/mucard/pup/index03.html",
-      "eligible_cards": [
-        "三菱UFJカード",
-        "三菱UFJカード ゴールド",
-        "三菱UFJカード・プラチナ・アメリカン・エキスプレス・カード(一部店舗は優遇対象外)"
-      ],
-      "ineligible_cards": ["家族カード(本人会員のみエントリー可)", "提携カードからの切替による旧シルバー券面の一部"],
       "conditions": [
         "参加必須: ①支払口座を三菱UFJ銀行に設定 ②MDCアプリから本人会員がエントリー(カードごと)",
         "エントリー後に支払口座を他行へ変更すると7%に低下",
         "対象の支払方法はクレカ払い・カードのタッチ決済・Apple Pay(QUICPay)。スマホのタッチ決済・グローバルポイントWallet決済は対象外",
         "条件達成判定は毎月1日〜末日、達成状況が翌月16日〜翌々月15日の利用分に適用",
         "スペシャルポイントは請求確定の翌々月25日頃付与",
-        "エントリー初回特典: エントリー月の翌月15日まで一律10%適用"
-      ],
-      "rate_breakdown": [
-        { "group": "基本", "condition": "全ショッピング利用(月合計1,000円ごと)", "rate": 0.5 },
-        { "group": "基本", "condition": "エントリー+三菱UFJ銀行口座設定(スペシャルポイント)", "rate": 6.5 },
-        { "group": "カードのサービス", "condition": "MDCアプリに月1回以上ログイン", "rate": 0.5 },
-        { "group": "カードのサービス", "condition": "月5万円(税込)以上のカード利用", "rate": 0.5 },
-        { "group": "カードのサービス", "condition": "Apple Pay(QUICPay)利用 or グローバルポイントWalletチャージ", "rate": 0.5 },
-        { "group": "カードのサービス", "condition": "楽Pay登録 or 月1万円以上のリボ/分割(3回以上)/カードローン利用 ※手数料に注意", "rate": 2.0 },
-        { "group": "MUFGグループ", "condition": "三菱UFJダイレクトに月1回以上ログイン", "rate": 1.0 },
-        { "group": "MUFGグループ", "condition": "三菱UFJ銀行口座で給与または年金受け取り", "rate": 1.0 },
-        { "group": "MUFGグループ", "condition": "つみたて投資 月1万円以上(対象サービスのいずれか)", "rate": 1.0 },
-        { "group": "MUFGグループ", "condition": "三菱UFJ銀行の住宅ローン契約(借入残高あり)", "rate": 1.0 },
-        { "group": "MUFGグループ", "condition": "COIN+(エアウォレット等)に三菱UFJ銀行口座を登録", "rate": 0.5 },
-        { "group": "特定サービスのカード払い", "condition": "携帯料金・電気料金・Appleのサービス・ABEMA等の対象サービス1つにつき+1.0%(最大5サービス)", "rate": 5.0 }
-      ],
-      "global_exclusions": [
+        "エントリー初回特典: エントリー月の翌月15日まで一律10%適用",
         "対象店舗でもオンラインストア・ネットスーパー・デリバリー・テナント売場は概ね対象外",
         "キャッシング・年会費・リボ/分割手数料等は月5万円利用条件の集計対象外"
       ],
@@ -159,11 +118,6 @@
         { "merchant_id": "akachan_honpo", "note": "Online Shop含む", "exclusion_note": "Amexは店頭決済のみ対象外(Online Shopは対象)", "amex_excluded": true, "official_store_list": {"eligible_stores": ["シーナシーナ屯田", "新さっぽろアークシティ", "アリオ札幌", "シーナシーナ青森", "仙台泉", "ヨークパーク郡山", "トナリエつくば", "ニューポートひたちなか", "ベルモール", "高崎", "スマーク伊勢崎", "ステラタウン大宮", "アリオ川口", "エミテラス所沢", "アリオ深谷", "アリオ上尾", "ALCo越谷", "和光イトーヨーカドー", "アリオ鷲宮", "テラスモール松戸", "アリオ柏", "アリオ市原", "四街道イトーヨーカドー", "アリオ北砂", "ウィラ大井", "池袋東武", "セブンタウン小豆沢", "アリオ西新井", "アリオ亀有", "アリオ葛西", "セレオ八王子", "昭島イトーヨーカドー", "武蔵小金井イトーヨーカドー", "東久留米イトーヨーカドー", "横浜別所イトーヨーカドー", "港南台バーズ", "グランツリー武蔵小杉", "溝口", "古淵イトーヨーカドー", "アリオ橋本", "テラスモール湘南", "大和鶴間イトーヨーカドー", "新潟亀田アピタ", "リバーサイド千秋", "ファボーレ", "アピタタウン金沢ベイ", "アルプラザ小松", "福井", "甲府昭和イトーヨーカドー", "アリオ上田", "アイシティ２１", "カラフルタウン岐阜", "静岡イトーヨーカドー", "浜松プラザ", "アクロスプラザ春日井", "リーフウォーク稲沢", "プライムツリー赤池", "ビバシティ彦根", "エイスクエア草津", "洛北阪急スクエア", "MOMOテラス", "精華台", "あべのイトーヨーカドー", "京阪シティモール", "大阪本町", "高槻阪急スクエア", "くずはモール", "アリオ八尾", "ホームズ寝屋川", "スマイル御影クラッセ", "ブルメール舞多聞", "カナート西神戸", "ゆめタウン姫路", "MEGAドン・キホーテ姫路広畑", "つかしん", "明石イトーヨーカドー", "トナリエ大和高田", "イズミヤ和歌山", "ゆめタウン出雲", "ハピータウン岡南", "ブランチ北長瀬", "フジグラン緑井", "ゆめタウンみゆき", "ゆめタウン福山", "ゆめタウン廿日市", "イオンタウン防府", "ゆめタウン徳島", "瓦町FLAG", "エミフルMASAKI", "リバーウォーク北九州", "福岡マリナタウン", "ガーデンズ千早", "ゆめタウン飯塚", "ゆめタウン筑紫野", "ゆめタウン佐賀", "ゆめタウンはません", "ゆめタウン光の森", "パークプレイス大分", "ニトリモール宮崎", "オプシアミスミ", "浦添西海岸パルコシティ", "ハンビータウン", "西原シティ"], "ineligible_stores": ["ララガーデン長町", "ララガーデン川口", "ララガーデン春日部", "ららぽーと富士見", "ららぽーと新三郷", "幕張イトーヨーカドー", "ららぽーとTOKYO-BAY", "ららぽーと柏の葉", "アルカキット錦糸町", "ららぽーと豊洲", "ららぽーと立川立飛", "ららぽーと横浜", "立場イトーヨーカドー", "ラゾーナ川崎", "ららぽーと湘南平塚", "ららぽーと海老名", "ららぽーと沼津", "ららぽーと磐田", "ららぽーと名古屋みなとアクルス", "ららぽーと安城", "ららぽーと愛知東郷", "ららぽーと堺", "ららぽーとEXPOCITY", "ららぽーと和泉", "ららぽーと門真", "ららぽーと甲子園"], "updated_date": "2026-06-15", "date_is_official": false, "source_url": "https://www.akachan.jp/topics/mufgCPlist/"} },
         { "merchant_id": "curves", "note": "入会金・月会費が対象", "exclusion_note": null, "amex_excluded": false }
       ],
-      "sources": [
-        "https://www.cr.mufg.jp/apply/card/mucard/pup/index03.html",
-        "https://faq.cr.mufg.jp/mufgcard/detail?id=4269",
-        "https://www.cr.mufg.jp/member/new/20250602_01.html"
-      ],
       "verified_date": "2026-06-12"
     },
     {
@@ -181,7 +135,6 @@
       "period_end": "2026-09-30",
       "per_transaction_cap": 3000,
       "period_total_cap": 5000,
-      "cap_note": "1回あたり付与上限3,000円相当、期間合計5,000円相当",
       "region": {
         "name": "湯沢市",
         "prefecture": "秋田県",
@@ -190,7 +143,6 @@
       "detail_url": "https://paypay.ne.jp/event/akita-yuzawa-city/",
       "store_search_url": null,
       "merchant_rules": [],
-      "sources": ["https://paypay.ne.jp/event/akita-yuzawa-city/"],
       "verified_date": "2026-06-30"
     },
     {
@@ -208,7 +160,6 @@
       "period_end": "2026-09-30",
       "per_transaction_cap": 3000,
       "period_total_cap": 5000,
-      "cap_note": "1回あたり付与上限3,000円相当、期間合計5,000円相当",
       "region": {
         "name": "湯沢市",
         "prefecture": "秋田県",
@@ -217,7 +168,6 @@
       "detail_url": "https://media.aupay.wallet.auone.jp/articles/5059",
       "store_search_url": null,
       "merchant_rules": [],
-      "sources": ["https://media.aupay.wallet.auone.jp/articles/5059"],
       "verified_date": "2026-06-30"
     },
     {
@@ -235,7 +185,6 @@
       "period_end": "2026-07-31",
       "per_transaction_cap": 5000,
       "period_total_cap": 10000,
-      "cap_note": "1回あたり付与上限5,000円相当、期間合計10,000円相当",
       "region": {
         "name": "奥州市",
         "prefecture": "岩手県",
@@ -244,7 +193,6 @@
       "detail_url": "https://paypay.ne.jp/event/iwate-oshu-city-20260701/",
       "store_search_url": null,
       "merchant_rules": [],
-      "sources": ["https://paypay.ne.jp/event/iwate-oshu-city-20260701/"],
       "verified_date": "2026-06-30"
     },
     {
@@ -262,7 +210,6 @@
       "period_end": "2026-08-10",
       "per_transaction_cap": 2000,
       "period_total_cap": 5000,
-      "cap_note": "1回あたり付与上限2,000円相当、期間合計5,000円相当",
       "region": {
         "name": "大田市",
         "prefecture": "島根県",
@@ -271,7 +218,6 @@
       "detail_url": "https://paypay.ne.jp/notice/20260529/cp-jichitai/",
       "store_search_url": null,
       "merchant_rules": [],
-      "sources": ["https://paypay.ne.jp/notice/20260529/cp-jichitai/"],
       "verified_date": "2026-06-30"
     },
     {
@@ -289,8 +235,6 @@
       "period_end": "2026-07-15",
       "min_purchase": 800,
       "period_total_cap": 10000,
-      "cap_note": "期間合計10,000ポイントまで",
-      "entry_required": true,
       "conditions": [
         "事前エントリー必要",
         "1回の決済800円(税込)以上が対象",
@@ -300,7 +244,6 @@
         { "merchant_id": "matsuya", "note": "松弁ネット・モバイルオーダー・松弁デリバリーも対象(松のや・マイカリー食堂等のグループブランド含む)", "exclusion_note": null }
       ],
       "detail_url": "https://www.matsuyafoods.co.jp/matsuya/whatsnew/campaign/160563.html",
-      "sources": ["https://www.matsuyafoods.co.jp/matsuya/whatsnew/campaign/160563.html"],
       "verified_date": "2026-06-30"
     },
     {
@@ -318,7 +261,6 @@
       "period_end": "2026-07-10",
       "per_transaction_cap": 1000,
       "period_total_cap": 4000,
-      "cap_note": "1回あたり付与上限1,000円相当、期間合計4,000円相当",
       "region": {
         "name": "杉並区",
         "prefecture": "東京都",
@@ -331,10 +273,6 @@
         "PayPay商品券・クレジットカードは対象外"
       ],
       "merchant_rules": [],
-      "sources": [
-        "https://paypay.ne.jp/event/tokyo-suginami-city-20260601/",
-        "https://www.city.suginami.tokyo.jp/s033/news/25505.html"
-      ],
       "verified_date": "2026-06-30"
     }
   ]

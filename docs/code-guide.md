@@ -153,31 +153,20 @@ erDiagram
         string brand_color "#RRGGBB"
         string payment_instruction "支払い方法の説明"
         double rate_base "基準還元率(定率時)"
-        string rate_note "還元率の補足"
         int discount_amount "割引額(定額時)"
-        bool entry_required "エントリー要否"
         string period_start "開始日(ISO8601・nullで常設)"
         string period_end "終了日(ISO8601・nullで常設)"
         int per_transaction_cap "1回上限(円)"
         int period_total_cap "期間合計上限(円)"
-        string cap_note "上限の補足(表示用)"
+        string cap_note "上限の但し書き(数値で表せない補足専用)"
         int min_purchase "最低購入額(円)"
         int usage_limit "利用回数上限"
         string usage_limit_note "回数上限の補足(表示用)"
-        string_list eligible_cards "対象カード"
-        string_list ineligible_cards "対象外カード"
-        string_list conditions "条件リスト"
-        string_list global_exclusions "全チェーン共通の除外条件"
+        string_list conditions "条件リスト(除外条件含む)"
         string payment_method_id "QR決済ID(カード施策はnull)"
         string detail_url "施策の詳細ページURL"
         string store_search_url "対象店舗検索URL"
-        string_list sources "ソースURL"
         string verified_date "最終確認日"
-    }
-    RATE_BREAKDOWN {
-        string group "グループ名(空文字で単一)"
-        string condition "条件"
-        double rate "還元率"
     }
     REGION {
         string name "自治体名"
@@ -205,7 +194,6 @@ erDiagram
         string card_name
         string brand "Visa/Mastercard/Amex"
         double effective_rate_default
-        string_list notes "補足情報"
         PointMultiplier point_multiplier "ポイント倍率(任意)"
     }
     POINT_MULTIPLIER {
@@ -235,7 +223,6 @@ erDiagram
     PROFILE ||--o{ PROFILE_CARD : "cards[]"
     PROFILE ||--o{ QR_PAYMENT : "qr_payments[]"
     CAMPAIGN ||--o{ MERCHANT_RULE : "merchant_rules[]"
-    CAMPAIGN ||--o{ RATE_BREAKDOWN : "rate_breakdown[]"
     CAMPAIGN ||--o| REGION : "region(自治体施策のみ)"
     MERCHANT ||--o| LOCATION_HINT : "location_hint(自販機等)"
     MERCHANT_RULE }o--|| MERCHANT : "merchant_id で参照"
@@ -366,7 +353,7 @@ flowchart LR
 - `effectiveRate = card.effectiveRateDefault ?: campaign.rateBase` — ユーザー前提（profile）があればそれを優先
 - **保有カードのみ対象**: profile に対応カードが無い施策はスキップする。設定で「所有」OFF にしたカードは `MainViewModel` のマージ層で profile から外れるため、ここで自然に除外される。
 - **期間フィルタ**: `campaignStatus(campaign, today)` が ACTIVE の施策のみ。期限切れ・未来開始はスキップ。
-- **store_scope フィルタ**: `store_scope == "managed"` のみ。自治体施策（`external`）は「探す」「近く」に出さない。
+- **store_scope フィルタ**: `store_scope == "managed"` のみ。`external` の施策は「探す」「近く」に出さない。
 - **カード vs QR の分離**: `paymentMethodId == null` のカード施策のみ `judgeCards` が返す。QR 決済施策は `judgeQr` が担当（`enabledQrIds` でユーザーの利用 QR をフィルタ）。どちらも統一型 `CampaignJudgment` を返す。
 - **Amex の対象外**: カードブランドが Amex で店舗 rule が `amex_excluded` のとき、その店ではこの施策を除外する（警告ではなく非表示。検索・判定詳細・地図ピン/件数すべてに波及）。非 Amex（Mastercard/Visa/JCB）は従来どおり。
 - **設定値の反映はマージ層**: 還元率の手入力・MUFG ブランド・ウエル活 ×1.5（`ProfileCard.point_multiplier` の係数）は `MainViewModel` が DataStore の差分（`CardOverride`）を profile に重ねてからエンジンへ渡す。`JudgmentEngine` は純 Kotlin・実データテストのまま保つ（4 章「設定の永続化」／6.1 参照）。

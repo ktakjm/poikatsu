@@ -286,7 +286,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
         return if (days > 0) days else null
     }
 
-    /** アクティブな campaign のみ返す(store_scope フィルタなし) */
+    /** アクティブな campaign のみ返す */
     fun activeCampaigns(today: LocalDate): List<Campaign> =
         data.campaigns.filter { campaignStatus(it, today) == CampaignStatus.ACTIVE }
 
@@ -358,7 +358,6 @@ class JudgmentEngine(private val data: PoikatsuData) {
         data.campaigns
             .filter { campaignStatus(it, today) == CampaignStatus.ACTIVE }
             .filter { it.storeScope == "managed" }
-            .filter { it.campaignType != CampaignType.MUNICIPAL }
             .filter { it.paymentMethodId == null }
             .mapNotNull { campaign ->
                 val rule = campaign.ruleFor(merchant) ?: return@mapNotNull null
@@ -382,7 +381,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
 
     /**
      * QR 決済の判定を返す。ユーザーが利用中の QR 決済でフィルタ済み。
-     * store_scope == "managed" のみ。municipal(external) は探すタブには含めない。
+     * store_scope == "managed" のみ。
      */
     fun judgeQr(merchant: Merchant, today: LocalDate, enabledQrIds: Set<String>): List<CampaignJudgment> =
         data.campaigns

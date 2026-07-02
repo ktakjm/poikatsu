@@ -228,7 +228,13 @@ internal fun PeriodRow(periodText: String) {
 
 @Composable
 internal fun CapRow(perTransaction: Int?, periodTotal: Int?, capNote: String?) {
-    val text = capNote ?: buildCapText(perTransaction, periodTotal) ?: return
+    val capText = buildCapText(perTransaction, periodTotal)
+    val text = when {
+        capText != null && capNote != null -> "$capText ($capNote)"
+        capText != null -> capText
+        capNote != null -> capNote
+        else -> return
+    }
     Text("上限: $text", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
 }
 

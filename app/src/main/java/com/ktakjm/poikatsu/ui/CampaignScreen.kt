@@ -81,8 +81,6 @@ internal fun CampaignPane(
         CampaignFilter.ALL -> { _ -> true }
         CampaignFilter.MUNICIPAL -> { c -> c.campaignType == CampaignType.MUNICIPAL }
         CampaignFilter.NON_MUNICIPAL -> { c -> c.campaignType != CampaignType.MUNICIPAL }
-        CampaignFilter.CARD -> { c -> c.campaignType == CampaignType.CARD_PROMOTION && c.paymentMethodId == null }
-        CampaignFilter.QR -> { c -> c.paymentMethodId != null && c.campaignType != CampaignType.MUNICIPAL }
     }
     val activeGroups = remember(activeCampaigns, filter) {
         groupCampaignsForDisplay(activeCampaigns.filter(filterFn))
@@ -282,6 +280,4 @@ private fun campaignFilterLabel(filter: CampaignFilter): String = when (filter) 
     CampaignFilter.ALL -> "全て"
     CampaignFilter.MUNICIPAL -> "自治体"
     CampaignFilter.NON_MUNICIPAL -> "自治体以外"
-    CampaignFilter.CARD -> "カード"
-    CampaignFilter.QR -> "QR"
 }

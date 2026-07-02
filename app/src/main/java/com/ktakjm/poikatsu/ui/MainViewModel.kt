@@ -63,7 +63,7 @@ private val FALLBACK_PLACE = MainViewModel.GeocodedPlace(
 )
 
 enum class AppTab { SEARCH, NEARBY, CAMPAIGNS, SETTINGS }
-enum class CampaignFilter { ALL, MUNICIPAL, NON_MUNICIPAL, CARD, QR }
+enum class CampaignFilter { ALL, MUNICIPAL, NON_MUNICIPAL }
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 

@@ -39,7 +39,7 @@ class DataRepositoryTest {
     fun `リモート取得に成功するとキャッシュされ次回起動で使われる`() {
         // updated_at を変えたリモートデータを返す
         val repo = repository { name ->
-            assetTexts.getValue(name).replace("\"2026-06-30\"", "\"2099-01-01\"")
+            assetTexts.getValue(name).replace("\"2026-07-03\"", "\"2099-01-01\"")
         }
         val refreshed = repo.refresh()!!
         assertEquals(DataSource.REMOTE, refreshed.source)
