@@ -147,7 +147,7 @@ erDiagram
         string id PK
         string name "施策表示名"
         string type "card_program/card_promotion/municipal"
-        string benefit_type "rebate/coupon_percent/coupon_fixed"
+        string benefit_type "rebate/discount"
         string store_scope "managed/external"
         string issuer "発行体"
         string brand_color "#RRGGBB"
@@ -235,7 +235,7 @@ erDiagram
 3 つの JSON の役割分担:
 
 - `merchants.json` — チェーンの正規化マスタ。検索ヒット率は `reading` / `aliases` の充実度で決まる。トップレベルに `yolp_config`（YOLP 検索の gc グループ定義・密度チューニング用の `max_pages`）を持ち、各 merchant の `yolp_search`（`gc`/`keyword`/`none`）で検索方式を指定する。`YolpClient` はこの設定から `YolpSearchConfig` を動的に構築し、アクティブな施策が参照する merchant だけを検索対象にする（該当 merchant がいない gc_group はスキップ）。位置情報を持たない発行体（自販機など）は `location_hint` で外部導線（Coke ON アプリ等）を案内し、「近くのこの店を探す」を出さない
-- `campaigns.json` — 汎用的な施策情報のみ。**ユーザー固有の前提を書かない**（規約）。`type` で常設カード（`card_program`）/ 期間限定（`card_promotion`）/ 自治体施策（`municipal`）を区分し、`benefit_type` でポイント還元（`rebate`）/ 定率即時割引（`coupon_percent`）/ 定額即時割引（`coupon_fixed`）を区分する。`store_scope` が `managed` ならチェーン検索・地図に表示、`external` ならキャンペーンタブのみ表示（`detail_url`/`store_search_url` で公式ページへリンク）
+- `campaigns.json` — 汎用的な施策情報のみ。**ユーザー固有の前提を書かない**（規約）。`type` で常設カード（`card_program`）/ 期間限定（`card_promotion`）/ 自治体施策（`municipal`）を区分し、`benefit_type` でポイント還元（`rebate`）/ 即時割引（`discount`）を区分し、定率/定額は `rate_base` / `discount_amount` のどちらが入っているかで導出する。`store_scope` が `managed` ならチェーン検索・地図に表示、`external` ならキャンペーンタブのみ表示（`detail_url`/`store_search_url` で公式ページへリンク）
 - `profile.json` — ユーザー前提（保有ブランド・エントリー済みか等）+ QR 決済カタログ（`qr_payments`）。常にローカル（assets）から読み、リモート更新の対象外。`point_multiplier`（`PointMultiplier`）を持つカードはポイント価値の倍率（例: ウエル活 ×1.5）を設定画面で ON/OFF でき、ON 時は `effectiveRateDefault × factor` が実質還元率になる。`point_multiplier.color` はウエルシアのロゴ色など識別バッジに使う
 
 パースは `PoikatsuJson.parse()` に集約。`ignoreUnknownKeys = true` + `coerceInputValues = true` により、スキーマに後からフィールドを追加しても旧アプリが壊れない（前方互換）。
@@ -342,10 +342,10 @@ flowchart LR
     CARD -- "あり" --> AMEX{"Amex かつ<br/>amex_excluded?"}
     AMEX -- "はい" --> DROP
     AMEX -- "いいえ" --> RATE["effectiveRate 決定<br/>+ 残日数警告"]
-    RATE --> SORT["effectiveRate 降順で<br/>CampaignJudgment リスト返却"]
+    RATE --> OUT["CampaignJudgment 返却<br/>（ソートは judgeAll で一括）"]
 
     style IN fill:#1565C0,stroke:#0D47A1,color:#fff
-    style SORT fill:#2E7D32,stroke:#1B5E20,color:#fff
+    style OUT fill:#2E7D32,stroke:#1B5E20,color:#fff
     style DROP fill:#E0E0E0,stroke:#9E9E9E,color:#333
     style QR fill:#6A1B9A,stroke:#4A148C,color:#fff
 ```
@@ -374,7 +374,7 @@ data class CampaignJudgment(
     val campaign: Campaign,
     val badgeLabel: String,          // カード名 / QR決済名 / issuer
     val brandColor: String?,
-    val benefitType: BenefitType,    // REBATE / COUPON_PERCENT / COUPON_FIXED
+    val benefitType: BenefitType,    // REBATE / DISCOUNT
     val effectiveRate: Double?,
     val discountAmount: Int?,
     val daysRemaining: Int?,
@@ -390,9 +390,9 @@ data class CampaignJudgment(
 )
 ```
 
-`judgeAll(merchant, today, enabledQrIds)` は `judgeCards` + `judgeQr` を統合して `JudgmentResult`（`judgments` + `bestOption`）を返す。`bestOption` は定率（rebate/coupon_percent）で最高還元率のものを選ぶ。定額（coupon_fixed）は購入額に依存するため比較せず並列表示とする。
+`judgeAll(merchant, today, enabledQrIds)` は `judgeCards` + `judgeQr` を統合し、定率（`effectiveRate` 降順）→ 定額（`discountAmount` 降順）の統一ソートで `JudgmentResult`（`judgments` + `bestOption`）を返す。`bestOption` は定率（`rate_base` あり・`discount_amount` なし）で最高還元率のものを選ぶ。定額は購入額に依存するため比較せず並列表示とする。
 
-`BenefitType`（`REBATE` / `COUPON_PERCENT` / `COUPON_FIXED`）と `CampaignType`（`CARD_PROGRAM` / `CARD_PROMOTION` / `MUNICIPAL`）はそれぞれ `jsonValue` プロパティを持つ enum で、`fromString()` で JSON 文字列から変換する。`Campaign.campaignType` 拡張プロパティで `type` 文字列を enum に変換でき、コード中で生 String 比較を排除している。rebate は後日ポイント付与（PayPay の「クーポン」含む）、coupon は即時値引き。
+`BenefitType`（`REBATE` / `DISCOUNT`）と `CampaignType`（`CARD_PROGRAM` / `CARD_PROMOTION` / `MUNICIPAL`）はそれぞれ `jsonValue` プロパティを持つ enum で、`fromString()` で JSON 文字列から変換する。`Campaign.campaignType` 拡張プロパティで `type` 文字列を enum に変換でき、コード中で生 String 比較を排除している。rebate は後日ポイント付与（PayPay の「クーポン」含む）、discount は即時値引き。定率/定額は `rate_base` / `discount_amount` のどちらが入っているかで導出する（2 軸直交）。
 
 特典の表示ラベルは `formatBenefit(benefitType, rate, discount): BenefitLabel?` に集約されている。`BenefitLabel`（`value` + `suffix`）が 2×2 のラベル行列（`%還元` / `円還元` / `% OFF` / `円引き`）を返し、UI 層はこれを `toString()` するだけで統一的に表示できる
 
@@ -537,7 +537,7 @@ sequenceDiagram
 
 | テスト | 対象 | 特徴 |
 |---|---|---|
-| `JudgmentEngineTest`（66 件）+ `MunicipalitiesTest`（3 件）+ `JapaneseTextTest`（3 件）＝計 72 件 | 検索・正規化・判定・店舗対象判定（3 状態）・近隣除外・**期間フィルタ・store_scope・QR判定・クーポン・judgeAll・BenefitType・formatBenefit 4象限・データ検証・自治体マスタ検証** | **リポジトリ直下 `data/` の実データを読み込む**。「マック→マクドナルド」「マックスバリュは誤ヒットしない」等の振る舞いと、merchant_id 参照切れ等のデータ整合性チェックを兼ねる。アカチャンホンポの公式リストで対象/対象外/要確認の 3 状態も検証。期間フィルタ（active/upcoming/expired・残日数警告）、store_scope フィルタ、QR 決済判定（rebate/coupon_percent/coupon_fixed）、judgeAll 統合、実データの新フィールド検証、formatBenefit 4象限網羅（%還元/円還元/% OFF/円引き）、rebate+定額判定、rate_base/discount_amount 排他制約を検証。`MunicipalitiesTest`（47 都道府県・23 区の検証、`RegisteredMunicipality` シリアライズ往復）を含む |
+| `JudgmentEngineTest`（66 件）+ `MunicipalitiesTest`（3 件）+ `JapaneseTextTest`（3 件）＝計 72 件 | 検索・正規化・判定・店舗対象判定（3 状態）・近隣除外・**期間フィルタ・store_scope・QR判定・クーポン・judgeAll・BenefitType・formatBenefit 4象限・データ検証・自治体マスタ検証** | **リポジトリ直下 `data/` の実データを読み込む**。「マック→マクドナルド」「マックスバリュは誤ヒットしない」等の振る舞いと、merchant_id 参照切れ等のデータ整合性チェックを兼ねる。アカチャンホンポの公式リストで対象/対象外/要確認の 3 状態も検証。期間フィルタ（active/upcoming/expired・残日数警告）、store_scope フィルタ、QR 決済判定（rebate/discount × 定率/定額）、judgeAll 統合、実データの新フィールド検証、formatBenefit 4象限網羅（%還元/円還元/% OFF/円引き）、rebate+定額判定、rate_base/discount_amount 排他制約を検証。`MunicipalitiesTest`（47 都道府県・23 区の検証、`RegisteredMunicipality` シリアライズ往復）を含む |
 | `DataRepositoryTest`（5 件） | ロード戦略 | ラムダ注入により、キャッシュあり/なし/破損、リモート成功/失敗の各経路を File システムだけで検証 |
 | `NearbyTest`（27 件） | Overpass/YOLP パース・距離計算・チェーン特定・施設テナント除外・重複排除キー・密度差クリップ・**YolpSearchConfig 構築（データ駆動化の等価性検証・gc_group スキップ・maxPages）** | 固定 JSON フィクスチャ＋実データでネットワーク非依存 |
 

@@ -135,7 +135,7 @@ private fun BestOptionBanner(best: BestPaymentOption) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(20.dp))
-            Text("最もお得：$benefitLabel", style = MaterialTheme.typography.titleSmall)
+            Text("最大おトク率：$benefitLabel", style = MaterialTheme.typography.titleSmall)
             if (best.isTimeLimited && best.daysRemaining != null) {
                 Text(
                     "残り${best.daysRemaining}日",

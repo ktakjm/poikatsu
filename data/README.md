@@ -17,16 +17,15 @@
   - `"card_program"`: 常設カードプログラム(既存の SMCC/MUFG)。`merchant_rules` で管理、「探す」「近く」タブに表示
   - `"card_promotion"`: カード/QR 会社の期間限定(特定チェーン対象)。`merchant_rules` で管理、「探す」「近く」タブに表示
   - `"municipal"`: 自治体施策(店舗データなし)。キャンペーンタブにのみ表示(`detail_url`/`store_search_url` で公式ページへリンク)
-- `benefit_type` — 特典の形態。省略時は `"rebate"`:
+- `benefit_type` — 特典のタイミング(2 値)。省略時は `"rebate"`:
   - `"rebate"`: ポイント還元(後日ポイント付与)。PayPay の「クーポン」も実態は後日ポイント付与のため rebate に分類
-  - `"coupon_percent"`: 即時割引(定率)。`rate_base` が割引率(%)
-  - `"coupon_fixed"`: 即時割引(定額)。`discount_amount` が割引額(円)
+  - `"discount"`: 即時割引。定率(`rate_base`)か定額(`discount_amount`)かはフィールドから導出
 - `store_scope` — 店舗データの有無:
   - `"managed"`: `merchant_rules` で管理。「探す」「近く」タブに表示
   - `"external"`: 外部参照のみ。キャンペーンタブにのみ表示
 - `payment_method_id` — QR 決済の識別子(`profile.json` の `qr_payments.id` と対応)。カード施策は null
-- `rate_base` — 定率(rebate/coupon_percent)の場合の率(%)。定額の場合は null。常設カード施策では現実的な基準還元率
-- `discount_amount` — 定額(rebate 固定額/coupon_fixed)の場合の金額(円)。定率の場合は null
+- `rate_base` — 定率の場合の率(%)。定額の場合は null。常設カード施策では現実的な基準還元率
+- `discount_amount` — 定額の場合の金額(円)。定率の場合は null
   - **`rate_base` と `discount_amount` は排他(どちらか一方が non-null)**
 - `per_transaction_cap` — 1 回あたりの付与/割引上限(円相当)。null = 上限なし
 - `period_total_cap` — 期間合計の付与/割引上限(円相当)。null = 上限なし

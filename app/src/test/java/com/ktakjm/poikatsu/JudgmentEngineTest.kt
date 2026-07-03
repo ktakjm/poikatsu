@@ -465,11 +465,11 @@ class JudgmentEngineTest {
     }
 
     @Test
-    fun `クーポン割引の判定_coupon_fixed`() {
+    fun `即時割引の判定_定額`() {
         val dpay = QrPayment(id = "dpay", name = "d払い", brandColor = "#E60033")
         val campaign = campaignWithPeriod(
             type = CampaignType.CARD_PROMOTION,
-            benefitType = BenefitType.COUPON_FIXED,
+            benefitType = BenefitType.DISCOUNT,
             paymentMethodId = "dpay",
             rateBase = null,
             discountAmount = 100,
@@ -484,7 +484,7 @@ class JudgmentEngineTest {
         val results = engine.judgeQr(testMerchant, julyToday, setOf("dpay"))
         assertEquals(1, results.size)
         val q = results.first()
-        assertEquals(BenefitType.COUPON_FIXED, q.benefitType)
+        assertEquals(BenefitType.DISCOUNT, q.benefitType)
         assertEquals(100, q.discountAmount)
         assertEquals(200, q.minPurchase)
         assertEquals("お一人様1回まで", q.usageLimitText)
@@ -493,11 +493,11 @@ class JudgmentEngineTest {
     }
 
     @Test
-    fun `クーポン割引の判定_coupon_percent`() {
+    fun `即時割引の判定_定率`() {
         val dpay = QrPayment(id = "dpay", name = "d払い", brandColor = "#E60033")
         val campaign = campaignWithPeriod(
             type = CampaignType.CARD_PROMOTION,
-            benefitType = BenefitType.COUPON_PERCENT,
+            benefitType = BenefitType.DISCOUNT,
             paymentMethodId = "dpay",
             rateBase = 10.0,
             perTransactionCap = 500,
@@ -510,7 +510,7 @@ class JudgmentEngineTest {
         val results = engine.judgeQr(testMerchant, julyToday, setOf("dpay"))
         assertEquals(1, results.size)
         val q = results.first()
-        assertEquals(BenefitType.COUPON_PERCENT, q.benefitType)
+        assertEquals(BenefitType.DISCOUNT, q.benefitType)
         assertEquals(10.0, q.effectiveRate!!, 0.001)
         assertEquals(500, q.perTransactionCap)
     }
@@ -570,8 +570,7 @@ class JudgmentEngineTest {
     @Test
     fun `BenefitType の文字列変換`() {
         assertEquals(BenefitType.REBATE, BenefitType.fromString("rebate"))
-        assertEquals(BenefitType.COUPON_PERCENT, BenefitType.fromString("coupon_percent"))
-        assertEquals(BenefitType.COUPON_FIXED, BenefitType.fromString("coupon_fixed"))
+        assertEquals(BenefitType.DISCOUNT, BenefitType.fromString("discount"))
         assertEquals(BenefitType.REBATE, BenefitType.fromString("unknown"))
     }
 
@@ -589,8 +588,8 @@ class JudgmentEngineTest {
     fun `formatBenefit_4象限の網羅`() {
         assertEquals("20% 還元", formatBenefit(BenefitType.REBATE, 20.0, null).toString())
         assertEquals("500円還元", formatBenefit(BenefitType.REBATE, null, 500).toString())
-        assertEquals("10% OFF", formatBenefit(BenefitType.COUPON_PERCENT, 10.0, null).toString())
-        assertEquals("300円引き", formatBenefit(BenefitType.COUPON_FIXED, null, 300).toString())
+        assertEquals("10% OFF", formatBenefit(BenefitType.DISCOUNT, 10.0, null).toString())
+        assertEquals("300円引き", formatBenefit(BenefitType.DISCOUNT, null, 300).toString())
     }
 
     @Test
@@ -605,8 +604,7 @@ class JudgmentEngineTest {
     @Test
     fun `formatBenefit_両方nullならnull`() {
         assertNull(formatBenefit(BenefitType.REBATE, null, null))
-        assertNull(formatBenefit(BenefitType.COUPON_PERCENT, null, null))
-        assertNull(formatBenefit(BenefitType.COUPON_FIXED, null, null))
+        assertNull(formatBenefit(BenefitType.DISCOUNT, null, null))
     }
 
     @Test

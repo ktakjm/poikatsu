@@ -65,8 +65,7 @@ data class StoreVerdict(
 
 enum class BenefitType(val jsonValue: String) {
     REBATE("rebate"),
-    COUPON_PERCENT("coupon_percent"),
-    COUPON_FIXED("coupon_fixed");
+    DISCOUNT("discount");
 
     companion object {
         fun fromString(s: String): BenefitType = entries.find { it.jsonValue == s } ?: REBATE
@@ -91,8 +90,11 @@ data class BenefitLabel(val value: String, val suffix: String) {
 
 fun formatBenefit(benefitType: BenefitType, rate: Double?, discount: Int?): BenefitLabel? =
     when (benefitType) {
-        BenefitType.COUPON_FIXED -> discount?.let { BenefitLabel("${it}円", "引き") }
-        BenefitType.COUPON_PERCENT -> rate?.let { BenefitLabel("${trimRate(it)}%", " OFF") }
+        BenefitType.DISCOUNT -> when {
+            discount != null -> BenefitLabel("${discount}円", "引き")
+            rate != null -> BenefitLabel("${trimRate(rate)}%", " OFF")
+            else -> null
+        }
         BenefitType.REBATE -> when {
             discount != null -> BenefitLabel("${discount}円", "還元")
             rate != null -> BenefitLabel("${trimRate(rate)}%", " 還元")
@@ -351,8 +353,8 @@ class JudgmentEngine(private val data: PoikatsuData) {
     }
 
     /**
-     * カード施策の判定を還元率の高い順に返す。期間フィルタ適用済み。
-     * store_scope == "managed" の施策のみ対象。
+     * カード施策の判定を返す。期間フィルタ適用済み。
+     * store_scope == "managed" の施策のみ対象。ソートは judgeAll で一括。
      */
     fun judgeCards(merchant: Merchant, today: LocalDate): List<CampaignJudgment> =
         data.campaigns
@@ -377,7 +379,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
                     appPackage = null,
                     today = today,
                 )
-            }.sortedByDescending { it.effectiveRate }
+            }
 
     /**
      * QR 決済の判定を返す。ユーザーが利用中の QR 決済でフィルタ済み。
@@ -408,14 +410,19 @@ class JudgmentEngine(private val data: PoikatsuData) {
      * カード + QR をまとめた包括判定。
      */
     fun judgeAll(merchant: Merchant, today: LocalDate, enabledQrIds: Set<String> = emptySet()): JudgmentResult {
-        val all = judgeCards(merchant, today) + judgeQr(merchant, today, enabledQrIds)
+        val all = (judgeCards(merchant, today) + judgeQr(merchant, today, enabledQrIds))
+            .sortedWith(
+                compareBy<CampaignJudgment> { it.discountAmount != null }
+                    .thenByDescending { it.effectiveRate ?: 0.0 }
+                    .thenByDescending { it.discountAmount ?: 0 },
+            )
         val bestOption = determineBest(all)
         return JudgmentResult(all, bestOption)
     }
 
     private fun determineBest(judgments: List<CampaignJudgment>): BestPaymentOption? {
         val best = judgments
-            .filter { it.effectiveRate != null && it.benefitType != BenefitType.COUPON_FIXED }
+            .filter { it.effectiveRate != null && it.discountAmount == null }
             .maxByOrNull { it.effectiveRate!! }
             ?: return null
         return BestPaymentOption(
