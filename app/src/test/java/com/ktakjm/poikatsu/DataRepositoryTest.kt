@@ -17,9 +17,42 @@ class DataRepositoryTest {
     val tempFolder = TemporaryFolder()
 
     private val assetTexts = mapOf(
-        DataRepository.MERCHANTS to File("../data/merchants.json").readText(),
-        DataRepository.CAMPAIGNS to File("../data/campaigns.json").readText(),
-        DataRepository.PROFILE to File("../data/profile.json").readText(),
+        DataRepository.MERCHANTS to """
+            {
+                "schema_version": 1,
+                "updated_at": "2026-07-03",
+                "merchants": [
+                    {"id": "test_store", "name": "テスト店", "reading": "てすとてん", "category": "その他"}
+                ]
+            }
+        """.trimIndent(),
+        DataRepository.CAMPAIGNS to """
+            {
+                "schema_version": 1,
+                "updated_at": "2026-07-03",
+                "campaigns": [
+                    {
+                        "id": "test_campaign",
+                        "issuer": "test",
+                        "name": "テスト施策",
+                        "rate_base": 5.0,
+                        "verified_date": "2026-06-01",
+                        "merchant_rules": [{"merchant_id": "test_store"}]
+                    }
+                ]
+            }
+        """.trimIndent(),
+        DataRepository.PROFILE to """
+            {
+                "schema_version": 1,
+                "updated_at": "2026-07-03",
+                "profile": {
+                    "cards": [
+                        {"campaign_id": "test_campaign", "card_name": "テストカード"}
+                    ]
+                }
+            }
+        """.trimIndent(),
     )
 
     private fun repository(fetchRemote: (String) -> String?) = DataRepository(

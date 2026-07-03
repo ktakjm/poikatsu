@@ -29,18 +29,70 @@ import java.io.File
 import java.time.LocalDate
 
 /**
- * リポジトリ直下 data/ の実データを読み込んで検証する。
- * データ整合性チェック(参照切れ等)も兼ねる。
+ * フィクスチャデータでロジックを検証する。実データには依存しない。
  */
 class JudgmentEngineTest {
 
-    private val data = PoikatsuJson.parse(
-        merchantsJson = File("../data/merchants.json").readText(),
-        campaignsJson = File("../data/campaigns.json").readText(),
-        profileJson = File("../data/profile.json").readText(),
+    private val data = PoikatsuData(
+        merchants = listOf(
+            Merchant(id = "mcdonalds", name = "マクドナルド", reading = "まくどなるど", aliases = listOf("マック"), category = "ファストフード"),
+            Merchant(id = "seven_eleven", name = "セブン-イレブン", reading = "せぶんいれぶん", aliases = listOf("セブンイレブン"), category = "コンビニ"),
+            Merchant(id = "lawson", name = "ローソン", reading = "ろーそん", category = "コンビニ"),
+            Merchant(id = "starbucks", name = "スターバックス", reading = "すたーばっくす", aliases = listOf("スタバ"), category = "カフェ"),
+            Merchant(id = "gusto", name = "ガスト", reading = "がすと", category = "ファミレス"),
+            Merchant(id = "steak_gusto", name = "ステーキガスト", reading = "すてーきがすと", category = "ファミレス"),
+            Merchant(id = "saizeriya", name = "サイゼリヤ", reading = "さいぜりや", aliases = listOf("サイゼ"), category = "ファミレス"),
+            Merchant(id = "kfc", name = "ケンタッキーフライドチキン", reading = "けんたっきーふらいどちきん", aliases = listOf("KFC"), category = "ファストフード"),
+            Merchant(id = "sushiro", name = "スシロー", reading = "すしろー", category = "回転寿司"),
+            Merchant(id = "kurazushi", name = "くら寿司", reading = "くらずし", category = "回転寿司"),
+            Merchant(id = "test_super", name = "テストスーパー", reading = "てすとすーぱー", category = "スーパー"),
+            Merchant(id = "test_other", name = "テストその他", reading = "てすとそのた", category = "その他"),
+        ),
+        campaigns = listOf(
+            Campaign(
+                id = "smcc_combini_restaurant",
+                issuer = "smcc",
+                name = "三井住友コンビニ・飲食",
+                paymentInstruction = "タッチ決済",
+                rateBase = 7.0,
+                verifiedDate = "2026-06-01",
+                merchantRules = listOf(
+                    MerchantRule(merchantId = "mcdonalds"),
+                    MerchantRule(merchantId = "seven_eleven"),
+                    MerchantRule(merchantId = "lawson"),
+                    MerchantRule(merchantId = "starbucks"),
+                    MerchantRule(merchantId = "gusto"),
+                    MerchantRule(merchantId = "steak_gusto"),
+                    MerchantRule(merchantId = "saizeriya"),
+                    MerchantRule(merchantId = "kfc"),
+                ),
+            ),
+            Campaign(
+                id = "mufg_point_up_program",
+                issuer = "mufg",
+                name = "MUFGポイントアップ",
+                paymentInstruction = "カード利用",
+                rateBase = 5.5,
+                verifiedDate = "2026-06-01",
+                merchantRules = listOf(
+                    MerchantRule(merchantId = "seven_eleven"),
+                    MerchantRule(merchantId = "sushiro"),
+                    MerchantRule(merchantId = "kurazushi", amexExcluded = true),
+                ),
+            ),
+        ),
+        profile = Profile(
+            cards = listOf(
+                ProfileCard(campaignId = "smcc_combini_restaurant", cardName = "三井住友カード", effectiveRateDefault = 7.0),
+                ProfileCard(campaignId = "mufg_point_up_program", cardName = "MUFGカード", brand = "Mastercard", effectiveRateDefault = 7.0),
+            ),
+        ),
+        updatedAt = "2026-06-01",
     )
     private val engine = JudgmentEngine(data)
     private val today = LocalDate.of(2026, 6, 28)
+
+    // ---- 検索ロジック ----
 
     @Test
     fun `エイリアスで検索できる`() {
@@ -106,7 +158,7 @@ class JudgmentEngineTest {
 
     @Test
     fun `店名とカテゴリの組み合わせで絞り込める`() {
-        // 「す」はすき家(ファストフード)やスシロー(回転寿司)にもヒットするが、カフェに絞ればスタバ系のみ
+        // 「す」はスシロー(回転寿司)にもヒットするが、カフェに絞ればスタバ系のみ
         val results = engine.search("す", setOf("カフェ"))
         assertTrue(results.all { it.category == "カフェ" })
         assertTrue(results.any { it.id == "starbucks" })
@@ -127,6 +179,8 @@ class JudgmentEngineTest {
         assertEquals("マクドナルド", engine.search("マクドナルド渋谷駅前店").first().name)
         assertTrue(engine.search("くら寿司ららぽーとTOKYO-BAY店").any { it.id == "kurazushi" })
     }
+
+    // ---- 店舗対象判定(公式リスト) ----
 
     @Test
     fun `対象外リストに一致すると対象外`() {
@@ -169,18 +223,6 @@ class JudgmentEngineTest {
         assertTrue(withList.canCheckStore(mWith))
         val (without, mWithout) = storeCheckEngine(hasList = false)
         assertFalse(without.canCheckStore(mWithout))
-    }
-
-    @Test
-    fun `実データ_アカチャンホンポは公式リストで3状態判定できる`() {
-        val merchant = data.merchants.first { it.id == "akachan_honpo" }
-        assertTrue(engine.canCheckStore(merchant))
-        // 公式の対象外店舗(ららぽーとTOKYO-BAY内)→ 対象外
-        assertEquals(StoreEligibility.INELIGIBLE, engine.checkStore(merchant, "ららぽーとTOKYO-BAY店").single().eligibility)
-        // 公式の対象店舗 → 対象
-        assertEquals(StoreEligibility.ELIGIBLE, engine.checkStore(merchant, "アリオ札幌店").single().eligibility)
-        // どちらのリストにも無い → 要確認
-        assertEquals(StoreEligibility.UNKNOWN, engine.checkStore(merchant, "架空のどこか店").single().eligibility)
     }
 
     @Test
@@ -233,6 +275,8 @@ class JudgmentEngineTest {
         return JudgmentEngine(data) to merchant
     }
 
+    // ---- isExactNameMatch ----
+
     @Test
     fun `チェーン名そのままの入力は完全一致と判定される`() {
         val mcdonalds = data.merchants.first { it.id == "mcdonalds" }
@@ -241,19 +285,7 @@ class JudgmentEngineTest {
         assertFalse(engine.isExactNameMatch(mcdonalds, "マクドナルド渋谷店"))
     }
 
-    @Test
-    fun `merchant_rules の参照切れがない`() {
-        val ids = data.merchants.map { it.id }.toSet()
-        val broken = data.campaigns.flatMap { c -> c.merchantRules.map { c.id to it.merchantId } }
-            .filter { (_, mid) -> mid !in ids }
-        assertEquals(emptyList<Pair<String, String>>(), broken)
-    }
-
-    @Test
-    fun `プロファイルのカードは実在する施策を参照している`() {
-        val campaignIds = data.campaigns.map { it.id }.toSet()
-        assertTrue(data.profile.cards.all { it.campaignId in campaignIds })
-    }
+    // ---- Amex / カード所有フィルタ ----
 
     private fun engineWithProfile(profile: Profile) = JudgmentEngine(data.copy(profile = profile))
 
@@ -637,6 +669,47 @@ class JudgmentEngineTest {
         assertEquals(500, q.discountAmount)
         assertNull(q.effectiveRate)
         assertEquals("500円還元", formatBenefit(q.benefitType, q.effectiveRate, q.discountAmount).toString())
+    }
+}
+
+/**
+ * リポジトリ直下 data/ の実データを読み込み、パース成功・構造整合性・
+ * 施策固有の振る舞いを検証する。ロジック自体の網羅は JudgmentEngineTest で行う。
+ */
+class JudgmentEngineRealDataTest {
+
+    private val data = PoikatsuJson.parse(
+        merchantsJson = File("../data/merchants.json").readText(),
+        campaignsJson = File("../data/campaigns.json").readText(),
+        profileJson = File("../data/profile.json").readText(),
+    )
+    private val engine = JudgmentEngine(data)
+    private val today = LocalDate.of(2026, 6, 28)
+
+    @Test
+    fun `実データ_merchant_rulesの参照切れがない`() {
+        val ids = data.merchants.map { it.id }.toSet()
+        val broken = data.campaigns.flatMap { c -> c.merchantRules.map { c.id to it.merchantId } }
+            .filter { (_, mid) -> mid !in ids }
+        assertEquals(emptyList<Pair<String, String>>(), broken)
+    }
+
+    @Test
+    fun `実データ_プロファイルのカードは実在する施策を参照している`() {
+        val campaignIds = data.campaigns.map { it.id }.toSet()
+        assertTrue(data.profile.cards.all { it.campaignId in campaignIds })
+    }
+
+    @Test
+    fun `実データ_アカチャンホンポは公式リストで3状態判定できる`() {
+        val merchant = data.merchants.first { it.id == "akachan_honpo" }
+        assertTrue(engine.canCheckStore(merchant))
+        // 公式の対象外店舗(ららぽーとTOKYO-BAY内)→ 対象外
+        assertEquals(StoreEligibility.INELIGIBLE, engine.checkStore(merchant, "ららぽーとTOKYO-BAY店").single().eligibility)
+        // 公式の対象店舗 → 対象
+        assertEquals(StoreEligibility.ELIGIBLE, engine.checkStore(merchant, "アリオ札幌店").single().eligibility)
+        // どちらのリストにも無い → 要確認
+        assertEquals(StoreEligibility.UNKNOWN, engine.checkStore(merchant, "架空のどこか店").single().eligibility)
     }
 
     // ---- 実データの新フィールド検証 ----

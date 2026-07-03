@@ -1,9 +1,16 @@
 package com.ktakjm.poikatsu
 
+import com.ktakjm.poikatsu.data.Campaign
+import com.ktakjm.poikatsu.data.GcGroup
+import com.ktakjm.poikatsu.data.Merchant
+import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.OverpassClient
 import com.ktakjm.poikatsu.data.Poi
+import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
+import com.ktakjm.poikatsu.data.Profile
 import com.ktakjm.poikatsu.data.YolpClient
+import com.ktakjm.poikatsu.data.YolpConfig
 import com.ktakjm.poikatsu.data.YolpSearchConfig
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.util.GeoMath
@@ -16,12 +23,29 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * フィクスチャデータで店舗マッチングロジックを検証する。
+ */
 class StoreMatchTest {
 
-    private val data = PoikatsuJson.parse(
-        merchantsJson = File("../data/merchants.json").readText(),
-        campaignsJson = File("../data/campaigns.json").readText(),
-        profileJson = File("../data/profile.json").readText(),
+    private val data = PoikatsuData(
+        merchants = listOf(
+            Merchant(id = "mcdonalds", name = "マクドナルド", reading = "まくどなるど", aliases = listOf("マック")),
+            Merchant(id = "seven_eleven", name = "セブン-イレブン", reading = "せぶんいれぶん", aliases = listOf("セブンイレブン", "7-ELEVEN")),
+            Merchant(id = "gusto", name = "ガスト", reading = "がすと"),
+            Merchant(id = "steak_gusto", name = "ステーキガスト", reading = "すてーきがすと"),
+            Merchant(id = "lawson", name = "ローソン", reading = "ろーそん", aliases = listOf("LAWSON")),
+            Merchant(id = "hanamasa", name = "肉のハナマサ", reading = "にくのはなまさ", aliases = listOf("ハナマサ")),
+            Merchant(id = "ok_store", name = "オーケー", reading = "おーけー", aliases = listOf("OK"), yolpSearch = "keyword", yolpKeyword = "オーケー"),
+            Merchant(id = "akachan_honpo", name = "アカチャンホンポ", reading = "あかちゃんほんぽ", yolpSearch = "keyword", yolpKeyword = "アカチャンホンポ"),
+            Merchant(id = "kfc", name = "ケンタッキーフライドチキン", reading = "けんたっきーふらいどちきん", aliases = listOf("KFC")),
+            Merchant(id = "starbucks", name = "スターバックスコーヒー", reading = "すたーばっくすこーひー", aliases = listOf("スタバ")),
+            Merchant(id = "dommy", name = "ドミー", reading = "どみー", category = "スーパー"),
+            Merchant(id = "ueshima", name = "上島珈琲店", reading = "うえしまこーひーてん", category = "カフェ"),
+        ),
+        campaigns = emptyList(),
+        profile = Profile(),
+        updatedAt = "2026-06-01",
     )
     private val engine = JudgmentEngine(data)
 
@@ -255,7 +279,58 @@ class YolpClipTest {
     }
 }
 
+/**
+ * フィクスチャデータで YOLP 検索設定ロジックを検証する。
+ */
 class YolpSearchConfigTest {
+
+    private val fixtureYolpConfig = YolpConfig(
+        gcGroups = listOf(
+            GcGroup(gc = "0123", categories = listOf("ファストフード", "ファミレス"), maxPages = 5),
+            GcGroup(gc = "0205", categories = listOf("コンビニ", "スーパー"), maxPages = 3),
+        ),
+    )
+    private val fixtureMerchants = listOf(
+        Merchant(id = "seven_eleven", name = "セブン-イレブン", category = "コンビニ", yolpSearch = "gc"),
+        Merchant(id = "mcdonalds", name = "マクドナルド", category = "ファストフード", yolpSearch = "gc"),
+        Merchant(id = "ok_store", name = "オーケー", category = "スーパー", yolpSearch = "keyword", yolpKeyword = "オーケー"),
+        Merchant(id = "coke_on", name = "Coke ON", category = "その他", yolpSearch = "none"),
+    )
+
+    @Test
+    fun `該当merchantがいないgc_groupはスキップされる`() {
+        val config = YolpSearchConfig.build(fixtureYolpConfig, fixtureMerchants, setOf("seven_eleven"))
+        assertEquals(1, config.gcGroups.size)
+        assertEquals("0205", config.gcGroups[0].gc)
+    }
+
+    @Test
+    fun `yolp_search_noneのmerchantは検索対象にならない`() {
+        val config = YolpSearchConfig.build(fixtureYolpConfig, fixtureMerchants, setOf("coke_on"))
+        assertTrue(config.keywordQueries.isEmpty())
+        assertTrue(config.gcGroups.isEmpty())
+    }
+
+    @Test
+    fun `gc_groupごとのmax_pagesが反映される`() {
+        val allIds = fixtureMerchants.map { it.id }.toSet()
+        val config = YolpSearchConfig.build(fixtureYolpConfig, fixtureMerchants, allIds)
+        assertEquals(5, config.gcGroups[0].maxPages)
+        assertEquals(3, config.gcGroups[1].maxPages)
+    }
+
+    @Test
+    fun `空のactiveMerchantIdsでは全gc_groupがスキップされキーワードも空`() {
+        val config = YolpSearchConfig.build(fixtureYolpConfig, fixtureMerchants, emptySet())
+        assertTrue(config.gcGroups.isEmpty())
+        assertTrue(config.keywordQueries.isEmpty())
+    }
+}
+
+/**
+ * 実データで YOLP 検索設定の整合性を検証する。
+ */
+class YolpSearchConfigRealDataTest {
 
     private val data = PoikatsuJson.parse(
         merchantsJson = File("../data/merchants.json").readText(),
@@ -266,14 +341,14 @@ class YolpSearchConfigTest {
     private val today = LocalDate.of(2026, 6, 28)
 
     @Test
-    fun `実データのconfigは旧ハードコードと同じgcグループを使う`() {
+    fun `実データ_configは旧ハードコードと同じgcグループを使う`() {
         val activeMerchantIds = engine.activeManagedMerchantIds(today)
         val config = YolpSearchConfig.build(data.yolpConfig!!, data.merchants, activeMerchantIds)
         assertEquals(listOf("0123,0115,0101013", "0205"), config.gcGroups.map { it.gc })
     }
 
     @Test
-    fun `実データのconfigは旧ハードコードと同じキーワードを使う`() {
+    fun `実データ_configは旧ハードコードと同じキーワードを使う`() {
         val activeMerchantIds = engine.activeManagedMerchantIds(today)
         val config = YolpSearchConfig.build(data.yolpConfig!!, data.merchants, activeMerchantIds)
         val expected = setOf("カーブス", "アカチャンホンポ", "オーケー", "ピザハット", "上島珈琲", "はま寿司")
@@ -281,39 +356,10 @@ class YolpSearchConfigTest {
     }
 
     @Test
-    fun `該当merchantがいないgc_groupはスキップされる`() {
-        val config = YolpSearchConfig.build(data.yolpConfig!!, data.merchants, setOf("seven_eleven"))
-        assertEquals(1, config.gcGroups.size)
-        assertEquals("0205", config.gcGroups[0].gc)
-    }
-
-    @Test
-    fun `yolp_search_noneのmerchantは検索対象にならない`() {
-        val config = YolpSearchConfig.build(data.yolpConfig!!, data.merchants, setOf("coke_on"))
-        assertTrue(config.keywordQueries.isEmpty())
-        assertTrue(config.gcGroups.isEmpty())
-    }
-
-    @Test
-    fun `gc_groupごとのmax_pagesが反映される`() {
-        val activeMerchantIds = engine.activeManagedMerchantIds(today)
-        val config = YolpSearchConfig.build(data.yolpConfig!!, data.merchants, activeMerchantIds)
-        assertEquals(5, config.gcGroups[0].maxPages)
-        assertEquals(3, config.gcGroups[1].maxPages)
-    }
-
-    @Test
-    fun `全keyword merchantがアクティブな施策にカバーされている`() {
+    fun `実データ_全keyword_merchantがアクティブな施策にカバーされている`() {
         val activeMerchantIds = engine.activeManagedMerchantIds(today)
         val keywordMerchants = data.merchants.filter { it.yolpSearch == "keyword" }
         assertTrue(keywordMerchants.all { it.id in activeMerchantIds })
-    }
-
-    @Test
-    fun `空のactiveMerchantIdsでは全gc_groupがスキップされキーワードも空`() {
-        val config = YolpSearchConfig.build(data.yolpConfig!!, data.merchants, emptySet())
-        assertTrue(config.gcGroups.isEmpty())
-        assertTrue(config.keywordQueries.isEmpty())
     }
 }
 
