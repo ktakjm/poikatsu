@@ -903,6 +903,57 @@ class MunicipalitiesTest {
     }
 }
 
+/**
+ * data-test/ のショーケースデータの整合性テスト。
+ * 実データ(JudgmentEngineRealDataTest)と同じ検証を通し、スキーマ変更で腐るのを CI で防ぐ。
+ */
+class TestDataIntegrityTest {
+
+    private val data = PoikatsuJson.parse(
+        merchantsJson = File("../data-test/merchants.json").readText(),
+        campaignsJson = File("../data-test/campaigns.json").readText(),
+        profileJson = File("../data/profile.json").readText(),
+    )
+
+    @Test
+    fun `テストデータ_パースに成功する`() {
+        assertTrue("merchants が空", data.merchants.isNotEmpty())
+        assertTrue("campaigns が空", data.campaigns.isNotEmpty())
+    }
+
+    @Test
+    fun `テストデータ_merchant_rulesの参照切れがない`() {
+        val ids = data.merchants.map { it.id }.toSet()
+        val broken = data.campaigns.flatMap { c -> c.merchantRules.map { c.id to it.merchantId } }
+            .filter { (_, mid) -> mid !in ids }
+        assertEquals(emptyList<Pair<String, String>>(), broken)
+    }
+
+    @Test
+    fun `テストデータ_rate_baseとdiscount_amountはちょうど一方がnon-null`() {
+        data.campaigns.forEach { c ->
+            val hasRate = c.rateBase != null
+            val hasDiscount = c.discountAmount != null
+            assertTrue(
+                "${c.id}: rate_base(${c.rateBase}) と discount_amount(${c.discountAmount}) はちょうど一方が non-null",
+                hasRate xor hasDiscount,
+            )
+        }
+    }
+
+    @Test
+    fun `テストデータ_type_benefitType_storeScopeが有効な値`() {
+        val validTypes = CampaignType.entries.map { it.jsonValue }.toSet()
+        val validBenefitTypes = BenefitType.entries.map { it.jsonValue }.toSet()
+        val validScopes = setOf("managed", "external")
+        data.campaigns.forEach { c ->
+            assertTrue("${c.id}: invalid type '${c.type}'", c.type in validTypes)
+            assertTrue("${c.id}: invalid benefitType '${c.benefitType}'", c.benefitType in validBenefitTypes)
+            assertTrue("${c.id}: invalid storeScope '${c.storeScope}'", c.storeScope in validScopes)
+        }
+    }
+}
+
 class JapaneseTextTest {
 
     @Test

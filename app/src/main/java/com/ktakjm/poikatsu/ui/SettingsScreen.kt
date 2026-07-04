@@ -72,6 +72,7 @@ internal fun SettingsScreen(
     dataStatus: String,
     refreshing: Boolean,
     dataCommitRef: String,
+    useTestData: Boolean,
     onThemeModeChange: (ThemeMode) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
     onAutoRefreshChange: (Boolean) -> Unit,
@@ -85,6 +86,7 @@ internal fun SettingsScreen(
     onLoadMunicipalityMaster: () -> Unit,
     onRefresh: () -> Unit,
     onDataCommitRefChange: (String) -> Unit,
+    onUseTestDataChange: (Boolean) -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
     var showMunicipalityPicker by remember { mutableStateOf(false) }
@@ -208,6 +210,11 @@ internal fun SettingsScreen(
 
         // --- 開発者向け ---
         SettingsSectionHeader("開発者向け")
+        ListItem(
+            headlineContent = { Text("テストデータを使う") },
+            supportingContent = { Text("data-test/ のショーケースデータに切り替えます") },
+            trailingContent = { Switch(checked = useTestData, onCheckedChange = onUseTestDataChange) },
+        )
         CommitRefRow(value = dataCommitRef, onChange = onDataCommitRefChange)
 
         // --- このアプリ ---

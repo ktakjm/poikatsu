@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "updated_at": "2026-07-04",
+
+  "yolp_config": {
+    "gc_groups": [
+      {
+        "gc": "0123,0115,0101013",
+        "categories": ["ファストフード", "ファミレス", "カフェ", "回転寿司"],
+        "max_pages": 5,
+        "note": "グルメのうち対象チェーンが集中する業種"
+      },
+      {
+        "gc": "0205",
+        "categories": ["コンビニ", "スーパー"],
+        "max_pages": 3,
+        "note": "スーパー+コンビニ"
+      }
+    ],
+    "max_keyword_sources": 20
+  },
+
+  "merchants": [
+    { "id": "test_combini", "name": "テストコンビニ", "reading": "てすとこんびに", "category": "コンビニ" },
+    { "id": "test_fastfood", "name": "テストバーガー", "reading": "てすとばーがー", "category": "ファストフード" }
+  ]
+}

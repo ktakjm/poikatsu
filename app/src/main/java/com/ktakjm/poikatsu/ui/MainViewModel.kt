@@ -217,6 +217,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         /** 自治体マスタ(都道府県→市区町村リスト)。設定画面の追加ピッカー用 */
         val municipalityMaster: Map<String, List<String>> = emptyMap(),
         val dataCommitRef: String = "",
+        val useTestData: Boolean = false,
     )
 
     /** 設定画面の QR 決済1件分の表示・編集状態 */
@@ -256,7 +257,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             app.assets.open(name).bufferedReader().use { it.readText() }
         },
         cacheDir = File(app.filesDir, "remote_data"),
-        fetchRemote = { fileName, ref -> GithubRawClient.fetch(fileName, ref) },
+        fetchRemote = { fileName, ref, dataDir -> GithubRawClient.fetch(fileName, ref, dataDir) },
     )
 
     private val settingsRepo = SettingsRepository(app)
@@ -293,9 +294,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val settingsJob: Job = settingsRepo.settings
         .onEach { new ->
             val refChanged = lastSettings.dataCommitRef != new.dataCommitRef
+            val testDataChanged = lastSettings.useTestData != new.useTestData
             lastSettings = new
             rebuild()
-            if (refChanged) refresh(force = true)
+            if (refChanged || testDataChanged) refresh(force = true)
         }
         .launchIn(viewModelScope)
 
@@ -317,7 +319,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             initialLoad.join() // ローカルロード完了前にリモート結果で上書きされない順序を保証
             _state.update { it.copy(refreshing = true) }
             val ref = lastSettings.dataCommitRef.ifBlank { "main" }
-            val loaded = repository.refresh(ref)
+            val dataDir = if (lastSettings.useTestData) "data-test" else "data"
+            val loaded = repository.refresh(ref, dataDir)
             if (loaded != null) {
                 lastFetchSucceededAt = System.currentTimeMillis()
                 applyData(loaded)
@@ -456,6 +459,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 qrPaymentSettings = qrPaymentSettings,
                 registeredMunicipalities = settings.registeredMunicipalities,
                 dataCommitRef = settings.dataCommitRef,
+                useTestData = settings.useTestData,
                 timeLimitedActive = timeLimitedActive,
                 timeLimitedUpcoming = timeLimitedUpcoming,
                 merchantNames = loaded.data.merchants.associate { it.id to it.name },
@@ -1090,6 +1094,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onSetAutoRefresh(enabled: Boolean) = viewModelScope.launch { settingsRepo.setAutoRefresh(enabled) }
 
     fun onSetDataCommitRef(ref: String) = viewModelScope.launch { settingsRepo.setDataCommitRef(ref) }
+
+    fun onSetUseTestData(enabled: Boolean) = viewModelScope.launch { settingsRepo.setUseTestData(enabled) }
 
     fun onSetCardOwned(campaignId: String, owned: Boolean) =
         viewModelScope.launch { settingsRepo.setOwned(campaignId, owned) }

@@ -41,6 +41,8 @@ data class AppSettings(
     val cardOverrides: Map<String, CardOverride> = emptyMap(),
     /** データ取得先の Git ref(short commit hash 等)。空文字列は main を使う */
     val dataCommitRef: String = "",
+    /** テストデータ(data-test/)を使うか。true なら取得パスが data/ → data-test/ に切り替わる */
+    val useTestData: Boolean = false,
     /** 利用中の QR 決済 ID。profile.json の qr_payments カタログからユーザーが選択 */
     val enabledQrPaymentIds: Set<String> = emptySet(),
     /** 登録自治体(都道府県+市区町村)。キャンペーンタブのフィルタに使う */
@@ -64,6 +66,7 @@ class SettingsRepository(private val context: Context) {
         val AUTO_REFRESH = booleanPreferencesKey("auto_refresh")
         val CARD_OVERRIDES = stringPreferencesKey("card_overrides")
         val DATA_COMMIT_REF = stringPreferencesKey("data_commit_ref")
+        val USE_TEST_DATA = booleanPreferencesKey("use_test_data")
         val QR_ENABLED = stringPreferencesKey("qr_enabled")
         val MUNICIPALITIES = stringPreferencesKey("municipalities")
     }
@@ -77,6 +80,7 @@ class SettingsRepository(private val context: Context) {
             autoRefresh = prefs[Keys.AUTO_REFRESH] ?: true,
             cardOverrides = prefs.decodeOverrides(),
             dataCommitRef = prefs[Keys.DATA_COMMIT_REF] ?: "",
+            useTestData = prefs[Keys.USE_TEST_DATA] ?: false,
             enabledQrPaymentIds = prefs.decodeQrEnabled(),
             registeredMunicipalities = prefs.decodeMunicipalities(),
         )
@@ -96,6 +100,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setDataCommitRef(ref: String) {
         context.settingsDataStore.edit { it[Keys.DATA_COMMIT_REF] = ref.trim() }
+    }
+
+    suspend fun setUseTestData(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.USE_TEST_DATA] = enabled }
     }
 
     suspend fun setOwned(campaignId: String, owned: Boolean) =

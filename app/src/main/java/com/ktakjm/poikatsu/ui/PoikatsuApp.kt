@@ -315,9 +315,10 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     qrPayments = state.qrPaymentSettings,
                     registeredMunicipalities = state.registeredMunicipalities,
                     municipalityMaster = state.municipalityMaster,
-                    dataStatus = dataStatusLabel(state.dataUpdatedAt, state.dataSource),
+                    dataStatus = dataStatusLabel(state.dataUpdatedAt, state.dataSource, state.useTestData),
                     refreshing = state.refreshing,
                     dataCommitRef = state.dataCommitRef,
+                    useTestData = state.useTestData,
                     onThemeModeChange = viewModel::onSetThemeMode,
                     onDynamicColorChange = viewModel::onSetDynamicColor,
                     onAutoRefreshChange = viewModel::onSetAutoRefresh,
@@ -331,6 +332,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     onLoadMunicipalityMaster = viewModel::loadMunicipalityMaster,
                     onRefresh = viewModel::onManualRefresh,
                     onDataCommitRefChange = viewModel::onSetDataCommitRef,
+                    onUseTestDataChange = viewModel::onSetUseTestData,
                 )
                 else -> PaddedColumn {
                     SearchPane(
@@ -338,7 +340,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         categories = state.categories,
                         selectedCategories = state.selectedCategories,
                         results = state.results,
-                        dataStatus = dataStatusLabel(state.dataUpdatedAt, state.dataSource),
+                        dataStatus = dataStatusLabel(state.dataUpdatedAt, state.dataSource, state.useTestData),
                         refreshing = state.refreshing,
                         onQueryChange = viewModel::onQueryChange,
                         onToggleCategory = viewModel::onToggleCategory,

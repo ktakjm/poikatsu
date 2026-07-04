@@ -46,14 +46,15 @@ internal fun parseBrandColor(hex: String?): Color? {
 internal fun onColorFor(background: Color): Color =
     if (background.luminance() > 0.5f) Color.Black else Color.White
 
-internal fun dataStatusLabel(updatedAt: String, source: DataSource?): String {
+internal fun dataStatusLabel(updatedAt: String, source: DataSource?, useTestData: Boolean = false): String {
     val sourceLabel = when (source) {
         DataSource.REMOTE -> "最新データ取得済み"
         DataSource.CACHE -> "前回取得データ(オフライン?)"
         DataSource.BUNDLED -> "同梱データ(オフライン?)"
         null -> ""
     }
-    return "データ更新日：$updatedAt $sourceLabel"
+    val testLabel = if (useTestData) " [テストデータ]" else ""
+    return "データ更新日：$updatedAt $sourceLabel$testLabel"
 }
 
 /**
