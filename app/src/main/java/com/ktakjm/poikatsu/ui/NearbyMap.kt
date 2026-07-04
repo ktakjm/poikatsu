@@ -40,6 +40,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,10 +75,14 @@ import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.ComposeMapColorScheme
 import com.google.maps.android.clustering.ClusterItem
+import com.google.maps.android.clustering.view.DefaultClusterRenderer
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.MapsComposeExperimentalApi
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.clustering.Clustering
+import com.google.maps.android.compose.clustering.rememberClusterManager
+import com.google.maps.android.compose.clustering.rememberClusterRenderer
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
 import com.ktakjm.poikatsu.util.GeoMath
@@ -112,6 +117,7 @@ data class MapMarker(
  * 対象店舗をピン表示する地図。浮きコントロールは上部(検索バー)、
  * 条件付き「このエリアを検索」、右下の現在地ボタンで構成する。
  */
+@OptIn(MapsComposeExperimentalApi::class) // rememberClusterManager/Renderer(minClusterSize 変更のため)
 @Composable
 fun NearbyMap(
     center: MapPoint,
@@ -230,108 +236,55 @@ fun NearbyMap(
                 )
             }
             val clusterItems = remember(markers) { markers.map(::StoreClusterItem) }
-            Clustering(
-                items = clusterItems,
-                onClusterClick = { cluster ->
+            val clusterManager = rememberClusterManager<StoreClusterItem>()
+            val clusterRenderer = rememberClusterRenderer(
+                clusterContent = { cluster ->
+                    // 複合ピン(groupSize>1)を含み得るため、アイテム数でなく店舗数の合計を表示する
+                    ClusterBadge(count = cluster.items.sumOf { it.marker.groupSize })
+                },
+                clusterItemContent = { item ->
+                    if (item.marker.groupSize > 1) {
+                        // 同一地点の複合ピン: ライブラリクラスタと同じバッジで描く
+                        ClusterBadge(count = item.marker.groupSize)
+                    } else {
+                        StorePin(item.marker)
+                    }
+                },
+                clusterManager = clusterManager,
+            )
+            SideEffect {
+                // 既定の最小クラスタサイズは 4 で、2〜3 個の近接ピンは束ねられず重なったまま
+                // 描かれてしまう。「画面上で重なるなら束ねる」ため 2 に下げる
+                (clusterRenderer as? DefaultClusterRenderer<*>)?.minClusterSize = 2
+                // クラスタタップはズームインのみ。YOLP 再検索はしない(minClusterSize=2 では
+                // 高ズーム中のタップも多く、その時点の表示範囲=極小半径で再検索すると
+                // それまでの検索結果リストを狭い範囲の結果で上書きしてしまうため)
+                clusterManager?.setOnClusterClickListener { cluster ->
                     scope.launch {
                         val newZoom = (cameraPositionState.position.zoom + 2f)
                             .coerceAtMost(MAX_CLUSTER_ZOOM)
                         cameraPositionState.animate(
                             CameraUpdateFactory.newLatLngZoom(cluster.position, newZoom),
                         )
-                        val pos = cameraPositionState.position
-                        val c = pos.target
-                        val bounds = cameraPositionState.projection?.visibleRegion?.latLngBounds
-                        val radiusM = bounds?.let {
-                            GeoMath.distanceMeters(
-                                c.latitude, c.longitude,
-                                it.northeast.latitude, it.northeast.longitude,
-                            )
-                        } ?: 1000
-                        onSearchHere(MapPoint(c.latitude, c.longitude), radiusM, pos.zoom.toDouble())
                     }
                     onClusterTap()
                     true
-                },
-                onClusterItemClick = { item ->
+                }
+                clusterManager?.setOnClusterItemClickListener { item ->
                     item.marker.onClick()
                     true
-                },
-                clusterContent = { cluster ->
-                    Surface(
-                        modifier = Modifier.size(40.dp),
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.inverseSurface,
-                        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
-                        border = BorderStroke(2.dp, Color.White),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = "${cluster.size}",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
-                    }
-                },
-                clusterItemContent = { item ->
-                    if (item.marker.groupSize > 1) {
-                        // 同一地点の複合ピン: ライブラリクラスタと同じバッジで描く
-                        Surface(
-                            modifier = Modifier.size(40.dp),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.inverseSurface,
-                            contentColor = MaterialTheme.colorScheme.inverseOnSurface,
-                            border = BorderStroke(2.dp, Color.White),
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "${item.marker.groupSize}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                        }
-                    } else {
-                        val selected = item.marker.selected
-                        val sizeDp = if (selected) 34.dp else 24.dp
-                        val colors = item.marker.colorHexes.map { Color(parseColor(it)) }
-                            .ifEmpty { listOf(Color(parseColor(null))) }
-                        val strokeWidth = if (selected) 3.dp else 2.dp
-                        Box(
-                            modifier = Modifier
-                                .size(sizeDp)
-                                .drawBehind {
-                                    val sw = strokeWidth.toPx()
-                                    val inset = sw / 2f
-                                    val ovalSize = Size(size.width - sw, size.height - sw)
-                                    val ovalOffset = Offset(inset, inset)
-                                    if (colors.size == 1) {
-                                        drawOval(colors[0], topLeft = ovalOffset, size = ovalSize)
-                                    } else {
-                                        val sweep = 360f / colors.size
-                                        var start = -45f
-                                        colors.forEach { c ->
-                                            drawArc(
-                                                c, start, sweep,
-                                                useCenter = true,
-                                                topLeft = ovalOffset,
-                                                size = ovalSize,
-                                            )
-                                            start += sweep
-                                        }
-                                    }
-                                    drawOval(
-                                        Color.White,
-                                        topLeft = ovalOffset,
-                                        size = ovalSize,
-                                        style = Stroke(width = sw),
-                                    )
-                                },
-                        )
-                    }
-                },
-            )
+                }
+            }
+            SideEffect {
+                if (clusterManager != null && clusterRenderer != null &&
+                    clusterManager.renderer !== clusterRenderer
+                ) {
+                    clusterManager.renderer = clusterRenderer
+                }
+            }
+            if (clusterManager != null) {
+                Clustering(items = clusterItems, clusterManager = clusterManager)
+            }
         }
 
         // --- 上部コントロール: 検索バー + 候補リスト + 「このエリアを検索」/進捗ピル ---
@@ -624,6 +577,67 @@ private fun PlaceSearchBar(
             }
         }
     }
+}
+
+/** ライブラリクラスタ・同一地点複合ピン共通の件数バッジ */
+@Composable
+private fun ClusterBadge(count: Int) {
+    Surface(
+        modifier = Modifier.size(40.dp),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.inverseSurface,
+        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+        border = BorderStroke(2.dp, Color.White),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = "$count",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+/** 単独店舗のピン。ブランドカラーで塗り、複数施策対応の店舗は色ごとに扇形に分割する */
+@Composable
+private fun StorePin(marker: MapMarker) {
+    val selected = marker.selected
+    val sizeDp = if (selected) 34.dp else 24.dp
+    val colors = marker.colorHexes.map { Color(parseColor(it)) }
+        .ifEmpty { listOf(Color(parseColor(null))) }
+    val strokeWidth = if (selected) 3.dp else 2.dp
+    Box(
+        modifier = Modifier
+            .size(sizeDp)
+            .drawBehind {
+                val sw = strokeWidth.toPx()
+                val inset = sw / 2f
+                val ovalSize = Size(size.width - sw, size.height - sw)
+                val ovalOffset = Offset(inset, inset)
+                if (colors.size == 1) {
+                    drawOval(colors[0], topLeft = ovalOffset, size = ovalSize)
+                } else {
+                    val sweep = 360f / colors.size
+                    var start = -45f
+                    colors.forEach { c ->
+                        drawArc(
+                            c, start, sweep,
+                            useCenter = true,
+                            topLeft = ovalOffset,
+                            size = ovalSize,
+                        )
+                        start += sweep
+                    }
+                }
+                drawOval(
+                    Color.White,
+                    topLeft = ovalOffset,
+                    size = ovalSize,
+                    style = Stroke(width = sw),
+                )
+            },
+    )
 }
 
 /** 単色の丸ドット(白縁付き)。現在地ドットなど 1 色で足りる用途に使う */

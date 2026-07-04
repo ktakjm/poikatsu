@@ -609,16 +609,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     hasTimeLimited = allCampaigns.any { it.periodEnd != null },
                 )
             }
-            .sortedBy { it.distanceFromCenter }
             // 同一店舗の重複を排除(YOLP は同じ店を別名・空白違いで複数返すことがある。
             // 例: 「KFC…店」と「ケンタッキーフライドチキン…店」、空白有無違いの同名)。
-            // 「チェーン + 支店名」がともに一致するものを同一店舗とみなし、最も近い1件を残す。
+            // 「チェーン + 支店名」がともに一致するものを同一店舗とみなし、1件だけ残す。
             // 座標基準にしないのは、同一モール内に同チェーンの別店舗(例: レイクタウンの複数スタバ)が
             // 入る場合に誤って1件へ潰さないため(支店名が異なれば別物として残る)。
-            .distinctBy { p ->
+            // 残す1件は座標の辞書順で選ぶ。「最も近い1件」にすると、同一店舗が座標違いで重複登録
+            // されている場合(例: リヴィンオズ大泉のドトール、施設実位置と住所ジオコード点が約44m差)に
+            // 検索起点しだいで残る座標が入れ替わり、近接グルーピングの結果が検索のたびに揺れるため
+            .groupBy { p ->
                 val m = p.merchant
                 if (m == null) "?:${p.name}" else "${m.id}:${engine.normalizedBranch(m, p.name)}"
             }
+            .map { (_, dups) -> dups.minWith(compareBy({ it.lat }, { it.lon }, { it.name })) }
+            .sortedBy { it.distanceFromCenter }
         val effectiveZoom = if (adaptZoom) {
             val nearCount = places.count { it.distanceFromCenter <= NEARBY_DENSE_RADIUS_M }
             if (nearCount < NEARBY_DENSE_THRESHOLD) NEARBY_WIDE_ZOOM else zoom

@@ -1046,25 +1046,41 @@ private fun distanceLabel(meters: Int, originName: String?): String {
     return "$prefix$dist"
 }
 
-/** 同一地点(閾値メートル以内)の店舗をグルーピングする。同一ビル 1F/2F 等の重なり対策 */
+/**
+ * 同一地点(閾値メートル以内)の店舗をグルーピングする。同一ビル 1F/2F 等の重なり対策。
+ * 判定は「グループ内のいずれかのメンバーと閾値以内か」(連結成分)。シード1店舗との距離だけで
+ * 判定すると A-B 4m / B-C 4m / A-C 8m のようなチェーンが入力順(=検索起点からの距離順)次第で
+ * {A,B}+{C} にも {A,B,C} にも分かれてしまい、同じ施設でも検索のたびに結果が揺れるため。
+ * 連結成分なら分割は入力順によらず一意に決まる。
+ */
 private fun groupByProximity(
     places: List<MainViewModel.NearbyPlace>,
-    thresholdMeters: Int = 5,
+    thresholdMeters: Int = 10,
 ): List<List<MainViewModel.NearbyPlace>> {
     val used = BooleanArray(places.size)
     val groups = mutableListOf<List<MainViewModel.NearbyPlace>>()
     for (i in places.indices) {
         if (used[i]) continue
         used[i] = true
-        val group = mutableListOf(places[i])
-        for (j in i + 1 until places.size) {
-            if (used[j]) continue
-            if (GeoMath.distanceMeters(places[i].lat, places[i].lon, places[j].lat, places[j].lon) <= thresholdMeters) {
-                group.add(places[j])
-                used[j] = true
+        val memberIdx = mutableListOf(i)
+        // メンバーが増えるたびに再走査し、閾値以内の店舗を推移的に取り込む
+        var expanded = true
+        while (expanded) {
+            expanded = false
+            for (j in places.indices) {
+                if (used[j]) continue
+                val near = memberIdx.any {
+                    GeoMath.distanceMeters(places[it].lat, places[it].lon, places[j].lat, places[j].lon) <= thresholdMeters
+                }
+                if (near) {
+                    memberIdx.add(j)
+                    used[j] = true
+                    expanded = true
+                }
             }
         }
-        groups.add(group)
+        // グループ内は元リストの並び(検索起点からの距離順)を保つ
+        groups.add(memberIdx.sorted().map { places[it] })
     }
     return groups
 }
