@@ -594,36 +594,37 @@ private fun NearbyPane(
             .sortedWith(compareByDescending<Map.Entry<Merchant, Int>> { it.value }.thenBy { it.key.reading })
             .map { it.key to it.value }
     }
-    // 同一地点(5m 以内)の店舗をグルーピングし、複合マーカーで表示する。
+    // 同一地点(10m 以内・連結成分)の店舗をグルーピングし、複合マーカーで表示する。
     // タップでズーム分解できない重なりを、クラスタバッジと同じ見た目で一つにまとめる。
-    val markers = remember(visiblePlaces, selectedPlace) {
+    // markerGroups はマーカー座標→グループ内店舗の逆引きで、ズームしても分解できない
+    // ライブラリクラスタを「同じ場所に N 件」で開くとき(onClusterOpen)に使う。
+    val (markers, markerGroups) = remember(visiblePlaces, selectedPlace) {
         val groups = groupByProximity(visiblePlaces)
-        groups.flatMap { group ->
+        val byPoint = HashMap<MapPoint, List<MainViewModel.NearbyPlace>>()
+        val built = groups.map { group ->
+            val rep = group[0]
+            val point = MapPoint(rep.lat, rep.lon)
+            byPoint[point] = group
             if (group.size == 1) {
-                val place = group[0]
-                listOf(
-                    MapMarker(
-                        point = MapPoint(place.lat, place.lon),
-                        label = place.name,
-                        colorHexes = place.brandColors,
-                        selected = place == selectedPlace,
-                        onClick = { onPreviewPlace(place) },
-                    ),
+                MapMarker(
+                    point = point,
+                    label = rep.name,
+                    colorHexes = rep.brandColors,
+                    selected = rep == selectedPlace,
+                    onClick = { onPreviewPlace(rep) },
                 )
             } else {
-                val rep = group[0]
-                listOf(
-                    MapMarker(
-                        point = MapPoint(rep.lat, rep.lon),
-                        label = "${group.size}件",
-                        colorHexes = group.flatMap { it.brandColors }.distinct(),
-                        selected = group.any { it == selectedPlace },
-                        onClick = { onClearPreview(); compoundPlaces = group },
-                        groupSize = group.size,
-                    ),
+                MapMarker(
+                    point = point,
+                    label = "${group.size}件",
+                    colorHexes = group.flatMap { it.brandColors }.distinct(),
+                    selected = group.any { it == selectedPlace },
+                    onClick = { onClearPreview(); compoundPlaces = group },
+                    groupSize = group.size,
                 )
             }
         }
+        built to byPoint
     }
 
     // 地図を全面に出し、店舗リストは引き上げ式のボトムシートに収める。
@@ -811,6 +812,15 @@ private fun NearbyPane(
             onSearchHere = { p, r, z -> onSearchHere(p.lat, p.lon, r, z) },
             onSearchMyLocation = onReload,
             onClusterTap = onClusterTap,
+            onClusterOpen = { clusterMarkers ->
+                val places = clusterMarkers
+                    .flatMap { markerGroups[it.point].orEmpty() }
+                    .sortedBy { it.distanceFromCenter }
+                if (places.isNotEmpty()) {
+                    onClearPreview()
+                    compoundPlaces = places
+                }
+            },
             loadingMessage = if (nearby.loading) nearbyLoadingText(nearby.loadingPhase) else null,
             originName = originName,
             geocodeCandidates = geocodeCandidates,

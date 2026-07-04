@@ -128,6 +128,8 @@ fun NearbyMap(
     onSearchHere: (MapPoint, Int, Double) -> Unit,
     onSearchMyLocation: () -> Unit,
     onClusterTap: () -> Unit,
+    /** ズームしても分解できないクラスタをタップしたとき、内包するマーカー一覧を渡す(→店舗リスト表示) */
+    onClusterOpen: (List<MapMarker>) -> Unit,
     loadingMessage: String?,
     // 地名検索(起点コントロール)
     originName: String?,
@@ -258,16 +260,27 @@ fun NearbyMap(
                 (clusterRenderer as? DefaultClusterRenderer<*>)?.minClusterSize = 2
                 // クラスタタップはズームインのみ。YOLP 再検索はしない(minClusterSize=2 では
                 // 高ズーム中のタップも多く、その時点の表示範囲=極小半径で再検索すると
-                // それまでの検索結果リストを狭い範囲の結果で上書きしてしまうため)
+                // それまでの検索結果リストを狭い範囲の結果で上書きしてしまうため)。
+                // ただしズーム上限(MAX_CLUSTER_ZOOM)でもライブラリが束ね続ける広がりのクラスタは
+                // ズームしても永遠に分解できない(デッドエンド)ため、複合ピンと同じく
+                // 「同じ場所に N 件」の店舗リストを開く。距離予測が外れて分解できなかった場合も、
+                // 上限到達後の再タップで必ずリスト表示に落ちる
                 clusterManager?.setOnClusterClickListener { cluster ->
-                    scope.launch {
-                        val newZoom = (cameraPositionState.position.zoom + 2f)
-                            .coerceAtMost(MAX_CLUSTER_ZOOM)
-                        cameraPositionState.animate(
-                            CameraUpdateFactory.newLatLngZoom(cluster.position, newZoom),
-                        )
+                    val currentZoom = cameraPositionState.position.zoom
+                    val maxSpreadM = maxPairwiseDistanceMeters(cluster.items.map { it.position })
+                    val unsplittable = currentZoom >= MAX_CLUSTER_ZOOM - 0.01f ||
+                        maxSpreadM <= clusterMergeDistanceMeters(MAX_CLUSTER_ZOOM, cluster.position.latitude)
+                    if (unsplittable) {
+                        onClusterOpen(cluster.items.map { it.marker })
+                    } else {
+                        scope.launch {
+                            val newZoom = (currentZoom + 2f).coerceAtMost(MAX_CLUSTER_ZOOM)
+                            cameraPositionState.animate(
+                                CameraUpdateFactory.newLatLngZoom(cluster.position, newZoom),
+                            )
+                        }
+                        onClusterTap()
                     }
-                    onClusterTap()
                     true
                 }
                 clusterManager?.setOnClusterItemClickListener { item ->
@@ -675,5 +688,33 @@ private class StoreClusterItem(val marker: MapMarker) : ClusterItem {
     override fun getZIndex() = if (marker.selected) 1f else 0f
 }
 
+/**
+ * ライブラリクラスタリング(NonHierarchicalDistanceBasedAlgorithm)が指定ズームで 2 点を
+ * 同一クラスタに束ねる目安距離(メートル)。アルゴリズムは整数ズーム z ごとに正規化世界座標
+ * (世界幅=1)で span = 100/2^z/256 の探索ボックス(±span/2)を張って点を取り込むため、
+ * 実効的なマージ半径は span の半分。メートル換算は赤道周長×cos(緯度)(メルカトル)。
+ * 例: ズーム19・緯度36°で約 12m。この距離以内のピン同士はズーム上限でも分解できない。
+ */
+private fun clusterMergeDistanceMeters(zoom: Float, lat: Double): Double {
+    val discreteZoom = zoom.toInt()
+    return EARTH_CIRCUMFERENCE_M * cos(Math.toRadians(lat)) * 50.0 / (256.0 * 2.0.pow(discreteZoom))
+}
+
+/** 点集合の最大ペア間距離(m)。クラスタ内アイテムの広がりの見積もりに使う(要素数は高々数十) */
+private fun maxPairwiseDistanceMeters(points: List<LatLng>): Int {
+    var max = 0
+    for (i in points.indices) {
+        for (j in i + 1 until points.size) {
+            val d = GeoMath.distanceMeters(
+                points[i].latitude, points[i].longitude,
+                points[j].latitude, points[j].longitude,
+            )
+            if (d > max) max = d
+        }
+    }
+    return max
+}
+
+private const val EARTH_CIRCUMFERENCE_M = 40075016.686
 private const val MAX_CLUSTER_ZOOM = 19f
 private const val SELECTION_MIN_ZOOM = 17f
