@@ -365,7 +365,7 @@ flowchart LR
 - `canCheckStore(merchant)`: `official_store_list` を持つ施策が 1 つでもあれば、対象判定画面（`StoreCheckScreen`）に遷移できる。
 - `isExcludedStore(merchant, storeName)`: 近隣リスト用。`checkStore` の結果が INELIGIBLE を含み ELIGIBLE を含まないときだけ true（**明示的対象外のみ**近隣リストから除外する）。
 - チェーン rule の引き当ては `Campaign.ruleFor(merchant)`（private 拡張）に集約。
-- `matchStore(storeName, brand)` は GPS 検索用。OSM の POI 名（「マクドナルド 渋谷駅前店」）からチェーンを特定する。「ステーキガスト」が「ガスト」に負けないよう、**一致キーが最長のチェーンを採用**する
+- `matchStore(storeName, brand)` は GPS 検索用。OSM の POI 名（「マクドナルド 渋谷駅前店」）からチェーンを特定する。「ステーキガスト」が「ガスト」に負けないよう、**一致キーが最長のチェーンを採用**する。照合キーは 3 文字以上、または**漢字のみ 2 文字**（松屋・夢庵等。#38）。漢字キーは前方境界のみ厳格（「小松屋」の「松屋」は別の店名の一部とみなす。直後の漢字は「松屋渋谷店」のように支店名なので許容）
 
 ### 5.5 統一判定型 CampaignJudgment と統合判定（judgeAll）
 

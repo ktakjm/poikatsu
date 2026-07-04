@@ -41,6 +41,8 @@ class StoreMatchTest {
             Merchant(id = "starbucks", name = "スターバックスコーヒー", reading = "すたーばっくすこーひー", aliases = listOf("スタバ")),
             Merchant(id = "dommy", name = "ドミー", reading = "どみー", category = "スーパー"),
             Merchant(id = "ueshima", name = "上島珈琲店", reading = "うえしまこーひーてん", category = "カフェ"),
+            Merchant(id = "matsuya", name = "松屋", reading = "まつや", aliases = listOf("松のや"), category = "ファストフード"),
+            Merchant(id = "yumean", name = "夢庵", reading = "ゆめあん", category = "ファミレス"),
         ),
         campaigns = emptyList(),
         updatedAt = "2026-06-01",
@@ -80,6 +82,26 @@ class StoreMatchTest {
         // OSMのbrandは "7-ELEVEN" "LAWSON" のような英字表記が多い
         assertEquals("seven_eleven", engine.matchStore("名称不明", brand = "7-ELEVEN")?.id)
         assertEquals("lawson", engine.matchStore("名称不明", brand = "LAWSON")?.id)
+    }
+
+    @Test
+    fun `漢字2文字のチェーン名でもマッチする`() {
+        // 「松屋」等の漢字2文字は3文字未満だが照合対象(かなの「もす」等と違い誤爆しにくい)。
+        // POI 名は漢字表記なので読み(まつや)では当たらず、これが無いと素の松屋を全て取りこぼす(#38)
+        assertEquals("matsuya", engine.matchStore("松屋 横浜西口店")?.id)
+        assertEquals("matsuya", engine.matchStore("松屋横浜西口店")?.id)
+        assertEquals("yumean", engine.matchStore("夢庵 港南台店")?.id)
+        // 別名(松のや)経由の併設店も従来どおりマッチする
+        assertEquals("matsuya", engine.matchStore("松のや伊勢佐木町店（松屋併設）")?.id)
+    }
+
+    @Test
+    fun `漢字2文字キーは直前が漢字だと別の店名として誤マッチしない`() {
+        // 「小松屋」「浜松屋」は松屋チェーンではない(前方境界のみ厳格・後方は支店名として許容)
+        assertNull(engine.matchStore("小松屋"))
+        assertNull(engine.matchStore("浜松屋 渋谷店"))
+        // 会社表記(〜会社松屋フーズ)も直前が漢字なのでマッチしない
+        assertNull(engine.matchStore("株式会社松屋フーズ 横浜店"))
     }
 
     @Test

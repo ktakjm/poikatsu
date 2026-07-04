@@ -182,11 +182,19 @@ class JudgmentEngine(private val data: PoikatsuData) {
         val normalizedBrand = brand?.let { JapaneseText.normalize(it) }
         return searchIndex.mapNotNull { (merchant, keys) ->
             val best = keys.filter { key ->
-                (key.length >= 3 && containsAsWord(normalizedName, key)) || key == normalizedBrand
+                (isMatchableKey(key) && containsAsWord(normalizedName, key)) || key == normalizedBrand
             }.maxOfOrNull { it.length }
             if (best == null) null else merchant to best
         }.maxByOrNull { it.second }?.first
     }
+
+    /**
+     * POI 名との照合に使えるキーか。3 文字未満は「もす」のような別単語の接頭辞に誤爆しやすいので
+     * 照合しない。ただし**漢字のみ 2 文字**(松屋・夢庵・藍屋・桃菜・三和)はかなより情報密度が
+     * 高く誤爆しにくいため許可する(「小松屋」等への誤爆は containsAsWord の漢字境界判定で防ぐ)。
+     */
+    private fun isMatchableKey(key: String): Boolean =
+        key.length >= 3 || (key.length == 2 && key.all { isKanji(it) })
 
     /**
      * 単語っぽい境界での包含判定。「マックスバリュ」が「マック」にヒットしないよう、
@@ -198,11 +206,17 @@ class JudgmentEngine(private val data: PoikatsuData) {
      * 支店名を区切りなく連結する(例「肉のハナマサひばりヶ丘店」)ため、チェーン名の直後が同字種
      * (はなまさ|ひ…)でも支店名の一部とみなして許容しないと取りこぼす。短いキー(「マック」等)は
      * 「マックスバリュ」のような別単語の接頭辞になりやすいので従来どおり厳格に見る。
+     *
+     * 漢字は**前方境界のみ**連結とみなす(前後非対称)。キー先頭が漢字で直前も漢字なら別の名前の
+     * 一部(「小松屋」「浜松屋」の「松屋」)だが、直後の漢字は支店名の始まり(「松屋渋谷店」の
+     * 「渋谷」)であることが多く、後方まで厳格にすると取りこぼすため。
      */
     private fun containsAsWord(text: String, key: String): Boolean {
         var index = text.indexOf(key)
         while (index >= 0) {
-            val beforeJoined = isSameWord(text.getOrNull(index - 1), key.first())
+            val before = text.getOrNull(index - 1)
+            val beforeJoined = isSameWord(before, key.first()) ||
+                (before != null && isKanji(before) && isKanji(key.first()))
             val afterJoined = key.length < 5 && isSameWord(text.getOrNull(index + key.length), key.last())
             if (!beforeJoined && !afterJoined) return true
             index = text.indexOf(key, index + 1)
@@ -216,6 +230,8 @@ class JudgmentEngine(private val data: PoikatsuData) {
     }
 
     private fun isKana(c: Char): Boolean = c in 'ぁ'..'ゖ' || c == 'ー'
+
+    private fun isKanji(c: Char): Boolean = c.code in 0x4E00..0x9FFF
 
     private fun isAsciiAlnum(c: Char): Boolean = c.code < 128 && c.isLetterOrDigit()
 
