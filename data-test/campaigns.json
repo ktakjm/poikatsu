@@ -1,19 +1,20 @@
 {
-  "schema_version": 3,
-  "updated_at": "2026-07-04",
+  "schema_version": 4,
+  "updated_at": "2026-07-05",
   "campaigns": [
     {
       "id": "test_card_program",
       "type": "card_program",
       "benefit_type": "rebate",
       "store_scope": "managed",
-      "issuer": "テストカード発行会社",
+      "operator": "テストカード発行会社",
+      "card_id": "test_card",
       "brand_color": "#4CAF50",
       "name": "テスト常設施策（7%還元）",
       "rate_base": 7.0,
       "period_start": null,
       "period_end": null,
-      "verified_date": "2026-07-04",
+      "verified_date": "2026-07-05",
       "merchant_rules": [
         { "merchant_id": "test_combini" },
         { "merchant_id": "test_fastfood" }
@@ -21,16 +22,17 @@
     },
     {
       "id": "test_promotion",
-      "type": "card_promotion",
+      "type": "promotion",
       "benefit_type": "rebate",
       "store_scope": "managed",
-      "issuer": "テストカード発行会社",
+      "operator": "テストカード発行会社",
+      "card_id": "test_card",
       "brand_color": "#4CAF50",
       "name": "テスト期間限定施策（10%還元）",
       "rate_base": 10.0,
       "period_start": "2026-01-01",
       "period_end": "2099-12-31",
-      "verified_date": "2026-07-04",
+      "verified_date": "2026-07-05",
       "merchant_rules": [
         { "merchant_id": "test_combini" }
       ]

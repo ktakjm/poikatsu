@@ -3,7 +3,7 @@
 開発の現在地と今後の計画をまとめるドキュメント。
 フェーズの定義と背景は [PLAN.md](../PLAN.md)、コードの構成は [code-guide.md](code-guide.md)、個別タスクは [GitHub Issues](https://github.com/ktakjm/poikatsu/issues)（[Project Board](https://github.com/users/ktakjm/projects/1)）を参照。
 
-最終更新: 2026-07-01
+最終更新: 2026-07-05
 
 ## 1. 現在地サマリ
 
@@ -37,6 +37,7 @@ flowchart LR
 - **設定画面**: テーマ・マイカード・QR 決済・自治体登録（DataStore 永続化）
 - **キャンペーン Phase A〜F**: 期間限定キャンペーン・自治体施策・QR クーポン・4 タブナビ・キャンペーンタブ・判定画面のカード/QR セクション
 - **GitHub Actions CI**: main push / PR 時に `testDebugUnitTest` を自動実行し、データ整合性（merchant_id 参照切れ・エイリアス衝突等）を検出
+- **S-in 前リネーム（#34）**: カード id 独立（campaigns 側が `card_id` で参照する向きに反転）・profile.json → payment_methods.json（リモート取得/テストデータ切替対象に昇格）・`card_promotion`→`promotion`・`issuer`→`operator`。設計判断は [schema-refresh-plan.md](schema-refresh-plan.md) 参照（2026-07-05、実機検証待ち）
 
 ## 3. 今後
 

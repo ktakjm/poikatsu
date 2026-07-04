@@ -5,7 +5,6 @@ import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.PoikatsuData
-import com.ktakjm.poikatsu.data.ProfileCard
 import com.ktakjm.poikatsu.data.QrPayment
 import com.ktakjm.poikatsu.util.JapaneseText
 import java.time.LocalDate
@@ -74,7 +73,7 @@ enum class BenefitType(val jsonValue: String) {
 
 enum class CampaignType(val jsonValue: String) {
     CARD_PROGRAM("card_program"),
-    CARD_PROMOTION("card_promotion"),
+    PROMOTION("promotion"),
     MUNICIPAL("municipal");
 
     companion object {
@@ -132,7 +131,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
     }
 
     private val qrPaymentMap: Map<String, QrPayment> =
-        data.profile.qrPayments.associateBy { it.id }
+        data.qrPayments.associateBy { it.id }
 
     /** データ定義順のカテゴリ一覧 */
     val categories: List<String> = data.merchants.map { it.category }.distinct()
@@ -363,7 +362,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
             .filter { it.paymentMethodId == null }
             .mapNotNull { campaign ->
                 val rule = campaign.ruleFor(merchant) ?: return@mapNotNull null
-                val card = data.profile.cards.firstOrNull { it.campaignId == campaign.id }
+                val card = data.cards.firstOrNull { it.id == campaign.cardId }
                     ?: return@mapNotNull null
                 if (rule.amexExcluded && card.brand.equals("Amex", ignoreCase = true)) {
                     return@mapNotNull null

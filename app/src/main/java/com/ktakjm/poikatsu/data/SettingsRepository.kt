@@ -18,16 +18,16 @@ import kotlinx.serialization.json.Json
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
 /**
- * ユーザーがカードごとに上書きする差分。profile.json(カタログ=既定値)に重ねる。
- * 値が null/既定なら profile.json の値を使う。
+ * ユーザーがカードごとに上書きする差分。payment_methods.json(カタログ=既定値)に重ねる。
+ * 値が null/既定ならカタログの値を使う。
  */
 @Serializable
 data class CardOverride(
     /** このカードを所有しているか。null=既定(所有)。false で施策ごと判定から外す。 */
     val owned: Boolean? = null,
-    /** 公式アプリ表示の実効還元率。null なら profile の既定値。 */
+    /** 公式アプリ表示の実効還元率。null ならカタログの既定値。 */
     val rate: Double? = null,
-    /** カードブランド(MUFG の Amex/Mastercard/Visa/JCB 等)。null なら profile の既定値。 */
+    /** カードブランド(MUFG の Amex/Mastercard/Visa/JCB 等)。null ならカタログの既定値。 */
     val brand: String? = null,
     /** ウエル活(ポイント価値 ×倍率)で表示するか。 */
     val welcatsu: Boolean = false,
@@ -43,7 +43,7 @@ data class AppSettings(
     val dataCommitRef: String = "",
     /** テストデータ(data-test/)を使うか。true なら取得パスが data/ → data-test/ に切り替わる */
     val useTestData: Boolean = false,
-    /** 利用中の QR 決済 ID。profile.json の qr_payments カタログからユーザーが選択 */
+    /** 利用中の QR 決済 ID。payment_methods.json の qr_payments カタログからユーザーが選択 */
     val enabledQrPaymentIds: Set<String> = emptySet(),
     /** 登録自治体(都道府県+市区町村)。キャンペーンタブのフィルタに使う */
     val registeredMunicipalities: List<RegisteredMunicipality> = emptyList(),
@@ -53,8 +53,8 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
 
 /**
  * 設定の永続化(DataStore Preferences)。テーマ/データ取得とカード差分を保持する。
- * カード差分は campaign_id をキーにした Map を JSON 文字列として1キーに格納する
- * (キー数が可変でも Preferences のキーを増やさずに済む)。
+ * カード差分はカード id(payment_methods.json の cards.id)をキーにした Map を
+ * JSON 文字列として1キーに格納する(キー数が可変でも Preferences のキーを増やさずに済む)。
  */
 class SettingsRepository(private val context: Context) {
 
@@ -106,23 +106,23 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.edit { it[Keys.USE_TEST_DATA] = enabled }
     }
 
-    suspend fun setOwned(campaignId: String, owned: Boolean) =
-        updateOverride(campaignId) { it.copy(owned = owned) }
+    suspend fun setOwned(cardId: String, owned: Boolean) =
+        updateOverride(cardId) { it.copy(owned = owned) }
 
-    suspend fun setRate(campaignId: String, rate: Double?) =
-        updateOverride(campaignId) { it.copy(rate = rate) }
+    suspend fun setRate(cardId: String, rate: Double?) =
+        updateOverride(cardId) { it.copy(rate = rate) }
 
-    suspend fun setBrand(campaignId: String, brand: String) =
-        updateOverride(campaignId) { it.copy(brand = brand) }
+    suspend fun setBrand(cardId: String, brand: String) =
+        updateOverride(cardId) { it.copy(brand = brand) }
 
-    suspend fun setWelcatsu(campaignId: String, enabled: Boolean) =
-        updateOverride(campaignId) { it.copy(welcatsu = enabled) }
+    suspend fun setWelcatsu(cardId: String, enabled: Boolean) =
+        updateOverride(cardId) { it.copy(welcatsu = enabled) }
 
-    private suspend fun updateOverride(campaignId: String, transform: (CardOverride) -> CardOverride) {
+    private suspend fun updateOverride(cardId: String, transform: (CardOverride) -> CardOverride) {
         context.settingsDataStore.edit { prefs ->
             val current = prefs.decodeOverrides()
             val updated = current.toMutableMap()
-            updated[campaignId] = transform(current[campaignId] ?: CardOverride())
+            updated[cardId] = transform(current[cardId] ?: CardOverride())
             prefs[Keys.CARD_OVERRIDES] = json.encodeToString(updated)
         }
     }

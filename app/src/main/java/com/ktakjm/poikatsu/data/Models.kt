@@ -131,7 +131,10 @@ data class Region(
 @Serializable
 data class Campaign(
     val id: String,
-    val issuer: String,
+    /** 施策の運営者(カード会社・QR決済事業者・自治体キャンペーンの決済事業者)。バッジ表示のフォールバックに使う */
+    val operator: String,
+    /** 紐づくカード(payment_methods.json の cards.id)。card_program / promotion で使い、payment_method_id と排他 */
+    @SerialName("card_id") val cardId: String? = null,
     @SerialName("brand_color") val brandColor: String? = null,
     val name: String,
     @SerialName("payment_instruction") val paymentInstruction: String = "",
@@ -180,8 +183,9 @@ data class PointMultiplier(
 )
 
 @Serializable
-data class ProfileCard(
-    @SerialName("campaign_id") val campaignId: String,
+data class PaymentCard(
+    /** カードの識別子(例: "smcc")。campaigns.json の card_id と DataStore card_overrides のキーから参照される */
+    val id: String,
     @SerialName("card_name") val cardName: String,
     val brand: String = "",
     @SerialName("effective_rate_default") val effectiveRateDefault: Double? = null,
@@ -200,17 +204,13 @@ data class QrPayment(
     @SerialName("enabled_default") val enabledDefault: Boolean = false,
 )
 
+/** 決済手段カタログ(payment_methods.json)。カードと QR 決済のマスタで、ユーザー差分は DataStore に持つ */
 @Serializable
-data class Profile(
-    val cards: List<ProfileCard> = emptyList(),
-    @SerialName("qr_payments") val qrPayments: List<QrPayment> = emptyList(),
-)
-
-@Serializable
-data class ProfileFile(
+data class PaymentMethodsFile(
     @SerialName("schema_version") val schemaVersion: Int = 1,
     @SerialName("updated_at") val updatedAt: String = "",
-    val profile: Profile = Profile(),
+    val cards: List<PaymentCard> = emptyList(),
+    @SerialName("qr_payments") val qrPayments: List<QrPayment> = emptyList(),
 )
 
 @Serializable
@@ -222,7 +222,8 @@ data class RegisteredMunicipality(
 data class PoikatsuData(
     val merchants: List<Merchant>,
     val campaigns: List<Campaign>,
-    val profile: Profile,
+    val cards: List<PaymentCard> = emptyList(),
+    val qrPayments: List<QrPayment> = emptyList(),
     val updatedAt: String,
     val yolpConfig: YolpConfig? = null,
 )
@@ -233,14 +234,15 @@ object PoikatsuJson {
         coerceInputValues = true
     }
 
-    fun parse(merchantsJson: String, campaignsJson: String, profileJson: String): PoikatsuData {
+    fun parse(merchantsJson: String, campaignsJson: String, paymentMethodsJson: String): PoikatsuData {
         val merchantsFile = json.decodeFromString<MerchantsFile>(merchantsJson)
         val campaignsFile = json.decodeFromString<CampaignsFile>(campaignsJson)
-        val profileFile = json.decodeFromString<ProfileFile>(profileJson)
+        val paymentMethodsFile = json.decodeFromString<PaymentMethodsFile>(paymentMethodsJson)
         return PoikatsuData(
             merchants = merchantsFile.merchants,
             campaigns = campaignsFile.campaigns,
-            profile = profileFile.profile,
+            cards = paymentMethodsFile.cards,
+            qrPayments = paymentMethodsFile.qrPayments,
             updatedAt = campaignsFile.updatedAt,
             yolpConfig = merchantsFile.yolpConfig,
         )

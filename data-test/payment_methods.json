@@ -1,0 +1,13 @@
+{
+  "schema_version": 3,
+  "updated_at": "2026-07-05",
+  "cards": [
+    {
+      "id": "test_card",
+      "card_name": "テストカード",
+      "brand": "Visa",
+      "effective_rate_default": 7.0
+    }
+  ],
+  "qr_payments": []
+}

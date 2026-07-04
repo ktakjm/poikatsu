@@ -7,11 +7,12 @@ enum class DataSource { REMOTE, CACHE, BUNDLED }
 data class LoadedData(val data: PoikatsuData, val source: DataSource)
 
 /**
- * 施策データの取得戦略:
+ * 施策データ・決済手段カタログの取得戦略:
  * 1. 起動時は loadLocal() — 前回リモート取得のキャッシュ、なければ同梱 assets から即時ロード
  * 2. 裏で refresh() — リモート(GitHub raw)から取得し、パースに成功した場合のみキャッシュ保存
  *
- * merchants/campaigns はリモート更新の対象。profile はユーザー設定なので常にローカル。
+ * merchants/campaigns/payment_methods の 3 ファイルすべてがリモート更新の対象
+ * (ユーザー固有値はカタログでなく DataStore 差分に持つため、カタログはデータ扱いでよい)。
  * Android 非依存(関数とFileを注入)にしてユニットテスト可能にしている。
  */
 class DataRepository(
@@ -22,35 +23,33 @@ class DataRepository(
     companion object {
         const val MERCHANTS = "merchants.json"
         const val CAMPAIGNS = "campaigns.json"
-        const val PROFILE = "profile.json"
+        const val PAYMENT_METHODS = "payment_methods.json"
+        private val ALL_FILES = listOf(MERCHANTS, CAMPAIGNS, PAYMENT_METHODS)
     }
 
     fun loadLocal(): LoadedData {
-        val profileJson = readAsset(PROFILE)
-        val cachedMerchants = File(cacheDir, MERCHANTS)
-        val cachedCampaigns = File(cacheDir, CAMPAIGNS)
-        if (cachedMerchants.isFile && cachedCampaigns.isFile) {
+        val cached = ALL_FILES.map { File(cacheDir, it) }
+        if (cached.all { it.isFile }) {
             // キャッシュが壊れていたら捨てて assets にフォールバック
             runCatching {
-                val data = PoikatsuJson.parse(cachedMerchants.readText(), cachedCampaigns.readText(), profileJson)
+                val (merchants, campaigns, paymentMethods) = cached.map { it.readText() }
+                val data = PoikatsuJson.parse(merchants, campaigns, paymentMethods)
                 return LoadedData(data, DataSource.CACHE)
             }
         }
-        val data = PoikatsuJson.parse(readAsset(MERCHANTS), readAsset(CAMPAIGNS), profileJson)
+        val data = PoikatsuJson.parse(readAsset(MERCHANTS), readAsset(CAMPAIGNS), readAsset(PAYMENT_METHODS))
         return LoadedData(data, DataSource.BUNDLED)
     }
 
     /** 取得・パースのいずれかに失敗したら null(呼び出し側はローカルデータを使い続ける) */
     fun refresh(ref: String = "main", dataDir: String = "data"): LoadedData? {
-        val merchantsJson = fetchRemote(MERCHANTS, ref, dataDir) ?: return null
-        val campaignsJson = fetchRemote(CAMPAIGNS, ref, dataDir) ?: return null
+        val texts = ALL_FILES.map { fetchRemote(it, ref, dataDir) ?: return null }
         val data = runCatching {
-            PoikatsuJson.parse(merchantsJson, campaignsJson, readAsset(PROFILE))
+            PoikatsuJson.parse(texts[0], texts[1], texts[2])
         }.getOrNull() ?: return null
         runCatching {
             cacheDir.mkdirs()
-            File(cacheDir, MERCHANTS).writeText(merchantsJson)
-            File(cacheDir, CAMPAIGNS).writeText(campaignsJson)
+            ALL_FILES.forEachIndexed { i, name -> File(cacheDir, name).writeText(texts[i]) }
         }
         return LoadedData(data, DataSource.REMOTE)
     }

@@ -5,8 +5,8 @@
 ## ファイル
 
 - `merchants.json` — チェーン店マスタ。`reading`(ひらがな読み)と `aliases`(略称・別ブランド名)は検索のヒット率に直結するので、追加時は必ず入れる。位置情報を持たない発行体(自販機など)は `location_hint`(`text`/`label`/`url`)を持たせる。これがあると判定詳細で「近くのこの店を探す」を出さず、代わりに位置を確認できる外部アプリ/サイトへ案内する(例: コカ・コーラ自販機 → Coke ON 公式アプリ)。`yolp_config` で YOLP 検索の gc グループ設定、各 merchant の `yolp_search`/`yolp_keyword` で検索方式を持つ(§ YOLP 検索設定 参照)。
-- `campaigns.json` — 還元施策。`merchant_rules[].merchant_id` は merchants.json の `id` を参照する。**ユーザー固有の前提はここに書かず、汎用的な施策情報のみを持つ。** 常設施策(`card_program`)・期間限定施策(`card_promotion`)・自治体施策(`municipal`) の 3 種類をサポート。
-- `profile.json` — ユーザー前提条件の**デフォルト値(カタログ)**。現状: 三井住友=Visa(7%, `point_multiplier` でウエル活×1.5)、MUFG=Mastercard(基準7%)。**設定画面でカード所有・還元率・ブランド・ウエル活を編集でき、差分は DataStore に保存して起動時にこのプロファイルへ重ねる(profile.json 自体は書き換えない)**。判定エンジンは**所有カードのみ**を対象とし、brand が Amex なら `amex_excluded` の店を除外・Mastercard 等なら無視、`effective_rate_default` を実効還元率として用いる。`qr_payments` に QR 決済サービスのカタログを持つ。
+- `campaigns.json` — 還元施策。`merchant_rules[].merchant_id` は merchants.json の `id`、`card_id` は payment_methods.json の `cards[].id` を参照する。**ユーザー固有の前提はここに書かず、汎用的な施策情報のみを持つ。** 常設施策(`card_program`)・期間限定施策(`promotion`)・自治体施策(`municipal`) の 3 種類をサポート。
+- `payment_methods.json` — 決済手段(カード + QR 決済)の**カタログ(マスタ)**。`cards` は現状: 三井住友(`smcc`)=Visa(7%, `point_multiplier` でウエル活×1.5)、三菱UFJ(`mufg`)=Mastercard(基準7%)。**設定画面でカード所有・還元率・ブランド・ウエル活を編集でき、差分はカード id をキーに DataStore に保存して起動時にこのカタログへ重ねる(payment_methods.json 自体は書き換えない)**。判定エンジンは**所有カードのみ**を対象とし、brand が Amex なら `amex_excluded` の店を除外・Mastercard 等なら無視、`effective_rate_default` を実効還元率として用いる。`qr_payments` に QR 決済サービスのカタログを持つ。
 - `municipalities.json` — 全国自治体マスタ(47 都道府県・約 1,700 市区町村)。設定画面で居住地・行動圏の自治体を登録する際のピッカーデータとして使う。現在は手動生成だが、将来的には総務省の全国地方公共団体コード等のオープンデータから自動生成する方針(roadmap.md バックログ参照)。アプリ固有のロジック(東京 23区/市部 のグループ分け等)は UI コード側で扱い、マスタ自体はフラットな構造を保つ。
 
 ## スキーマの要点
@@ -15,15 +15,17 @@
 
 - `type` — 施策種別。判定エンジン・UI の分岐に使う:
   - `"card_program"`: 常設カードプログラム(既存の SMCC/MUFG)。`merchant_rules` で管理、「探す」「近く」タブに表示
-  - `"card_promotion"`: カード/QR 会社の期間限定(特定チェーン対象)。`merchant_rules` で管理、「探す」「近く」タブに表示
+  - `"promotion"`: カード/QR 会社の期間限定(特定チェーン対象)。`merchant_rules` で管理、「探す」「近く」タブに表示
   - `"municipal"`: 自治体施策(店舗データなし)。キャンペーンタブにのみ表示(`detail_url`/`store_search_url` で公式ページへリンク)
+- `operator` — 施策の運営者(カード会社・QR 決済事業者)。バッジ表示のフォールバックに使う
+- `card_id` — 紐づくカード(payment_methods.json の `cards[].id`)。card_program / promotion で使い、**`payment_method_id` と排他(ちょうど一方が non-null)**。1 カードに複数施策を紐づけられる
 - `benefit_type` — 特典のタイミング(2 値)。省略時は `"rebate"`:
   - `"rebate"`: ポイント還元(後日ポイント付与)。PayPay の「クーポン」も実態は後日ポイント付与のため rebate に分類
   - `"discount"`: 即時割引。定率(`rate_base`)か定額(`discount_amount`)かはフィールドから導出
 - `store_scope` — 店舗データの有無:
   - `"managed"`: `merchant_rules` で管理。「探す」「近く」タブに表示
   - `"external"`: 外部参照のみ。キャンペーンタブにのみ表示
-- `payment_method_id` — QR 決済の識別子(`profile.json` の `qr_payments.id` と対応)。カード施策は null
+- `payment_method_id` — QR 決済の識別子(payment_methods.json の `qr_payments[].id` と対応)。カード施策は null
 - `rate_base` — 定率の場合の率(%)。定額の場合は null。常設カード施策では現実的な基準還元率
 - `discount_amount` — 定額の場合の金額(円)。定率の場合は null
   - **`rate_base` と `discount_amount` は排他(どちらか一方が non-null)**
@@ -54,9 +56,9 @@
   - 確認済み: 三井住友=トラッドグリーン `#004831` (SMFG VI)、三菱UFJ=MUFGレッド `#E60000`
   - QR 決済: PayPay `#FF0033`、au PAY `#FF5722`、d払い `#E60033`、楽天ペイ `#BF0000`
 
-### profile.json
+### payment_methods.json
 
-- `cards` — カード施策のカタログ(既存)
+- `cards` — カードのカタログ。`{ id, card_name, brand, effective_rate_default, point_multiplier }`。`id`(例: `"smcc"`)は campaigns.json の `card_id` と DataStore のカード差分キーから参照される
 - `point_multiplier`(任意) — ポイント価値の倍率。`{ label, factor, color }`。設定画面で「ウエル活利用時の還元率を表示」チェックを出し、ON で `factor` 倍した実効還元率を表示する。`color` はバッジ色(ウエルシアのロゴ色 #RRGGBB)。三井住友(Vポイント)に設定。
 - `qr_payments` — 利用中の QR 決済サービスのカタログ。`{ id, name, brand_color, app_package, store_search_label, enabled_default }`。設定画面でチェックした QR 決済が判定エンジンのフィルタに使われる。DataStore に差分保存。
 
@@ -91,7 +93,7 @@
 
 ### 切替方法
 
-設定画面 → 開発者向け → 「テストデータを使う」トグルを ON にすると、アプリのリモート取得先が `data/` から `data-test/` に切り替わる。`data-test/` のデータは `data/` と同じスキーマ(campaigns.json / merchants.json)に従う。profile.json / municipalities.json は assets 固定のため切替対象外。
+設定画面 → 開発者向け → 「テストデータを使う」トグルを ON にすると、アプリのリモート取得先が `data/` から `data-test/` に切り替わる。`data-test/` のデータは `data/` と同じスキーマ(campaigns.json / merchants.json / payment_methods.json)に従い、カードもテスト専用カタログ(`test_card`)に切り替わる。municipalities.json のみ assets 固定のため切替対象外。
 
 ### 更新ルール
 

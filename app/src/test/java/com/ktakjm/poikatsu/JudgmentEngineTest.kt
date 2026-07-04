@@ -4,10 +4,9 @@ import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.OfficialStoreList
+import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
-import com.ktakjm.poikatsu.data.Profile
-import com.ktakjm.poikatsu.data.ProfileCard
 import com.ktakjm.poikatsu.data.QrPayment
 import com.ktakjm.poikatsu.data.Region
 import com.ktakjm.poikatsu.data.RegisteredMunicipality
@@ -51,7 +50,8 @@ class JudgmentEngineTest {
         campaigns = listOf(
             Campaign(
                 id = "smcc_combini_restaurant",
-                issuer = "smcc",
+                operator = "三井住友カード",
+                cardId = "smcc",
                 name = "三井住友コンビニ・飲食",
                 paymentInstruction = "タッチ決済",
                 rateBase = 7.0,
@@ -69,7 +69,8 @@ class JudgmentEngineTest {
             ),
             Campaign(
                 id = "mufg_point_up_program",
-                issuer = "mufg",
+                operator = "三菱UFJカード",
+                cardId = "mufg",
                 name = "MUFGポイントアップ",
                 paymentInstruction = "カード利用",
                 rateBase = 5.5,
@@ -81,11 +82,9 @@ class JudgmentEngineTest {
                 ),
             ),
         ),
-        profile = Profile(
-            cards = listOf(
-                ProfileCard(campaignId = "smcc_combini_restaurant", cardName = "三井住友カード", effectiveRateDefault = 7.0),
-                ProfileCard(campaignId = "mufg_point_up_program", cardName = "MUFGカード", brand = "Mastercard", effectiveRateDefault = 7.0),
-            ),
+        cards = listOf(
+            PaymentCard(id = "smcc", cardName = "三井住友カード", effectiveRateDefault = 7.0),
+            PaymentCard(id = "mufg", cardName = "MUFGカード", brand = "Mastercard", effectiveRateDefault = 7.0),
         ),
         updatedAt = "2026-06-01",
     )
@@ -248,7 +247,7 @@ class JudgmentEngineTest {
         val merchant = Merchant(id = "m1", name = "テスト店", reading = "てすとてん")
         val campaign = Campaign(
             id = "c1",
-            issuer = "test",
+            operator = "test",
             name = "テスト施策",
             paymentInstruction = "タッチ決済",
             rateBase = 5.0,
@@ -269,7 +268,6 @@ class JudgmentEngineTest {
         val data = PoikatsuData(
             merchants = listOf(merchant),
             campaigns = listOf(campaign),
-            profile = Profile(),
             updatedAt = "2026-06-01",
         )
         return JudgmentEngine(data) to merchant
@@ -287,38 +285,36 @@ class JudgmentEngineTest {
 
     // ---- Amex / カード所有フィルタ ----
 
-    private fun engineWithProfile(profile: Profile) = JudgmentEngine(data.copy(profile = profile))
+    private fun engineWithCards(cards: List<PaymentCard>) = JudgmentEngine(data.copy(cards = cards))
 
-    private fun profileWithMufgBrand(brand: String) = Profile(
-        cards = data.profile.cards.map {
-            if (it.campaignId == "mufg_point_up_program") it.copy(brand = brand) else it
-        },
-    )
+    private fun cardsWithMufgBrand(brand: String) = data.cards.map {
+        if (it.id == "mufg") it.copy(brand = brand) else it
+    }
 
     @Test
     fun `Amex は amex_excluded の店舗で MUFG が対象外になる`() {
         val kurazushi = data.merchants.first { it.id == "kurazushi" } // amex_excluded = true
-        val amexEngine = engineWithProfile(profileWithMufgBrand("Amex"))
+        val amexEngine = engineWithCards(cardsWithMufgBrand("Amex"))
         assertTrue(amexEngine.judgeCards(kurazushi, today).none { it.campaign.id == "mufg_point_up_program" })
-        // 非 Amex(既定プロファイル=Mastercard)では従来どおり MUFG が出る
+        // 非 Amex(既定カタログ=Mastercard)では従来どおり MUFG が出る
         assertTrue(engine.judgeCards(kurazushi, today).any { it.campaign.id == "mufg_point_up_program" })
     }
 
     @Test
     fun `Amex でも amex_excluded でない店舗では MUFG が残る`() {
         val sevenEleven = data.merchants.first { it.id == "seven_eleven" } // amex_excluded = false
-        val amexEngine = engineWithProfile(profileWithMufgBrand("Amex"))
+        val amexEngine = engineWithCards(cardsWithMufgBrand("Amex"))
         assertTrue(amexEngine.judgeCards(sevenEleven, today).any { it.campaign.id == "mufg_point_up_program" })
     }
 
     @Test
     fun `未所有カードの施策は判定に出ない`() {
         val kurazushi = data.merchants.first { it.id == "kurazushi" }
-        // MUFG カードを所有していない(profile から除外)ケース
-        val onlySmcc = Profile(cards = data.profile.cards.filter { it.campaignId == "smcc_combini_restaurant" })
-        assertTrue(engineWithProfile(onlySmcc).judgeCards(kurazushi, today).none { it.campaign.id == "mufg_point_up_program" })
+        // MUFG カードを所有していない(カード一覧から除外)ケース
+        val onlySmcc = data.cards.filter { it.id == "smcc" }
+        assertTrue(engineWithCards(onlySmcc).judgeCards(kurazushi, today).none { it.campaign.id == "mufg_point_up_program" })
         // どのカードも所有していなければ判定は空
-        assertTrue(engineWithProfile(Profile()).judgeCards(kurazushi, today).isEmpty())
+        assertTrue(engineWithCards(emptyList()).judgeCards(kurazushi, today).isEmpty())
     }
 
     // ---- 期間フィルタのテスト ----
@@ -329,6 +325,8 @@ class JudgmentEngineTest {
         type: CampaignType = CampaignType.CARD_PROGRAM,
         storeScope: String = "managed",
         benefitType: BenefitType = BenefitType.REBATE,
+        // カード施策/QR 施策の帰属は排他: QR 施策を作るときは cardId = null を渡す
+        cardId: String? = "test_card",
         paymentMethodId: String? = null,
         rateBase: Double? = 10.0,
         discountAmount: Int? = null,
@@ -339,7 +337,8 @@ class JudgmentEngineTest {
         region: Region? = null,
     ) = Campaign(
         id = "test_campaign",
-        issuer = "test",
+        operator = "test",
+        cardId = cardId,
         name = "テスト",
         paymentInstruction = "テスト",
         rateBase = rateBase,
@@ -360,14 +359,19 @@ class JudgmentEngineTest {
     )
 
     private val testMerchant = Merchant(id = "m1", name = "テスト店", reading = "てすとてん")
-    private val testCard = ProfileCard(campaignId = "test_campaign", cardName = "テストカード", effectiveRateDefault = 10.0)
+    private val testCard = PaymentCard(id = "test_card", cardName = "テストカード", effectiveRateDefault = 10.0)
 
-    private fun periodTestEngine(campaign: Campaign, profile: Profile = Profile(cards = listOf(testCard))): JudgmentEngine =
+    private fun periodTestEngine(
+        campaign: Campaign,
+        cards: List<PaymentCard> = listOf(testCard),
+        qrPayments: List<QrPayment> = emptyList(),
+    ): JudgmentEngine =
         JudgmentEngine(
             PoikatsuData(
                 merchants = listOf(testMerchant),
                 campaigns = listOf(campaign),
-                profile = profile,
+                cards = cards,
+                qrPayments = qrPayments,
                 updatedAt = "2026-06-01",
             ),
         )
@@ -472,14 +476,14 @@ class JudgmentEngineTest {
     fun `QR決済の判定_利用中のQRのみ返る`() {
         val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
         val campaign = campaignWithPeriod(
-            type = CampaignType.CARD_PROMOTION,
+            type = CampaignType.PROMOTION,
+            cardId = null,
             paymentMethodId = "paypay",
             rateBase = 20.0,
             start = "2026-07-01",
             end = "2026-07-31",
         )
-        val profile = Profile(qrPayments = listOf(paypay))
-        val engine = periodTestEngine(campaign, profile)
+        val engine = periodTestEngine(campaign, cards = emptyList(), qrPayments = listOf(paypay))
 
         // 7月中はアクティブ
         val julyToday = LocalDate.of(2026, 7, 15)
@@ -500,8 +504,9 @@ class JudgmentEngineTest {
     fun `即時割引の判定_定額`() {
         val dpay = QrPayment(id = "dpay", name = "d払い", brandColor = "#E60033")
         val campaign = campaignWithPeriod(
-            type = CampaignType.CARD_PROMOTION,
+            type = CampaignType.PROMOTION,
             benefitType = BenefitType.DISCOUNT,
+            cardId = null,
             paymentMethodId = "dpay",
             rateBase = null,
             discountAmount = 100,
@@ -510,8 +515,7 @@ class JudgmentEngineTest {
             start = "2026-07-01",
             end = "2026-07-15",
         )
-        val profile = Profile(qrPayments = listOf(dpay))
-        val engine = periodTestEngine(campaign, profile)
+        val engine = periodTestEngine(campaign, cards = emptyList(), qrPayments = listOf(dpay))
         val julyToday = LocalDate.of(2026, 7, 10)
         val results = engine.judgeQr(testMerchant, julyToday, setOf("dpay"))
         assertEquals(1, results.size)
@@ -528,16 +532,16 @@ class JudgmentEngineTest {
     fun `即時割引の判定_定率`() {
         val dpay = QrPayment(id = "dpay", name = "d払い", brandColor = "#E60033")
         val campaign = campaignWithPeriod(
-            type = CampaignType.CARD_PROMOTION,
+            type = CampaignType.PROMOTION,
             benefitType = BenefitType.DISCOUNT,
+            cardId = null,
             paymentMethodId = "dpay",
             rateBase = 10.0,
             perTransactionCap = 500,
             start = "2026-07-01",
             end = "2026-07-31",
         )
-        val profile = Profile(qrPayments = listOf(dpay))
-        val engine = periodTestEngine(campaign, profile)
+        val engine = periodTestEngine(campaign, cards = emptyList(), qrPayments = listOf(dpay))
         val julyToday = LocalDate.of(2026, 7, 15)
         val results = engine.judgeQr(testMerchant, julyToday, setOf("dpay"))
         assertEquals(1, results.size)
@@ -554,16 +558,17 @@ class JudgmentEngineTest {
         val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
         val cardCampaign = campaignWithPeriod().copy(id = "card1")
         val qrCampaign = campaignWithPeriod(
-            type = CampaignType.CARD_PROMOTION,
+            type = CampaignType.PROMOTION,
+            cardId = null,
             paymentMethodId = "paypay",
             rateBase = 20.0,
         ).copy(id = "qr1")
-        val testCardForCard1 = testCard.copy(campaignId = "card1")
         val engine = JudgmentEngine(
             PoikatsuData(
                 merchants = listOf(testMerchant),
                 campaigns = listOf(cardCampaign, qrCampaign),
-                profile = Profile(cards = listOf(testCardForCard1), qrPayments = listOf(paypay)),
+                cards = listOf(testCard),
+                qrPayments = listOf(paypay),
                 updatedAt = "2026-06-01",
             ),
         )
@@ -579,16 +584,18 @@ class JudgmentEngineTest {
         val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
         val campaign5 = campaignWithPeriod(rateBase = 5.0).copy(id = "c5")
         val campaign20 = campaignWithPeriod(
-            type = CampaignType.CARD_PROMOTION,
+            type = CampaignType.PROMOTION,
+            cardId = null,
             paymentMethodId = "paypay",
             rateBase = 20.0,
         ).copy(id = "c20")
-        val testCardForC5 = testCard.copy(campaignId = "c5", effectiveRateDefault = 5.0)
+        val testCard5pct = testCard.copy(effectiveRateDefault = 5.0)
         val engine = JudgmentEngine(
             PoikatsuData(
                 merchants = listOf(testMerchant),
                 campaigns = listOf(campaign5, campaign20),
-                profile = Profile(cards = listOf(testCardForC5), qrPayments = listOf(paypay)),
+                cards = listOf(testCard5pct),
+                qrPayments = listOf(paypay),
                 updatedAt = "2026-06-01",
             ),
         )
@@ -609,7 +616,7 @@ class JudgmentEngineTest {
     @Test
     fun `CampaignType の文字列変換`() {
         assertEquals(CampaignType.CARD_PROGRAM, CampaignType.fromString("card_program"))
-        assertEquals(CampaignType.CARD_PROMOTION, CampaignType.fromString("card_promotion"))
+        assertEquals(CampaignType.PROMOTION, CampaignType.fromString("promotion"))
         assertEquals(CampaignType.MUNICIPAL, CampaignType.fromString("municipal"))
         assertEquals(CampaignType.CARD_PROGRAM, CampaignType.fromString("unknown"))
     }
@@ -651,16 +658,16 @@ class JudgmentEngineTest {
     fun `rebate定額の判定_discountAmountで判定結果が出る`() {
         val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
         val campaign = campaignWithPeriod(
-            type = CampaignType.CARD_PROMOTION,
+            type = CampaignType.PROMOTION,
             benefitType = BenefitType.REBATE,
+            cardId = null,
             paymentMethodId = "paypay",
             rateBase = null,
             discountAmount = 500,
             start = "2026-07-01",
             end = "2026-07-31",
         )
-        val profile = Profile(qrPayments = listOf(paypay))
-        val engine = periodTestEngine(campaign, profile)
+        val engine = periodTestEngine(campaign, cards = emptyList(), qrPayments = listOf(paypay))
         val julyToday = LocalDate.of(2026, 7, 15)
         val results = engine.judgeQr(testMerchant, julyToday, setOf("paypay"))
         assertEquals(1, results.size)
@@ -681,7 +688,7 @@ class JudgmentEngineRealDataTest {
     private val data = PoikatsuJson.parse(
         merchantsJson = File("../data/merchants.json").readText(),
         campaignsJson = File("../data/campaigns.json").readText(),
-        profileJson = File("../data/profile.json").readText(),
+        paymentMethodsJson = File("../data/payment_methods.json").readText(),
     )
     private val engine = JudgmentEngine(data)
     private val today = LocalDate.of(2026, 6, 28)
@@ -695,9 +702,27 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
-    fun `実データ_プロファイルのカードは実在する施策を参照している`() {
-        val campaignIds = data.campaigns.map { it.id }.toSet()
-        assertTrue(data.profile.cards.all { it.campaignId in campaignIds })
+    fun `実データ_card_idの参照切れがない`() {
+        val cardIds = data.cards.map { it.id }.toSet()
+        val broken = data.campaigns.filter { it.cardId != null && it.cardId !in cardIds }.map { it.id }
+        assertEquals(emptyList<String>(), broken)
+    }
+
+    @Test
+    fun `実データ_payment_method_idの参照切れがない`() {
+        val qrIds = data.qrPayments.map { it.id }.toSet()
+        val broken = data.campaigns.filter { it.paymentMethodId != null && it.paymentMethodId !in qrIds }.map { it.id }
+        assertEquals(emptyList<String>(), broken)
+    }
+
+    @Test
+    fun `実データ_施策の帰属はcard_idかpayment_method_idのちょうど一方`() {
+        data.campaigns.forEach { c ->
+            assertTrue(
+                "${c.id}: card_id(${c.cardId}) と payment_method_id(${c.paymentMethodId}) はちょうど一方が non-null",
+                (c.cardId != null) xor (c.paymentMethodId != null),
+            )
+        }
     }
 
     @Test
@@ -773,14 +798,14 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
-    fun `実データ_card_promotionは期間とmerchant_rulesを持つ`() {
-        val promotions = data.campaigns.filter { it.campaignType == CampaignType.CARD_PROMOTION }
-        assertTrue("card_promotion が1件以上存在する", promotions.isNotEmpty())
+    fun `実データ_promotionは期間とmerchant_rulesを持つ`() {
+        val promotions = data.campaigns.filter { it.campaignType == CampaignType.PROMOTION }
+        assertTrue("promotion が1件以上存在する", promotions.isNotEmpty())
         promotions.forEach { c ->
-            assertTrue("${c.id}: card_promotion should be managed", c.storeScope == "managed")
-            assertNotNull("${c.id}: card_promotion should have period_start", c.periodStart)
-            assertNotNull("${c.id}: card_promotion should have period_end", c.periodEnd)
-            assertTrue("${c.id}: card_promotion should have merchant_rules", c.merchantRules.isNotEmpty())
+            assertTrue("${c.id}: promotion should be managed", c.storeScope == "managed")
+            assertNotNull("${c.id}: promotion should have period_start", c.periodStart)
+            assertNotNull("${c.id}: promotion should have period_end", c.periodEnd)
+            assertTrue("${c.id}: promotion should have merchant_rules", c.merchantRules.isNotEmpty())
         }
     }
 
@@ -811,10 +836,8 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
-    fun `実データ_QRなしProfileでもupcomingCampaignsは動く`() {
-        val noQrProfile = data.profile.copy(cards = data.profile.cards)
-        val noQrData = data.copy(profile = Profile(cards = noQrProfile.cards))
-        val noQrEngine = JudgmentEngine(noQrData)
+    fun `実データ_QRなしカタログでもupcomingCampaignsは動く`() {
+        val noQrEngine = JudgmentEngine(data.copy(qrPayments = emptyList()))
         val june30 = LocalDate.of(2026, 6, 30)
         val upcoming = noQrEngine.upcomingCampaigns(june30).filter { it.campaignType != CampaignType.CARD_PROGRAM }
         assertTrue("upcoming should work without QR payments: ${upcoming.map { it.id }}", upcoming.isNotEmpty())
@@ -822,7 +845,7 @@ class JudgmentEngineRealDataTest {
 
     @Test
     fun `実データ_QR決済カタログが読み込めている`() {
-        val qr = data.profile.qrPayments
+        val qr = data.qrPayments
         assertTrue(qr.isNotEmpty())
         assertTrue(qr.any { it.id == "paypay" })
         assertTrue(qr.any { it.id == "aupay" })
@@ -912,13 +935,14 @@ class TestDataIntegrityTest {
     private val data = PoikatsuJson.parse(
         merchantsJson = File("../data-test/merchants.json").readText(),
         campaignsJson = File("../data-test/campaigns.json").readText(),
-        profileJson = File("../data/profile.json").readText(),
+        paymentMethodsJson = File("../data-test/payment_methods.json").readText(),
     )
 
     @Test
     fun `テストデータ_パースに成功する`() {
         assertTrue("merchants が空", data.merchants.isNotEmpty())
         assertTrue("campaigns が空", data.campaigns.isNotEmpty())
+        assertTrue("cards が空", data.cards.isNotEmpty())
     }
 
     @Test
@@ -927,6 +951,20 @@ class TestDataIntegrityTest {
         val broken = data.campaigns.flatMap { c -> c.merchantRules.map { c.id to it.merchantId } }
             .filter { (_, mid) -> mid !in ids }
         assertEquals(emptyList<Pair<String, String>>(), broken)
+    }
+
+    @Test
+    fun `テストデータ_card_idとpayment_method_idの参照と排他が正しい`() {
+        val cardIds = data.cards.map { it.id }.toSet()
+        val qrIds = data.qrPayments.map { it.id }.toSet()
+        data.campaigns.forEach { c ->
+            assertTrue(
+                "${c.id}: card_id(${c.cardId}) と payment_method_id(${c.paymentMethodId}) はちょうど一方が non-null",
+                (c.cardId != null) xor (c.paymentMethodId != null),
+            )
+            c.cardId?.let { assertTrue("${c.id}: card_id '$it' が cards に無い", it in cardIds) }
+            c.paymentMethodId?.let { assertTrue("${c.id}: payment_method_id '$it' が qr_payments に無い", it in qrIds) }
+        }
     }
 
     @Test

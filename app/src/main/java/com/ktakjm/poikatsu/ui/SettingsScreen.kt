@@ -114,10 +114,10 @@ internal fun SettingsScreen(
         cards.forEach { card ->
             CardSettingItem(
                 card = card,
-                onOwnedChange = { onCardOwnedChange(card.campaignId, it) },
-                onRateChange = { onCardRateChange(card.campaignId, it) },
-                onBrandChange = { onCardBrandChange(card.campaignId, it) },
-                onWelcatsuChange = { onCardWelcatsuChange(card.campaignId, it) },
+                onOwnedChange = { onCardOwnedChange(card.cardId, it) },
+                onRateChange = { onCardRateChange(card.cardId, it) },
+                onBrandChange = { onCardBrandChange(card.cardId, it) },
+                onWelcatsuChange = { onCardWelcatsuChange(card.cardId, it) },
             )
         }
 

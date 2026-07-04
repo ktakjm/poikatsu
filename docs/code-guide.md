@@ -95,8 +95,8 @@ poikatsu/
 ├── CLAUDE.md               # プロジェクト規約（ライセンス方針ほか）
 ├── data/                   # 施策データ（単一ソース）
 │   ├── merchants.json      # チェーン店マスタ（59 件）+ YOLP 検索設定（yolp_config）
-│   ├── campaigns.json      # 還元施策（常設 card_program + 期間限定 card_promotion + 自治体 municipal）
-│   ├── profile.json        # ユーザー前提条件（保有カード + QR 決済カタログ）
+│   ├── campaigns.json      # 還元施策（常設 card_program + 期間限定 promotion + 自治体 municipal）
+│   ├── payment_methods.json # 決済手段カタログ（カード + QR 決済のマスタ）
 │   ├── municipalities.json # 全国自治体マスタ（47 都道府県・約 1,700 市区町村）
 │   └── README.md           # データスキーマ仕様・更新ルール
 ├── docs/
@@ -147,10 +147,11 @@ erDiagram
     CAMPAIGN {
         string id PK
         string name "施策表示名"
-        string type "card_program/card_promotion/municipal"
+        string type "card_program/promotion/municipal"
         string benefit_type "rebate/discount"
         string store_scope "managed/external"
-        string issuer "発行体"
+        string operator "運営者(カード会社/決済事業者)"
+        string card_id "カードID(QR施策はnull・payment_method_idと排他)"
         string brand_color "#RRGGBB"
         string payment_instruction "支払い方法の説明"
         double rate_base "基準還元率(定率時)"
@@ -188,10 +189,10 @@ erDiagram
         bool date_is_official
         string source_url
     }
-    PROFILE {
+    PAYMENT_METHODS {
     }
-    PROFILE_CARD {
-        string campaign_id FK
+    PAYMENT_CARD {
+        string id PK "例: smcc"
         string card_name
         string brand "Visa/Mastercard/Amex"
         double effective_rate_default
@@ -221,23 +222,23 @@ erDiagram
         int max_pages "ページ上限(密度チューニング)"
         string note "備考"
     }
-    PROFILE ||--o{ PROFILE_CARD : "cards[]"
-    PROFILE ||--o{ QR_PAYMENT : "qr_payments[]"
+    PAYMENT_METHODS ||--o{ PAYMENT_CARD : "cards[]"
+    PAYMENT_METHODS ||--o{ QR_PAYMENT : "qr_payments[]"
     CAMPAIGN ||--o{ MERCHANT_RULE : "merchant_rules[]"
     CAMPAIGN ||--o| REGION : "region(自治体施策のみ)"
     MERCHANT ||--o| LOCATION_HINT : "location_hint(自販機等)"
     MERCHANT_RULE }o--|| MERCHANT : "merchant_id で参照"
     MERCHANT_RULE ||--o| OFFICIAL_STORE_LIST : "official_store_list(任意)"
-    PROFILE_CARD }o--|| CAMPAIGN : "campaign_id で参照"
-    PROFILE_CARD ||--o| POINT_MULTIPLIER : "point_multiplier(任意)"
+    CAMPAIGN }o--o| PAYMENT_CARD : "card_id で参照(1カード:N施策)"
+    PAYMENT_CARD ||--o| POINT_MULTIPLIER : "point_multiplier(任意)"
     YOLP_CONFIG ||--o{ GC_GROUP : "gc_groups[]"
 ```
 
 3 つの JSON の役割分担:
 
 - `merchants.json` — チェーンの正規化マスタ。検索ヒット率は `reading` / `aliases` の充実度で決まる。トップレベルに `yolp_config`（YOLP 検索の gc グループ定義・密度チューニング用の `max_pages`）を持ち、各 merchant の `yolp_search`（`gc`/`keyword`/`none`）で検索方式を指定する。`YolpClient` はこの設定から `YolpSearchConfig` を動的に構築し、アクティブな施策が参照する merchant だけを検索対象にする（該当 merchant がいない gc_group はスキップ）。位置情報を持たない発行体（自販機など）は `location_hint` で外部導線（Coke ON アプリ等）を案内し、「近くのこの店を探す」を出さない
-- `campaigns.json` — 汎用的な施策情報のみ。**ユーザー固有の前提を書かない**（規約）。`type` で常設カード（`card_program`）/ 期間限定（`card_promotion`）/ 自治体施策（`municipal`）を区分し、`benefit_type` でポイント還元（`rebate`）/ 即時割引（`discount`）を区分し、定率/定額は `rate_base` / `discount_amount` のどちらが入っているかで導出する。`store_scope` が `managed` ならチェーン検索・地図に表示、`external` ならキャンペーンタブのみ表示（`detail_url`/`store_search_url` で公式ページへリンク）
-- `profile.json` — ユーザー前提（保有ブランド・エントリー済みか等）+ QR 決済カタログ（`qr_payments`）。常にローカル（assets）から読み、リモート更新の対象外。`point_multiplier`（`PointMultiplier`）を持つカードはポイント価値の倍率（例: ウエル活 ×1.5）を設定画面で ON/OFF でき、ON 時は `effectiveRateDefault × factor` が実質還元率になる。`point_multiplier.color` はウエルシアのロゴ色など識別バッジに使う
+- `campaigns.json` — 汎用的な施策情報のみ。**ユーザー固有の前提を書かない**（規約）。`type` で常設カード（`card_program`）/ 期間限定（`promotion`）/ 自治体施策（`municipal`）を区分し、`benefit_type` でポイント還元（`rebate`）/ 即時割引（`discount`）を区分し、定率/定額は `rate_base` / `discount_amount` のどちらが入っているかで導出する。`store_scope` が `managed` ならチェーン検索・地図に表示、`external` ならキャンペーンタブのみ表示（`detail_url`/`store_search_url` で公式ページへリンク）。施策の帰属は `card_id`（カード施策。payment_methods.json の `cards[].id` を参照、1 カード : N 施策）か `payment_method_id`（QR 施策・自治体施策）の**ちょうど一方**を持つ
+- `payment_methods.json` — 決済手段カタログ（カード `cards` + QR 決済 `qr_payments`）。ユーザー固有値は持たず（差分は DataStore）、merchants/campaigns と同様にリモート更新・テストデータ切替の対象。`point_multiplier`（`PointMultiplier`）を持つカードはポイント価値の倍率（例: ウエル活 ×1.5）を設定画面で ON/OFF でき、ON 時は `effectiveRateDefault × factor` が実質還元率になる。`point_multiplier.color` はウエルシアのロゴ色など識別バッジに使う
 
 パースは `PoikatsuJson.parse()` に集約。`ignoreUnknownKeys = true` + `coerceInputValues = true` により、スキーマに後からフィールドを追加しても旧アプリが壊れない（前方互換）。
 
@@ -257,7 +258,7 @@ flowchart TD
     BUNDLED --> FG
     FG --> SKIP{"前回成功から<br/>1時間以内?"}
     SKIP -- "はい（手動更新以外）" --> NOP(["スキップ"])
-    SKIP -- "いいえ" --> FETCH["refresh(): GitHub raw から<br/>merchants/campaigns を取得"]
+    SKIP -- "いいえ" --> FETCH["refresh(): GitHub raw から<br/>merchants/campaigns/payment_methods を取得"]
     FETCH --> OK{"取得+パース<br/>成功?"}
     OK -- "成功" --> SAVE["キャッシュ保存 +<br/>DataSource.REMOTE で表示更新"]
     OK -- "失敗" --> KEEP["null を返す<br/>（ローカルデータ継続 + 失敗表示）"]
@@ -281,7 +282,7 @@ flowchart TD
 
 ### 設定の永続化（data/SettingsRepository.kt）
 
-テーマ・データ取得・マイカード・QR 決済・自治体の設定は **DataStore Preferences**（`SettingsRepository`）に保存する。テーマ／dynamic color／自動更新は型付きキー、カード差分（`CardOverride`：所有・還元率・ブランド・ウエル活）は `campaign_id` をキーにした Map を JSON 文字列として 1 キーに格納する（キー数が可変でも Preferences のキーを増やさない）。QR 決済の有効 ID（`Set<String>`）と登録自治体（`List<RegisteredMunicipality>`）も同様に JSON 文字列として格納する（登録自治体は保存のみで、キャンペーンタブのフィルタリングは未実装）。`MainViewModel` は `settings` Flow を購読し、変更のたびに **profile.json（カタログ＝既定値）へユーザー差分を重ねて**エンジンを作り直す（マージは VM 層、`JudgmentEngine` は純 Kotlin のまま）。profile.json 自体は書き換えない。テーマは描画前に必要なので `MainActivity` が `state.themeMode`/`dynamicColor` を `PoikatsuTheme` に渡す（6.1 参照）。
+テーマ・データ取得・マイカード・QR 決済・自治体の設定は **DataStore Preferences**（`SettingsRepository`）に保存する。テーマ／dynamic color／自動更新は型付きキー、カード差分（`CardOverride`：所有・還元率・ブランド・ウエル活）はカード id（payment_methods.json の `cards[].id`）をキーにした Map を JSON 文字列として 1 キーに格納する（キー数が可変でも Preferences のキーを増やさない）。QR 決済の有効 ID（`Set<String>`）と登録自治体（`List<RegisteredMunicipality>`）も同様に JSON 文字列として格納する（登録自治体は保存のみで、キャンペーンタブのフィルタリングは未実装）。`MainViewModel` は `settings` Flow を購読し、変更のたびに **payment_methods.json（カタログ＝既定値）へユーザー差分を重ねて**エンジンを作り直す（マージは VM 層、`JudgmentEngine` は純 Kotlin のまま）。payment_methods.json 自体は書き換えない。テーマは描画前に必要なので `MainActivity` が `state.themeMode`/`dynamicColor` を `PoikatsuTheme` に渡す（6.1 参照）。
 
 ## 5. 判定エンジン（domain/JudgmentEngine.kt）
 
@@ -351,13 +352,13 @@ flowchart LR
     style QR fill:#6A1B9A,stroke:#4A148C,color:#fff
 ```
 
-- `effectiveRate = card.effectiveRateDefault ?: campaign.rateBase` — ユーザー前提（profile）があればそれを優先
-- **保有カードのみ対象**: profile に対応カードが無い施策はスキップする。設定で「所有」OFF にしたカードは `MainViewModel` のマージ層で profile から外れるため、ここで自然に除外される。
+- `effectiveRate = card.effectiveRateDefault ?: campaign.rateBase` — ユーザー設定の実効率があればそれを優先
+- **保有カードのみ対象**: 施策の `card_id` に一致するカードが cards に無い施策はスキップする。設定で「所有」OFF にしたカードは `MainViewModel` のマージ層でカード一覧から外れるため、ここで自然に除外される。
 - **期間フィルタ**: `campaignStatus(campaign, today)` が ACTIVE の施策のみ。期限切れ・未来開始はスキップ。
 - **store_scope フィルタ**: `store_scope == "managed"` のみ。`external` の施策は「探す」「近く」に出さない。
 - **カード vs QR の分離**: `paymentMethodId == null` のカード施策のみ `judgeCards` が返す。QR 決済施策は `judgeQr` が担当（`enabledQrIds` でユーザーの利用 QR をフィルタ）。どちらも統一型 `CampaignJudgment` を返す。
 - **Amex の対象外**: カードブランドが Amex で店舗 rule が `amex_excluded` のとき、その店ではこの施策を除外する（警告ではなく非表示。検索・判定詳細・地図ピン/件数すべてに波及）。非 Amex（Mastercard/Visa/JCB）は従来どおり。
-- **設定値の反映はマージ層**: 還元率の手入力・MUFG ブランド・ウエル活 ×1.5（`ProfileCard.point_multiplier` の係数）は `MainViewModel` が DataStore の差分（`CardOverride`）を profile に重ねてからエンジンへ渡す。`JudgmentEngine` は純 Kotlin・実データテストのまま保つ（4 章「設定の永続化」／6.1 参照）。
+- **設定値の反映はマージ層**: 還元率の手入力・MUFG ブランド・ウエル活 ×1.5（`PaymentCard.point_multiplier` の係数）は `MainViewModel` が DataStore の差分（`CardOverride`）をカタログのカード一覧に重ねてからエンジンへ渡す。`JudgmentEngine` は純 Kotlin・実データテストのまま保つ（4 章「設定の永続化」／6.1 参照）。
 - **reward の無いチェーンは一覧に出さない**: 判定が空（所有カードで対象になる施策が無い）チェーンは検索結果・近隣リストから除外する（`MainViewModel.searchRewarded` と `loadNearbyAround` で `judgeAll` 非空のものだけ残す）。
 - **エントリー要否は持たない**: 還元率はユーザーが公式アプリの実効値（エントリー込み）を手入力する前提のため、`entry_done` フラグと未エントリー警告は廃止した。`CampaignJudgment.warnings` は期限切れ間近（残り 3 日以下）の警告に使われる。
 - **店舗単位の判定 `checkStore(merchant, storeName)`**: `official_store_list` を持つ施策ごとに、`ineligible_stores` 一致 → 対象外 / `eligible_stores` 一致 → 対象 / どちらにも無し → 要確認（`StoreEligibility.UNKNOWN`）の **3 状態**を返す（対象外を優先）。リスト網羅性を仮定せず、**公式が店舗名で明示した店だけ言い切る**設計（旧 `facility_risk_patterns` によるキーワード推測警告は実際の対象外店舗との乖離が大きく廃止）。
@@ -373,7 +374,7 @@ flowchart LR
 ```kotlin
 data class CampaignJudgment(
     val campaign: Campaign,
-    val badgeLabel: String,          // カード名 / QR決済名 / issuer
+    val badgeLabel: String,          // カード名 / QR決済名 / operator
     val brandColor: String?,
     val benefitType: BenefitType,    // REBATE / DISCOUNT
     val effectiveRate: Double?,

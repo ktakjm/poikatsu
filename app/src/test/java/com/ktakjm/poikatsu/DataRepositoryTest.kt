@@ -33,7 +33,8 @@ class DataRepositoryTest {
                 "campaigns": [
                     {
                         "id": "test_campaign",
-                        "issuer": "test",
+                        "operator": "test",
+                        "card_id": "test_card",
                         "name": "テスト施策",
                         "rate_base": 5.0,
                         "verified_date": "2026-06-01",
@@ -42,15 +43,13 @@ class DataRepositoryTest {
                 ]
             }
         """.trimIndent(),
-        DataRepository.PROFILE to """
+        DataRepository.PAYMENT_METHODS to """
             {
                 "schema_version": 1,
                 "updated_at": "2026-07-03",
-                "profile": {
-                    "cards": [
-                        {"campaign_id": "test_campaign", "card_name": "テストカード"}
-                    ]
-                }
+                "cards": [
+                    {"id": "test_card", "card_name": "テストカード"}
+                ]
             }
         """.trimIndent(),
     )
@@ -103,6 +102,7 @@ class DataRepositoryTest {
         val cacheDir = File(tempFolder.root, "remote_data").apply { mkdirs() }
         File(cacheDir, DataRepository.MERCHANTS).writeText("{ broken")
         File(cacheDir, DataRepository.CAMPAIGNS).writeText("{ broken")
+        File(cacheDir, DataRepository.PAYMENT_METHODS).writeText("{ broken")
         val loaded = repository { null }.loadLocal()
         assertEquals(DataSource.BUNDLED, loaded.source)
     }

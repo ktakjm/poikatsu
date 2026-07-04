@@ -3,9 +3,15 @@
 作成: 2026-07-04。実在キャンペーンの調査とスキーマ突き合わせ・命名レビューを行ったセッションの引き継ぎドキュメント。
 **このセッション内で完結しない前提**で、後続セッションが本ドキュメントだけで作業を再開できるよう、調査結果・設計判断・issue 対応方針をすべて記す。
 
-- ステータス: ~~レビュー待ち~~ → ~~issue 化~~（2026-07-04 完了: 対応A = [#34](https://github.com/ktakjm/poikatsu/issues/34)、対応B = [#35](https://github.com/ktakjm/poikatsu/issues/35)） → **実装（後続セッション）**
+- ステータス: ~~レビュー待ち~~ → ~~issue 化~~（2026-07-04 完了: 対応A = [#34](https://github.com/ktakjm/poikatsu/issues/34)、対応B = [#35](https://github.com/ktakjm/poikatsu/issues/35)） → ~~対応A 実装~~（2026-07-05 完了） → **対応B 実装（後続セッション）**
 - 実装の進行管理は GitHub Issues 側（#34 / #35）に移行済み。本ドキュメントは背景・設計判断のリファレンスとして参照する
 - 完了した項目はチェックを付け、設計変更があればこのファイルを更新すること
+
+### 対応A 実装時の設計調整（2026-07-05、#34）
+
+- カード id は `smcc` / `mufg`（テストデータは `test_card`）。Kotlin 型名は `ProfileCard`→`PaymentCard`、`ProfileFile`→`PaymentMethodsFile`。`Profile` ラッパーは廃止し、payment_methods.json はトップレベルに `cards` / `qr_payments` を持つフラット構造、`PoikatsuData` も `cards` / `qrPayments` を直接持つ
+- **payment_methods.json はリモート取得・テストデータ切替の対象に含めた**（§3 A-2 の「常にローカル」から変更）。カタログと再定義した以上 merchants/campaigns と同列に扱うのが一貫するため。`DataRepository` は 3 ファイルを取得・キャッシュし、data-test/ にも専用の payment_methods.json（`test_card`）を置いてテスト施策を紐づけた
+- schema_version: campaigns.json 3→4、payment_methods.json は profile.json の 2 を引き継いで 3
 
 ## 1. 背景と目的
 

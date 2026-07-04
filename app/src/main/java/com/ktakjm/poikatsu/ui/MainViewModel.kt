@@ -17,7 +17,6 @@ import com.ktakjm.poikatsu.data.YolpClient
 import com.ktakjm.poikatsu.data.YolpSearchConfig
 import com.ktakjm.poikatsu.data.AppSettings
 import com.ktakjm.poikatsu.data.PointMultiplier
-import com.ktakjm.poikatsu.data.Profile
 import com.ktakjm.poikatsu.data.QrPayment
 import com.ktakjm.poikatsu.data.RegisteredMunicipality
 import com.ktakjm.poikatsu.data.SettingsRepository
@@ -210,7 +209,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val autoRefresh: Boolean = true,
         /** 設定画面の「マイカード」用カタログ(未所有カードも含む全候補) */
         val cardSettings: List<CardSetting> = emptyList(),
-        /** 設定画面の「QR 決済」用カタログ(profile.json のカタログ + ユーザー差分) */
+        /** 設定画面の「QR 決済」用カタログ(payment_methods.json のカタログ + ユーザー差分) */
         val qrPaymentSettings: List<QrPaymentSetting> = emptyList(),
         /** 登録済み自治体 */
         val registeredMunicipalities: List<RegisteredMunicipality> = emptyList(),
@@ -228,9 +227,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val enabled: Boolean,
     )
 
-    /** 設定画面のカード1枚分の表示・編集状態(profile カタログ + ユーザー差分のマージ結果) */
+    /** 設定画面のカード1枚分の表示・編集状態(payment_methods カタログ + ユーザー差分のマージ結果) */
     data class CardSetting(
-        val campaignId: String,
+        val cardId: String,
         val cardName: String,
         val owned: Boolean,
         /** 表示・編集する還元率(上書きがあれば上書き値、無ければ既定) */
@@ -379,17 +378,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * 直近のデータ(lastLoaded)とユーザー設定(lastSettings)からエンジンを作り直し状態へ反映する。
-     * エンジンへは「所有カードのみ + 還元率/ブランド/ウエル活上書き」をマージした profile を渡す
+     * エンジンへは「所有カードのみ + 還元率/ブランド/ウエル活上書き」をマージしたカード一覧を渡す
      * (JudgmentEngine 自体は純 Kotlin のまま=実データテストを維持)。設定画面用カタログ(未所有も含む)は別に組む。
      */
     private fun rebuild() {
         val loaded = lastLoaded ?: return
         val settings = lastSettings
-        val baseCards = loaded.data.profile.cards
+        val baseCards = loaded.data.cards
 
-        // エンジン用: 所有カードのみ、上書きを反映した profile
+        // エンジン用: 所有カードのみ、上書きを反映したカード一覧
         val mergedCards = baseCards.mapNotNull { card ->
-            val ov = settings.cardOverrides[card.campaignId]
+            val ov = settings.cardOverrides[card.id]
             if (ov?.owned == false) return@mapNotNull null
             val rawRate = ov?.rate ?: card.effectiveRateDefault
             val welcatsuOn = ov?.welcatsu == true && card.pointMultiplier != null
@@ -400,7 +399,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 welcatsuApplied = welcatsuOn,
             )
         }
-        val engineData = loaded.data.copy(profile = loaded.data.profile.copy(cards = mergedCards))
+        val engineData = loaded.data.copy(cards = mergedCards)
         val newEngine = JudgmentEngine(engineData)
         engine = newEngine
 
@@ -412,21 +411,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
         // 設定画面「マイカード」カタログ: 未所有カードも含む全候補 + 現在の上書き値
         val cardSettings = baseCards.map { card ->
-            val ov = settings.cardOverrides[card.campaignId]
-            val campaign = loaded.data.campaigns.firstOrNull { it.id == card.campaignId }
+            val ov = settings.cardOverrides[card.id]
+            // 1カード:N施策なので、紐づくどれかの施策に amex_excluded ルールがあればブランド選択を出す
+            val cardCampaigns = loaded.data.campaigns.filter { it.cardId == card.id }
             CardSetting(
-                campaignId = card.campaignId,
+                cardId = card.id,
                 cardName = card.cardName,
                 owned = ov?.owned ?: true,
                 rate = ov?.rate ?: card.effectiveRateDefault ?: 0.0,
                 brand = ov?.brand ?: card.brand,
-                showBrandPicker = campaign?.merchantRules?.any { it.amexExcluded } == true,
+                showBrandPicker = cardCampaigns.any { c -> c.merchantRules.any { it.amexExcluded } },
                 pointMultiplier = card.pointMultiplier,
                 welcatsu = ov?.welcatsu ?: false,
             )
         }
 
-        val qrPaymentSettings = loaded.data.profile.qrPayments.map { qr ->
+        val qrPaymentSettings = loaded.data.qrPayments.map { qr ->
             QrPaymentSetting(
                 id = qr.id,
                 name = qr.name,
@@ -1051,12 +1051,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onSelectCampaignGroup(group: List<Campaign>) {
         val e = engine ?: return
         val today = LocalDate.now()
-        val qrMap = lastLoaded?.data?.profile?.qrPayments?.associateBy { it.id }.orEmpty()
+        val qrMap = lastLoaded?.data?.qrPayments?.associateBy { it.id }.orEmpty()
         val judgments = group.map { campaign ->
             val qr = campaign.paymentMethodId?.let { qrMap[it] }
             CampaignJudgment(
                 campaign = campaign,
-                badgeLabel = qr?.name ?: campaign.issuer,
+                badgeLabel = qr?.name ?: campaign.operator,
                 brandColor = campaign.brandColor,
                 benefitType = com.ktakjm.poikatsu.domain.BenefitType.fromString(campaign.benefitType),
                 effectiveRate = campaign.rateBase,
@@ -1101,17 +1101,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onSetUseTestData(enabled: Boolean) = viewModelScope.launch { settingsRepo.setUseTestData(enabled) }
 
-    fun onSetCardOwned(campaignId: String, owned: Boolean) =
-        viewModelScope.launch { settingsRepo.setOwned(campaignId, owned) }
+    fun onSetCardOwned(cardId: String, owned: Boolean) =
+        viewModelScope.launch { settingsRepo.setOwned(cardId, owned) }
 
-    fun onSetCardRate(campaignId: String, rate: Double?) =
-        viewModelScope.launch { settingsRepo.setRate(campaignId, rate) }
+    fun onSetCardRate(cardId: String, rate: Double?) =
+        viewModelScope.launch { settingsRepo.setRate(cardId, rate) }
 
-    fun onSetCardBrand(campaignId: String, brand: String) =
-        viewModelScope.launch { settingsRepo.setBrand(campaignId, brand) }
+    fun onSetCardBrand(cardId: String, brand: String) =
+        viewModelScope.launch { settingsRepo.setBrand(cardId, brand) }
 
-    fun onSetCardWelcatsu(campaignId: String, enabled: Boolean) =
-        viewModelScope.launch { settingsRepo.setWelcatsu(campaignId, enabled) }
+    fun onSetCardWelcatsu(cardId: String, enabled: Boolean) =
+        viewModelScope.launch { settingsRepo.setWelcatsu(cardId, enabled) }
 
     fun onSetQrEnabled(id: String, enabled: Boolean) =
         viewModelScope.launch { settingsRepo.setQrEnabled(id, enabled) }

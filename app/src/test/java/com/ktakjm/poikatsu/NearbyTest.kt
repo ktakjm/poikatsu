@@ -8,7 +8,6 @@ import com.ktakjm.poikatsu.data.OverpassClient
 import com.ktakjm.poikatsu.data.Poi
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
-import com.ktakjm.poikatsu.data.Profile
 import com.ktakjm.poikatsu.data.YolpClient
 import com.ktakjm.poikatsu.data.YolpConfig
 import com.ktakjm.poikatsu.data.YolpSearchConfig
@@ -44,7 +43,6 @@ class StoreMatchTest {
             Merchant(id = "ueshima", name = "上島珈琲店", reading = "うえしまこーひーてん", category = "カフェ"),
         ),
         campaigns = emptyList(),
-        profile = Profile(),
         updatedAt = "2026-06-01",
     )
     private val engine = JudgmentEngine(data)
@@ -335,7 +333,7 @@ class YolpSearchConfigRealDataTest {
     private val data = PoikatsuJson.parse(
         merchantsJson = File("../data/merchants.json").readText(),
         campaignsJson = File("../data/campaigns.json").readText(),
-        profileJson = File("../data/profile.json").readText(),
+        paymentMethodsJson = File("../data/payment_methods.json").readText(),
     )
     private val engine = JudgmentEngine(data)
     private val today = LocalDate.of(2026, 6, 28)
