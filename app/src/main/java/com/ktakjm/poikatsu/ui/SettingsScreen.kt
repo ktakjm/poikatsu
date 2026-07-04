@@ -253,8 +253,10 @@ private fun CardSettingItem(
     onWelcatsuChange: (Boolean) -> Unit,
 ) {
     var showRateDialog by remember { mutableStateOf(false) }
+    // タイトルにブランドは出さない。ブランドが判定に効くカード(showBrandPicker)だけ下のブランド行で表示・変更する
+    // (施策がブランド不問のカードに「（Visa）」等を出すと、そのブランド限定と誤読させるため)
     ListItem(
-        headlineContent = { Text("${card.cardName}（${card.brand}）") },
+        headlineContent = { Text(card.cardName) },
         leadingContent = { Checkbox(checked = card.owned, onCheckedChange = onOwnedChange) },
         supportingContent = { Text(if (card.owned) "持っている" else "持っていない") },
         modifier = Modifier.clickable { onOwnedChange(!card.owned) },
