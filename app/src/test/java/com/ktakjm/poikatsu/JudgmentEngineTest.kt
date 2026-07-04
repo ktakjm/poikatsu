@@ -15,6 +15,7 @@ import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.domain.CampaignType
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.StoreEligibility
+import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.formatBenefit
 import com.ktakjm.poikatsu.util.JapaneseText
@@ -650,6 +651,105 @@ class JudgmentEngineTest {
     fun `formatBenefit_rebate両方ありならdiscountを優先`() {
         val label = formatBenefit(BenefitType.REBATE, 10.0, 500)
         assertEquals("500円還元", label.toString())
+    }
+
+    // ---- bestBenefitLabel(一覧・プレビューの「最良特典」)のテスト ----
+
+    @Test
+    fun `bestBenefitLabel_定率があればbestOption由来のラベル`() {
+        val campaign = campaignWithPeriod(rateBase = 7.0)
+        val engine = periodTestEngine(campaign, cards = listOf(testCard.copy(effectiveRateDefault = 7.0)))
+        val label = engine.judgeAll(testMerchant, today).bestBenefitLabel()
+        assertEquals("7% 還元", label.toString())
+    }
+
+    @Test
+    fun `bestBenefitLabel_定額クーポンのみのチェーンは円引きラベル(0パーセント表示にならない)`() {
+        val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
+        val campaign = campaignWithPeriod(
+            type = CampaignType.PROMOTION,
+            benefitType = BenefitType.DISCOUNT,
+            cardId = null,
+            paymentMethodId = "paypay",
+            rateBase = null,
+            discountAmount = 300,
+        )
+        val engine = periodTestEngine(campaign, cards = emptyList(), qrPayments = listOf(paypay))
+        val result = engine.judgeAll(testMerchant, today, setOf("paypay"))
+        assertNull(result.bestOption) // 定額は還元率比較の対象にしないポリシーは維持
+        assertEquals("300円引き", result.bestBenefitLabel().toString())
+    }
+
+    @Test
+    fun `bestBenefitLabel_定額還元のみのチェーンは円還元ラベル`() {
+        val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
+        val campaign = campaignWithPeriod(
+            type = CampaignType.PROMOTION,
+            benefitType = BenefitType.REBATE,
+            cardId = null,
+            paymentMethodId = "paypay",
+            rateBase = null,
+            discountAmount = 500,
+        )
+        val engine = periodTestEngine(campaign, cards = emptyList(), qrPayments = listOf(paypay))
+        val label = engine.judgeAll(testMerchant, today, setOf("paypay")).bestBenefitLabel()
+        assertEquals("500円還元", label.toString())
+    }
+
+    @Test
+    fun `bestBenefitLabel_定率と定額が混在すれば定率(bestOption)を優先`() {
+        val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
+        val fixedCoupon = campaignWithPeriod(
+            type = CampaignType.PROMOTION,
+            benefitType = BenefitType.DISCOUNT,
+            cardId = null,
+            paymentMethodId = "paypay",
+            rateBase = null,
+            discountAmount = 1000,
+        ).copy(id = "fixed")
+        val rateCampaign = campaignWithPeriod(rateBase = 5.0).copy(id = "rate")
+        val engine = JudgmentEngine(
+            PoikatsuData(
+                merchants = listOf(testMerchant),
+                campaigns = listOf(fixedCoupon, rateCampaign),
+                cards = listOf(testCard.copy(effectiveRateDefault = 5.0)),
+                qrPayments = listOf(paypay),
+                updatedAt = "2026-06-01",
+            ),
+        )
+        val label = engine.judgeAll(testMerchant, today, setOf("paypay")).bestBenefitLabel()
+        assertEquals("5% 還元", label.toString())
+    }
+
+    @Test
+    fun `bestBenefitLabel_定額同士は金額が大きいものを出す`() {
+        val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
+        fun coupon(id: String, amount: Int) = campaignWithPeriod(
+            type = CampaignType.PROMOTION,
+            benefitType = BenefitType.DISCOUNT,
+            cardId = null,
+            paymentMethodId = "paypay",
+            rateBase = null,
+            discountAmount = amount,
+        ).copy(id = id)
+        val engine = JudgmentEngine(
+            PoikatsuData(
+                merchants = listOf(testMerchant),
+                campaigns = listOf(coupon("c300", 300), coupon("c500", 500)),
+                cards = emptyList(),
+                qrPayments = listOf(paypay),
+                updatedAt = "2026-06-01",
+            ),
+        )
+        val label = engine.judgeAll(testMerchant, today, setOf("paypay")).bestBenefitLabel()
+        assertEquals("500円引き", label.toString())
+    }
+
+    @Test
+    fun `bestBenefitLabel_判定なしならnull`() {
+        val campaign = campaignWithPeriod(start = "2026-01-01", end = "2026-01-31") // 終了済み
+        val engine = periodTestEngine(campaign)
+        assertNull(engine.judgeAll(testMerchant, today).bestBenefitLabel())
     }
 
     // ---- rebate+定額の判定テスト ----

@@ -120,6 +120,20 @@ data class JudgmentResult(
     val bestOption: BestPaymentOption?,
 )
 
+/**
+ * 一覧(検索・近くリスト・地図プレビュー)に出す「最良特典」ラベル。
+ * 定率の最大(bestOption)があればそれを、定額特典しか無いチェーンでは判定リスト先頭
+ * (judgeAll のソートで定額同士は金額降順)の特典を整形する。
+ * 定額は購入額に依存し定率と比較できないため、比較ポリシー(determineBest)は変えず
+ * 見せ方だけをラベル化する(定額のみのチェーンが「0%」表示になる問題への対処。#29)。
+ */
+fun JudgmentResult.bestBenefitLabel(): BenefitLabel? {
+    bestOption?.let { return formatBenefit(it.benefitType, it.rate, it.discountAmount) }
+    return judgments.firstNotNullOfOrNull {
+        formatBenefit(it.benefitType, it.effectiveRate, it.discountAmount)
+    }
+}
+
 class JudgmentEngine(private val data: PoikatsuData) {
 
     private val searchIndex: List<Pair<Merchant, List<String>>> = data.merchants.map { m ->

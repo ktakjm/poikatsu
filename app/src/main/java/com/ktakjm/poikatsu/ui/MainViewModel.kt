@@ -21,11 +21,13 @@ import com.ktakjm.poikatsu.data.QrPayment
 import com.ktakjm.poikatsu.data.RegisteredMunicipality
 import com.ktakjm.poikatsu.data.SettingsRepository
 import com.ktakjm.poikatsu.data.ThemeMode
+import com.ktakjm.poikatsu.domain.BenefitLabel
 import com.ktakjm.poikatsu.domain.BestPaymentOption
 import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.CampaignType
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.StoreVerdict
+import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.util.GeoMath
 import java.io.File
@@ -68,7 +70,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     data class SearchResult(
         val merchant: Merchant,
-        val bestRate: Double,
+        /** 最良特典のラベル(定率なら「7% 還元」、定額なら「300円引き」等)。特典を整形できない場合のみ null */
+        val bestBenefit: BenefitLabel?,
         val campaignCount: Int,
         /** ブランドカラー("#RRGGBB")を還元率の高い順に最大3色 */
         val brandColors: List<String>,
@@ -103,7 +106,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         /** 地図中心(検索時のカメラ中心)からの距離(m)。リストのソート用 */
         val distanceFromCenter: Int,
         val merchant: Merchant?,
-        val bestRate: Double?,
+        /** 最良特典のラベル(定率なら「7% 還元」、定額なら「300円引き」等)。null なら特典表示なし */
+        val bestBenefit: BenefitLabel?,
         val lat: Double,
         val lon: Double,
         /**
@@ -359,12 +363,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val result = judgeAll(merchant, today, enabledQrIds())
             if (result.judgments.isEmpty()) return@mapNotNull null
             val allCampaigns = result.judgments.map { it.campaign }
-            val bestRate = result.bestOption?.rate
-                ?: result.judgments.firstOrNull()?.effectiveRate
-                ?: 0.0
             SearchResult(
                 merchant = merchant,
-                bestRate = bestRate,
+                bestBenefit = result.bestBenefitLabel(),
                 campaignCount = allCampaigns.distinctBy { it.id }.size,
                 brandColors = allCampaigns.mapNotNull { it.brandColor }.distinct().take(3),
                 hasTimeLimited = allCampaigns.any { it.periodEnd != null },
@@ -601,8 +602,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     distanceMeters = GeoMath.distanceMeters(originLat, originLon, poi.lat, poi.lon),
                     distanceFromCenter = GeoMath.distanceMeters(centerLat, centerLon, poi.lat, poi.lon),
                     merchant = merchant,
-                    bestRate = result.bestOption?.rate
-                        ?: result.judgments.firstOrNull()?.effectiveRate,
+                    bestBenefit = result.bestBenefitLabel(),
                     lat = poi.lat,
                     lon = poi.lon,
                     brandColors = allCampaigns.mapNotNull { it.brandColor }.distinct(),

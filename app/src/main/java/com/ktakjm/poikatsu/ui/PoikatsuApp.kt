@@ -92,7 +92,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ktakjm.poikatsu.data.Merchant
-import com.ktakjm.poikatsu.domain.trimRate
 import com.ktakjm.poikatsu.util.GeoMath
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -471,11 +470,13 @@ private fun SearchResultCard(result: MainViewModel.SearchResult, onClick: () -> 
                     )
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        "${trimRate(result.bestRate)}% 還元",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+                    result.bestBenefit?.let {
+                        Text(
+                            it.toString(),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                     if (result.campaignCount > 1) {
                         Text(
                             "${result.campaignCount}件の施策",
@@ -729,9 +730,9 @@ private fun NearbyPane(
                                     Text("${distanceLabel(place.distanceMeters, originName)}・${place.merchant?.category.orEmpty()}")
                                 },
                                 trailingContent = {
-                                    place.bestRate?.let {
+                                    place.bestBenefit?.let {
                                         Text(
-                                            "${trimRate(it)}% 還元",
+                                            it.toString(),
                                             style = MaterialTheme.typography.titleMedium,
                                             color = MaterialTheme.colorScheme.primary,
                                         )
@@ -782,9 +783,9 @@ private fun NearbyPane(
                                         Text("${distanceLabel(place.distanceMeters, originName)}・${place.merchant?.category.orEmpty()}")
                                     },
                                     trailingContent = {
-                                        place.bestRate?.let {
+                                        place.bestBenefit?.let {
                                             Text(
-                                                "${trimRate(it)}% 還元",
+                                                it.toString(),
                                                 style = MaterialTheme.typography.titleMedium,
                                                 color = MaterialTheme.colorScheme.primary,
                                             )
@@ -873,9 +874,9 @@ private fun NearbyPreview(
                 Icon(Icons.Default.Close, contentDescription = "プレビューを閉じる")
             }
         }
-        place.bestRate?.let {
+        place.bestBenefit?.let {
             Text(
-                "最大 ${trimRate(it)}% 還元",
+                "最大 $it",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
