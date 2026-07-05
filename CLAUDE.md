@@ -24,7 +24,7 @@
 ## その他の方針
 
 - 還元施策データ(data/*.json)は汎用に保つ。決済手段のマスタは data/payment_methods.json(カタログ)、ユーザー固有の差分(所有・還元率等)は設定画面から DataStore に分離する
-- 各社ロゴ画像は商標・著作権の問題があるため使用しない。識別はブランドカラー(campaigns.json の brand_color)で行う
+- 各社ロゴ画像は商標・著作権の問題があるため使用しない。識別はブランドカラーで行う(payment_methods.json の cards / card_brands / qr_payments 側で一元管理。施策側には持たせない)
 - 判定ロジックは domain/ 配下に Android 非依存の純 Kotlin で書き、実データ(data/*.json)を使ったユニットテストを維持する
 - ログは **Timber** を使う(`android.util.Log` を直接使わない)。debug ビルドのみ Logcat 出力、release は無出力。domain/ は純 Kotlin を維持するため Timber を使わない。詳細は docs/code-guide.md「9. ログ方針」
 - ビルド確認は `./gradlew :app:testDebugUnitTest :app:assembleDebug`
