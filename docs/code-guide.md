@@ -148,10 +148,11 @@ erDiagram
         string id PK
         string name "施策表示名"
         string type "card_program/promotion/municipal"
-        string benefit_type "rebate/discount"
+        string benefit_type "rebate/discount/lottery"
         string store_scope "managed/external"
         string operator "運営者(カード会社/決済事業者)"
-        string card_id "カードID(QR施策はnull・payment_method_idと排他)"
+        string card_id "カードID(card_brand/payment_method_idと排他)"
+        string card_brand "ブランド施策の対象ブランド(card_id/payment_method_idと排他)"
         string brand_color "#RRGGBB"
         string payment_instruction "支払い方法の説明"
         double rate_base "基準還元率(定率時)"
@@ -164,6 +165,8 @@ erDiagram
         int min_purchase "最低購入額(円)"
         int usage_limit "利用回数上限"
         string usage_limit_note "回数上限の補足(表示用)"
+        bool may_end_early "予算到達次第の早期終了があり得るか"
+        Recurrence recurrence "繰り返し日付条件(days_of_week/days_of_month)"
         string_list conditions "条件リスト(除外条件含む)"
         string payment_method_id "QR決済ID(カード施策はnull)"
         string detail_url "施策の詳細ページURL"
@@ -177,6 +180,7 @@ erDiagram
     }
     MERCHANT_RULE {
         string merchant_id FK
+        double rate_override "店舗別還元率(非null時rate_baseを上書き)"
         string note "店固有条件"
         string exclusion_note "対象外の但し書き(人間向け)"
         bool amex_excluded
@@ -194,7 +198,7 @@ erDiagram
     PAYMENT_CARD {
         string id PK "例: smcc"
         string card_name
-        string brand "Visa/Mastercard/Amex"
+        string_list brands "選べるブランドの選択肢(実ブランドはユーザー設定)"
         double effective_rate_default
         PointMultiplier point_multiplier "ポイント倍率(任意)"
     }
@@ -440,7 +444,7 @@ stateDiagram-v2
 
 ### 6.2 判定カード表示
 
-`CampaignJudgmentCard` は施策ごとに 1 枚の統一カード。カード決済・QR 決済・キャンペーン詳細で共用し、各フィールドの null / 空チェックだけで表示を出し分ける。左端のストライプとバッジに `brand_color` を使い、ロゴ画像なしで発行体を識別する。表示要素は「特典表示（`formatBenefit()` で統一生成）→ バッジ（badgeLabel）→ 期間 → 支払い方法 → 店固有条件 → 警告 → 除外注記 → 公式店舗一覧リンク → 最低購入額 → 利用回数制限 → 上限 → 対象店舗確認 → 詳細リンク → アプリ起動 → ポイント倍率注記 → **情報確認日**」の順。**ポイント倍率**（`PointMultiplier`）を持つカードは、バッジの右に `badge_label`（例: 「ウエル活利用可」）を表示し、適用時は `applied_note`（例: 「還元率はウエル活利用時の実質還元率」）を末尾に注記する。文言は `PointMultiplier` のデータから取り、UI にハードコードしない。`verified_date` の表示は必須ルール（データが古くなるリスクへの対処）。
+`CampaignJudgmentCard` は施策ごとに 1 枚の統一カード。カード決済・QR 決済・キャンペーン詳細で共用し、各フィールドの null / 空チェックだけで表示を出し分ける。左端のストライプとバッジに `brand_color` を使い、ロゴ画像なしで発行体を識別する。表示要素は「特典表示（`formatBenefit()` で統一生成。抽選＝lottery は率を持たないため専用の「抽選」表示）→ バッジ（badgeLabel）→ 期間 → 対象日（recurrence 施策のみ。「今日は対象日」/「次の対象日: ○/○」）→ 支払い方法 → 店固有条件 → 警告 → 除外注記 → 早期終了注記（may_end_early）→ 抽選の但し書き → 公式店舗一覧リンク → 最低購入額 → 利用回数制限 → 上限 → 対象店舗確認 → 詳細リンク → アプリ起動 → ポイント倍率注記 → **情報確認日**」の順。**ポイント倍率**（`PointMultiplier`）を持つカードは、バッジの右に `badge_label`（例: 「ウエル活利用可」）を表示し、適用時は `applied_note`（例: 「還元率はウエル活利用時の実質還元率」）を末尾に注記する。文言は `PointMultiplier` のデータから取り、UI にハードコードしない。`verified_date` の表示は必須ルール（データが古くなるリスクへの対処）。
 
 公式リストを持つチェーン（`canCheckStore` が true）では判定詳細に「この店舗が対象か調べる →」ボタンを出し、別画面 `StoreCheckScreen` へ遷移する。同画面は店舗名入力に対し `StoreVerdictCard` で 対象（`CheckCircle`）/ 対象外（`Close`）/ 要確認（`Info`）を Material アイコン＋**トーナル面のステータスピル**（`Surface` の container/content 対：対象＝`primaryContainer`、対象外＝`errorContainer`、要確認＝`warningContainerColor()`）で表示し、断定の鮮度（`date_is_official` に応じて「公式情報の更新日」or「確認日」）を併記する。色をカード地（`surfaceVariant`）に直接乗せず container 対で出すのは、コントラスト担保のため（6.4 警告色 参照）。公式リストの無いチェーンはボタンを出さない（判定画面を意識させない）。
 

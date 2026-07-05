@@ -3,7 +3,7 @@
 作成: 2026-07-04。実在キャンペーンの調査とスキーマ突き合わせ・命名レビューを行ったセッションの引き継ぎドキュメント。
 **このセッション内で完結しない前提**で、後続セッションが本ドキュメントだけで作業を再開できるよう、調査結果・設計判断・issue 対応方針をすべて記す。
 
-- ステータス: ~~レビュー待ち~~ → ~~issue 化~~（2026-07-04 完了: 対応A = [#34](https://github.com/ktakjm/poikatsu/issues/34)、対応B = [#35](https://github.com/ktakjm/poikatsu/issues/35)） → ~~対応A 実装~~（2026-07-05 完了） → **対応B 実装（後続セッション）**
+- ステータス: ~~レビュー待ち~~ → ~~issue 化~~（2026-07-04 完了: 対応A = [#34](https://github.com/ktakjm/poikatsu/issues/34)、対応B = [#35](https://github.com/ktakjm/poikatsu/issues/35)） → ~~対応A 実装~~（2026-07-05 完了） → ~~対応B 実装~~（2026-07-05 完了、実機検証待ち）
 - 実装の進行管理は GitHub Issues 側（#34 / #35）に移行済み。本ドキュメントは背景・設計判断のリファレンスとして参照する
 - 完了した項目はチェックを付け、設計変更があればこのファイルを更新すること
 
@@ -12,6 +12,17 @@
 - カード id は `smcc` / `mufg`（テストデータは `test_card`）。Kotlin 型名は `ProfileCard`→`PaymentCard`、`ProfileFile`→`PaymentMethodsFile`。`Profile` ラッパーは廃止し、payment_methods.json はトップレベルに `cards` / `qr_payments` を持つフラット構造、`PoikatsuData` も `cards` / `qrPayments` を直接持つ
 - **payment_methods.json はリモート取得・テストデータ切替の対象に含めた**（§3 A-2 の「常にローカル」から変更）。カタログと再定義した以上 merchants/campaigns と同列に扱うのが一貫するため。`DataRepository` は 3 ファイルを取得・キャッシュし、data-test/ にも専用の payment_methods.json（`test_card`）を置いてテスト施策を紐づけた
 - schema_version: campaigns.json 3→4、payment_methods.json は profile.json の 2 を引き継いで 3
+
+### 対応B 実装時の設計調整（2026-07-05、#35）
+
+B-1〜B-6 を一括実装。schema_version: campaigns.json 4→5、payment_methods.json 3→4。
+
+- **B-2 複数カード一致時は 1 件に代表**: `card_brand` 施策に所有カードが複数一致したら、カタログ定義順の先頭 1 枚をバッジに使う（promotion の率は施策側の値なのでどのカードでも同率。複数並べてもノイズ）
+- **B-2 ブランドモデル**: カタログの `brand`（単一・既定値）→ `brands`（選択肢リスト）に変更。実ブランドは `CardOverride.brand`（DataStore）のみが情報源で、`brands` が単一なら自動確定、複数なら**既定なし＝未選択**。**未選択は好条件側に倒さない**（2026-07-05 追記: 当初は「どのブランドとも断定しない＝Amex 除外も発動しない」としたが、実際は Amex のユーザーに対象外店を対象と誤提示し得るためレビューで反転）: card_brand 施策には一致せず、`amex_excluded` はそのカードが Amex を取りうる（`brands` に Amex を含む、または選択肢情報なし）限り**除外側に倒す**（`JudgmentEngine.excludedByBrand`。カタログ駆動で MUFG 固有のコードは持たない）。加えて、**ブランドが判定に効くカード（Amex 除外ルールあり or card_brand 施策あり、かつ選択肢が複数）は有効化時にブランド選択を必須**にした（選択せず閉じたら有効化しない。既に有効でも未選択なら設定画面に警告文を出す）
+- **B-5 は campaignStatus を変えず isTargetDay を別判定に**: 計画の「ACTIVE 判定を期間内かつ対象日に拡張」だと非対象日にキャンペーンタブからも消えて「次の対象日」の置き場が無くなるため、`campaignStatus` は期間の外枠のまま、`isTargetDay`/`nextTargetDay`（純関数）を追加。「探す」「近く」の判定と YOLP 検索対象（`activeManagedMerchantIds`）は期間内かつ対象日のみ、キャンペーンタブは期間内なら非対象日でも出して「次の対象日: ○/○」を表示する
+- **B-1 の率の優先順位**: `rule.rateOverride ?: campaign.rateBase` を施策側の率とし、promotion はそれをカードの常設実効率より優先（施策に率が無ければカードにフォールバック）。card_program は従来どおりユーザー設定の実効率を優先。施策側の率を採用したときはウエル活係数・注記を適用しない（係数はカードの実効率にだけ掛かっている）
+- **B-6 lottery**: `formatBenefit` は lottery で null を返し、判定カードは専用の「抽選」表示。`buildJudgment` で率・額を null 化して最良比較・ソートから自然に外す。lottery 施策は `rate_base` / `discount_amount` をどちらも null にする（整合性テストで強制）
+- data-test/ に全パターン（card_brand / rate_override / may_end_early / recurrence 曜日・日付 / lottery）のショーケース施策を追加。実データは自治体 5 件に `may_end_early: true` を付けたのみ（card_brand / recurrence / lottery の実例は収録待ち）
 
 ## 1. 背景と目的
 
@@ -71,7 +82,7 @@ erDiagram
     Card {
         string id PK "A-1 新設（例: smcc）"
         string card_name
-        string brand "Visa/Mastercard/Amex/JCB"
+        json brands "B-2: 選べるブランドの選択肢（実ブランドは CardOverride.brand）"
         double effective_rate_default
         json point_multiplier "ウエル活等"
     }

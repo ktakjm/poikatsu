@@ -114,6 +114,8 @@ data class OfficialStoreList(
 @Serializable
 data class MerchantRule(
     @SerialName("merchant_id") val merchantId: String,
+    /** この merchant だけ還元率が異なる場合の上書き値(%)。非 null なら rate_base の代わりに使う */
+    @SerialName("rate_override") val rateOverride: Double? = null,
     val note: String? = null,
     @SerialName("exclusion_note") val exclusionNote: String? = null,
     @SerialName("amex_excluded") val amexExcluded: Boolean = false,
@@ -128,13 +130,28 @@ data class Region(
     @SerialName("area_group") val areaGroup: String? = null,
 )
 
+/**
+ * 繰り返し日付条件(毎週金土・毎月20日30日等)。period_start/end(外枠の開催期間)と併用し、
+ * 「探す」「近く」の判定には期間内かつ対象日のみ出す。days_of_week / days_of_month はどちらか一方
+ * (併用パターンは実在確認できるまで未対応)。
+ */
+@Serializable
+data class Recurrence(
+    /** 対象曜日("MON"〜"SUN" の3文字表記) */
+    @SerialName("days_of_week") val daysOfWeek: List<String> = emptyList(),
+    /** 対象日(1〜31) */
+    @SerialName("days_of_month") val daysOfMonth: List<Int> = emptyList(),
+)
+
 @Serializable
 data class Campaign(
     val id: String,
     /** 施策の運営者(カード会社・QR決済事業者・自治体キャンペーンの決済事業者)。バッジ表示のフォールバックに使う */
     val operator: String,
-    /** 紐づくカード(payment_methods.json の cards.id)。card_program / promotion で使い、payment_method_id と排他 */
+    /** 紐づくカード(payment_methods.json の cards.id)。card_program / promotion で使い、card_brand / payment_method_id と排他 */
     @SerialName("card_id") val cardId: String? = null,
+    /** ブランド施策(イシュアー不問。例: Amex 30% OFF)の対象ブランド。card_id / payment_method_id と排他 */
+    @SerialName("card_brand") val cardBrand: String? = null,
     @SerialName("brand_color") val brandColor: String? = null,
     val name: String,
     @SerialName("payment_instruction") val paymentInstruction: String = "",
@@ -145,6 +162,7 @@ data class Campaign(
     @SerialName("merchant_rules") val merchantRules: List<MerchantRule> = emptyList(),
     @SerialName("verified_date") val verifiedDate: String = "",
     val type: String = "card_program",
+    /** 特典の型: "rebate"(後日還元) | "discount"(即時割引) | "lottery"(抽選。最良特典比較には載せない) */
     @SerialName("benefit_type") val benefitType: String = "rebate",
     @SerialName("payment_method_id") val paymentMethodId: String? = null,
     @SerialName("per_transaction_cap") val perTransactionCap: Int? = null,
@@ -154,6 +172,10 @@ data class Campaign(
     @SerialName("min_purchase") val minPurchase: Int? = null,
     @SerialName("usage_limit") val usageLimit: Int? = null,
     @SerialName("usage_limit_note") val usageLimitNote: String? = null,
+    /** 予算到達次第の早期終了があり得るか(自治体系はほぼ全件 true)。判定詳細・キャンペーンタブに注記を出す */
+    @SerialName("may_end_early") val mayEndEarly: Boolean = false,
+    /** 繰り返し日付条件。null なら期間内の全日が対象 */
+    val recurrence: Recurrence? = null,
     val region: Region? = null,
     @SerialName("detail_url") val detailUrl: String? = null,
     @SerialName("store_search_url") val storeSearchUrl: String? = null,
@@ -187,9 +209,18 @@ data class PaymentCard(
     /** カードの識別子(例: "smcc")。campaigns.json の card_id と DataStore card_overrides のキーから参照される */
     val id: String,
     @SerialName("card_name") val cardName: String,
-    val brand: String = "",
+    /**
+     * このカード製品で選べるブランドの選択肢(カタログの事実)。単一なら固定ブランド。
+     * ユーザーが実際にどのブランドを持っているかはカタログに置かず CardOverride.brand(DataStore)で持つ。
+     */
+    val brands: List<String> = emptyList(),
     @SerialName("effective_rate_default") val effectiveRateDefault: Double? = null,
     @SerialName("point_multiplier") val pointMultiplier: PointMultiplier? = null,
+    /**
+     * 実行時フィールド: 判定に使う実ブランド。VM のマージで CardOverride.brand(なければ brands が
+     * 単一のときその値)を設定し JSON には現れない。空文字は「未選択」= どのブランドとも断定しない。
+     */
+    @Transient val brand: String = "",
     /** 実行時フラグ: ウエル活(×factor)を適用済みか。VM のマージで設定し JSON には現れない */
     @Transient val welcatsuApplied: Boolean = false,
 )

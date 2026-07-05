@@ -29,6 +29,8 @@ import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.StoreVerdict
 import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
+import com.ktakjm.poikatsu.domain.isTargetDay
+import com.ktakjm.poikatsu.domain.nextTargetDay
 import com.ktakjm.poikatsu.util.GeoMath
 import java.io.File
 import java.time.LocalDate
@@ -238,8 +240,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val owned: Boolean,
         /** 表示・編集する還元率(上書きがあれば上書き値、無ければ既定) */
         val rate: Double,
+        /** 実ブランド(ユーザー設定。単一ブランド製品は自動確定)。空文字は未選択 */
         val brand: String,
-        /** ブランド選択(Amex 等)を出すか。amex_excluded ルールを持つ施策のみ true */
+        /** この製品で選べるブランドの選択肢(カタログ) */
+        val brands: List<String>,
+        /** ブランド選択 UI を出すか。ブランドが判定に効き(Amex除外/ブランド施策)かつ選択肢が複数のカードのみ true */
         val showBrandPicker: Boolean,
         /** ウエル活チェックの定義(null ならチェックを出さない) */
         val pointMultiplier: PointMultiplier?,
@@ -387,7 +392,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val settings = lastSettings
         val baseCards = loaded.data.cards
 
-        // エンジン用: 所有カードのみ、上書きを反映したカード一覧
+        // エンジン用: 所有カードのみ、上書きを反映したカード一覧。
+        // 実ブランドはユーザー設定(CardOverride.brand)が唯一の情報源で、カタログが単一ブランド製品の
+        // ときだけ自動確定する。複数ブランド製品で未選択なら空文字=どのブランドとも断定しない
+        // (Amex 除外は発動せず、card_brand 施策にも一致しない)。
         val mergedCards = baseCards.mapNotNull { card ->
             val ov = settings.cardOverrides[card.id]
             if (ov?.owned == false) return@mapNotNull null
@@ -395,7 +403,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val welcatsuOn = ov?.welcatsu == true && card.pointMultiplier != null
             val factor = if (welcatsuOn) card.pointMultiplier?.factor ?: 1.0 else 1.0
             card.copy(
-                brand = ov?.brand ?: card.brand,
+                brand = ov?.brand ?: card.brands.singleOrNull().orEmpty(),
                 effectiveRateDefault = rawRate?.let { it * factor },
                 welcatsuApplied = welcatsuOn,
             )
@@ -411,17 +419,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .filter { it.campaignType != CampaignType.CARD_PROGRAM }
 
         // 設定画面「マイカード」カタログ: 未所有カードも含む全候補 + 現在の上書き値
+        val hasBrandCampaign = loaded.data.campaigns.any { it.cardBrand != null }
         val cardSettings = baseCards.map { card ->
             val ov = settings.cardOverrides[card.id]
             // 1カード:N施策なので、紐づくどれかの施策に amex_excluded ルールがあればブランド選択を出す
             val cardCampaigns = loaded.data.campaigns.filter { it.cardId == card.id }
+            val brandAffectsJudgment =
+                cardCampaigns.any { c -> c.merchantRules.any { it.amexExcluded } } || hasBrandCampaign
             CardSetting(
                 cardId = card.id,
                 cardName = card.cardName,
                 owned = ov?.owned ?: true,
                 rate = ov?.rate ?: card.effectiveRateDefault ?: 0.0,
-                brand = ov?.brand ?: card.brand,
-                showBrandPicker = cardCampaigns.any { c -> c.merchantRules.any { it.amexExcluded } },
+                brand = ov?.brand ?: card.brands.singleOrNull().orEmpty(),
+                brands = card.brands,
+                // ブランドが判定に効き(Amex除外 or ブランド施策あり)、かつ製品として選択肢が複数
+                // あるカードだけ選択 UI を出す(単一ブランド製品は固定なので出さない)
+                showBrandPicker = brandAffectsJudgment && card.brands.size > 1,
                 pointMultiplier = card.pointMultiplier,
                 welcatsu = ov?.welcatsu ?: false,
             )
@@ -1054,13 +1068,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val qrMap = lastLoaded?.data?.qrPayments?.associateBy { it.id }.orEmpty()
         val judgments = group.map { campaign ->
             val qr = campaign.paymentMethodId?.let { qrMap[it] }
+            val benefitType = com.ktakjm.poikatsu.domain.BenefitType.fromString(campaign.benefitType)
+            val isLottery = benefitType == com.ktakjm.poikatsu.domain.BenefitType.LOTTERY
+            val todayIsTarget = isTargetDay(campaign, today)
             CampaignJudgment(
                 campaign = campaign,
                 badgeLabel = qr?.name ?: campaign.operator,
                 brandColor = campaign.brandColor,
-                benefitType = com.ktakjm.poikatsu.domain.BenefitType.fromString(campaign.benefitType),
-                effectiveRate = campaign.rateBase,
-                discountAmount = campaign.discountAmount,
+                benefitType = benefitType,
+                effectiveRate = campaign.rateBase.takeUnless { isLottery },
+                discountAmount = campaign.discountAmount.takeUnless { isLottery },
                 daysRemaining = e.daysRemaining(campaign, today),
                 storeNote = null,
                 exclusionNote = null,
@@ -1081,6 +1098,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 appPackage = qr?.appPackage?.ifBlank { null },
                 pointMultiplier = null,
                 welcatsuApplied = false,
+                mayEndEarly = campaign.mayEndEarly,
+                todayIsTarget = todayIsTarget,
+                nextTargetDate = if (todayIsTarget) null else nextTargetDay(campaign, today),
             )
         }
         _state.update { it.copy(selectedCampaignGroup = judgments) }

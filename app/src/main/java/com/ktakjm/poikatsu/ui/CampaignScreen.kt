@@ -36,6 +36,9 @@ import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.domain.CampaignType
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.formatBenefit
+import com.ktakjm.poikatsu.domain.isTargetDay
+import com.ktakjm.poikatsu.domain.nextTargetDay
+import com.ktakjm.poikatsu.domain.recurrenceLabel
 import com.ktakjm.poikatsu.ui.theme.warningColor
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -205,6 +208,22 @@ private fun CampaignSummaryCard(
                                 color = if (urgent) warningColor() else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                        // 早期終了があり得る施策では「残り○日」が断定に見えないよう注記を添える
+                        if (campaigns.any { it.mayEndEarly }) {
+                            Text(
+                                "早期終了の可能性あり",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = warningColor(),
+                            )
+                        }
+                    }
+                    recurrenceInfo(campaigns, status, today)?.let { (label, isToday) ->
+                        Text(
+                            label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isToday) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
                 if (maxBenefit != null) {
@@ -240,11 +259,16 @@ internal fun CampaignDetail(
 
 // ==================== 共通ヘルパー ====================
 
-/** グループの最大還元率/特典テキスト(サマリーカード右側用) */
+/** グループの最大還元率/特典テキスト(サマリーカード右側用)。抽選は比較に載せず「抽選」と表示する */
 private fun campaignGroupMaxBenefit(campaigns: List<Campaign>): String? {
-    val type = BenefitType.fromString(campaigns.first().benefitType)
-    val maxRate = campaigns.mapNotNull { it.rateBase }.maxOrNull()
-    val maxDiscount = campaigns.mapNotNull { it.discountAmount }.maxOrNull()
+    val comparable = campaigns.filter { BenefitType.fromString(it.benefitType) != BenefitType.LOTTERY }
+    if (comparable.isEmpty()) return "抽選"
+    val type = BenefitType.fromString(comparable.first().benefitType)
+    // 店舗別の rate_override がある施策は「最大○%」としてその最大値を出す
+    val maxRate = comparable
+        .mapNotNull { c -> (c.merchantRules.mapNotNull { it.rateOverride } + listOfNotNull(c.rateBase)).maxOrNull() }
+        .maxOrNull()
+    val maxDiscount = comparable.mapNotNull { it.discountAmount }.maxOrNull()
     return formatBenefit(type, maxRate, maxDiscount)?.toString()
 }
 
@@ -252,6 +276,27 @@ private fun buildPeriodLabel(earliestStart: LocalDate?, latestEnd: LocalDate?): 
     if (earliestStart != null) append("${earliestStart.monthValue}/${earliestStart.dayOfMonth}")
     append("〜")
     if (latestEnd != null) append("${latestEnd.monthValue}/${latestEnd.dayOfMonth}")
+}
+
+/**
+ * recurrence 施策のサマリー表示(「対象日: 毎週金・土曜 | 今日は対象日」等)。
+ * グループ内に recurrence 施策が無い、または開催前なら null。Boolean は「今日が対象日」か。
+ */
+private fun recurrenceInfo(
+    campaigns: List<Campaign>,
+    status: CampaignStatus,
+    today: LocalDate,
+): Pair<String, Boolean>? {
+    if (status != CampaignStatus.ACTIVE) return null
+    val campaign = campaigns.firstOrNull { it.recurrence != null } ?: return null
+    val pattern = recurrenceLabel(campaign.recurrence ?: return null)
+    return if (isTargetDay(campaign, today)) {
+        "対象日: $pattern | 今日は対象日" to true
+    } else {
+        val next = nextTargetDay(campaign, today)
+        val nextLabel = next?.let { " | 次の対象日: ${it.monthValue}/${it.dayOfMonth}" }.orEmpty()
+        "対象日: $pattern$nextLabel" to false
+    }
 }
 
 private fun daysInfo(status: CampaignStatus, today: LocalDate, earliestStart: LocalDate?, latestEnd: LocalDate?): Pair<String, Boolean>? =

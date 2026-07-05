@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "updated_at": "2026-07-05",
   "campaigns": [
     {
@@ -28,10 +28,87 @@
       "operator": "テストカード発行会社",
       "card_id": "test_card",
       "brand_color": "#4CAF50",
-      "name": "テスト期間限定施策（10%還元）",
+      "name": "テスト期間限定施策（10%・バーガーのみ15%還元）",
       "rate_base": 10.0,
       "period_start": "2026-01-01",
       "period_end": "2099-12-31",
+      "may_end_early": true,
+      "verified_date": "2026-07-05",
+      "merchant_rules": [
+        { "merchant_id": "test_combini" },
+        { "merchant_id": "test_fastfood", "rate_override": 15.0 }
+      ]
+    },
+    {
+      "id": "test_brand_promotion",
+      "type": "promotion",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "テスト国際ブランド",
+      "card_brand": "Visa",
+      "brand_color": "#1A1F71",
+      "name": "テストブランド施策（Visaで30% OFF）",
+      "payment_instruction": "Visaブランドのカードで支払う",
+      "rate_base": 30.0,
+      "period_start": "2026-01-01",
+      "period_end": "2099-12-31",
+      "per_transaction_cap": 1000,
+      "verified_date": "2026-07-05",
+      "merchant_rules": [
+        { "merchant_id": "test_fastfood" }
+      ]
+    },
+    {
+      "id": "test_recurrence_weekly",
+      "type": "promotion",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "テストカード発行会社",
+      "card_id": "test_card",
+      "brand_color": "#9C27B0",
+      "name": "テスト曜日限定施策（毎週金土20%還元）",
+      "rate_base": 20.0,
+      "period_start": "2026-01-01",
+      "period_end": "2099-12-31",
+      "recurrence": { "days_of_week": ["FRI", "SAT"] },
+      "verified_date": "2026-07-05",
+      "merchant_rules": [
+        { "merchant_id": "test_combini" }
+      ]
+    },
+    {
+      "id": "test_recurrence_monthly",
+      "type": "promotion",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "テストカード発行会社",
+      "card_id": "test_card",
+      "brand_color": "#FF9800",
+      "name": "テスト日付限定施策（5・20・30日は12%還元）",
+      "rate_base": 12.0,
+      "period_start": "2026-01-01",
+      "period_end": "2099-12-31",
+      "recurrence": { "days_of_month": [5, 20, 30] },
+      "verified_date": "2026-07-05",
+      "merchant_rules": [
+        { "merchant_id": "test_fastfood" }
+      ]
+    },
+    {
+      "id": "test_lottery",
+      "type": "promotion",
+      "benefit_type": "lottery",
+      "store_scope": "managed",
+      "operator": "テストカード発行会社",
+      "card_id": "test_card",
+      "brand_color": "#607D8B",
+      "name": "テスト抽選施策（1/4の確率で最大全額還元）",
+      "period_start": "2026-01-01",
+      "period_end": "2099-12-31",
+      "conditions": [
+        "抽選で4分の1の確率で当選",
+        "当選すると決済額の最大全額(上限1000円相当)を還元"
+      ],
       "verified_date": "2026-07-05",
       "merchant_rules": [
         { "merchant_id": "test_combini" }

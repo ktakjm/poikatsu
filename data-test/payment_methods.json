@@ -1,12 +1,18 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "updated_at": "2026-07-05",
   "cards": [
     {
       "id": "test_card",
       "card_name": "テストカード",
-      "brand": "Visa",
+      "brands": ["Visa"],
       "effective_rate_default": 7.0
+    },
+    {
+      "id": "test_brand_card",
+      "card_name": "テストブランドカード",
+      "brands": ["Visa", "Mastercard", "JCB", "Amex"],
+      "effective_rate_default": 1.0
     }
   ],
   "qr_payments": []

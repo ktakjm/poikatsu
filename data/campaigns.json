@@ -1,5 +1,5 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "updated_at": "2026-07-05",
   "campaigns": [
     {
@@ -137,6 +137,7 @@
       "period_end": "2026-09-30",
       "per_transaction_cap": 3000,
       "period_total_cap": 5000,
+      "may_end_early": true,
       "region": {
         "name": "湯沢市",
         "prefecture": "秋田県",
@@ -162,6 +163,7 @@
       "period_end": "2026-09-30",
       "per_transaction_cap": 3000,
       "period_total_cap": 5000,
+      "may_end_early": true,
       "region": {
         "name": "湯沢市",
         "prefecture": "秋田県",
@@ -187,6 +189,7 @@
       "period_end": "2026-07-31",
       "per_transaction_cap": 5000,
       "period_total_cap": 10000,
+      "may_end_early": true,
       "region": {
         "name": "奥州市",
         "prefecture": "岩手県",
@@ -212,6 +215,7 @@
       "period_end": "2026-08-10",
       "per_transaction_cap": 2000,
       "period_total_cap": 5000,
+      "may_end_early": true,
       "region": {
         "name": "大田市",
         "prefecture": "島根県",
@@ -263,6 +267,7 @@
       "period_end": "2026-07-10",
       "per_transaction_cap": 1000,
       "period_total_cap": 4000,
+      "may_end_early": true,
       "region": {
         "name": "杉並区",
         "prefecture": "東京都",
@@ -271,7 +276,6 @@
       "detail_url": "https://paypay.ne.jp/event/tokyo-suginami-city-20260601/",
       "store_search_url": null,
       "conditions": [
-        "予定額に達した場合は早期終了",
         "PayPay商品券・クレジットカードは対象外"
       ],
       "merchant_rules": [],

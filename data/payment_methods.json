@@ -1,17 +1,18 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "updated_at": "2026-07-05",
   "cards": [
     {
       "id": "smcc",
       "card_name": "三井住友カード",
+      "brands": ["Visa", "Mastercard"],
       "effective_rate_default": 7.0,
       "point_multiplier": { "label": "ウエル活利用時の還元率を表示", "factor": 1.5, "color": "#00A0E9", "badge_label": "ウエル活利用可", "applied_note": "還元率はウエル活利用時の実質還元率" }
     },
     {
       "id": "mufg",
       "card_name": "三菱UFJカード",
-      "brand": "Mastercard",
+      "brands": ["Visa", "Mastercard", "JCB", "Amex"],
       "effective_rate_default": 7.0
     }
   ],

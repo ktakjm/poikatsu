@@ -253,21 +253,41 @@ private fun CardSettingItem(
     onWelcatsuChange: (Boolean) -> Unit,
 ) {
     var showRateDialog by remember { mutableStateOf(false) }
+    var showBrandRequiredDialog by remember { mutableStateOf(false) }
+    // ブランドが判定に効くカード(showBrandPicker)は、未選択のまま有効化すると Amex 除外等が
+    // 発動せず過剰表示になり得るため、有効化時にブランド選択を必須にする(選択せず閉じたら有効化しない)
+    val requestOwnedChange: (Boolean) -> Unit = { owned ->
+        if (owned && card.showBrandPicker && card.brand.isBlank()) {
+            showBrandRequiredDialog = true
+        } else {
+            onOwnedChange(owned)
+        }
+    }
     // タイトルにブランドは出さない。ブランドが判定に効くカード(showBrandPicker)だけ下のブランド行で表示・変更する
     // (施策がブランド不問のカードに「（Visa）」等を出すと、そのブランド限定と誤読させるため)
     ListItem(
         headlineContent = { Text(card.cardName) },
-        leadingContent = { Checkbox(checked = card.owned, onCheckedChange = onOwnedChange) },
+        leadingContent = { Checkbox(checked = card.owned, onCheckedChange = requestOwnedChange) },
         supportingContent = { Text(if (card.owned) "持っている" else "持っていない") },
-        modifier = Modifier.clickable { onOwnedChange(!card.owned) },
+        modifier = Modifier.clickable { requestOwnedChange(!card.owned) },
     )
     if (card.owned) {
         if (card.showBrandPicker) {
             ListItem(
                 headlineContent = { Text("ブランド") },
-                trailingContent = { BrandDropdown(brand = card.brand, onChange = onBrandChange) },
+                trailingContent = {
+                    BrandDropdown(brand = card.brand, options = card.brands, onChange = onBrandChange)
+                },
                 modifier = Modifier.padding(start = 24.dp),
             )
+            if (card.brand.isBlank()) {
+                Text(
+                    "ブランド未選択のため、Amex で優遇対象外になり得る店舗は対象外として扱われます。お持ちのブランドを選ぶと正確に判定されます",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = warningColor(),
+                    modifier = Modifier.padding(start = 24.dp, end = 16.dp, bottom = 8.dp),
+                )
+            }
             if (card.brand.equals("Amex", ignoreCase = true)) {
                 Text(
                     "Amex は一部店舗が優遇対象外になります",
@@ -308,11 +328,23 @@ private fun CardSettingItem(
             },
         )
     }
+    if (showBrandRequiredDialog) {
+        BrandRequiredDialog(
+            cardName = card.cardName,
+            options = card.brands,
+            onSelect = { brand ->
+                onBrandChange(brand)
+                onOwnedChange(true)
+                showBrandRequiredDialog = false
+            },
+            onDismiss = { showBrandRequiredDialog = false },
+        )
+    }
 }
 
-/** ブランド選択(Amex/Mastercard/Visa/JCB)。Amex のときだけ判定挙動が変わる。 */
+/** ブランド選択。選択肢はカタログ(payment_methods.json の brands)から出す。 */
 @Composable
-private fun BrandDropdown(brand: String, onChange: (String) -> Unit) {
+private fun BrandDropdown(brand: String, options: List<String>, onChange: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         TextButton(onClick = { expanded = true }) {
@@ -320,7 +352,7 @@ private fun BrandDropdown(brand: String, onChange: (String) -> Unit) {
             Icon(Icons.Default.ArrowDropDown, contentDescription = null)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            listOf("Amex", "Mastercard", "Visa", "JCB").forEach { b ->
+            options.forEach { b ->
                 DropdownMenuItem(
                     text = { Text(b) },
                     onClick = {
@@ -331,6 +363,37 @@ private fun BrandDropdown(brand: String, onChange: (String) -> Unit) {
             }
         }
     }
+}
+
+/** ブランドが判定に効くカードを有効化するとき、実ブランドの選択を求めるダイアログ。 */
+@Composable
+private fun BrandRequiredDialog(
+    cardName: String,
+    options: List<String>,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("ブランドを選択") },
+        text = {
+            Column {
+                Text(
+                    "${cardName}はブランドによって判定が変わります。お持ちのカードのブランドを選んでください。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(8.dp))
+                options.forEach { b ->
+                    ListItem(
+                        headlineContent = { Text(b) },
+                        modifier = Modifier.clickable { onSelect(b) },
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("キャンセル") } },
+    )
 }
 
 /** 還元率の数値入力ダイアログ。空/「既定に戻す」で上書きを解除する(null を返す)。 */

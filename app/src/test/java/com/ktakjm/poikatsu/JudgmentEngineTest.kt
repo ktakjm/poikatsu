@@ -8,6 +8,7 @@ import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.QrPayment
+import com.ktakjm.poikatsu.data.Recurrence
 import com.ktakjm.poikatsu.data.Region
 import com.ktakjm.poikatsu.data.RegisteredMunicipality
 import com.ktakjm.poikatsu.domain.BenefitType
@@ -18,6 +19,8 @@ import com.ktakjm.poikatsu.domain.StoreEligibility
 import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.formatBenefit
+import com.ktakjm.poikatsu.domain.nextTargetDay
+import com.ktakjm.poikatsu.domain.recurrenceLabel
 import com.ktakjm.poikatsu.util.JapaneseText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -309,6 +312,34 @@ class JudgmentEngineTest {
     }
 
     @Test
+    fun `ブランド未選択でAmexを取りうるカードはamex_excludedの店を除外する(不利側に倒す)`() {
+        val kurazushi = data.merchants.first { it.id == "kurazushi" }
+        fun mufgWith(brands: List<String>) = data.cards.map {
+            if (it.id == "mufg") it.copy(brand = "", brands = brands) else it
+        }
+        // Amex を選択肢に含むカードが未選択 → 好条件を誤提示しないよう除外
+        val couldBeAmex = engineWithCards(mufgWith(listOf("Visa", "Mastercard", "JCB", "Amex")))
+        assertTrue(couldBeAmex.judgeCards(kurazushi, today).none { it.campaign.id == "mufg_point_up_program" })
+        // カタログに選択肢情報が無い(旧データ等)場合も保守的に除外
+        val unknownBrands = engineWithCards(mufgWith(emptyList()))
+        assertTrue(unknownBrands.judgeCards(kurazushi, today).none { it.campaign.id == "mufg_point_up_program" })
+        // amex_excluded でない店には未選択でも出る
+        val sevenEleven = data.merchants.first { it.id == "seven_eleven" }
+        assertTrue(couldBeAmex.judgeCards(sevenEleven, today).any { it.campaign.id == "mufg_point_up_program" })
+    }
+
+    @Test
+    fun `ブランド未選択でもAmexを取り得ないカードはamex_excludedの店を除外しない`() {
+        val kurazushi = data.merchants.first { it.id == "kurazushi" }
+        val visaOrMaster = engineWithCards(
+            data.cards.map {
+                if (it.id == "mufg") it.copy(brand = "", brands = listOf("Visa", "Mastercard")) else it
+            },
+        )
+        assertTrue(visaOrMaster.judgeCards(kurazushi, today).any { it.campaign.id == "mufg_point_up_program" })
+    }
+
+    @Test
     fun `未所有カードの施策は判定に出ない`() {
         val kurazushi = data.merchants.first { it.id == "kurazushi" }
         // MUFG カードを所有していない(カード一覧から除外)ケース
@@ -326,8 +357,9 @@ class JudgmentEngineTest {
         type: CampaignType = CampaignType.CARD_PROGRAM,
         storeScope: String = "managed",
         benefitType: BenefitType = BenefitType.REBATE,
-        // カード施策/QR 施策の帰属は排他: QR 施策を作るときは cardId = null を渡す
+        // 施策の帰属は cardId / cardBrand / paymentMethodId のちょうど1つ: 他を使うときは cardId = null を渡す
         cardId: String? = "test_card",
+        cardBrand: String? = null,
         paymentMethodId: String? = null,
         rateBase: Double? = 10.0,
         discountAmount: Int? = null,
@@ -336,10 +368,14 @@ class JudgmentEngineTest {
         perTransactionCap: Int? = null,
         periodTotalCap: Int? = null,
         region: Region? = null,
+        mayEndEarly: Boolean = false,
+        recurrence: Recurrence? = null,
+        merchantRules: List<MerchantRule> = listOf(MerchantRule(merchantId = "m1")),
     ) = Campaign(
         id = "test_campaign",
         operator = "test",
         cardId = cardId,
+        cardBrand = cardBrand,
         name = "テスト",
         paymentInstruction = "テスト",
         rateBase = rateBase,
@@ -356,7 +392,9 @@ class JudgmentEngineTest {
         perTransactionCap = perTransactionCap,
         periodTotalCap = periodTotalCap,
         region = region,
-        merchantRules = listOf(MerchantRule(merchantId = "m1")),
+        mayEndEarly = mayEndEarly,
+        recurrence = recurrence,
+        merchantRules = merchantRules,
     )
 
     private val testMerchant = Merchant(id = "m1", name = "テスト店", reading = "てすとてん")
@@ -777,6 +815,258 @@ class JudgmentEngineTest {
         assertNull(q.effectiveRate)
         assertEquals("500円還元", formatBenefit(q.benefitType, q.effectiveRate, q.discountAmount).toString())
     }
+
+    // ---- B-1: promotion の還元率はカードの常設実効率より施策側を優先 ----
+
+    @Test
+    fun `promotionでは施策の率がカードの常設実効率を上書きする`() {
+        // カード常設 10% のカードに 15% の期間限定施策 → 15% が出る(逆だと常設が期間限定を上書きする潜在バグ)
+        val campaign = campaignWithPeriod(
+            type = CampaignType.PROMOTION,
+            rateBase = 15.0,
+            start = "2026-06-01",
+            end = "2026-07-31",
+        )
+        val engine = periodTestEngine(campaign)
+        assertEquals(15.0, engine.judgeCards(testMerchant, today).single().effectiveRate!!, 0.001)
+    }
+
+    @Test
+    fun `card_programでは従来どおりカードの実効率を優先する`() {
+        val campaign = campaignWithPeriod(rateBase = 7.0) // カードは 10.0
+        val engine = periodTestEngine(campaign)
+        assertEquals(10.0, engine.judgeCards(testMerchant, today).single().effectiveRate!!, 0.001)
+    }
+
+    @Test
+    fun `promotionに率が無ければカードの実効率にフォールバックする`() {
+        val campaign = campaignWithPeriod(
+            type = CampaignType.PROMOTION,
+            benefitType = BenefitType.DISCOUNT,
+            rateBase = null,
+            discountAmount = 300,
+            start = "2026-06-01",
+            end = "2026-07-31",
+        )
+        val engine = periodTestEngine(campaign)
+        val judgment = engine.judgeCards(testMerchant, today).single()
+        assertEquals(300, judgment.discountAmount)
+        assertEquals("300円引き", formatBenefit(judgment.benefitType, judgment.effectiveRate, judgment.discountAmount).toString())
+    }
+
+    // ---- B-2: card_brand(ブランド施策) ----
+
+    private val brandCampaign = campaignWithPeriod(
+        type = CampaignType.PROMOTION,
+        benefitType = BenefitType.DISCOUNT,
+        cardId = null,
+        cardBrand = "Amex",
+        rateBase = 30.0,
+        start = "2026-06-01",
+        end = "2026-07-31",
+    )
+
+    @Test
+    fun `card_brand施策は実ブランド一致の所有カードにマッチしそのカード名がバッジになる`() {
+        val engine = periodTestEngine(
+            brandCampaign,
+            cards = listOf(
+                testCard.copy(brand = "Visa"),
+                PaymentCard(id = "amex1", cardName = "Amexカード", brand = "Amex", effectiveRateDefault = 1.0),
+            ),
+        )
+        val judgment = engine.judgeCards(testMerchant, today).single()
+        assertEquals("Amexカード", judgment.badgeLabel)
+        assertEquals(30.0, judgment.effectiveRate!!, 0.001)
+        assertEquals("30% OFF", formatBenefit(judgment.benefitType, judgment.effectiveRate, judgment.discountAmount).toString())
+    }
+
+    @Test
+    fun `card_brand施策はブランド未選択・不一致のカードにはマッチしない`() {
+        val engine = periodTestEngine(
+            brandCampaign,
+            cards = listOf(testCard.copy(brand = ""), PaymentCard(id = "v1", cardName = "Visaカード", brand = "Visa")),
+        )
+        assertTrue(engine.judgeCards(testMerchant, today).isEmpty())
+    }
+
+    @Test
+    fun `card_brand施策に複数カードが一致したらカタログ定義順の先頭1件に代表させる`() {
+        val engine = periodTestEngine(
+            brandCampaign,
+            cards = listOf(
+                PaymentCard(id = "amex1", cardName = "Amexカード1", brand = "Amex"),
+                PaymentCard(id = "amex2", cardName = "Amexカード2", brand = "Amex"),
+            ),
+        )
+        val judgments = engine.judgeCards(testMerchant, today)
+        assertEquals(1, judgments.size)
+        assertEquals("Amexカード1", judgments.single().badgeLabel)
+    }
+
+    // ---- B-3: merchant_rules[].rate_override(店舗別還元率) ----
+
+    @Test
+    fun `rate_overrideがその店舗のrate_baseを上書きする`() {
+        val otherMerchant = Merchant(id = "m2", name = "テスト店2", reading = "てすとてんつー")
+        val campaign = campaignWithPeriod(
+            type = CampaignType.PROMOTION,
+            rateBase = 10.0,
+            start = "2026-06-01",
+            end = "2026-07-31",
+            merchantRules = listOf(
+                MerchantRule(merchantId = "m1", rateOverride = 20.0),
+                MerchantRule(merchantId = "m2"),
+            ),
+        )
+        val engine = JudgmentEngine(
+            PoikatsuData(
+                merchants = listOf(testMerchant, otherMerchant),
+                campaigns = listOf(campaign),
+                cards = listOf(testCard),
+                updatedAt = "2026-06-01",
+            ),
+        )
+        assertEquals(20.0, engine.judgeCards(testMerchant, today).single().effectiveRate!!, 0.001)
+        assertEquals(10.0, engine.judgeCards(otherMerchant, today).single().effectiveRate!!, 0.001)
+    }
+
+    @Test
+    fun `rate_overrideはQR施策でも効く`() {
+        val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
+        val campaign = campaignWithPeriod(
+            type = CampaignType.PROMOTION,
+            cardId = null,
+            paymentMethodId = "paypay",
+            rateBase = 10.0,
+            start = "2026-06-01",
+            end = "2026-07-31",
+            merchantRules = listOf(MerchantRule(merchantId = "m1", rateOverride = 20.0)),
+        )
+        val engine = periodTestEngine(campaign, cards = emptyList(), qrPayments = listOf(paypay))
+        assertEquals(20.0, engine.judgeQr(testMerchant, today, setOf("paypay")).single().effectiveRate!!, 0.001)
+    }
+
+    // ---- B-4: may_end_early(早期終了フラグ) ----
+
+    @Test
+    fun `may_end_earlyが判定結果に伝わる`() {
+        val campaign = campaignWithPeriod(start = "2026-06-01", end = "2026-07-31", mayEndEarly = true)
+        val engine = periodTestEngine(campaign)
+        assertTrue(engine.judgeCards(testMerchant, today).single().mayEndEarly)
+        assertFalse(periodTestEngine(campaignWithPeriod()).judgeCards(testMerchant, today).single().mayEndEarly)
+    }
+
+    // ---- B-5: recurrence(繰り返し日付条件) ----
+    // today = 2026-06-28(日)。6/26(金)・7/3(金) が FRI。
+
+    private val weeklyCampaign = campaignWithPeriod(
+        start = "2026-06-01",
+        end = "2026-07-31",
+        recurrence = Recurrence(daysOfWeek = listOf("FRI", "SAT")),
+    )
+
+    @Test
+    fun `recurrenceの曜日条件は対象日のみ判定に出す`() {
+        val engine = periodTestEngine(weeklyCampaign)
+        val friday = LocalDate.of(2026, 7, 3)
+        assertEquals(1, engine.judgeCards(testMerchant, friday).size)
+        val judgment = engine.judgeCards(testMerchant, friday).single()
+        assertTrue(judgment.todayIsTarget)
+        assertNull(judgment.nextTargetDate)
+        // 日曜(非対象日)は判定に出ない
+        assertTrue(engine.judgeCards(testMerchant, today).isEmpty())
+    }
+
+    @Test
+    fun `recurrenceの日付条件は対象日のみ判定に出す`() {
+        val campaign = campaignWithPeriod(
+            start = "2026-06-01",
+            end = "2026-07-31",
+            recurrence = Recurrence(daysOfMonth = listOf(20, 30)),
+        )
+        val engine = periodTestEngine(campaign)
+        assertEquals(1, engine.judgeCards(testMerchant, LocalDate.of(2026, 6, 30)).size)
+        assertTrue(engine.judgeCards(testMerchant, LocalDate.of(2026, 6, 28)).isEmpty())
+        assertEquals(LocalDate.of(2026, 6, 30), nextTargetDay(campaign, LocalDate.of(2026, 6, 28)))
+    }
+
+    @Test
+    fun `recurrence施策は期間内なら非対象日でもキャンペーンタブ用のactiveに残る`() {
+        val engine = periodTestEngine(weeklyCampaign)
+        // 日曜: campaignStatus は期間の外枠だけで判定(キャンペーンタブは「次の対象日」を案内する)
+        assertEquals(CampaignStatus.ACTIVE, engine.campaignStatus(weeklyCampaign, today))
+        assertTrue(engine.activeCampaigns(today).isNotEmpty())
+        // 一方、YOLP 検索対象(判定に出る店)からは外れる
+        assertTrue(engine.activeManagedMerchantIds(today).isEmpty())
+        assertEquals(setOf("m1"), engine.activeManagedMerchantIds(LocalDate.of(2026, 7, 3)))
+    }
+
+    @Test
+    fun `nextTargetDayは翌日以降の直近対象日を返し期間末を超えない`() {
+        assertEquals(LocalDate.of(2026, 7, 3), nextTargetDay(weeklyCampaign, today))
+        // 金曜当日の「次」は翌日の土曜
+        assertEquals(LocalDate.of(2026, 7, 4), nextTargetDay(weeklyCampaign, LocalDate.of(2026, 7, 3)))
+        // 期間内に対象日が残っていなければ null
+        val ending = campaignWithPeriod(
+            start = "2026-06-01",
+            end = "2026-06-30",
+            recurrence = Recurrence(daysOfWeek = listOf("FRI")),
+        )
+        assertNull(nextTargetDay(ending, LocalDate.of(2026, 6, 27)))
+        // recurrence が無ければ null
+        assertNull(nextTargetDay(campaignWithPeriod(), today))
+    }
+
+    @Test
+    fun `recurrenceLabelは曜日と日付を人間向けに整形する`() {
+        assertEquals("毎週金・土曜", recurrenceLabel(Recurrence(daysOfWeek = listOf("FRI", "SAT"))))
+        assertEquals("毎月20日・30日", recurrenceLabel(Recurrence(daysOfMonth = listOf(20, 30))))
+    }
+
+    // ---- B-6: lottery(抽選型) ----
+
+    private val lotteryCampaign = campaignWithPeriod(
+        benefitType = BenefitType.LOTTERY,
+        rateBase = null,
+        start = "2026-06-01",
+        end = "2026-07-31",
+    ).copy(id = "lottery")
+
+    @Test
+    fun `lotteryはformatBenefitがnull(比較用ラベルを持たない)`() {
+        assertNull(formatBenefit(BenefitType.LOTTERY, 100.0, null))
+        assertNull(formatBenefit(BenefitType.LOTTERY, null, 1000))
+    }
+
+    @Test
+    fun `lotteryは判定に出るが最良特典の比較には載らない`() {
+        val rateCampaign = campaignWithPeriod(rateBase = 7.0).copy(id = "rate")
+        val engine = JudgmentEngine(
+            PoikatsuData(
+                merchants = listOf(testMerchant),
+                campaigns = listOf(lotteryCampaign, rateCampaign),
+                cards = listOf(testCard.copy(effectiveRateDefault = 7.0)),
+                updatedAt = "2026-06-01",
+            ),
+        )
+        val result = engine.judgeAll(testMerchant, today)
+        assertEquals(2, result.judgments.size)
+        assertEquals("rate", result.judgments.first { it.effectiveRate != null }.campaign.id)
+        assertEquals(7.0, result.bestOption!!.rate!!, 0.001)
+        assertEquals("7% 還元", result.bestBenefitLabel().toString())
+    }
+
+    @Test
+    fun `lotteryのみのチェーンは判定は出るが最良特典はnull`() {
+        val engine = periodTestEngine(lotteryCampaign)
+        val result = engine.judgeAll(testMerchant, today)
+        assertEquals(1, result.judgments.size)
+        assertEquals(BenefitType.LOTTERY, result.judgments.single().benefitType)
+        assertNull(result.judgments.single().effectiveRate)
+        assertNull(result.bestOption)
+        assertNull(result.bestBenefitLabel())
+    }
 }
 
 /**
@@ -816,11 +1106,13 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
-    fun `実データ_施策の帰属はcard_idかpayment_method_idのちょうど一方`() {
+    fun `実データ_施策の帰属はcard_id_card_brand_payment_method_idのちょうど1つ`() {
         data.campaigns.forEach { c ->
-            assertTrue(
-                "${c.id}: card_id(${c.cardId}) と payment_method_id(${c.paymentMethodId}) はちょうど一方が non-null",
-                (c.cardId != null) xor (c.paymentMethodId != null),
+            val owners = listOfNotNull(c.cardId, c.cardBrand, c.paymentMethodId)
+            assertEquals(
+                "${c.id}: card_id(${c.cardId}) / card_brand(${c.cardBrand}) / payment_method_id(${c.paymentMethodId}) はちょうど1つが non-null",
+                1,
+                owners.size,
             )
         }
     }
@@ -856,10 +1148,29 @@ class JudgmentEngineRealDataTest {
         data.campaigns.forEach { c ->
             val hasRate = c.rateBase != null
             val hasDiscount = c.discountAmount != null
+            // 抽選は確定特典ではないため率・額を持たない(当選確率・最大額は conditions の文章)
+            if (BenefitType.fromString(c.benefitType) == BenefitType.LOTTERY) {
+                assertTrue("${c.id}: lottery は rate_base / discount_amount を持たない", !hasRate && !hasDiscount)
+            } else {
+                assertTrue(
+                    "${c.id}: rate_base(${c.rateBase}) と discount_amount(${c.discountAmount}) はちょうど一方が non-null",
+                    hasRate xor hasDiscount,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `実データ_recurrenceはdays_of_weekかdays_of_monthのどちらか一方`() {
+        val validDays = setOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
+        data.campaigns.forEach { c ->
+            val r = c.recurrence ?: return@forEach
             assertTrue(
-                "${c.id}: rate_base(${c.rateBase}) と discount_amount(${c.discountAmount}) はちょうど一方が non-null",
-                hasRate xor hasDiscount,
+                "${c.id}: days_of_week と days_of_month はどちらか一方だけ指定する",
+                r.daysOfWeek.isEmpty() xor r.daysOfMonth.isEmpty(),
             )
+            r.daysOfWeek.forEach { d -> assertTrue("${c.id}: invalid day_of_week '$d'", d in validDays) }
+            r.daysOfMonth.forEach { d -> assertTrue("${c.id}: invalid day_of_month $d", d in 1..31) }
         }
     }
 
@@ -1054,15 +1365,23 @@ class TestDataIntegrityTest {
     }
 
     @Test
-    fun `テストデータ_card_idとpayment_method_idの参照と排他が正しい`() {
+    fun `テストデータ_施策の帰属の参照と排他が正しい`() {
         val cardIds = data.cards.map { it.id }.toSet()
         val qrIds = data.qrPayments.map { it.id }.toSet()
         data.campaigns.forEach { c ->
-            assertTrue(
-                "${c.id}: card_id(${c.cardId}) と payment_method_id(${c.paymentMethodId}) はちょうど一方が non-null",
-                (c.cardId != null) xor (c.paymentMethodId != null),
+            val owners = listOfNotNull(c.cardId, c.cardBrand, c.paymentMethodId)
+            assertEquals(
+                "${c.id}: card_id(${c.cardId}) / card_brand(${c.cardBrand}) / payment_method_id(${c.paymentMethodId}) はちょうど1つが non-null",
+                1,
+                owners.size,
             )
             c.cardId?.let { assertTrue("${c.id}: card_id '$it' が cards に無い", it in cardIds) }
+            c.cardBrand?.let { brand ->
+                assertTrue(
+                    "${c.id}: card_brand '$brand' がどのカードの brands にも無い(マッチし得ない)",
+                    data.cards.any { card -> card.brands.any { it.equals(brand, ignoreCase = true) } },
+                )
+            }
             c.paymentMethodId?.let { assertTrue("${c.id}: payment_method_id '$it' が qr_payments に無い", it in qrIds) }
         }
     }
@@ -1072,10 +1391,28 @@ class TestDataIntegrityTest {
         data.campaigns.forEach { c ->
             val hasRate = c.rateBase != null
             val hasDiscount = c.discountAmount != null
+            if (BenefitType.fromString(c.benefitType) == BenefitType.LOTTERY) {
+                assertTrue("${c.id}: lottery は rate_base / discount_amount を持たない", !hasRate && !hasDiscount)
+            } else {
+                assertTrue(
+                    "${c.id}: rate_base(${c.rateBase}) と discount_amount(${c.discountAmount}) はちょうど一方が non-null",
+                    hasRate xor hasDiscount,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `テストデータ_recurrenceはdays_of_weekかdays_of_monthのどちらか一方`() {
+        val validDays = setOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
+        data.campaigns.forEach { c ->
+            val r = c.recurrence ?: return@forEach
             assertTrue(
-                "${c.id}: rate_base(${c.rateBase}) と discount_amount(${c.discountAmount}) はちょうど一方が non-null",
-                hasRate xor hasDiscount,
+                "${c.id}: days_of_week と days_of_month はどちらか一方だけ指定する",
+                r.daysOfWeek.isEmpty() xor r.daysOfMonth.isEmpty(),
             )
+            r.daysOfWeek.forEach { d -> assertTrue("${c.id}: invalid day_of_week '$d'", d in validDays) }
+            r.daysOfMonth.forEach { d -> assertTrue("${c.id}: invalid day_of_month $d", d in 1..31) }
         }
     }
 

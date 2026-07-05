@@ -44,11 +44,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.ktakjm.poikatsu.data.LocationHint
+import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.BestPaymentOption
 import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.StoreEligibility
 import com.ktakjm.poikatsu.domain.StoreVerdict
 import com.ktakjm.poikatsu.domain.formatBenefit
+import com.ktakjm.poikatsu.domain.recurrenceLabel
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningColor
 import com.ktakjm.poikatsu.ui.theme.warningContainerColor
@@ -201,6 +203,7 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
             }
         }
         PeriodRow(campaign)
+        RecurrenceRow(judgment)
         if (campaign.paymentInstruction.isNotBlank()) {
             Text("支払い方法：${campaign.paymentInstruction}", style = MaterialTheme.typography.bodyMedium)
         }
@@ -212,6 +215,16 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
         }
         judgment.exclusionNote?.let {
             NoticeRow(it, warningContainerColor(), onWarningContainerColor())
+        }
+        if (judgment.mayEndEarly) {
+            NoticeRow("予算上限あり。期限より早く終了する可能性があります", warningContainerColor(), onWarningContainerColor())
+        }
+        if (judgment.benefitType == BenefitType.LOTTERY) {
+            Text(
+                "抽選のため、当選した場合のみ特典が付与されます(最大おトク率の比較対象外)",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
         }
         MinPurchaseRow(judgment.minPurchase)
         judgment.usageLimitText?.let {
@@ -250,6 +263,22 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
 
 @Composable
 private fun BenefitDisplay(judgment: CampaignJudgment) {
+    // 抽選は formatBenefit が null(比較対象外)のため専用表示。当選確率・最大額は conditions の文章で持つ
+    if (judgment.benefitType == BenefitType.LOTTERY) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "抽選",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                "当選で還元",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        return
+    }
     val label = formatBenefit(judgment.benefitType, judgment.effectiveRate, judgment.discountAmount) ?: return
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
@@ -262,6 +291,41 @@ private fun BenefitDisplay(judgment: CampaignJudgment) {
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary,
         )
+    }
+}
+
+/**
+ * recurrence(繰り返し日付条件)の表示。対象日パターンと「今日は対象日」/「次の対象日」を出す。
+ * 「探す」「近く」の判定は対象日のみ出るため通常は「今日は対象日」、キャンペーンタブ詳細では
+ * 非対象日にも表示され「次の対象日」の案内になる。
+ */
+@Composable
+private fun RecurrenceRow(judgment: CampaignJudgment) {
+    val recurrence = judgment.campaign.recurrence ?: return
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "対象日: ${recurrenceLabel(recurrence)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+        )
+        if (judgment.todayIsTarget) {
+            Text(
+                "今日は対象日",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        } else {
+            judgment.nextTargetDate?.let {
+                Text(
+                    "次の対象日: ${it.monthValue}/${it.dayOfMonth}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 

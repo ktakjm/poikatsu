@@ -3,9 +3,11 @@ package com.ktakjm.poikatsu.domain
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.MerchantRule
+import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.QrPayment
+import com.ktakjm.poikatsu.data.Recurrence
 import com.ktakjm.poikatsu.util.JapaneseText
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -38,6 +40,12 @@ data class CampaignJudgment(
     val appPackage: String?,
     val pointMultiplier: PointMultiplier?,
     val welcatsuApplied: Boolean,
+    /** 予算到達次第の早期終了があり得る施策か。true なら注記を出す */
+    val mayEndEarly: Boolean = false,
+    /** recurrence 施策で今日が対象日か。recurrence の無い施策は常に true */
+    val todayIsTarget: Boolean = true,
+    /** recurrence 施策で今日が非対象日のときの次の対象日。対象日当日・recurrence 無しは null */
+    val nextTargetDate: LocalDate? = null,
 )
 
 enum class StoreEligibility {
@@ -64,7 +72,10 @@ data class StoreVerdict(
 
 enum class BenefitType(val jsonValue: String) {
     REBATE("rebate"),
-    DISCOUNT("discount");
+    DISCOUNT("discount"),
+
+    /** 抽選型。確定還元ではないため「最良特典」比較には載せない(表示のみ) */
+    LOTTERY("lottery");
 
     companion object {
         fun fromString(s: String): BenefitType = entries.find { it.jsonValue == s } ?: REBATE
@@ -99,10 +110,60 @@ fun formatBenefit(benefitType: BenefitType, rate: Double?, discount: Int?): Bene
             rate != null -> BenefitLabel("${trimRate(rate)}%", " 還元")
             else -> null
         }
+        // 抽選は確定特典ではないため定率・定額と同列のラベルにしない(最良特典の比較からも自然に外れる)
+        BenefitType.LOTTERY -> null
     }
 
 fun trimRate(rate: Double): String =
     if (rate == rate.toLong().toDouble()) rate.toLong().toString() else rate.toString()
+
+// ---- recurrence(繰り返し日付条件) ----
+// campaignStatus(期間の外枠)とは独立に「その日が対象日か」を判定する。「探す」「近く」の判定は
+// 期間内かつ対象日のみ、キャンペーンタブは期間内なら非対象日でも出して「次の対象日」を案内する。
+
+/** recurrence 条件に date が一致するか。recurrence の無い施策は常に true(全日対象) */
+fun isTargetDay(campaign: Campaign, date: LocalDate): Boolean =
+    campaign.recurrence?.matches(date) ?: true
+
+private fun Recurrence.matches(date: LocalDate): Boolean = when {
+    daysOfWeek.isNotEmpty() -> date.dayOfWeek.name.take(3) in daysOfWeek.map { it.uppercase() }
+    daysOfMonth.isNotEmpty() -> date.dayOfMonth in daysOfMonth
+    else -> true
+}
+
+/** 次の対象日(明日以降・期間内)。recurrence が無い、または期間内に対象日が残っていなければ null */
+fun nextTargetDay(campaign: Campaign, today: LocalDate): LocalDate? {
+    val recurrence = campaign.recurrence ?: return null
+    val end = campaign.periodEnd?.let { JudgmentEngine.parseDate(it) }
+    // days_of_month でも最長約1ヶ月先までに一致するはずだが、31日等の存在しない日指定に備えて2ヶ月で打ち切る
+    var date = today.plusDays(1)
+    val limit = today.plusDays(62)
+    while (date <= limit && (end == null || date <= end)) {
+        if (recurrence.matches(date)) return date
+        date = date.plusDays(1)
+    }
+    return null
+}
+
+/** recurrence の人間向けラベル(「毎週金・土曜」「毎月20日・30日」) */
+fun recurrenceLabel(recurrence: Recurrence): String = when {
+    recurrence.daysOfWeek.isNotEmpty() ->
+        "毎週" + recurrence.daysOfWeek.joinToString("・") { dayOfWeekJa(it) } + "曜"
+    recurrence.daysOfMonth.isNotEmpty() ->
+        "毎月" + recurrence.daysOfMonth.joinToString("・") { "${it}日" }
+    else -> ""
+}
+
+private fun dayOfWeekJa(day: String): String = when (day.uppercase()) {
+    "MON" -> "月"
+    "TUE" -> "火"
+    "WED" -> "水"
+    "THU" -> "木"
+    "FRI" -> "金"
+    "SAT" -> "土"
+    "SUN" -> "日"
+    else -> day
+}
 
 enum class CampaignStatus { ACTIVE, UPCOMING, EXPIRED }
 
@@ -294,6 +355,8 @@ class JudgmentEngine(private val data: PoikatsuData) {
     }
 
     // ---- 期間フィルタ ----
+    // recurrence(対象日)は含まない期間の外枠だけの判定。キャンペーンタブは期間内なら
+    // 非対象日でも「開催中」に出す(次の対象日を案内する)ため、対象日は isTargetDay で別判定する。
 
     fun campaignStatus(campaign: Campaign, today: LocalDate): CampaignStatus {
         val start = campaign.periodStart?.let { parseDate(it) }
@@ -325,10 +388,13 @@ class JudgmentEngine(private val data: PoikatsuData) {
     fun upcomingCampaigns(today: LocalDate): List<Campaign> =
         data.campaigns.filter { campaignStatus(it, today) == CampaignStatus.UPCOMING }
 
-    /** アクティブな managed 施策が参照する merchant ID の集合(YOLP 検索対象の決定に使う) */
+    /**
+     * アクティブな managed 施策が参照する merchant ID の集合(YOLP 検索対象の決定に使う)。
+     * recurrence 施策は今日が対象日のときだけ含める(非対象日は判定にも出ないため検索しても無駄)。
+     */
     fun activeManagedMerchantIds(today: LocalDate): Set<String> =
         activeCampaigns(today)
-            .filter { it.storeScope == "managed" }
+            .filter { it.storeScope == "managed" && isTargetDay(it, today) }
             .flatMap { it.merchantRules }
             .map { it.merchantId }
             .toSet()
@@ -353,13 +419,17 @@ class JudgmentEngine(private val data: PoikatsuData) {
         today: LocalDate,
     ): CampaignJudgment {
         val days = daysRemaining(campaign, today)
+        val benefitType = BenefitType.fromString(campaign.benefitType)
+        val isLottery = benefitType == BenefitType.LOTTERY
+        val todayIsTarget = isTargetDay(campaign, today)
         return CampaignJudgment(
             campaign = campaign,
             badgeLabel = badgeLabel,
             brandColor = campaign.brandColor,
-            benefitType = BenefitType.fromString(campaign.benefitType),
-            effectiveRate = effectiveRate,
-            discountAmount = discountAmount,
+            benefitType = benefitType,
+            // 抽選は確定還元ではないので率・額を持たせない(ソート・最良比較に混ざらないように)
+            effectiveRate = effectiveRate.takeUnless { isLottery },
+            discountAmount = discountAmount.takeUnless { isLottery },
             daysRemaining = days,
             storeNote = rule?.note,
             exclusionNote = rule?.exclusionNote,
@@ -378,33 +448,71 @@ class JudgmentEngine(private val data: PoikatsuData) {
             appPackage = appPackage,
             pointMultiplier = pointMultiplier,
             welcatsuApplied = welcatsuApplied,
+            mayEndEarly = campaign.mayEndEarly,
+            todayIsTarget = todayIsTarget,
+            nextTargetDate = if (todayIsTarget) null else nextTargetDay(campaign, today),
         )
     }
 
     /**
-     * カード施策の判定を返す。期間フィルタ適用済み。
+     * 施策に紐づくカードを所有カードから解決する。card_id は id 一致、card_brand はブランド一致
+     * (CardOverride での上書き反映後の実ブランド。複数一致時はカタログ定義順の先頭1枚に代表させる。
+     * promotion の還元率は施策側の値を使うためどのカードでも同率になり、複数並べてもノイズのため)。
+     */
+    private fun resolveCard(campaign: Campaign): PaymentCard? = when {
+        campaign.cardId != null -> data.cards.firstOrNull { it.id == campaign.cardId }
+        campaign.cardBrand != null ->
+            data.cards.firstOrNull { it.brand.equals(campaign.cardBrand, ignoreCase = true) }
+        else -> null
+    }
+
+    /**
+     * ブランド条件によりこの店を判定から除外するか。方針は「不確かな情報で実際より好条件を
+     * 提示しない」: 実ブランドが Amex のときに加え、**未選択でもこのカードが Amex を取りうる**
+     * (brands に Amex を含む、またはカタログに選択肢情報が無い)なら除外側に倒す。
+     * ブランド未選択で好条件側に倒すと、実際は Amex のユーザーに対象外店を対象と誤提示してしまう。
+     * card_brand 施策側は未選択だとマッチしない(resolveCard)ので、こちらも一貫して保守的。
+     */
+    private fun excludedByBrand(rule: MerchantRule, card: PaymentCard): Boolean {
+        if (!rule.amexExcluded) return false
+        if (card.brand.isNotBlank()) return card.brand.equals("Amex", ignoreCase = true)
+        return card.brands.isEmpty() || card.brands.any { it.equals("Amex", ignoreCase = true) }
+    }
+
+    /**
+     * カード施策の判定を返す。期間 + 対象日(recurrence)フィルタ適用済み。
      * store_scope == "managed" の施策のみ対象。ソートは judgeAll で一括。
      */
     fun judgeCards(merchant: Merchant, today: LocalDate): List<CampaignJudgment> =
         data.campaigns
-            .filter { campaignStatus(it, today) == CampaignStatus.ACTIVE }
+            .filter { campaignStatus(it, today) == CampaignStatus.ACTIVE && isTargetDay(it, today) }
             .filter { it.storeScope == "managed" }
             .filter { it.paymentMethodId == null }
             .mapNotNull { campaign ->
                 val rule = campaign.ruleFor(merchant) ?: return@mapNotNull null
-                val card = data.cards.firstOrNull { it.id == campaign.cardId }
-                    ?: return@mapNotNull null
-                if (rule.amexExcluded && card.brand.equals("Amex", ignoreCase = true)) {
-                    return@mapNotNull null
+                val card = resolveCard(campaign) ?: return@mapNotNull null
+                if (excludedByBrand(rule, card)) return@mapNotNull null
+                // 施策側の率(店舗別の上書きがあればそちら)。promotion では施策の率がカードの常設
+                // 実効率より優先(逆にすると常設7%が期間限定10%を上書きしてしまう)。card_program は
+                // 従来どおりユーザー設定の実効率を優先し、施策の率は既定値扱い。
+                val campaignRate = rule.rateOverride ?: campaign.rateBase
+                val usesCampaignRate =
+                    campaign.campaignType == CampaignType.PROMOTION && campaignRate != null
+                val effectiveRate = if (usesCampaignRate) {
+                    campaignRate
+                } else {
+                    card.effectiveRateDefault ?: campaignRate ?: 0.0
                 }
                 buildJudgment(
                     campaign = campaign,
                     rule = rule,
                     badgeLabel = card.cardName,
-                    effectiveRate = card.effectiveRateDefault ?: campaign.rateBase ?: 0.0,
+                    effectiveRate = effectiveRate,
                     discountAmount = campaign.discountAmount,
                     pointMultiplier = card.pointMultiplier,
-                    welcatsuApplied = card.welcatsuApplied,
+                    // ウエル活倍率はカードの実効率にだけ掛かっている。施策側の率を採用したときに
+                    // 「ウエル活利用時の実質還元率」の注記が出ると誤りなのでフラグを落とす
+                    welcatsuApplied = card.welcatsuApplied && !usesCampaignRate,
                     appPackage = null,
                     today = today,
                 )
@@ -412,21 +520,21 @@ class JudgmentEngine(private val data: PoikatsuData) {
 
     /**
      * QR 決済の判定を返す。ユーザーが利用中の QR 決済でフィルタ済み。
-     * store_scope == "managed" のみ。
+     * store_scope == "managed" のみ。期間 + 対象日(recurrence)フィルタ適用済み。
      */
     fun judgeQr(merchant: Merchant, today: LocalDate, enabledQrIds: Set<String>): List<CampaignJudgment> =
         data.campaigns
-            .filter { campaignStatus(it, today) == CampaignStatus.ACTIVE }
+            .filter { campaignStatus(it, today) == CampaignStatus.ACTIVE && isTargetDay(it, today) }
             .filter { it.storeScope == "managed" }
             .filter { it.paymentMethodId != null && it.paymentMethodId in enabledQrIds }
             .mapNotNull { campaign ->
-                campaign.ruleFor(merchant) ?: return@mapNotNull null
+                val rule = campaign.ruleFor(merchant) ?: return@mapNotNull null
                 val qr = qrPaymentMap[campaign.paymentMethodId] ?: return@mapNotNull null
                 buildJudgment(
                     campaign = campaign,
-                    rule = campaign.ruleFor(merchant),
+                    rule = rule,
                     badgeLabel = qr.name,
-                    effectiveRate = campaign.rateBase,
+                    effectiveRate = rule.rateOverride ?: campaign.rateBase,
                     discountAmount = campaign.discountAmount,
                     pointMultiplier = null,
                     welcatsuApplied = false,
@@ -450,7 +558,9 @@ class JudgmentEngine(private val data: PoikatsuData) {
     }
 
     private fun determineBest(judgments: List<CampaignJudgment>): BestPaymentOption? {
+        // 抽選は確定還元でないため比較に載せない(buildJudgment で率を null にしているが意図を明示)
         val best = judgments
+            .filter { it.benefitType != BenefitType.LOTTERY }
             .filter { it.effectiveRate != null && it.discountAmount == null }
             .maxByOrNull { it.effectiveRate!! }
             ?: return null
