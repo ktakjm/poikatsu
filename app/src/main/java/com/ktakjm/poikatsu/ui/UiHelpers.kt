@@ -134,12 +134,8 @@ internal fun formatPeriod(campaign: Campaign): String? {
     }
 }
 
-/** 上限額のフォーマット(1万 / 2千 / 500円) */
-internal fun formatCap(yen: Int): String = when {
-    yen >= 10000 && yen % 10000 == 0 -> "${yen / 10000}万"
-    yen >= 1000 && yen % 1000 == 0 -> "${yen / 1000}千"
-    else -> "${yen}円"
-}
+internal fun formatCap(yen: Int): String =
+    "%,d円".format(yen)
 
 /** 期間限定バッジ */
 @Composable
@@ -249,7 +245,7 @@ internal fun buildCapText(perTransaction: Int?, periodTotal: Int?): String? {
 @Composable
 internal fun MinPurchaseRow(minPurchase: Int?) {
     if (minPurchase == null) return
-    Text("${minPurchase}円(税込)以上の決済で適用", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+    Text("%,d円(税込)以上の決済で適用".format(minPurchase), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
 }
 
 @Composable

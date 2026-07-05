@@ -101,12 +101,12 @@ data class BenefitLabel(val value: String, val suffix: String) {
 fun formatBenefit(benefitType: BenefitType, rate: Double?, discount: Int?): BenefitLabel? =
     when (benefitType) {
         BenefitType.DISCOUNT -> when {
-            discount != null -> BenefitLabel("${discount}円", "引き")
+            discount != null -> BenefitLabel("%,d円".format(discount), "引き")
             rate != null -> BenefitLabel("${trimRate(rate)}%", " OFF")
             else -> null
         }
         BenefitType.REBATE -> when {
-            discount != null -> BenefitLabel("${discount}円", "還元")
+            discount != null -> BenefitLabel("%,d円".format(discount), "還元")
             rate != null -> BenefitLabel("${trimRate(rate)}%", " 還元")
             else -> null
         }

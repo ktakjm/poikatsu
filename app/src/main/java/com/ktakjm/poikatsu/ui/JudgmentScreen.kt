@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -231,22 +232,24 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
             Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
         }
         CapRow(judgment.perTransactionCap, judgment.periodTotalCap, judgment.capNote)
-        judgment.storeSearchUrl?.let { url ->
-            ExternalLinkButton("対象店舗を確認") { uriHandler.openUri(url) }
-        }
-        judgment.storeListUrl?.let { url ->
-            ExternalLinkButton("公式の対象店舗一覧") { uriHandler.openUri(url) }
-        }
-        judgment.detailUrl?.let { url ->
-            ExternalLinkButton("詳細を見る") { uriHandler.openUri(url) }
-        }
-        judgment.appPackage?.let { pkg ->
-            ExternalLinkButton("${judgment.badgeLabel}アプリを開く") {
-                val intent = context.packageManager.getLaunchIntentForPackage(pkg)
-                if (intent != null) {
-                    context.startActivity(intent)
-                } else {
-                    uriHandler.openUri("https://play.google.com/store/apps/details?id=$pkg")
+        Column {
+            judgment.storeSearchUrl?.let { url ->
+                ExternalLinkButton("対象店舗を確認") { uriHandler.openUri(url) }
+            }
+            judgment.storeListUrl?.let { url ->
+                ExternalLinkButton("公式の対象店舗一覧") { uriHandler.openUri(url) }
+            }
+            judgment.detailUrl?.let { url ->
+                ExternalLinkButton("詳細を見る") { uriHandler.openUri(url) }
+            }
+            judgment.appPackage?.let { pkg ->
+                ExternalLinkButton("${judgment.badgeLabel}アプリを開く") {
+                    val intent = context.packageManager.getLaunchIntentForPackage(pkg)
+                    if (intent != null) {
+                        context.startActivity(intent)
+                    } else {
+                        uriHandler.openUri("https://play.google.com/store/apps/details?id=$pkg")
+                    }
                 }
             }
         }
@@ -461,7 +464,8 @@ private fun StoreVerdictCard(verdict: StoreVerdict) {
 private fun ExternalLinkButton(label: String, onClick: () -> Unit) {
     TextButton(
         onClick = onClick,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+        modifier = Modifier.defaultMinSize(minHeight = 36.dp),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.width(4.dp))

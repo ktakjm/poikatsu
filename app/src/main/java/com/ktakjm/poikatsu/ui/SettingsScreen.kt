@@ -134,7 +134,7 @@ internal fun SettingsScreen(
             )
             brands.forEach { b ->
                 ListItem(
-                    headlineContent = { Text("${b.brand} のカード") },
+                    headlineContent = { Text(b.brand) },
                     leadingContent = {
                         Checkbox(
                             checked = b.owned,
