@@ -598,9 +598,9 @@ private fun ClusterBadge(count: Int) {
     Surface(
         modifier = Modifier.size(40.dp),
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.inverseSurface,
-        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
-        border = BorderStroke(2.dp, Color.White),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        border = BorderStroke(2.dp, MaterialTheme.colorScheme.outline),
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(

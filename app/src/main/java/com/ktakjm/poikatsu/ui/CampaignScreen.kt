@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,6 +24,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -39,7 +41,9 @@ import com.ktakjm.poikatsu.domain.formatBenefit
 import com.ktakjm.poikatsu.domain.isTargetDay
 import com.ktakjm.poikatsu.domain.nextTargetDay
 import com.ktakjm.poikatsu.domain.recurrenceLabel
+import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningColor
+import com.ktakjm.poikatsu.ui.theme.warningContainerColor
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
@@ -232,11 +236,17 @@ private fun CampaignSummaryCard(
                     }
                     // 早期終了があり得る施策では「残り○日」が断定に見えないよう注記を添える
                     if (campaigns.any { it.mayEndEarly }) {
-                        Text(
-                            "※早期終了の可能性あり",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = warningColor(),
-                        )
+                        Surface(
+                            color = warningContainerColor(),
+                            contentColor = onWarningContainerColor(),
+                            shape = RoundedCornerShape(4.dp),
+                        ) {
+                            Text(
+                                "※早期終了の可能性あり",
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
                     }
                     recurrenceInfo(campaigns, status, today)?.let { (label, isToday) ->
                         Text(
