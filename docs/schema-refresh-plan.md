@@ -22,6 +22,8 @@ B-1〜B-6 を一括実装。schema_version: campaigns.json 4→5、payment_metho
 - **B-5 は campaignStatus を変えず isTargetDay を別判定に**: 計画の「ACTIVE 判定を期間内かつ対象日に拡張」だと非対象日にキャンペーンタブからも消えて「次の対象日」の置き場が無くなるため、`campaignStatus` は期間の外枠のまま、`isTargetDay`/`nextTargetDay`（純関数）を追加。「探す」「近く」の判定と YOLP 検索対象（`activeManagedMerchantIds`）は期間内かつ対象日のみ、キャンペーンタブは期間内なら非対象日でも出して「次の対象日: ○/○」を表示する
 - **B-1 の率の優先順位**: `rule.rateOverride ?: campaign.rateBase` を施策側の率とし、promotion はそれをカードの常設実効率より優先（施策に率が無ければカードにフォールバック）。card_program は従来どおりユーザー設定の実効率を優先。施策側の率を採用したときはウエル活係数・注記を適用しない（係数はカードの実効率にだけ掛かっている）
 - **B-6 lottery**: `formatBenefit` は lottery で null を返し、判定カードは専用の「抽選」表示。`buildJudgment` で率・額を null 化して最良比較・ソートから自然に外す。lottery 施策は `rate_base` / `discount_amount` をどちらも null にする（整合性テストで強制）
+- **B-2 ブランド単位の登録（2026-07-06 追記）**: 「Visa の全カード対象」型の施策で、カタログに無いカード（イシュアー未収録）の保有ブランドを登録できないと設定画面が破綻する指摘への対応。設定画面に「カードブランド」セクションを追加。**選択肢はカタログ**（payment_methods.json の `card_brands`、schema_version 4→5）**から常時表示**し、事前登録→施策開始と同時に判定へ反映する（当初は campaigns の card_brand 値から導出し施策があるときだけ出す案だったが、「キャンペーンが出てから登録では登録漏れが起きる」レビューで常時表示に変更）。登録は DataStore `owned_brands`、判定は VM が仮想カード（`owned_brand_visa`）をカタログのカードの後ろに合成してエンジンへ渡すだけで、**エンジンは無変更**。card_brand 施策のバッジは特定カード名でなく**ブランド名**を出す（イシュアー不問のため。ポイント倍率などカード固有の表示も抑止）
+- **brand_color を campaigns から payment_methods へ移設（2026-07-06 追記、campaigns v6 / payment_methods v6）**: 識別色は施策でなく発行体の属性のため、`cards[].brand_color` / `card_brands[].color`（オブジェクト化）/ `qr_payments[].brand_color`（既存）で一元管理し、アプリが帰属（card_id / card_brand / payment_method_id）から解決する（`PoikatsuData.brandColorOf`）。同一発行体の施策間で色がぶれる（例: 三井住友の 2 種の緑が混在）のを構造的に防ぐ。三井住友はフレッシュグリーン `#00A94F` に統一
 - data-test/ に全パターン（card_brand / rate_override / may_end_early / recurrence 曜日・日付 / lottery）のショーケース施策を追加。実データは自治体 5 件に `may_end_early: true` を付けたのみ（card_brand / recurrence / lottery の実例は収録待ち）
 
 ## 1. 背景と目的
@@ -82,6 +84,7 @@ erDiagram
     Card {
         string id PK "A-1 新設（例: smcc）"
         string card_name
+        string brand_color "識別色（施策側には持たない）"
         json brands "B-2: 選べるブランドの選択肢（実ブランドは CardOverride.brand）"
         double effective_rate_default
         json point_multiplier "ウエル活等"

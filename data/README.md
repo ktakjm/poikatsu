@@ -20,7 +20,7 @@
 - `operator` — 施策の運営者(カード会社・QR 決済事業者)。バッジ表示のフォールバックに使う
 - 施策の帰属は **`card_id` / `card_brand` / `payment_method_id` のちょうど 1 つ**(残り 2 つは null):
   - `card_id` — 紐づくカード(payment_methods.json の `cards[].id`)。card_program / promotion で使う。1 カードに複数施策を紐づけられる
-  - `card_brand` — ブランド施策(イシュアー不問。例: 「タッチで Visa 割」、Amex 30% OFF)の対象ブランド。所有カードのうち実ブランド(ユーザー設定。単一ブランド製品は自動確定)が一致するカードにマッチし、バッジはそのカード名。複数一致時はカタログ定義順の先頭 1 枚に代表させる(promotion の率は施策側の値なのでどのカードでも同率)
+  - `card_brand` — ブランド施策(イシュアー不問。例: 「タッチで Visa 割」、Amex 30% OFF)の対象ブランド。値は payment_methods.json の `card_brands` にあるものを使う。所有カードのうち実ブランド(ユーザー設定。単一ブランド製品は自動確定)が一致するカードが 1 枚でもあれば判定に出る(複数一致でも判定は施策につき 1 件)。バッジは特定カード名でなく**ブランド名**(イシュアー不問のため)。**カタログに無いカードの保有ブランド**は設定画面「カードブランド」(DataStore の `owned_brands` に保存)で登録でき、仮想カードとしてマッチする。セクションは常時表示し、事前登録しておけば施策開始と同時に判定へ現れる
   - `payment_method_id` — QR 決済(後述)
 - `benefit_type` — 特典のタイミング(3 値)。省略時は `"rebate"`:
   - `"rebate"`: ポイント還元(後日ポイント付与)。PayPay の「クーポン」も実態は後日ポイント付与のため rebate に分類
@@ -59,13 +59,16 @@
   - 注意: 網羅的でない例示リストをここに入れると「非一致=対象」を誤って断定してしまう。断定できる完全なリストだけを登録すること。
 - `merchant_rules[].amex_excluded` — Amex ブランドだと優遇対象外の店(汎用フラグ。現状使うのは MUFG のデータのみ)。実ブランドが Amex の場合、これらの店は判定・検索・地図から除外される。**ブランド未選択でもそのカードが Amex を取りうる(`brands` に Amex を含む)なら除外側に倒す**(不確かな情報で実際より好条件を提示しない方針。実ブランドを選択すると正確になる)。
 - `verified_date` — 公式ページで最後に確認した日。**判定画面に必ず表示する。**
-- `brand_color` — 発行体の識別色(#RRGGBB)。UIのストライプ/バッジに使う。**ロゴ画像は商標・著作権の問題があるため使用しない**(公開リポジトリでの再配布になる)。色には権利が及ばないのでブランドカラーで識別する。
-  - 確認済み: 三井住友=トラッドグリーン `#004831` (SMFG VI)、三菱UFJ=MUFGレッド `#E60000`
-  - QR 決済: PayPay `#FF0033`、au PAY `#FF5722`、d払い `#E60033`、楽天ペイ `#BF0000`
+- 識別色(brand_color)は campaigns.json には**持たない**。発行体(payment_methods.json の cards / card_brands / qr_payments)側で一元管理し、アプリが帰属(card_id / card_brand / payment_method_id)から解決する(同一発行体の施策間で色がぶれないようにするため。§ payment_methods.json 参照)
 
 ### payment_methods.json
 
-- `cards` — カードのカタログ。`{ id, card_name, brands, effective_rate_default, point_multiplier }`。`id`(例: `"smcc"`)は campaigns.json の `card_id` と DataStore のカード差分キーから参照される
+- `card_brands` — 登録できるカードブランドの選択肢(国際ブランドのマスタ)。`{ name, color }` で、`name` は campaigns.json の `card_brand` から参照され(整合性テストで強制)、設定画面「カードブランド」に常時表示する。`color` はブランド施策の識別色
+- **識別色(`brand_color` / `color`)** — 発行体ごとに 1 色をここで一元管理し、施策のストライプ/バッジ/地図ピンは帰属先(カード/ブランド/QR)から解決する。**ロゴ画像は商標・著作権の問題があるため使用しない**(公開リポジトリでの再配布になる)。色には権利が及ばないのでブランドカラーで識別する。
+  - カード: 三井住友=フレッシュグリーン `#00A94F`(SMFG VI にはトラッドグリーン `#004831` もあるが、視認性と従来表示の継続のため明るい方に統一)、三菱UFJ=MUFGレッド `#E60000`
+  - ブランド: Visa `#1A1F71`、Mastercard `#EB001B`、JCB `#005BAC`、Amex `#016FD0`(各社ロゴの近似色)
+  - QR 決済: PayPay `#FF0033`、au PAY `#FF5722`、d払い `#E60033`、楽天ペイ `#BF0000`
+- `cards` — カードのカタログ。`{ id, card_name, brand_color, brands, effective_rate_default, point_multiplier }`。`id`(例: `"smcc"`)は campaigns.json の `card_id` と DataStore のカード差分キーから参照される
 - `brands` — そのカード製品で**選べるブランドの選択肢**(カタログの事実。例: 三菱UFJカードは Visa/Mastercard/JCB/Amex)。**ユーザーが実際に持っているブランドはカタログに置かず** `CardOverride.brand`(DataStore)で持つ。`brands` が単一なら自動確定、複数なら未選択(空)から設定画面で選ぶ。未選択の間は**好条件側に倒さない**: `card_brand` 施策には一致せず(特典を出さない)、Amex 除外はそのカードが Amex を取りうる限り除外側に倒す。加えて、ブランドが判定に効くカードは有効化時にブランド選択を必須にしている
 - `point_multiplier`(任意) — ポイント価値の倍率。`{ label, factor, color }`。設定画面で「ウエル活利用時の還元率を表示」チェックを出し、ON で `factor` 倍した実効還元率を表示する。`color` はバッジ色(ウエルシアのロゴ色 #RRGGBB)。三井住友(Vポイント)に設定。
 - `qr_payments` — 利用中の QR 決済サービスのカタログ。`{ id, name, brand_color, app_package, store_search_label, enabled_default }`。設定画面でチェックした QR 決済が判定エンジンのフィルタに使われる。DataStore に差分保存。

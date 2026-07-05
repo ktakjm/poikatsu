@@ -45,6 +45,12 @@ data class AppSettings(
     val useTestData: Boolean = false,
     /** 利用中の QR 決済 ID。payment_methods.json の qr_payments カタログからユーザーが選択 */
     val enabledQrPaymentIds: Set<String> = emptySet(),
+    /**
+     * カタログのカード以外で保有しているカードブランド(例: "Visa")。イシュアー不問の
+     * ブランド施策(campaigns.json の card_brand)の判定にだけ使う。選択肢は施策データ側の
+     * card_brand 値から出すため、カタログ(payment_methods.json)にスキーマ追加は不要。
+     */
+    val ownedBrands: Set<String> = emptySet(),
     /** 登録自治体(都道府県+市区町村)。キャンペーンタブのフィルタに使う */
     val registeredMunicipalities: List<RegisteredMunicipality> = emptyList(),
 )
@@ -68,6 +74,7 @@ class SettingsRepository(private val context: Context) {
         val DATA_COMMIT_REF = stringPreferencesKey("data_commit_ref")
         val USE_TEST_DATA = booleanPreferencesKey("use_test_data")
         val QR_ENABLED = stringPreferencesKey("qr_enabled")
+        val OWNED_BRANDS = stringPreferencesKey("owned_brands")
         val MUNICIPALITIES = stringPreferencesKey("municipalities")
     }
 
@@ -82,6 +89,7 @@ class SettingsRepository(private val context: Context) {
             dataCommitRef = prefs[Keys.DATA_COMMIT_REF] ?: "",
             useTestData = prefs[Keys.USE_TEST_DATA] ?: false,
             enabledQrPaymentIds = prefs.decodeQrEnabled(),
+            ownedBrands = prefs.decodeOwnedBrands(),
             registeredMunicipalities = prefs.decodeMunicipalities(),
         )
     }
@@ -135,6 +143,14 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    suspend fun setBrandOwned(brand: String, owned: Boolean) {
+        context.settingsDataStore.edit { prefs ->
+            val current = prefs.decodeOwnedBrands().toMutableSet()
+            if (owned) current.add(brand) else current.remove(brand)
+            prefs[Keys.OWNED_BRANDS] = json.encodeToString(current)
+        }
+    }
+
     suspend fun addMunicipality(municipality: RegisteredMunicipality) {
         context.settingsDataStore.edit { prefs ->
             val current = prefs.decodeMunicipalities().toMutableList()
@@ -160,6 +176,11 @@ class SettingsRepository(private val context: Context) {
 
     private fun Preferences.decodeQrEnabled(): Set<String> =
         this[Keys.QR_ENABLED]
+            ?.let { runCatching { json.decodeFromString<Set<String>>(it) }.getOrNull() }
+            ?: emptySet()
+
+    private fun Preferences.decodeOwnedBrands(): Set<String> =
+        this[Keys.OWNED_BRANDS]
             ?.let { runCatching { json.decodeFromString<Set<String>>(it) }.getOrNull() }
             ?: emptySet()
 

@@ -153,7 +153,6 @@ erDiagram
         string operator "運営者(カード会社/決済事業者)"
         string card_id "カードID(card_brand/payment_method_idと排他)"
         string card_brand "ブランド施策の対象ブランド(card_id/payment_method_idと排他)"
-        string brand_color "#RRGGBB"
         string payment_instruction "支払い方法の説明"
         double rate_base "基準還元率(定率時)"
         int discount_amount "割引額(定額時)"
@@ -195,9 +194,14 @@ erDiagram
     }
     PAYMENT_METHODS {
     }
+    CARD_BRAND {
+        string name "Visa/Mastercard/JCB/Amex(campaigns.card_brand から参照)"
+        string color "#RRGGBB"
+    }
     PAYMENT_CARD {
         string id PK "例: smcc"
         string card_name
+        string brand_color "#RRGGBB(施策の色は発行体側で一元管理)"
         string_list brands "選べるブランドの選択肢(実ブランドはユーザー設定)"
         double effective_rate_default
         PointMultiplier point_multiplier "ポイント倍率(任意)"
@@ -226,6 +230,7 @@ erDiagram
         int max_pages "ページ上限(密度チューニング)"
         string note "備考"
     }
+    PAYMENT_METHODS ||--o{ CARD_BRAND : "card_brands[]"
     PAYMENT_METHODS ||--o{ PAYMENT_CARD : "cards[]"
     PAYMENT_METHODS ||--o{ QR_PAYMENT : "qr_payments[]"
     CAMPAIGN ||--o{ MERCHANT_RULE : "merchant_rules[]"

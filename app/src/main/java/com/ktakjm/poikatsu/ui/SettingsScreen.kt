@@ -66,6 +66,7 @@ internal fun SettingsScreen(
     dynamicColor: Boolean,
     autoRefresh: Boolean,
     cards: List<MainViewModel.CardSetting>,
+    brands: List<MainViewModel.BrandSetting>,
     qrPayments: List<MainViewModel.QrPaymentSetting>,
     registeredMunicipalities: List<RegisteredMunicipality>,
     municipalityMaster: Map<String, List<String>>,
@@ -80,6 +81,7 @@ internal fun SettingsScreen(
     onCardRateChange: (String, Double?) -> Unit,
     onCardBrandChange: (String, String) -> Unit,
     onCardWelcatsuChange: (String, Boolean) -> Unit,
+    onBrandOwnedChange: (String, Boolean) -> Unit,
     onQrEnabledChange: (String, Boolean) -> Unit,
     onAddMunicipality: (RegisteredMunicipality) -> Unit,
     onRemoveMunicipality: (RegisteredMunicipality) -> Unit,
@@ -119,6 +121,29 @@ internal fun SettingsScreen(
                 onBrandChange = { onCardBrandChange(card.cardId, it) },
                 onWelcatsuChange = { onCardWelcatsuChange(card.cardId, it) },
             )
+        }
+
+        // --- カードブランド(イシュアー不問のブランド施策向け。事前登録できるよう常時出す) ---
+        if (brands.isNotEmpty()) {
+            SettingsSectionHeader("カードブランド")
+            Text(
+                "上のカード以外で持っているブランドにチェックを入れてください。カード会社を問わないブランド対象キャンペーン(Visa割など)が始まると、開始と同時に判定へ表示されます。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+            brands.forEach { b ->
+                ListItem(
+                    headlineContent = { Text("${b.brand} のカード") },
+                    leadingContent = {
+                        Checkbox(
+                            checked = b.owned,
+                            onCheckedChange = { onBrandOwnedChange(b.brand, it) },
+                        )
+                    },
+                    modifier = Modifier.clickable { onBrandOwnedChange(b.brand, !b.owned) },
+                )
+            }
         }
 
         // --- QR 決済 ---

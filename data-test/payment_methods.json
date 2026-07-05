@@ -1,16 +1,24 @@
 {
-  "schema_version": 4,
-  "updated_at": "2026-07-05",
+  "schema_version": 6,
+  "updated_at": "2026-07-06",
+  "card_brands": [
+    { "name": "Visa", "color": "#1A1F71" },
+    { "name": "Mastercard", "color": "#EB001B" },
+    { "name": "JCB", "color": "#005BAC" },
+    { "name": "Amex", "color": "#016FD0" }
+  ],
   "cards": [
     {
       "id": "test_card",
       "card_name": "テストカード",
+      "brand_color": "#4CAF50",
       "brands": ["Visa"],
       "effective_rate_default": 7.0
     },
     {
       "id": "test_brand_card",
       "card_name": "テストブランドカード",
+      "brand_color": "#607D8B",
       "brands": ["Visa", "Mastercard", "JCB", "Amex"],
       "effective_rate_default": 1.0
     }

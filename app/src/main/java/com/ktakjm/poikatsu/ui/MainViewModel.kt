@@ -16,6 +16,7 @@ import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.YolpClient
 import com.ktakjm.poikatsu.data.YolpSearchConfig
 import com.ktakjm.poikatsu.data.AppSettings
+import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.QrPayment
 import com.ktakjm.poikatsu.data.RegisteredMunicipality
@@ -208,6 +209,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val timeLimitedActive: List<Campaign> = emptyList(),
         val timeLimitedUpcoming: List<Campaign> = emptyList(),
         val merchantNames: Map<String, String> = emptyMap(),
+        /** 施策 id → 発行体の識別色(#RRGGBB)。色は施策でなく発行体カタログ側に持つため、ここで解決して配る */
+        val campaignBrandColors: Map<String, String> = emptyMap(),
         val selectedCampaignGroup: List<CampaignJudgment>? = null,
         // --- 設定値(DataStore 由来) ---
         val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -215,6 +218,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val autoRefresh: Boolean = true,
         /** 設定画面の「マイカード」用カタログ(未所有カードも含む全候補) */
         val cardSettings: List<CardSetting> = emptyList(),
+        /** 設定画面の「カードブランド」用(カタログの card_brands 由来。常時表示) */
+        val brandSettings: List<BrandSetting> = emptyList(),
         /** 設定画面の「QR 決済」用カタログ(payment_methods.json のカタログ + ユーザー差分) */
         val qrPaymentSettings: List<QrPaymentSetting> = emptyList(),
         /** 登録済み自治体 */
@@ -223,6 +228,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val municipalityMaster: Map<String, List<String>> = emptyMap(),
         val dataCommitRef: String = "",
         val useTestData: Boolean = false,
+    )
+
+    /**
+     * 設定画面の「カードブランド」1件分。カタログのカードとは別に、イシュアー不問のブランド施策
+     * (card_brand)向けに「このブランドのカードを持っている」を登録する。選択肢はカタログ
+     * (payment_methods.json の card_brands)から常時出し、事前登録→施策開始と同時に判定へ反映する。
+     */
+    data class BrandSetting(
+        val brand: String,
+        val owned: Boolean,
     )
 
     /** 設定画面の QR 決済1件分の表示・編集状態 */
@@ -372,7 +387,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 merchant = merchant,
                 bestBenefit = result.bestBenefitLabel(),
                 campaignCount = allCampaigns.distinctBy { it.id }.size,
-                brandColors = allCampaigns.mapNotNull { it.brandColor }.distinct().take(3),
+                brandColors = result.judgments.mapNotNull { it.brandColor }.distinct().take(3),
                 hasTimeLimited = allCampaigns.any { it.periodEnd != null },
             )
         }
@@ -408,7 +423,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 welcatsuApplied = welcatsuOn,
             )
         }
-        val engineData = loaded.data.copy(cards = mergedCards)
+        // ブランド単位の登録(カタログ外のカード)は仮想カードとしてエンジンに渡す。card_brand 施策の
+        // resolveCard がブランド一致でマッチするだけで、card_id 施策には一致しない(id が衝突しないため)。
+        // カタログのカードの後ろに置き、複数一致時の代表はカタログのカード(具体名)を優先する。
+        val brandCards = settings.ownedBrands.sorted().map { brand ->
+            PaymentCard(
+                id = "owned_brand_${brand.lowercase()}",
+                cardName = "${brand}カード",
+                brands = listOf(brand),
+                brand = brand,
+            )
+        }
+        val engineData = loaded.data.copy(cards = mergedCards + brandCards)
         val newEngine = JudgmentEngine(engineData)
         engine = newEngine
 
@@ -441,6 +467,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
 
+        // 設定画面「カードブランド」: カタログ(card_brands)の選択肢を常時出す。事前に登録しておけば
+        // ブランド施策の開始と同時に(設定画面を見なくても)判定に現れる。施策側が参照しているのに
+        // カタログに無いブランドがあれば防御的に追加する(データ不整合時も登録手段を失わないように)
+        val brandSettings = (loaded.data.cardBrands.map { it.name } + loaded.data.campaigns.mapNotNull { it.cardBrand })
+            .distinct()
+            .map { brand -> BrandSetting(brand = brand, owned = brand in settings.ownedBrands) }
+
         val qrPaymentSettings = loaded.data.qrPayments.map { qr ->
             QrPaymentSetting(
                 id = qr.id,
@@ -471,6 +504,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 dynamicColor = settings.dynamicColor,
                 autoRefresh = settings.autoRefresh,
                 cardSettings = cardSettings,
+                brandSettings = brandSettings,
                 qrPaymentSettings = qrPaymentSettings,
                 registeredMunicipalities = settings.registeredMunicipalities,
                 dataCommitRef = settings.dataCommitRef,
@@ -478,6 +512,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 timeLimitedActive = timeLimitedActive,
                 timeLimitedUpcoming = timeLimitedUpcoming,
                 merchantNames = loaded.data.merchants.associate { it.id to it.name },
+                campaignBrandColors = loaded.data.campaigns
+                    .mapNotNull { c -> loaded.data.brandColorOf(c)?.let { c.id to it } }
+                    .toMap(),
             )
         }
     }
@@ -619,7 +656,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     bestBenefit = result.bestBenefitLabel(),
                     lat = poi.lat,
                     lon = poi.lon,
-                    brandColors = allCampaigns.mapNotNull { it.brandColor }.distinct(),
+                    brandColors = result.judgments.mapNotNull { it.brandColor }.distinct(),
                     hasTimeLimited = allCampaigns.any { it.periodEnd != null },
                 )
             }
@@ -1065,7 +1102,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onSelectCampaignGroup(group: List<Campaign>) {
         val e = engine ?: return
         val today = LocalDate.now()
-        val qrMap = lastLoaded?.data?.qrPayments?.associateBy { it.id }.orEmpty()
+        val catalog = lastLoaded?.data
+        val qrMap = catalog?.qrPayments?.associateBy { it.id }.orEmpty()
         val judgments = group.map { campaign ->
             val qr = campaign.paymentMethodId?.let { qrMap[it] }
             val benefitType = com.ktakjm.poikatsu.domain.BenefitType.fromString(campaign.benefitType)
@@ -1073,8 +1111,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val todayIsTarget = isTargetDay(campaign, today)
             CampaignJudgment(
                 campaign = campaign,
-                badgeLabel = qr?.name ?: campaign.operator,
-                brandColor = campaign.brandColor,
+                // ブランド施策はイシュアー不問なので、バッジは運営者でなくブランド名を出す
+                badgeLabel = qr?.name ?: campaign.cardBrand ?: campaign.operator,
+                // 未所有カードの施策もキャンペーンタブには出るため、色は全カタログから引く
+                brandColor = catalog?.brandColorOf(campaign),
                 benefitType = benefitType,
                 effectiveRate = campaign.rateBase.takeUnless { isLottery },
                 discountAmount = campaign.discountAmount.takeUnless { isLottery },
@@ -1135,6 +1175,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onSetQrEnabled(id: String, enabled: Boolean) =
         viewModelScope.launch { settingsRepo.setQrEnabled(id, enabled) }
+
+    fun onSetBrandOwned(brand: String, owned: Boolean) =
+        viewModelScope.launch { settingsRepo.setBrandOwned(brand, owned) }
 
     fun onAddMunicipality(municipality: RegisteredMunicipality) =
         viewModelScope.launch { settingsRepo.addMunicipality(municipality) }

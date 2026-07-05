@@ -867,7 +867,7 @@ class JudgmentEngineTest {
     )
 
     @Test
-    fun `card_brand施策は実ブランド一致の所有カードにマッチしそのカード名がバッジになる`() {
+    fun `card_brand施策は実ブランド一致の所有カードにマッチしバッジはブランド名になる`() {
         val engine = periodTestEngine(
             brandCampaign,
             cards = listOf(
@@ -876,7 +876,8 @@ class JudgmentEngineTest {
             ),
         )
         val judgment = engine.judgeCards(testMerchant, today).single()
-        assertEquals("Amexカード", judgment.badgeLabel)
+        // イシュアー不問の施策なので、バッジは特定カード名でなくブランド名
+        assertEquals("Amex", judgment.badgeLabel)
         assertEquals(30.0, judgment.effectiveRate!!, 0.001)
         assertEquals("30% OFF", formatBenefit(judgment.benefitType, judgment.effectiveRate, judgment.discountAmount).toString())
     }
@@ -891,7 +892,7 @@ class JudgmentEngineTest {
     }
 
     @Test
-    fun `card_brand施策に複数カードが一致したらカタログ定義順の先頭1件に代表させる`() {
+    fun `card_brand施策に複数カードが一致しても判定は1件`() {
         val engine = periodTestEngine(
             brandCampaign,
             cards = listOf(
@@ -901,7 +902,7 @@ class JudgmentEngineTest {
         )
         val judgments = engine.judgeCards(testMerchant, today)
         assertEquals(1, judgments.size)
-        assertEquals("Amexカード1", judgments.single().badgeLabel)
+        assertEquals("Amex", judgments.single().badgeLabel)
     }
 
     // ---- B-3: merchant_rules[].rate_override(店舗別還元率) ----
@@ -1255,6 +1256,17 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
+    fun `実データ_カードブランドカタログが読み込めていて施策の参照先がある`() {
+        assertTrue("card_brands が空", data.cardBrands.isNotEmpty())
+        data.campaigns.mapNotNull { it.cardBrand }.forEach { brand ->
+            assertTrue(
+                "card_brand '$brand' がカタログの card_brands に無い(設定画面で登録できない)",
+                data.cardBrands.any { it.name.equals(brand, ignoreCase = true) },
+            )
+        }
+    }
+
+    @Test
     fun `実データ_QR決済カタログが読み込めている`() {
         val qr = data.qrPayments
         assertTrue(qr.isNotEmpty())
@@ -1354,6 +1366,7 @@ class TestDataIntegrityTest {
         assertTrue("merchants が空", data.merchants.isNotEmpty())
         assertTrue("campaigns が空", data.campaigns.isNotEmpty())
         assertTrue("cards が空", data.cards.isNotEmpty())
+        assertTrue("card_brands が空", data.cardBrands.isNotEmpty())
     }
 
     @Test
@@ -1378,8 +1391,8 @@ class TestDataIntegrityTest {
             c.cardId?.let { assertTrue("${c.id}: card_id '$it' が cards に無い", it in cardIds) }
             c.cardBrand?.let { brand ->
                 assertTrue(
-                    "${c.id}: card_brand '$brand' がどのカードの brands にも無い(マッチし得ない)",
-                    data.cards.any { card -> card.brands.any { it.equals(brand, ignoreCase = true) } },
+                    "${c.id}: card_brand '$brand' がカタログの card_brands に無い(設定画面で登録できない)",
+                    data.cardBrands.any { it.name.equals(brand, ignoreCase = true) },
                 )
             }
             c.paymentMethodId?.let { assertTrue("${c.id}: payment_method_id '$it' が qr_payments に無い", it in qrIds) }

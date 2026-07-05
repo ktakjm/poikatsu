@@ -51,6 +51,7 @@ internal fun CampaignPane(
     activeCampaigns: List<Campaign>,
     upcomingCampaigns: List<Campaign>,
     merchantNames: Map<String, String>,
+    campaignColors: Map<String, String>,
     filter: CampaignFilter,
     onFilterChange: (CampaignFilter) -> Unit,
     onSelectGroup: (List<Campaign>) -> Unit,
@@ -85,11 +86,17 @@ internal fun CampaignPane(
         CampaignFilter.MUNICIPAL -> { c -> c.campaignType == CampaignType.MUNICIPAL }
         CampaignFilter.NON_MUNICIPAL -> { c -> c.campaignType != CampaignType.MUNICIPAL }
     }
-    val activeGroups = remember(activeCampaigns, filter) {
+    val allActiveGroups = remember(activeCampaigns, filter) {
         groupCampaignsForDisplay(activeCampaigns.filter(filterFn))
     }
     val upcomingGroups = remember(upcomingCampaigns, filter) {
         groupCampaignsForDisplay(upcomingCampaigns.filter(filterFn))
+    }
+    // recurrence 施策で今日が対象日でないグループは「開催中」と混ぜず別セクションに出す
+    // (期間内=開催中だが今日は使えないため。カード内で「次の対象日」を案内する)
+    val today = LocalDate.now()
+    val (activeGroups, offDayGroups) = allActiveGroups.partition { group ->
+        group.any { isTargetDay(it, today) }
     }
 
     LazyColumn(
@@ -117,7 +124,20 @@ internal fun CampaignPane(
                 )
             }
             items(activeGroups, key = { it.first().id }) { group ->
-                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, onClick = { onSelectGroup(group) })
+                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, onClick = { onSelectGroup(group) })
+            }
+        }
+        if (offDayGroups.isNotEmpty()) {
+            item {
+                Text(
+                    "開催中（本日対象外）",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+            }
+            items(offDayGroups, key = { "offday_${it.first().id}" }) { group ->
+                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, onClick = { onSelectGroup(group) })
             }
         }
         if (upcomingGroups.isNotEmpty()) {
@@ -130,10 +150,10 @@ internal fun CampaignPane(
                 )
             }
             items(upcomingGroups, key = { "upcoming_${it.first().id}" }) { group ->
-                CampaignSummaryCard(group, CampaignStatus.UPCOMING, merchantNames, onClick = { onSelectGroup(group) })
+                CampaignSummaryCard(group, CampaignStatus.UPCOMING, merchantNames, campaignColors, onClick = { onSelectGroup(group) })
             }
         }
-        if (activeGroups.isEmpty() && upcomingGroups.isEmpty()) {
+        if (allActiveGroups.isEmpty() && upcomingGroups.isEmpty()) {
             item {
                 Text(
                     "このフィルタに一致するキャンペーンはありません。",
@@ -155,6 +175,7 @@ private fun CampaignSummaryCard(
     campaigns: List<Campaign>,
     status: CampaignStatus,
     merchantNames: Map<String, String>,
+    campaignColors: Map<String, String>,
     onClick: () -> Unit,
 ) {
     val today = LocalDate.now()
@@ -171,7 +192,7 @@ private fun CampaignSummaryCard(
     val daysInfo = daysInfo(status, today, earliestStart, latestEnd)
 
     val fallback = MaterialTheme.colorScheme.primary
-    val stripeColors = campaigns.mapNotNull { it.brandColor }.distinct()
+    val stripeColors = campaigns.mapNotNull { campaignColors[it.id] }.distinct()
         .mapNotNull { parseBrandColor(it) }
         .ifEmpty { listOf(fallback) }
     val separatorColor = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -208,14 +229,14 @@ private fun CampaignSummaryCard(
                                 color = if (urgent) warningColor() else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        // 早期終了があり得る施策では「残り○日」が断定に見えないよう注記を添える
-                        if (campaigns.any { it.mayEndEarly }) {
-                            Text(
-                                "早期終了の可能性あり",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = warningColor(),
-                            )
-                        }
+                    }
+                    // 早期終了があり得る施策では「残り○日」が断定に見えないよう注記を添える
+                    if (campaigns.any { it.mayEndEarly }) {
+                        Text(
+                            "※早期終了の可能性あり",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = warningColor(),
+                        )
                     }
                     recurrenceInfo(campaigns, status, today)?.let { (label, isToday) ->
                         Text(
@@ -273,9 +294,9 @@ private fun campaignGroupMaxBenefit(campaigns: List<Campaign>): String? {
 }
 
 private fun buildPeriodLabel(earliestStart: LocalDate?, latestEnd: LocalDate?): String = buildString {
-    if (earliestStart != null) append("${earliestStart.monthValue}/${earliestStart.dayOfMonth}")
+    if (earliestStart != null) append(formatPeriodDate(earliestStart))
     append("〜")
-    if (latestEnd != null) append("${latestEnd.monthValue}/${latestEnd.dayOfMonth}")
+    if (latestEnd != null) append(formatPeriodDate(latestEnd))
 }
 
 /**

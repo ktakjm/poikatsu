@@ -425,7 +425,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
         return CampaignJudgment(
             campaign = campaign,
             badgeLabel = badgeLabel,
-            brandColor = campaign.brandColor,
+            brandColor = data.brandColorOf(campaign),
             benefitType = benefitType,
             // 抽選は確定還元ではないので率・額を持たせない(ソート・最良比較に混ざらないように)
             effectiveRate = effectiveRate.takeUnless { isLottery },
@@ -456,8 +456,9 @@ class JudgmentEngine(private val data: PoikatsuData) {
 
     /**
      * 施策に紐づくカードを所有カードから解決する。card_id は id 一致、card_brand はブランド一致
-     * (CardOverride での上書き反映後の実ブランド。複数一致時はカタログ定義順の先頭1枚に代表させる。
-     * promotion の還元率は施策側の値を使うためどのカードでも同率になり、複数並べてもノイズのため)。
+     * (CardOverride での上書き反映後の実ブランド)。card_brand は「そのブランドのカードを1枚でも
+     * 持っているか」の判定で、複数一致しても判定は施策につき1件(バッジはブランド名を出すため
+     * どのカードが解決されたかは表示に影響しない)。
      */
     private fun resolveCard(campaign: Campaign): PaymentCard? = when {
         campaign.cardId != null -> data.cards.firstOrNull { it.id == campaign.cardId }
@@ -503,16 +504,19 @@ class JudgmentEngine(private val data: PoikatsuData) {
                 } else {
                     card.effectiveRateDefault ?: campaignRate ?: 0.0
                 }
+                // ブランド施策はどのカード会社のカードでも使えるため、バッジは特定カード名でなく
+                // ブランド名(Visa 等)を出す。ポイント倍率もカード固有の話なので出さない
+                val isBrandCampaign = campaign.cardBrand != null
                 buildJudgment(
                     campaign = campaign,
                     rule = rule,
-                    badgeLabel = card.cardName,
+                    badgeLabel = campaign.cardBrand ?: card.cardName,
                     effectiveRate = effectiveRate,
                     discountAmount = campaign.discountAmount,
-                    pointMultiplier = card.pointMultiplier,
+                    pointMultiplier = card.pointMultiplier.takeUnless { isBrandCampaign },
                     // ウエル活倍率はカードの実効率にだけ掛かっている。施策側の率を採用したときに
                     // 「ウエル活利用時の実質還元率」の注記が出ると誤りなのでフラグを落とす
-                    welcatsuApplied = card.welcatsuApplied && !usesCampaignRate,
+                    welcatsuApplied = card.welcatsuApplied && !usesCampaignRate && !isBrandCampaign,
                     appPackage = null,
                     today = today,
                 )

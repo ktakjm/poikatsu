@@ -120,19 +120,17 @@ internal fun benefitText(campaign: Campaign): String =
     formatBenefit(BenefitType.fromString(campaign.benefitType), campaign.rateBase, campaign.discountAmount)
         ?.toString() ?: ""
 
-/** 期間テキスト("7/1〜7/31")。常設(period null)なら null を返す */
+/** 期間表示用の日付("2026/07/01")。年を省くと年跨ぎ期間が読めなくなるため常に年付きで出す */
+internal fun formatPeriodDate(date: LocalDate): String =
+    date.format(java.time.format.DateTimeFormatter.ofPattern("yyyy/MM/dd"))
+
+/** 期間テキスト("2026/07/01〜2026/07/31")。常設(period null)なら null を返す */
 internal fun formatPeriod(campaign: Campaign): String? {
     if (campaign.periodStart == null && campaign.periodEnd == null) return null
     return buildString {
-        campaign.periodStart?.let {
-            val d = LocalDate.parse(it)
-            append("${d.monthValue}/${d.dayOfMonth}")
-        }
+        campaign.periodStart?.let { append(formatPeriodDate(LocalDate.parse(it))) }
         append("〜")
-        campaign.periodEnd?.let {
-            val d = LocalDate.parse(it)
-            append("${d.monthValue}/${d.dayOfMonth}")
-        }
+        campaign.periodEnd?.let { append(formatPeriodDate(LocalDate.parse(it))) }
     }
 }
 

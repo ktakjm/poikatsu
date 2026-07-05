@@ -152,7 +152,6 @@ data class Campaign(
     @SerialName("card_id") val cardId: String? = null,
     /** ブランド施策(イシュアー不問。例: Amex 30% OFF)の対象ブランド。card_id / payment_method_id と排他 */
     @SerialName("card_brand") val cardBrand: String? = null,
-    @SerialName("brand_color") val brandColor: String? = null,
     val name: String,
     @SerialName("payment_instruction") val paymentInstruction: String = "",
     @SerialName("rate_base") val rateBase: Double? = null,
@@ -210,6 +209,11 @@ data class PaymentCard(
     val id: String,
     @SerialName("card_name") val cardName: String,
     /**
+     * 発行体の識別色(#RRGGBB)。このカードに紐づく施策のストライプ/バッジ/地図ピンに使う。
+     * 施策側には色を持たせない(同一発行体の施策で色がぶれないよう発行体側で一元管理する)。
+     */
+    @SerialName("brand_color") val brandColor: String? = null,
+    /**
      * このカード製品で選べるブランドの選択肢(カタログの事実)。単一なら固定ブランド。
      * ユーザーが実際にどのブランドを持っているかはカタログに置かず CardOverride.brand(DataStore)で持つ。
      */
@@ -223,6 +227,14 @@ data class PaymentCard(
     @Transient val brand: String = "",
     /** 実行時フラグ: ウエル活(×factor)を適用済みか。VM のマージで設定し JSON には現れない */
     @Transient val welcatsuApplied: Boolean = false,
+)
+
+/** 国際ブランド1件(payment_methods.json の card_brands)。name は campaigns.json の card_brand から参照される */
+@Serializable
+data class CardBrand(
+    val name: String,
+    /** ブランドの識別色(#RRGGBB)。card_brand 施策のストライプ/バッジ/地図ピンに使う */
+    val color: String? = null,
 )
 
 @Serializable
@@ -241,6 +253,12 @@ data class PaymentMethodsFile(
     @SerialName("schema_version") val schemaVersion: Int = 1,
     @SerialName("updated_at") val updatedAt: String = "",
     val cards: List<PaymentCard> = emptyList(),
+    /**
+     * 登録できるカードブランドの選択肢(国際ブランドのマスタ)。設定画面「カードブランド」に常時出し、
+     * カタログに無いカードの保有ブランドを登録しておくと、ブランド施策(card_brand)の開始と同時に
+     * 判定へ表示される。campaigns.json の card_brand はこのリストの name を使う
+     */
+    @SerialName("card_brands") val cardBrands: List<CardBrand> = emptyList(),
     @SerialName("qr_payments") val qrPayments: List<QrPayment> = emptyList(),
 )
 
@@ -254,10 +272,24 @@ data class PoikatsuData(
     val merchants: List<Merchant>,
     val campaigns: List<Campaign>,
     val cards: List<PaymentCard> = emptyList(),
+    val cardBrands: List<CardBrand> = emptyList(),
     val qrPayments: List<QrPayment> = emptyList(),
     val updatedAt: String,
     val yolpConfig: YolpConfig? = null,
-)
+) {
+    /**
+     * 施策の識別色。発行体(カード / ブランド / QR)のカタログから引く。施策側に色を持たせないのは、
+     * 同一発行体の施策間で色がぶれる(例: 三井住友の2種の緑が混在する)のを防ぐため。
+     */
+    fun brandColorOf(campaign: Campaign): String? = when {
+        campaign.cardId != null -> cards.firstOrNull { it.id == campaign.cardId }?.brandColor
+        campaign.cardBrand != null ->
+            cardBrands.firstOrNull { it.name.equals(campaign.cardBrand, ignoreCase = true) }?.color
+        campaign.paymentMethodId != null ->
+            qrPayments.firstOrNull { it.id == campaign.paymentMethodId }?.brandColor
+        else -> null
+    }
+}
 
 object PoikatsuJson {
     private val json = Json {
@@ -273,6 +305,7 @@ object PoikatsuJson {
             merchants = merchantsFile.merchants,
             campaigns = campaignsFile.campaigns,
             cards = paymentMethodsFile.cards,
+            cardBrands = paymentMethodsFile.cardBrands,
             qrPayments = paymentMethodsFile.qrPayments,
             updatedAt = campaignsFile.updatedAt,
             yolpConfig = merchantsFile.yolpConfig,
