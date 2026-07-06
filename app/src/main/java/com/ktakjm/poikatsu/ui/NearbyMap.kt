@@ -124,12 +124,17 @@ fun NearbyMap(
     userLocation: MapPoint?,
     markers: List<MapMarker>,
     initialZoom: Double,
+    /** 検索完了ごとに変わる世代スタンプ。center が同値の再検索でもカメラを寄せ直すためのキー */
+    searchStamp: Int,
     selectedPoint: MapPoint?,
     onSearchHere: (MapPoint, Int, Double) -> Unit,
     onSearchMyLocation: () -> Unit,
-    onClusterTap: () -> Unit,
-    /** ズームしても分解できないクラスタをタップしたとき、内包するマーカー一覧を渡す(→店舗リスト表示) */
-    onClusterOpen: (List<MapMarker>) -> Unit,
+    /**
+     * クラスタをタップしたとき、内包するマーカー一覧を渡す(→店舗リスト表示)。
+     * sameSpot=true はズームしても分解できないクラスタ(実質同一地点)で、ズームは行わない。
+     * false は分解できるクラスタで、リスト表示と同時にズームインする。
+     */
+    onClusterOpen: (markers: List<MapMarker>, sameSpot: Boolean) -> Unit,
     loadingMessage: String?,
     // 地名検索(起点コントロール)
     originName: String?,
@@ -161,8 +166,11 @@ fun NearbyMap(
     val initialCamera = CameraPosition.fromLatLngZoom((selectedPoint ?: center).toLatLng(), initialZoom.toFloat())
     val cameraPositionState = rememberCameraPositionState { position = initialCamera }
 
+    // 検索完了のたびにカメラを検索中心へ寄せる。キーに searchStamp を含めるのは、現在地ボタンの
+    // 再検索で GPS が前回と同じ座標を返すと center/initialZoom が同値のままで、値の変化だけでは
+    // 発火せず「現在地に戻らない」ため(パンして地図だけ動かした後の現在地ボタンで起きる)。
     var centerInitialized by remember { mutableStateOf(false) }
-    LaunchedEffect(center, initialZoom) {
+    LaunchedEffect(center, initialZoom, searchStamp) {
         if (!centerInitialized) {
             centerInitialized = true
             return@LaunchedEffect
@@ -258,29 +266,30 @@ fun NearbyMap(
                 // 既定の最小クラスタサイズは 4 で、2〜3 個の近接ピンは束ねられず重なったまま
                 // 描かれてしまう。「画面上で重なるなら束ねる」ため 2 に下げる
                 (clusterRenderer as? DefaultClusterRenderer<*>)?.minClusterSize = 2
-                // クラスタタップはズームインのみ。YOLP 再検索はしない(minClusterSize=2 では
-                // 高ズーム中のタップも多く、その時点の表示範囲=極小半径で再検索すると
+                // クラスタタップは「内包する店舗リストの表示」＋(分解できるなら)ズームイン。
+                // YOLP 再検索はしない(minClusterSize=2 では高ズーム中のタップも多く、
+                // その時点の表示範囲=極小半径で再検索すると
                 // それまでの検索結果リストを狭い範囲の結果で上書きしてしまうため)。
-                // ただしズーム上限(MAX_CLUSTER_ZOOM)でもライブラリが束ね続ける広がりのクラスタは
-                // ズームしても永遠に分解できない(デッドエンド)ため、複合ピンと同じく
-                // 「同じ場所に N 件」の店舗リストを開く。距離予測が外れて分解できなかった場合も、
-                // 上限到達後の再タップで必ずリスト表示に落ちる
+                // リストは常に開く: ズームだけだと下部シートが旧検索中心基準の全体リストのままで、
+                // タップしたクラスタと無関係な店舗が上位に並んでしまうため。
+                // ズーム上限(MAX_CLUSTER_ZOOM)でもライブラリが束ね続ける広がりのクラスタは
+                // ズームしても永遠に分解できない(デッドエンド)ため、ズームせず sameSpot=true で
+                // 複合ピンと同じ「同じ場所に N 件」扱いにする。距離予測が外れて分解できなかった
+                // 場合も、上限到達後の再タップで必ず sameSpot=true に落ちる
                 clusterManager?.setOnClusterClickListener { cluster ->
                     val currentZoom = cameraPositionState.position.zoom
                     val maxSpreadM = maxPairwiseDistanceMeters(cluster.items.map { it.position })
                     val unsplittable = currentZoom >= MAX_CLUSTER_ZOOM - 0.01f ||
                         maxSpreadM <= clusterMergeDistanceMeters(MAX_CLUSTER_ZOOM, cluster.position.latitude)
-                    if (unsplittable) {
-                        onClusterOpen(cluster.items.map { it.marker })
-                    } else {
+                    if (!unsplittable) {
                         scope.launch {
                             val newZoom = (currentZoom + 2f).coerceAtMost(MAX_CLUSTER_ZOOM)
                             cameraPositionState.animate(
                                 CameraUpdateFactory.newLatLngZoom(cluster.position, newZoom),
                             )
                         }
-                        onClusterTap()
                     }
+                    onClusterOpen(cluster.items.map { it.marker }, unsplittable)
                     true
                 }
                 clusterManager?.setOnClusterItemClickListener { item ->

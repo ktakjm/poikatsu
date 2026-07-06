@@ -275,7 +275,6 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             onSearchFailedShown = viewModel::onNearbySearchFailedShown,
                             onPreviewPlace = viewModel::onPreviewNearby,
                             onClearPreview = viewModel::onClearNearbyPreview,
-                            onClusterTap = viewModel::onClearNearbyPreview,
                             onOpenDetail = viewModel::onSelectNearby,
                             onSearchHere = viewModel::searchHere,
                             onGeocode = viewModel::onGeocode,
@@ -495,6 +494,16 @@ private fun SearchResultCard(result: MainViewModel.SearchResult, onClick: () -> 
 
 // ---- 近く(地図)タブ ----
 
+/**
+ * 複合ピン/クラスタをタップしたときにボトムシートへ出す店舗グループ。
+ * sameSpot=true は同一地点(同一ビル等の複合ピン、ズームで分解できないクラスタ)で
+ * 「同じ場所に N 件」、false は付近に散らばるクラスタで「この付近に N 件」と見出しを変える。
+ */
+private data class PlaceGroupSheet(
+    val places: List<MainViewModel.NearbyPlace>,
+    val sameSpot: Boolean,
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NearbyPane(
@@ -514,7 +523,6 @@ private fun NearbyPane(
     onClearChain: () -> Unit,
     onPreviewPlace: (MainViewModel.NearbyPlace) -> Unit,
     onClearPreview: () -> Unit,
-    onClusterTap: () -> Unit,
     onOpenDetail: (MainViewModel.NearbyPlace) -> Unit,
     onSearchHere: (Double, Double, Int, Double) -> Unit,
     onGeocode: (String) -> Unit,
@@ -524,14 +532,18 @@ private fun NearbyPane(
     topInset: Dp,
 ) {
     val selectedPlace = nearby.selectedPlace
-    // 同一地点の複合ピンをタップしたときの選択状態(BottomSheet でリスト表示)
-    var compoundPlaces by remember { mutableStateOf<List<MainViewModel.NearbyPlace>?>(null) }
-    LaunchedEffect(selectedPlace) { if (selectedPlace != null) compoundPlaces = null }
-    // 戻る: プレビュー → 複合リスト → 一覧 → モード閉じ の順に遡る
+    // 複合ピン/クラスタをタップしたときの選択状態(BottomSheet で内包店舗をリスト表示)
+    var placeGroup by remember { mutableStateOf<PlaceGroupSheet?>(null) }
+    LaunchedEffect(selectedPlace) { if (selectedPlace != null) placeGroup = null }
+    // 再検索(現在地ボタン/このエリアを検索)が始まったらグループシートも閉じる。ViewModel は
+    // selectedPlace をクリアするが placeGroup はこの Composable のローカル状態なので、ここで
+    // 閉じないと新しい検索結果に無関係な古いグループリストがシートに残り続ける
+    LaunchedEffect(nearby.loading) { if (nearby.loading) placeGroup = null }
+    // 戻る: プレビュー → グループリスト → 一覧 → モード閉じ の順に遡る
     BackHandler(onBack = {
         when {
             selectedPlace != null -> onClearPreview()
-            compoundPlaces != null -> compoundPlaces = null
+            placeGroup != null -> placeGroup = null
             else -> onClose()
         }
     })
@@ -600,8 +612,8 @@ private fun NearbyPane(
     }
     // 同一地点(10m 以内・連結成分)の店舗をグルーピングし、複合マーカーで表示する。
     // タップでズーム分解できない重なりを、クラスタバッジと同じ見た目で一つにまとめる。
-    // markerGroups はマーカー座標→グループ内店舗の逆引きで、ズームしても分解できない
-    // ライブラリクラスタを「同じ場所に N 件」で開くとき(onClusterOpen)に使う。
+    // markerGroups はマーカー座標→グループ内店舗の逆引きで、ライブラリクラスタの
+    // タップ時に内包店舗のリスト(onClusterOpen)へ展開するのに使う。
     val (markers, markerGroups) = remember(visiblePlaces, selectedPlace) {
         val groups = groupByProximity(visiblePlaces)
         val byPoint = HashMap<MapPoint, List<MainViewModel.NearbyPlace>>()
@@ -623,7 +635,11 @@ private fun NearbyPane(
                     label = "${group.size}件",
                     colorHexes = group.flatMap { it.brandColors }.distinct(),
                     selected = group.any { it == selectedPlace },
-                    onClick = { onClearPreview(); compoundPlaces = group },
+                    onClick = {
+                        onClearPreview()
+                        // 並び順はクラスタタップ時と同じ「起点からの距離」(各行の距離ラベルと一致)
+                        placeGroup = PlaceGroupSheet(group.sortedBy { it.distanceMeters }, sameSpot = true)
+                    },
                     groupSize = group.size,
                 )
             }
@@ -649,8 +665,8 @@ private fun NearbyPane(
             scaffoldState.bottomSheetState.partialExpand()
         }
     }
-    LaunchedEffect(compoundPlaces) {
-        if (compoundPlaces != null &&
+    LaunchedEffect(placeGroup) {
+        if (placeGroup != null &&
             scaffoldState.bottomSheetState.currentValue != SheetValue.PartiallyExpanded
         ) {
             scaffoldState.bottomSheetState.partialExpand()
@@ -672,15 +688,19 @@ private fun NearbyPane(
     val listPeek = 220.dp
     val density = LocalDensity.current
     var previewSheetPeek by remember { mutableStateOf<Dp?>(null) }
-    val sheetPeek = if (selectedPlace != null || compoundPlaces != null) {
-        previewSheetPeek?.let { maxOf(listPeek, it) } ?: listPeek
-    } else {
-        listPeek
-    }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // シート展開時の最大高さ: 検索バー上端まで(検索バーは覆う)。
         // 検索バーは topInset + 8.dp から始まるので、そこをシートの上限にする。
         val sheetMaxHeight = maxHeight - topInset - 16.dp
+        // グループリストは件数分だけ内容が伸びるため、覗き高さは画面の約4割で頭打ちにして
+        // 地図(タップしたクラスタ)が隠れないようにする。続きはシートを引き上げて見る。
+        val groupPeekMax = maxHeight * 0.4f
+        val sheetPeek = when {
+            selectedPlace != null -> previewSheetPeek?.let { maxOf(listPeek, it) } ?: listPeek
+            placeGroup != null ->
+                previewSheetPeek?.let { maxOf(listPeek, minOf(it, groupPeekMax)) } ?: listPeek
+            else -> listPeek
+        }
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
         sheetPeekHeight = sheetPeek,
@@ -705,12 +725,17 @@ private fun NearbyPane(
                         onClose = onClearPreview,
                     )
                 }
-            } else if (compoundPlaces != null) {
-                // 同一地点の複合ピンをタップ: グループ内の店舗をリストで見せる
+            } else if (placeGroup != null) {
+                // 複合ピン/クラスタをタップ: 内包する店舗をリストで見せる。
+                // 覗き高さは内容の実測(少数件は全件見せる)。多数件は sheetPeek 側で頭打ちにし、
+                // シートを引き上げるとリスト内スクロールで続きを見られる。
+                val group = placeGroup!!
                 Column(
-                    modifier = Modifier.onSizeChanged {
-                        previewSheetPeek = with(density) { it.height.toDp() } + COMPACT_HANDLE_HEIGHT
-                    },
+                    modifier = Modifier
+                        .heightIn(max = sheetMaxHeight)
+                        .onSizeChanged {
+                            previewSheetPeek = with(density) { it.height.toDp() } + COMPACT_HANDLE_HEIGHT
+                        },
                 ) {
                     SheetAttribution()
                     Column(
@@ -718,33 +743,39 @@ private fun NearbyPane(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                "同じ場所に ${compoundPlaces!!.size} 件",
+                                if (group.sameSpot) {
+                                    "同じ場所に ${group.places.size} 件"
+                                } else {
+                                    "この付近に ${group.places.size} 件"
+                                },
                                 style = MaterialTheme.typography.titleMedium,
                                 modifier = Modifier.weight(1f),
                             )
-                            IconButton(onClick = { compoundPlaces = null }) {
+                            IconButton(onClick = { placeGroup = null }) {
                                 Icon(Icons.Default.Close, contentDescription = "閉じる")
                             }
                         }
-                        compoundPlaces!!.forEach { place ->
-                            ListItem(
-                                headlineContent = { Text(place.name) },
-                                supportingContent = {
-                                    Text("${distanceLabel(place.distanceMeters, originName)}・${place.merchant?.category.orEmpty()}")
-                                },
-                                trailingContent = {
-                                    place.bestBenefit?.let {
-                                        Text(
-                                            it.toString(),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = MaterialTheme.colorScheme.primary,
-                                        )
-                                    }
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onPreviewPlace(place) },
-                            )
+                        LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false)) {
+                            items(group.places, key = { "${it.lat},${it.lon},${it.name}" }) { place ->
+                                ListItem(
+                                    headlineContent = { Text(place.name) },
+                                    supportingContent = {
+                                        Text("${distanceLabel(place.distanceMeters, originName)}・${place.merchant?.category.orEmpty()}")
+                                    },
+                                    trailingContent = {
+                                        place.bestBenefit?.let {
+                                            Text(
+                                                it.toString(),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = MaterialTheme.colorScheme.primary,
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onPreviewPlace(place) },
+                                )
+                            }
                         }
                         Spacer(Modifier.height(12.dp))
                     }
@@ -812,17 +843,19 @@ private fun NearbyPane(
             userLocation = userLocation,
             markers = markers,
             initialZoom = nearby.zoom,
+            searchStamp = nearby.searchStamp,
             selectedPoint = selectedPlace?.let { MapPoint(it.lat, it.lon) },
             onSearchHere = { p, r, z -> onSearchHere(p.lat, p.lon, r, z) },
             onSearchMyLocation = onReload,
-            onClusterTap = onClusterTap,
-            onClusterOpen = { clusterMarkers ->
+            onClusterOpen = { clusterMarkers, sameSpot ->
+                // クラスタ内の店舗に展開する。並び順は各行の距離ラベルと同じ「起点からの距離」
+                // (distanceFromCenter は旧検索中心基準のため、クラスタ内の並びとしては不自然)
                 val places = clusterMarkers
                     .flatMap { markerGroups[it.point].orEmpty() }
-                    .sortedBy { it.distanceFromCenter }
+                    .sortedBy { it.distanceMeters }
                 if (places.isNotEmpty()) {
                     onClearPreview()
-                    compoundPlaces = places
+                    placeGroup = PlaceGroupSheet(places, sameSpot)
                 }
             },
             loadingMessage = if (nearby.loading) nearbyLoadingText(nearby.loadingPhase) else null,

@@ -164,6 +164,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          * そのまま引き継ぐ(再センタリングで勝手にズームを変えないため。可視範囲=検索範囲の要)。
          */
         val zoom: Double = NEARBY_DEFAULT_ZOOM,
+        /**
+         * 検索が完了するたびに変わる世代スタンプ(=nearbyGeneration)。center/zoom が前回と同値でも
+         * (現在地ボタンで GPS が同じ座標を返す等)カメラを検索中心へ寄せ直すためのキー。
+         */
+        val searchStamp: Int = 0,
     )
 
     data class UiState(
@@ -689,6 +694,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 userLat = userLat,
                 userLon = userLon,
                 zoom = effectiveZoom,
+                searchStamp = gen,
             ),
         )
     }
