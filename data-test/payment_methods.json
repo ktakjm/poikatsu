@@ -1,6 +1,6 @@
 {
   "schema_version": 6,
-  "updated_at": "2026-07-06",
+  "updated_at": "2026-07-07",
   "card_brands": [
     { "name": "Visa", "color": "#1A1F71" },
     { "name": "Mastercard", "color": "#EB001B" },
@@ -23,5 +23,14 @@
       "effective_rate_default": 1.0
     }
   ],
-  "qr_payments": []
+  "qr_payments": [
+    {
+      "id": "test_paypay",
+      "name": "テストPayPay",
+      "brand_color": "#FF0033",
+      "app_package": "",
+      "store_search_label": "テストPayPay対象店舗を探す",
+      "enabled_default": false
+    }
+  ]
 }

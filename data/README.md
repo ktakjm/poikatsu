@@ -106,12 +106,39 @@
 
 設定画面 → 開発者向け → 「テストデータを使う」トグルを ON にすると、アプリのリモート取得先が `data/` から `data-test/` に切り替わる。`data-test/` のデータは `data/` と同じスキーマ(campaigns.json / merchants.json / payment_methods.json)に従い、カードもテスト専用カタログ(`test_card`)に切り替わる。municipalities.json のみ assets 固定のため切替対象外。
 
+### 収録パターン一覧
+
+| ID | 検証対象 | 安定性 |
+|----|---------|--------|
+| `test_card_program` | 常設 rebate+rate(7%)、Amex 除外(`test_super`)、`official_store_list` 3 状態、`store_list_url`、`location_hint`(`test_vending`)、`cap_note` | 常時安定 |
+| `test_promotion` | 期間限定 rebate+rate(10%)、`rate_override`(15%)、`may_end_early` | 常時安定 |
+| `test_brand_promotion` | `card_brand`(Visa)、即時定率 discount+rate(30% OFF)、`per_transaction_cap` | 常時安定 |
+| `test_recurrence_weekly` | `recurrence` 曜日型(毎週金土) | 検証日依存 |
+| `test_recurrence_monthly` | `recurrence` 日付型(5・20・30 日) | 検証日依存 |
+| `test_lottery` | 抽選型(`lottery`)、`conditions` | 常時安定 |
+| `test_discount_fixed` | **即時定額** discount+`discount_amount`(300 円引き)、`min_purchase`(500 円)、`usage_limit`(1 回) | 常時安定 |
+| `test_rebate_fixed` | **後日定額** rebate+`discount_amount`(500 円還元)、`usage_limit`(3 回)、`usage_limit_note`、`period_total_cap` | 常時安定 |
+| `test_upcoming` | **UPCOMING** 状態(常時未開始) | 常時安定 |
+| `test_ending_soon` | **残り 3 日警告**(検証日に `period_end` を手直し) | **要手直し** |
+| `test_municipal` | 自治体施策(`municipal`+`external`)、`region`、`store_search_url`、`per_transaction_cap`+`period_total_cap`、`may_end_early` | 常時安定 |
+
+#### 複数施策競合の確認
+
+- **テストコンビニ**: test_card_program(7%)・test_promotion(10%)・test_recurrence_weekly(20% 金土)・test_lottery(抽選)・test_rebate_fixed(500 円還元 PayPay)・test_upcoming(25% 未開始)・test_ending_soon(15% 終了間近)
+- **テストバーガー**: test_card_program(7%)・test_promotion(15% override)・test_brand_promotion(Visa 30% OFF)・test_recurrence_monthly(12% 5・20・30 日)・test_discount_fixed(300 円引き PayPay)・test_upcoming(25% 未開始)
+
+#### 日付依存パターンの手直し手順
+
+- **`test_ending_soon`**: `period_end` を「検証日の 3 日後」に設定する(例: 7/10 に検証するなら `"2026-07-13"`)。残り 0〜3 日で警告が表示される
+- **`test_upcoming` → ACTIVE 遷移**: 常時 UPCOMING(2099 年)。ACTIVE 状態を見たい場合は `period_start` を検証日以前に変更する
+- **`test_recurrence_weekly`**: 金・土曜に検証すると「対象日」、他の曜日では「次の対象日: ○/○」が表示される
+- **`test_recurrence_monthly`**: 5・20・30 日に検証すると「対象日」、他の日では「次の対象日」が表示される
+
 ### 更新ルール
 
 - `data/` のスキーマ変更時は `data-test/` も同時に更新する(同一コミット)
 - CI の整合性テスト(`TestDataIntegrityTest`)がパース成功・参照切れ・フィールド排他を検証する
-- 日付依存パターンは 2 種類: 常時安定(期間を極端な未来/過去に設定)と検証時要手直し(残り 3 日警告・UPCOMING→ACTIVE 遷移)。前者を基本とする
-- スキーマ拡張(#35)の各パターン(card_brand / rate_override / may_end_early / recurrence 曜日・日付 / lottery)のショーケース施策を収録済み。recurrence は「今日が対象日/非対象日」の両状態を見られるよう曜日型(金土)と日付型(5・20・30日)の 2 本を置いている(検証日によっては要手直し)。全パターンの本格整備(4 象限・UPCOMING 等の網羅)は #33 で行う
+- 日付依存パターンは 2 種類: 常時安定(期間を極端な未来/過去に設定)と検証時要手直し(残り 3 日警告等)。前者を基本とする
 
 ## 更新ルール
 

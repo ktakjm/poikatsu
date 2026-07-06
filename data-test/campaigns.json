@@ -1,6 +1,6 @@
 {
   "schema_version": 6,
-  "updated_at": "2026-07-06",
+  "updated_at": "2026-07-07",
   "campaigns": [
     {
       "id": "test_card_program",
@@ -10,13 +10,23 @@
       "operator": "テストカード発行会社",
       "card_id": "test_card",
       "name": "テスト常設施策（7%還元）",
+      "payment_instruction": "テストカードのタッチ決済で支払う",
       "rate_base": 7.0,
       "period_start": null,
       "period_end": null,
-      "verified_date": "2026-07-05",
+      "cap_note": "月間ポイント上限なし。ただし1万円超はタッチ決済不可",
+      "verified_date": "2026-07-07",
       "merchant_rules": [
         { "merchant_id": "test_combini" },
-        { "merchant_id": "test_fastfood" }
+        { "merchant_id": "test_fastfood", "exclusion_note": "一部店舗のみ対象。公式の対象店舗検索で要確認", "store_list_url": "https://example.com/store-list" },
+        { "merchant_id": "test_super", "amex_excluded": true, "note": "テストマート含む", "exclusion_note": "商業施設内の一部店舗は対象外", "official_store_list": {
+          "eligible_stores": ["テスト駅前", "テストモール", "テスト中央"],
+          "ineligible_stores": ["テスト商業施設内", "テスト空港"],
+          "updated_date": "2026-07-01",
+          "date_is_official": false,
+          "source_url": "https://example.com/official-list"
+        }},
+        { "merchant_id": "test_vending", "note": "テストアプリ対応自販機が対象" }
       ]
     },
     {
@@ -31,7 +41,7 @@
       "period_start": "2026-01-01",
       "period_end": "2099-12-31",
       "may_end_early": true,
-      "verified_date": "2026-07-05",
+      "verified_date": "2026-07-07",
       "merchant_rules": [
         { "merchant_id": "test_combini" },
         { "merchant_id": "test_fastfood", "rate_override": 15.0 }
@@ -50,7 +60,7 @@
       "period_start": "2026-01-01",
       "period_end": "2099-12-31",
       "per_transaction_cap": 1000,
-      "verified_date": "2026-07-05",
+      "verified_date": "2026-07-07",
       "merchant_rules": [
         { "merchant_id": "test_fastfood" }
       ]
@@ -67,7 +77,7 @@
       "period_start": "2026-01-01",
       "period_end": "2099-12-31",
       "recurrence": { "days_of_week": ["FRI", "SAT"] },
-      "verified_date": "2026-07-05",
+      "verified_date": "2026-07-07",
       "merchant_rules": [
         { "merchant_id": "test_combini" }
       ]
@@ -84,7 +94,7 @@
       "period_start": "2026-01-01",
       "period_end": "2099-12-31",
       "recurrence": { "days_of_month": [5, 20, 30] },
-      "verified_date": "2026-07-05",
+      "verified_date": "2026-07-07",
       "merchant_rules": [
         { "merchant_id": "test_fastfood" }
       ]
@@ -103,10 +113,123 @@
         "抽選で4分の1の確率で当選",
         "当選すると決済額の最大全額(上限1000円相当)を還元"
       ],
-      "verified_date": "2026-07-05",
+      "verified_date": "2026-07-07",
       "merchant_rules": [
         { "merchant_id": "test_combini" }
       ]
+    },
+    {
+      "id": "test_discount_fixed",
+      "type": "promotion",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "テストPayPay",
+      "payment_method_id": "test_paypay",
+      "name": "テスト即時定額クーポン（300円引き）",
+      "payment_instruction": "テストPayPayのコード決済で支払う",
+      "discount_amount": 300,
+      "min_purchase": 500,
+      "usage_limit": 1,
+      "period_start": "2026-01-01",
+      "period_end": "2099-12-31",
+      "detail_url": "https://example.com/discount-coupon",
+      "verified_date": "2026-07-07",
+      "merchant_rules": [
+        { "merchant_id": "test_fastfood", "note": "モバイルオーダーも対象" }
+      ]
+    },
+    {
+      "id": "test_rebate_fixed",
+      "type": "promotion",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "テストPayPay",
+      "payment_method_id": "test_paypay",
+      "name": "テスト後日定額還元（500円還元）",
+      "payment_instruction": "テストPayPayのコード決済で支払う",
+      "discount_amount": 500,
+      "usage_limit": 3,
+      "usage_limit_note": "お一人様期間中3回まで",
+      "period_total_cap": 1500,
+      "period_start": "2026-01-01",
+      "period_end": "2099-12-31",
+      "conditions": [
+        "お一人様期間中3回まで",
+        "付与上限1,500円"
+      ],
+      "detail_url": "https://example.com/rebate-campaign",
+      "verified_date": "2026-07-07",
+      "merchant_rules": [
+        { "merchant_id": "test_combini" }
+      ]
+    },
+    {
+      "id": "test_upcoming",
+      "type": "promotion",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "テストカード発行会社",
+      "card_id": "test_card",
+      "name": "テストUPCOMING施策（25%還元・常時未開始）",
+      "payment_instruction": "テストカードのタッチ決済で支払う",
+      "rate_base": 25.0,
+      "period_start": "2099-01-01",
+      "period_end": "2099-12-31",
+      "conditions": [
+        "事前エントリー必要"
+      ],
+      "detail_url": "https://example.com/upcoming-campaign",
+      "verified_date": "2026-07-07",
+      "merchant_rules": [
+        { "merchant_id": "test_combini" },
+        { "merchant_id": "test_fastfood" }
+      ]
+    },
+    {
+      "id": "test_ending_soon",
+      "type": "promotion",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "テストカード発行会社",
+      "card_id": "test_card",
+      "name": "テスト終了間近施策（15%還元・残り3日警告）",
+      "payment_instruction": "テストカードのタッチ決済で支払う",
+      "rate_base": 15.0,
+      "period_start": "2026-07-05",
+      "period_end": "2026-07-10",
+      "verified_date": "2026-07-07",
+      "merchant_rules": [
+        { "merchant_id": "test_combini" }
+      ]
+    },
+    {
+      "id": "test_municipal",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "テストPayPay",
+      "payment_method_id": "test_paypay",
+      "name": "テスト市キャッシュレスキャンペーン（20%還元）",
+      "payment_instruction": "テストPayPay残高・テストPayPayクレジットで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-07-01",
+      "period_end": "2026-09-30",
+      "per_transaction_cap": 3000,
+      "period_total_cap": 5000,
+      "may_end_early": true,
+      "region": {
+        "name": "テスト市",
+        "prefecture": "テスト県",
+        "area_group": null
+      },
+      "detail_url": "https://example.com/municipal-campaign",
+      "store_search_url": "https://example.com/municipal-stores",
+      "conditions": [
+        "対象の中小企業・小規模事業者の店舗が対象",
+        "大手チェーン店は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-07"
     }
   ]
 }

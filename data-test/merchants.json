@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-07-04",
+  "updated_at": "2026-07-07",
 
   "yolp_config": {
     "gc_groups": [
@@ -22,6 +22,8 @@
 
   "merchants": [
     { "id": "test_combini", "name": "テストコンビニ", "reading": "てすとこんびに", "category": "コンビニ" },
-    { "id": "test_fastfood", "name": "テストバーガー", "reading": "てすとばーがー", "category": "ファストフード" }
+    { "id": "test_fastfood", "name": "テストバーガー", "reading": "てすとばーがー", "category": "ファストフード" },
+    { "id": "test_super", "name": "テストスーパー", "reading": "てすとすーぱー", "aliases": ["テストマート"], "category": "スーパー" },
+    { "id": "test_vending", "name": "テスト自販機", "reading": "てすとじはんき", "category": "その他", "location_hint": { "text": "テスト公式アプリで対応自販機を探せます", "label": "テストアプリで探す", "url": "https://example.com/vending-app" }, "yolp_search": "none" }
   ]
 }
