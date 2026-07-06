@@ -28,7 +28,7 @@
       "id": "test_paypay",
       "name": "テストPayPay",
       "brand_color": "#FF0033",
-      "app_package": "",
+      "app_package": "jp.ne.paypay.android.app",
       "store_search_label": "テストPayPay対象店舗を探す",
       "enabled_default": false
     }
