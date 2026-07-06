@@ -195,7 +195,7 @@ fun NearbyMap(
     }
 
     // 「このエリアを検索」の表示条件:
-    // (1) 地図カメラが最終検索中心から画面の約4割以上移動した、または
+    // (1) 地図カメラが最終検索中心から画面の約2割以上移動した(下限 50m)、または
     // (2) ズームアウトにより表示範囲が検索時の倍以上に広がった(ズームが1段階以上下がった)
     val showSearchHere by remember(center, initialZoom) {
         derivedStateOf {
@@ -207,7 +207,7 @@ fun NearbyMap(
             )
             val metersPerPx = 156543.03 * cos(Math.toRadians(center.lat)) / 2.0.pow(currentZoom)
             val halfScreenM = (540 * metersPerPx).toInt()
-            val movedEnough = dist > maxOf(halfScreenM * 4 / 10, 100)
+            val movedEnough = dist > maxOf(halfScreenM * 2 / 10, 50)
             val zoomedOutEnough = currentZoom <= initialZoom - 1.0
             movedEnough || zoomedOutEnough
         }
