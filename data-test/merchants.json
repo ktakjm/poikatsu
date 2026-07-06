@@ -21,9 +21,34 @@
   },
 
   "merchants": [
-    { "id": "test_combini", "name": "テストコンビニ", "reading": "てすとこんびに", "category": "コンビニ" },
-    { "id": "test_fastfood", "name": "テストバーガー", "reading": "てすとばーがー", "category": "ファストフード" },
-    { "id": "test_super", "name": "テストスーパー", "reading": "てすとすーぱー", "aliases": ["テストマート"], "category": "スーパー" },
-    { "id": "test_vending", "name": "テスト自販機", "reading": "てすとじはんき", "category": "その他", "location_hint": { "text": "テスト公式アプリで対応自販機を探せます", "label": "テストアプリで探す", "url": "https://example.com/vending-app" }, "yolp_search": "none" }
+    {
+      "id": "test_combini",
+      "name": "テストコンビニ",
+      "reading": "てすとこんびに",
+      "aliases": ["セブン-イレブン", "セブンイレブン", "ローソン", "LAWSON", "ファミリーマート", "ファミマ", "ミニストップ"],
+      "category": "コンビニ"
+    },
+    {
+      "id": "test_fastfood",
+      "name": "テストバーガー",
+      "reading": "てすとばーがー",
+      "aliases": ["マクドナルド", "マック", "吉野家", "すき家", "モスバーガー", "ケンタッキーフライドチキン", "KFC", "松屋"],
+      "category": "ファストフード"
+    },
+    {
+      "id": "test_super",
+      "name": "テストスーパー",
+      "reading": "てすとすーぱー",
+      "aliases": ["テストマート", "イオン", "マックスバリュ", "イトーヨーカドー", "ライフ", "マルエツ", "西友"],
+      "category": "スーパー"
+    },
+    {
+      "id": "test_vending",
+      "name": "テスト自販機",
+      "reading": "てすとじはんき",
+      "category": "その他",
+      "location_hint": { "text": "テスト公式アプリで対応自販機を探せます", "label": "テストアプリで探す", "url": "https://example.com/vending-app" },
+      "yolp_search": "none"
+    }
   ]
 }
