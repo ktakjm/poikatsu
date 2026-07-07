@@ -99,13 +99,15 @@ val Campaign.campaignType: CampaignType get() = CampaignType.fromString(type)
 // ---- ウォレット(スマホのタッチ決済)対応 ----
 // eligible_wallets / ineligible_wallets は「公式がウォレット単位で対象/対象外を言い切っている」
 // 事実だけを持つ(未掲載は不明の3状態)。Android 固有の消費(Google Pay → ウォレットアプリ起動)は
-// ここに閉じ、apple_pay エントリはアプリでは読まない(検証済み事実の記録として持つ)。
+// ここに閉じる。apple_pay は起動リンクには使わないが、Google Pay 対象外警告の付記
+// (iPhone 併用者向けの「Apple Payは対象」)に使う。
 
 /** Android のウォレット(Google Pay)アプリのパッケージ名(文字列定数のみなので domain の純 Kotlin は維持される) */
 const val WALLET_APP_PACKAGE = "com.google.android.apps.walletnfcrel"
 
-/** eligible_wallets / ineligible_wallets での Google Pay の識別子 */
+/** eligible_wallets / ineligible_wallets でのウォレット識別子 */
 const val WALLET_GOOGLE_PAY = "google_pay"
+const val WALLET_APPLE_PAY = "apple_pay"
 
 /** ウォレット起動リンクのラベル。バッジ(カード名)でなく起動先アプリの名前を出す */
 const val WALLET_APP_LABEL = "ウォレット(Google Pay)"
@@ -116,7 +118,12 @@ val Campaign.walletAppPackage: String?
 
 /** 公式が Google Pay を還元対象外と明記している施策への警告文。該当しなければ null */
 val Campaign.googlePayIneligibleWarning: String?
-    get() = "Google Pay(スマホのタッチ決済)での支払いは還元対象外".takeIf { WALLET_GOOGLE_PAY in ineligibleWallets }
+    get() = when {
+        WALLET_GOOGLE_PAY !in ineligibleWallets -> null
+        // 非対称なケース(MUFG 等)は「Apple Pay なら対象」まで言い切る
+        WALLET_APPLE_PAY in eligibleWallets -> "Google Pay(スマホのタッチ決済)での支払いは還元対象外(Apple Payは対象)"
+        else -> "Google Pay(スマホのタッチ決済)での支払いは還元対象外"
+    }
 
 data class BenefitLabel(val value: String, val suffix: String) {
     override fun toString() = "$value$suffix"

@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
-    <!-- Android 11+ のパッケージ可視性制限対応。QR決済アプリ起動(JudgmentScreen)で
+    <!-- Android 11+ のパッケージ可視性制限対応。QR決済・ウォレットアプリ起動(JudgmentScreen)で
          getLaunchIntentForPackage() が正しく検出できるよう、対象アプリを明示する。
          未宣言だとインストール済みでも null が返り Play Store フォールバックに落ちる。 -->
     <queries>
@@ -17,6 +17,8 @@
         <package android:name="com.kddi.android.aupay" />
         <package android:name="com.nttdocomo.android.payment" />
         <package android:name="jp.co.rakuten.pay" />
+        <!-- ウォレット(Google Pay)。domain の WALLET_APP_PACKAGE と対で管理 -->
+        <package android:name="com.google.android.apps.walletnfcrel" />
     </queries>
 
     <application

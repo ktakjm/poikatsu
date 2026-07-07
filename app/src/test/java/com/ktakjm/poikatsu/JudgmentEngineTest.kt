@@ -512,14 +512,24 @@ class JudgmentEngineTest {
 
     @Test
     fun `google_payがineligibleなら警告が出て起動リンクは付かない`() {
+        val campaign = campaignWithPeriod(ineligibleWallets = listOf("google_pay"))
+        val judgment = periodTestEngine(campaign).judgeCards(testMerchant, today).first()
+        assertNull(judgment.appPackage)
+        assertNull(judgment.appLabel)
+        assertTrue(judgment.warnings.any { it.contains("Google Pay") })
+        // apple_pay が eligible と分かっていないときは Apple Pay に言及しない(断定しない)
+        assertTrue(judgment.warnings.none { it.contains("Apple Pay") })
+    }
+
+    @Test
+    fun `google_pay対象外かつapple_pay対象なら警告にApple Payは対象と付記される`() {
         val campaign = campaignWithPeriod(
             eligibleWallets = listOf("apple_pay"),
             ineligibleWallets = listOf("google_pay"),
         )
         val judgment = periodTestEngine(campaign).judgeCards(testMerchant, today).first()
         assertNull(judgment.appPackage)
-        assertNull(judgment.appLabel)
-        assertTrue(judgment.warnings.any { it.contains("Google Pay") })
+        assertTrue(judgment.warnings.any { it.contains("Google Pay") && it.contains("Apple Payは対象") })
     }
 
     @Test
@@ -533,11 +543,12 @@ class JudgmentEngineTest {
 
     @Test
     fun `apple_payのみeligibleでは起動リンクを出さない`() {
-        // apple_pay エントリは検証済み事実の記録であり、Android アプリは消費しない
+        // apple_pay は起動リンクには使わない(Google Pay 対象外警告の付記にのみ使う)
         val campaign = campaignWithPeriod(eligibleWallets = listOf("apple_pay"))
         val judgment = periodTestEngine(campaign).judgeCards(testMerchant, today).first()
         assertNull(judgment.appPackage)
         assertNull(judgment.appLabel)
+        assertTrue(judgment.warnings.isEmpty())
     }
 
     // ---- store_scope フィルタのテスト ----
@@ -1262,7 +1273,8 @@ class JudgmentEngineRealDataTest {
         assertEquals(WALLET_APP_LABEL, smcc.appLabel)
         val mufg = judgments.first { it.campaign.id == "mufg_point_up_program" }
         assertNull(mufg.appPackage)
-        assertTrue(mufg.warnings.any { it.contains("Google Pay") })
+        // MUFG は apple_pay が eligible なので「Apple Payは対象」の付記まで出る
+        assertTrue(mufg.warnings.any { it.contains("Google Pay") && it.contains("Apple Payは対象") })
     }
 
     @Test

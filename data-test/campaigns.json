@@ -59,6 +59,7 @@
       "card_brand": "Visa",
       "name": "テストブランド施策（Visaで30% OFF）",
       "payment_instruction": "Visaブランドのカードで支払う",
+      "ineligible_wallets": ["apple_pay", "google_pay"],
       "rate_base": 30.0,
       "period_start": "2026-01-01",
       "period_end": "2099-12-31",
@@ -110,6 +111,7 @@
       "operator": "テストカード発行会社",
       "card_id": "test_card",
       "name": "テスト抽選施策（1/4の確率で最大全額還元）",
+      "ineligible_wallets": ["google_pay"],
       "period_start": "2026-01-01",
       "period_end": "2099-12-31",
       "conditions": [

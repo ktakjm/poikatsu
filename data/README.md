@@ -41,9 +41,9 @@
 - `usage_limit_note` — 利用条件の人間向け補足
 - `eligible_wallets` / `ineligible_wallets` — **公式がウォレット単位で還元対象/対象外を言い切っている場合のみ**登録する(値: `"apple_pay"` / `"google_pay"`)。未掲載 = 不明として扱い、網羅性を仮定しない(official_store_list と同じ3状態の設計思想)。抽象フラグにしないのは「Apple Pay は対象・Google Pay は対象外」(MUFG)のような非対称な事実を表現するため:
   - `eligible_wallets` に `google_pay` → 判定詳細に「ウォレット(Google Pay)を開く」起動リンクを表示
-  - `ineligible_wallets` に `google_pay` → 判定詳細に「Google Pay での支払いは還元対象外」警告を表示(Android ユーザーが自然に Google Pay でタッチして還元を取り逃すのを防ぐ)
+  - `ineligible_wallets` に `google_pay` → 判定詳細に「Google Pay での支払いは還元対象外」警告を表示(Android ユーザーが自然に Google Pay でタッチして還元を取り逃すのを防ぐ)。このとき `apple_pay` が eligible なら「(Apple Payは対象)」を付記する(MUFG のような非対称ケース)
   - どちらにも無い → 何も出さない(`payment_instruction` の文章が担う)
-  - `apple_pay` エントリはアプリでは読まないが、sources と同じ「検証済み事実の記録」として断定できるものだけ書く(プラットフォーム非依存の施策側の事実。Android 固有の消費はコード側に閉じる)
+  - `apple_pay` エントリは起動リンクには使わず、上記の警告付記にのみ使う。sources と同じ「検証済み事実の記録」として断定できるものだけ書く(プラットフォーム非依存の施策側の事実。Android 固有の消費はコード側に閉じる)
 - `may_end_early` — 予算到達次第の早期終了があり得るか(省略時 false)。true なら判定詳細・キャンペーンタブに「早期終了の可能性」注記を出し、「残り○日」が断定に見えないようにする。**自治体系はほぼ全件 true にする**(標準条項のため)
 - `recurrence` — 繰り返し日付条件。`{ "days_of_week": ["FRI", "SAT"] }`(毎週金土)または `{ "days_of_month": [20, 30] }`(毎月20・30日)の**どちらか一方**(併用は実在確認できるまで未対応)。`period_start/end`(外枠の開催期間)と併用し、「探す」「近く」の判定は期間内かつ**今日が対象日**のときだけ出す。キャンペーンタブは期間内なら非対象日でも「開催中」に出し「次の対象日: ○/○」を案内する
 - `region` — 自治体施策用。`{ name, prefecture, area_group }`。`area_group` は将来のグループフィルタ用(現在 null)
@@ -117,10 +117,10 @@
 |----|---------|--------|
 | `test_card_program` | 常設 rebate+rate(7%)、Amex 除外(`test_super`)、`official_store_list` 3 状態、`store_list_url`、`location_hint`(`test_vending`)、`cap_note`、`eligible_wallets`(ウォレット起動リンク) | 常時安定 |
 | `test_promotion` | 期間限定 rebate+rate(10%)、`rate_override`(15%)、`may_end_early`、`ineligible_wallets`(Google Pay 対象外警告) | 常時安定 |
-| `test_brand_promotion` | `card_brand`(Visa)、即時定率 discount+rate(30% OFF)、`per_transaction_cap` | 常時安定 |
+| `test_brand_promotion` | `card_brand`(Visa)、即時定率 discount+rate(30% OFF)、`per_transaction_cap`、`ineligible_wallets` 両ウォレット対象外(付記なし警告) | 常時安定 |
 | `test_recurrence_weekly` | `recurrence` 曜日型(毎週金土) | 検証日依存 |
 | `test_recurrence_monthly` | `recurrence` 日付型(5・20・30 日) | 検証日依存 |
-| `test_lottery` | 抽選型(`lottery`)、`conditions` | 常時安定 |
+| `test_lottery` | 抽選型(`lottery`)、`conditions`、`ineligible_wallets` Google Pay のみ対象外・Apple Pay 情報なし(付記なし警告) | 常時安定 |
 | `test_discount_fixed` | **即時定額** discount+`discount_amount`(300 円引き)、`min_purchase`(500 円)、`usage_limit`(1 回) | 常時安定 |
 | `test_rebate_fixed` | **後日定額** rebate+`discount_amount`(500 円還元)、`usage_limit`(3 回)、`usage_limit_note`、`period_total_cap` | 常時安定 |
 | `test_upcoming` | **UPCOMING** 状態(常時未開始) | 常時安定 |
