@@ -73,10 +73,12 @@ import com.google.android.gms.maps.model.MapColorScheme
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.MapStyleOptions
 import com.google.maps.android.compose.ComposeMapColorScheme
 import com.google.maps.android.clustering.ClusterItem
 import com.google.maps.android.clustering.view.DefaultClusterRenderer
 import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.MapsComposeExperimentalApi
 import com.google.maps.android.compose.Marker
@@ -166,6 +168,15 @@ fun NearbyMap(
     val initialCamera = CameraPosition.fromLatLngZoom((selectedPoint ?: center).toLatLng(), initialZoom.toFloat())
     val cameraPositionState = rememberCameraPositionState { position = initialCamera }
 
+    // ズームが寄り(POI_SUPPRESS_ZOOM 以上)のときだけ Google 標準 POI ラベルを消す(定義側コメント参照)。
+    // derivedStateOf により閾値をまたいだ瞬間だけ recompose され、スタイルが差し替わる。
+    val suppressPoi by remember {
+        derivedStateOf { cameraPositionState.position.zoom >= POI_SUPPRESS_ZOOM }
+    }
+    val mapProperties = remember(suppressPoi) {
+        MapProperties(mapStyleOptions = if (suppressPoi) POI_SUPPRESS_STYLE else null)
+    }
+
     // 検索完了のたびにカメラを検索中心へ寄せる。キーに searchStamp を含めるのは、現在地ボタンの
     // 再検索で GPS が前回と同じ座標を返すと center/initialZoom が同値のままで、値の変化だけでは
     // 発火せず「現在地に戻らない」ため(パンして地図だけ動かした後の現在地ボタンで起きる)。
@@ -227,6 +238,7 @@ fun NearbyMap(
                     .camera(initialCamera)
                     .mapColorScheme(if (darkMode) MapColorScheme.DARK else MapColorScheme.LIGHT)
             },
+            properties = mapProperties,
             uiSettings = uiSettings,
             mapColorScheme = if (darkMode) ComposeMapColorScheme.DARK else ComposeMapColorScheme.LIGHT,
             contentPadding = PaddingValues(bottom = bottomPadding),
@@ -727,3 +739,15 @@ private fun maxPairwiseDistanceMeters(points: List<LatLng>): Int {
 private const val EARTH_CIRCUMFERENCE_M = 40075016.686
 private const val MAX_CLUSTER_ZOOM = 19f
 private const val SELECTION_MIN_ZOOM = 17f
+
+// Google Maps 標準 POI ラベルの表示はこのズームを境に切り替える。
+// 引き(閾値未満)はデフォルト表示のままにし、Google 内部の重要度ランキングに任せる
+// (大型公園・百貨店・大病院などのランドマーク級しか出ない)。
+// 寄り(閾値以上)ではコンビニ・個人クリニック等の細かい POI が湧いてアプリの店舗ピンと
+// 紛らわしくなるため、POI ラベルを全て消す。JSON スタイルには規模・重要度による
+// 絞り込みが無い(カテゴリ×on/off のみ)ため、ズーム連動のスタイル切替で代替している。
+// visibility:"on" はダークモードの配色を上書きしてラベルが浮くため off 系ルールのみ使う。
+private const val POI_SUPPRESS_ZOOM = 18f
+private val POI_SUPPRESS_STYLE = MapStyleOptions(
+    """[{"featureType":"poi","elementType":"labels","stylers":[{"visibility":"off"}]}]""",
+)
