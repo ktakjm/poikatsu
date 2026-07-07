@@ -28,10 +28,13 @@ import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.CampaignType
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.StoreVerdict
+import com.ktakjm.poikatsu.domain.WALLET_APP_LABEL
 import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
+import com.ktakjm.poikatsu.domain.googlePayIneligibleWarning
 import com.ktakjm.poikatsu.domain.isTargetDay
 import com.ktakjm.poikatsu.domain.nextTargetDay
+import com.ktakjm.poikatsu.domain.walletAppPackage
 import com.ktakjm.poikatsu.util.GeoMath
 import java.io.File
 import java.time.LocalDate
@@ -1131,6 +1134,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 warnings = buildList {
                     val days = e.daysRemaining(campaign, today)
                     if (days != null && days <= 3) add("残り${days}日")
+                    campaign.googlePayIneligibleWarning?.let { add(it) }
                 },
                 minPurchase = campaign.minPurchase,
                 usageLimitText = campaign.usageLimitNote
@@ -1141,7 +1145,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 conditions = campaign.conditions,
                 storeSearchUrl = if (campaign.storeScope == "external") campaign.storeSearchUrl else null,
                 detailUrl = campaign.detailUrl,
-                appPackage = qr?.appPackage?.ifBlank { null },
+                appPackage = qr?.appPackage?.ifBlank { null } ?: campaign.walletAppPackage,
+                appLabel = when {
+                    qr != null && qr.appPackage.isNotBlank() -> "${qr.name}アプリ"
+                    campaign.walletAppPackage != null -> WALLET_APP_LABEL
+                    else -> null
+                },
                 pointMultiplier = null,
                 welcatsuApplied = false,
                 mayEndEarly = campaign.mayEndEarly,

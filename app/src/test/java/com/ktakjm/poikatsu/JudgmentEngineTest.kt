@@ -16,6 +16,8 @@ import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.domain.CampaignType
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.StoreEligibility
+import com.ktakjm.poikatsu.domain.WALLET_APP_LABEL
+import com.ktakjm.poikatsu.domain.WALLET_APP_PACKAGE
 import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.formatBenefit
@@ -370,6 +372,8 @@ class JudgmentEngineTest {
         region: Region? = null,
         mayEndEarly: Boolean = false,
         recurrence: Recurrence? = null,
+        eligibleWallets: List<String> = emptyList(),
+        ineligibleWallets: List<String> = emptyList(),
         merchantRules: List<MerchantRule> = listOf(MerchantRule(merchantId = "m1")),
     ) = Campaign(
         id = "test_campaign",
@@ -394,6 +398,8 @@ class JudgmentEngineTest {
         region = region,
         mayEndEarly = mayEndEarly,
         recurrence = recurrence,
+        eligibleWallets = eligibleWallets,
+        ineligibleWallets = ineligibleWallets,
         merchantRules = merchantRules,
     )
 
@@ -493,6 +499,47 @@ class JudgmentEngineTest {
         assertTrue(judgments.first().warnings.isEmpty())
     }
 
+    // ---- ウォレット(Google Pay)対応のテスト ----
+
+    @Test
+    fun `google_payがeligibleならウォレット起動リンクが付く`() {
+        val campaign = campaignWithPeriod(eligibleWallets = listOf("apple_pay", "google_pay"))
+        val judgment = periodTestEngine(campaign).judgeCards(testMerchant, today).first()
+        assertEquals(WALLET_APP_PACKAGE, judgment.appPackage)
+        assertEquals(WALLET_APP_LABEL, judgment.appLabel)
+        assertTrue(judgment.warnings.isEmpty())
+    }
+
+    @Test
+    fun `google_payがineligibleなら警告が出て起動リンクは付かない`() {
+        val campaign = campaignWithPeriod(
+            eligibleWallets = listOf("apple_pay"),
+            ineligibleWallets = listOf("google_pay"),
+        )
+        val judgment = periodTestEngine(campaign).judgeCards(testMerchant, today).first()
+        assertNull(judgment.appPackage)
+        assertNull(judgment.appLabel)
+        assertTrue(judgment.warnings.any { it.contains("Google Pay") })
+    }
+
+    @Test
+    fun `ウォレット未指定なら起動リンクも警告も出ない`() {
+        // 3状態の「不明」: 断定できないので何も出さない(payment_instruction の文章が担う)
+        val judgment = periodTestEngine(campaignWithPeriod()).judgeCards(testMerchant, today).first()
+        assertNull(judgment.appPackage)
+        assertNull(judgment.appLabel)
+        assertTrue(judgment.warnings.isEmpty())
+    }
+
+    @Test
+    fun `apple_payのみeligibleでは起動リンクを出さない`() {
+        // apple_pay エントリは検証済み事実の記録であり、Android アプリは消費しない
+        val campaign = campaignWithPeriod(eligibleWallets = listOf("apple_pay"))
+        val judgment = periodTestEngine(campaign).judgeCards(testMerchant, today).first()
+        assertNull(judgment.appPackage)
+        assertNull(judgment.appLabel)
+    }
+
     // ---- store_scope フィルタのテスト ----
 
     @Test
@@ -529,6 +576,9 @@ class JudgmentEngineTest {
         val results = engine.judgeQr(testMerchant, julyToday, setOf("paypay"))
         assertEquals(1, results.size)
         assertEquals("PayPay", results.first().badgeLabel)
+        // app_package の無いカタログでは起動リンク(appPackage/appLabel)は付かない
+        assertNull(results.first().appPackage)
+        assertNull(results.first().appLabel)
         assertEquals(20.0, results.first().effectiveRate!!, 0.001)
         assertEquals(BenefitType.REBATE, results.first().benefitType)
 
@@ -537,6 +587,22 @@ class JudgmentEngineTest {
 
         // 空セットでは出ない
         assertTrue(engine.judgeQr(testMerchant, julyToday, emptySet()).isEmpty())
+    }
+
+    @Test
+    fun `QR決済のapp_packageがあれば起動リンクは決済名アプリのラベル`() {
+        val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033", appPackage = "jp.ne.paypay.android.app")
+        val campaign = campaignWithPeriod(
+            type = CampaignType.PROMOTION,
+            cardId = null,
+            paymentMethodId = "paypay",
+            start = "2026-07-01",
+            end = "2026-07-31",
+        )
+        val engine = periodTestEngine(campaign, cards = emptyList(), qrPayments = listOf(paypay))
+        val judgment = engine.judgeQr(testMerchant, LocalDate.of(2026, 7, 15), setOf("paypay")).first()
+        assertEquals("jp.ne.paypay.android.app", judgment.appPackage)
+        assertEquals("PayPayアプリ", judgment.appLabel)
     }
 
     @Test
@@ -1176,6 +1242,30 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
+    fun `実データ_walletsの値が既知でeligibleとineligibleが重複しない`() {
+        val known = setOf("apple_pay", "google_pay")
+        data.campaigns.forEach { c ->
+            (c.eligibleWallets + c.ineligibleWallets).forEach { w ->
+                assertTrue("${c.id}: unknown wallet '$w'", w in known)
+            }
+            val overlap = c.eligibleWallets.intersect(c.ineligibleWallets.toSet())
+            assertTrue("${c.id}: eligible/ineligible が重複 $overlap", overlap.isEmpty())
+        }
+    }
+
+    @Test
+    fun `実データ_三井住友はウォレット起動リンク_MUFGはGoogle Pay警告`() {
+        val merchant = data.merchants.first { it.id == "seven_eleven" }
+        val judgments = engine.judgeCards(merchant, LocalDate.of(2026, 7, 8))
+        val smcc = judgments.first { it.campaign.id == "smcc_combini_restaurant" }
+        assertEquals(WALLET_APP_PACKAGE, smcc.appPackage)
+        assertEquals(WALLET_APP_LABEL, smcc.appLabel)
+        val mufg = judgments.first { it.campaign.id == "mufg_point_up_program" }
+        assertNull(mufg.appPackage)
+        assertTrue(mufg.warnings.any { it.contains("Google Pay") })
+    }
+
+    @Test
     fun `実データ_常設施策はcard_program_managed`() {
         data.campaigns.filter { it.campaignType == CampaignType.CARD_PROGRAM }.forEach { c ->
             assertTrue("${c.id}: card_program should be managed", c.storeScope == "managed")
@@ -1426,6 +1516,18 @@ class TestDataIntegrityTest {
             )
             r.daysOfWeek.forEach { d -> assertTrue("${c.id}: invalid day_of_week '$d'", d in validDays) }
             r.daysOfMonth.forEach { d -> assertTrue("${c.id}: invalid day_of_month $d", d in 1..31) }
+        }
+    }
+
+    @Test
+    fun `テストデータ_walletsの値が既知でeligibleとineligibleが重複しない`() {
+        val known = setOf("apple_pay", "google_pay")
+        data.campaigns.forEach { c ->
+            (c.eligibleWallets + c.ineligibleWallets).forEach { w ->
+                assertTrue("${c.id}: unknown wallet '$w'", w in known)
+            }
+            val overlap = c.eligibleWallets.intersect(c.ineligibleWallets.toSet())
+            assertTrue("${c.id}: eligible/ineligible が重複 $overlap", overlap.isEmpty())
         }
     }
 

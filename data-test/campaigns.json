@@ -1,6 +1,6 @@
 {
-  "schema_version": 6,
-  "updated_at": "2026-07-07",
+  "schema_version": 7,
+  "updated_at": "2026-07-08",
   "campaigns": [
     {
       "id": "test_card_program",
@@ -11,6 +11,7 @@
       "card_id": "test_card",
       "name": "テスト常設施策（7%還元）",
       "payment_instruction": "テストカードのタッチ決済で支払う",
+      "eligible_wallets": ["apple_pay", "google_pay"],
       "rate_base": 7.0,
       "period_start": null,
       "period_end": null,
@@ -37,6 +38,8 @@
       "operator": "テストカード発行会社",
       "card_id": "test_card",
       "name": "テスト期間限定施策（10%・バーガーのみ15%還元）",
+      "eligible_wallets": ["apple_pay"],
+      "ineligible_wallets": ["google_pay"],
       "rate_base": 10.0,
       "period_start": "2026-01-01",
       "period_end": "2099-12-31",

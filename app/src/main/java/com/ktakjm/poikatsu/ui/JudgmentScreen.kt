@@ -243,7 +243,9 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
                 ExternalLinkButton("詳細を見る") { uriHandler.openUri(url) }
             }
             judgment.appPackage?.let { pkg ->
-                ExternalLinkButton("${judgment.badgeLabel}アプリを開く") {
+                // ラベルは起動先アプリの名前(appLabel)。バッジ(カード名)だと「三井住友カードアプリを開く」で
+                // ウォレットが起動する齟齬が出る
+                ExternalLinkButton("${judgment.appLabel ?: "${judgment.badgeLabel}アプリ"}を開く") {
                     val intent = context.packageManager.getLaunchIntentForPackage(pkg)
                     if (intent != null) {
                         context.startActivity(intent)

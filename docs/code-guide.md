@@ -165,6 +165,8 @@ erDiagram
         int usage_limit "利用回数上限"
         string usage_limit_note "回数上限の補足(表示用)"
         bool may_end_early "予算到達次第の早期終了があり得るか"
+        string_list eligible_wallets "公式が還元対象と明記したウォレット(apple_pay/google_pay)"
+        string_list ineligible_wallets "公式が還元対象外と明記したウォレット(未掲載=不明の3状態)"
         Recurrence recurrence "繰り返し日付条件(days_of_week/days_of_month)"
         string_list conditions "条件リスト(除外条件含む)"
         string payment_method_id "QR決済ID(カード施策はnull)"
@@ -394,7 +396,8 @@ data class CampaignJudgment(
     val warnings: List<String>,      // 残り3日以下等
     val minPurchase: Int?,
     val usageLimitText: String?,     // usageLimitNote ?: "お一人様N回まで"
-    val appPackage: String?,         // QR決済のアプリ起動用
+    val appPackage: String?,         // アプリ起動用（QR決済 / google_pay eligible ならウォレット）
+    val appLabel: String?,           // 起動リンクのラベル（QR=「◯◯アプリ」、カード=「ウォレット(Google Pay)」。バッジと分離）
     val pointMultiplier: PointMultiplier?,  // ポイント倍率（バッジ・注記はデータ駆動）
     val welcatsuApplied: Boolean,
     // ... perTransactionCap, periodTotalCap, capNote, conditions, storeSearchUrl, storeListUrl, detailUrl

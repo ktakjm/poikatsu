@@ -38,6 +38,8 @@ data class CampaignJudgment(
     val storeSearchUrl: String?,
     val detailUrl: String?,
     val appPackage: String?,
+    /** 起動リンクのラベル(「◯◯を開く →」の◯◯)。QR は「◯◯アプリ」、カードは「ウォレット(Google Pay)」 */
+    val appLabel: String? = null,
     val pointMultiplier: PointMultiplier?,
     val welcatsuApplied: Boolean,
     /** 予算到達次第の早期終了があり得る施策か。true なら注記を出す */
@@ -93,6 +95,28 @@ enum class CampaignType(val jsonValue: String) {
 }
 
 val Campaign.campaignType: CampaignType get() = CampaignType.fromString(type)
+
+// ---- ウォレット(スマホのタッチ決済)対応 ----
+// eligible_wallets / ineligible_wallets は「公式がウォレット単位で対象/対象外を言い切っている」
+// 事実だけを持つ(未掲載は不明の3状態)。Android 固有の消費(Google Pay → ウォレットアプリ起動)は
+// ここに閉じ、apple_pay エントリはアプリでは読まない(検証済み事実の記録として持つ)。
+
+/** Android のウォレット(Google Pay)アプリのパッケージ名(文字列定数のみなので domain の純 Kotlin は維持される) */
+const val WALLET_APP_PACKAGE = "com.google.android.apps.walletnfcrel"
+
+/** eligible_wallets / ineligible_wallets での Google Pay の識別子 */
+const val WALLET_GOOGLE_PAY = "google_pay"
+
+/** ウォレット起動リンクのラベル。バッジ(カード名)でなく起動先アプリの名前を出す */
+const val WALLET_APP_LABEL = "ウォレット(Google Pay)"
+
+/** 公式が Google Pay を還元対象と明記している施策ならウォレットアプリのパッケージ名。それ以外は null */
+val Campaign.walletAppPackage: String?
+    get() = WALLET_APP_PACKAGE.takeIf { WALLET_GOOGLE_PAY in eligibleWallets }
+
+/** 公式が Google Pay を還元対象外と明記している施策への警告文。該当しなければ null */
+val Campaign.googlePayIneligibleWarning: String?
+    get() = "Google Pay(スマホのタッチ決済)での支払いは還元対象外".takeIf { WALLET_GOOGLE_PAY in ineligibleWallets }
 
 data class BenefitLabel(val value: String, val suffix: String) {
     override fun toString() = "$value$suffix"
@@ -416,6 +440,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
         pointMultiplier: PointMultiplier?,
         welcatsuApplied: Boolean,
         appPackage: String?,
+        appLabel: String?,
         today: LocalDate,
     ): CampaignJudgment {
         val days = daysRemaining(campaign, today)
@@ -436,6 +461,8 @@ class JudgmentEngine(private val data: PoikatsuData) {
             storeListUrl = rule?.storeListUrl,
             warnings = buildList {
                 if (days != null && days <= 3) add("残り${days}日")
+                // Android ユーザーは自然に Google Pay でタッチしがちなので、対象外なら積極的に注意喚起する
+                campaign.googlePayIneligibleWarning?.let { add(it) }
             },
             minPurchase = campaign.minPurchase,
             usageLimitText = usageLimitText(campaign),
@@ -446,6 +473,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
             storeSearchUrl = if (campaign.storeScope == "external") campaign.storeSearchUrl else null,
             detailUrl = campaign.detailUrl,
             appPackage = appPackage,
+            appLabel = appLabel,
             pointMultiplier = pointMultiplier,
             welcatsuApplied = welcatsuApplied,
             mayEndEarly = campaign.mayEndEarly,
@@ -507,6 +535,8 @@ class JudgmentEngine(private val data: PoikatsuData) {
                 // ブランド施策はどのカード会社のカードでも使えるため、バッジは特定カード名でなく
                 // ブランド名(Visa 等)を出す。ポイント倍率もカード固有の話なので出さない
                 val isBrandCampaign = campaign.cardBrand != null
+                // Google Pay が還元対象と公式が明記している施策だけウォレット起動リンクを出す
+                val walletPackage = campaign.walletAppPackage
                 buildJudgment(
                     campaign = campaign,
                     rule = rule,
@@ -517,7 +547,8 @@ class JudgmentEngine(private val data: PoikatsuData) {
                     // ウエル活倍率はカードの実効率にだけ掛かっている。施策側の率を採用したときに
                     // 「ウエル活利用時の実質還元率」の注記が出ると誤りなのでフラグを落とす
                     welcatsuApplied = card.welcatsuApplied && !usesCampaignRate && !isBrandCampaign,
-                    appPackage = null,
+                    appPackage = walletPackage,
+                    appLabel = if (walletPackage != null) WALLET_APP_LABEL else null,
                     today = today,
                 )
             }
@@ -543,6 +574,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
                     pointMultiplier = null,
                     welcatsuApplied = false,
                     appPackage = qr.appPackage.ifBlank { null },
+                    appLabel = "${qr.name}アプリ".takeIf { qr.appPackage.isNotBlank() },
                     today = today,
                 )
             }

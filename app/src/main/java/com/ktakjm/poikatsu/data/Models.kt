@@ -173,6 +173,13 @@ data class Campaign(
     @SerialName("usage_limit_note") val usageLimitNote: String? = null,
     /** 予算到達次第の早期終了があり得るか(自治体系はほぼ全件 true)。判定詳細・キャンペーンタブに注記を出す */
     @SerialName("may_end_early") val mayEndEarly: Boolean = false,
+    /**
+     * 公式が「還元対象」と明記しているウォレット("apple_pay" / "google_pay")。
+     * 未掲載は不明扱い(3状態)。official_store_list と同じく断定できる事実だけを登録する。
+     */
+    @SerialName("eligible_wallets") val eligibleWallets: List<String> = emptyList(),
+    /** 公式が「還元対象外」と明記しているウォレット。google_pay があれば判定詳細に警告を出す */
+    @SerialName("ineligible_wallets") val ineligibleWallets: List<String> = emptyList(),
     /** 繰り返し日付条件。null なら期間内の全日が対象 */
     val recurrence: Recurrence? = null,
     val region: Region? = null,
