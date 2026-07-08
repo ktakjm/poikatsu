@@ -1,6 +1,6 @@
 # 地図描画・店舗データソースの選定(決定記録)
 
-最終更新: 2026-06-20
+最終更新: 2026-07-08
 
 「近く」モードの地図描画と店舗(POI)データの取得元をどうするかの調査・決定を記録する。
 背景フェーズは [PLAN.md](../PLAN.md)、UI 方針は [CLAUDE.md](../CLAUDE.md)、ライセンスは [licenses.md](licenses.md)、進捗は [roadmap.md](roadmap.md) を参照。
@@ -16,18 +16,12 @@
 **理由**: 旧構成(OSM)は新規開店店舗の欠落・支店名(「○○店」)の欠落・地図デザインの質で実用に劣る。
 描画品質はGoogle、店舗データ品質はYOLP(国内POIに強い)で補う。
 
-**重要な方針転換**: 旧構成の osmdroid は「**Play Services 非依存**」を明示方針として選定した([roadmap.md](roadmap.md) 3.3 / 本ファイル末尾の経緯)。
-Google Maps SDK は **Play Services 必須**のため、この方針を意図的に転換する。代償と緩和策は §5 に記載。
+**重要な方針転換**: 旧構成の osmdroid は「**Play Services 非依存**」を明示方針として選定した(本ファイル末尾の経緯)。
+Google Maps SDK は **Play Services 必須**のため、この方針を意図的に転換する(転換済み。位置取得も 2026-07 に FLP へ移行済み)。詳細は §5 に記載。
 
 ## 2. 出発点(調査時点の現状)
 
-| 項目 | 現状 |
-|---|---|
-| 地図描画 | osmdroid 6.1.20 / MAPNIK タイル(`ui/NearbyMap.kt`) |
-| POI 取得 | Overpass API(OSM)・OkHttp POST(`data/OverpassClient.kt`) |
-| POI のローカル永続化 | **なし**(毎回ライブ取得。`Poi` はメモリ保持のみ) |
-| 抽象化 | 地図ライブラリ固有型は `NearbyMap.kt` に隔離、アプリ側は自前 `MapPoint`/`MapMarker` を扱う |
-| APIキー管理 | 現状すべて鍵不要。`BuildConfig` 未使用 |
+調査時点(2026-06)の旧構成は **osmdroid(OSM タイル)+ Overpass API(OSM の POI 検索)** で、鍵不要・POI の永続化なし・地図ライブラリ固有型は `NearbyMap.kt` に隔離済みだった。旧実装の詳細は git 履歴を参照(Overpass クライアントは移行後しばらく休眠フォールバックとして残し、2026-07-08 に削除)。
 
 POI 結果を永続化していない点は、後述の **YOLP キャッシュ禁止条項と既に整合**している(改修で崩さないこと)。
 
@@ -117,16 +111,16 @@ YOLP は **2020年10月31日に地図描画系の API/SDK を全廃**した。
 - **YOLP + Yahoo 地図**: Yahoo の地図描画 API は廃止済みで選択不可(§3.2)。
 - **MapLibre Native(BSD-2)で Play Services 非依存を死守**: ベクタタイルに MapTiler 等(鍵・課金)が要り「完全無料」にならない。ユーザー判断で描画は Google を選択。将来 Play Services を外す要件が再浮上した場合の第一候補として温存。
 - **オール Google(描画 + Places)**: 規約は最も身軽だが Places が従量課金。**§6 のスケール局面での再評価候補**として残す。
-- **YOLP→OSM 同日フォールバックを今すぐ実装**: 5 万/日に当たらない個人/小規模では死にコード(YAGNI)。実測で上限が見えてから検討。
+- **YOLP→OSM 同日フォールバックを今すぐ実装**: 5 万/日に当たらない個人/小規模では死にコード(YAGNI)。実測で上限が見えてから検討。(旧 Overpass クライアントも 2026-07-08 に削除済み。再導入するなら git 履歴から再実装)
 
 ## 5. Play Services 非依存方針の転換について
 
-- 旧 osmdroid 採用と現 `data/LocationProvider.kt`(`LocationManager` 使用)は **Play Services を避ける**ことを意図していた。
-- Google Maps SDK 採用で **`play-services-maps` 依存が入る**ため、この方針は「描画について」転換する。
-- 緩和・整理:
-  - 位置取得は当面 `LocationManager` を維持してよい(Maps SDK とは独立)。`FusedLocationProvider` への移行は任意で、必須ではない。
-  - 「Play Services 非依存」を将来再び要件化する場合は **MapLibre Native へ描画層だけ差し替え**できるよう、§2 の抽象化(`NearbyMap.kt` 隔離)を維持する。
-  - この転換の事実は `roadmap.md` 3.3 と `licenses.md` にも反映する。
+- 旧 osmdroid 採用と旧 `data/LocationProvider.kt`(`LocationManager` 使用)は **Play Services を避ける**ことを意図していた。
+- Google Maps SDK 採用で **`play-services-maps` 依存が入る**ため、この方針は転換済み(2026-06-20)。**「Play Services 非依存」はもはや本プロジェクトの方針ではない**。GMS 依存を理由に FLP 等の Play Services API を避ける必要はない(採用時は他の依存と同様に licenses.md へ追記するだけでよい)。
+- 位置取得も 2026-07-08 に `LocationManager` から **`FusedLocationProvider`(`play-services-location`)へ移行済み**(単発 GPS 測位の遅さ・古いキャッシュ表示の解消。code-guide.md §7)。
+- 整理:
+  - 「Play Services 非依存」を将来再び要件化する場合は **MapLibre Native へ描画層だけ差し替え**できるよう、§2 の抽象化(`NearbyMap.kt` 隔離)を維持する(その際は位置取得の `LocationManager` 戻しも併せて必要になる)。
+  - この転換の事実は `licenses.md` にも反映済み。
 
 ## 6. フェーズ別戦略
 
@@ -135,7 +129,7 @@ flowchart LR
     A["個人 / 小規模<br/>(現在)"] -->|利用者増で<br/>5万/日に接近| B["公開・スケール"]
     A -.->|採用| A1["Google描画 + YOLPデータ<br/>キャッシュなし / フォールバックなし"]
     B -.->|いずれか| B1["YOLP Premier(有償)へ移行"]
-    B -.->|いずれか| B2["5万到達時の OSM フォールバック"]
+    B -.->|いずれか| B2["5万到達時の OSM フォールバック<br/>(git 履歴から再実装)"]
     B -.->|いずれか| B3["オール Google(Places 従量)"]
 ```
 
@@ -159,7 +153,7 @@ flowchart LR
 
 - ~~**詳細画面から戻ると地図が「少し北→少し南」へわずかに沈み込む**(2026-06-21 実機確認)。~~ **(2026-06-23 解消)** 当初は初期カメラと `contentPadding` の差を疑ったが、実因は**カメラ移動 `LaunchedEffect` の初回スキップが効いていなかった**こと。共有フラグを別 `LaunchedEffect(Unit)` で立てる方式は、そのフラグ立て effect が同じ dispatcher 上で先に走り終える(記述順 FIFO)ため、`center`/`selectedPoint` 側のガードが初回から素通りし、戻った直後に `move(center)`(瞬間移動)→`animate(selectedPoint)`(滑らかに寄り直し)が両方走っていた。各 `LaunchedEffect` が自分の初回だけを個別フラグでスキップする方式に変更し、初期カメラ `selectedPoint ?: center` のまま据え置くようにして解消(code-guide.md 7.1)。
 - **重複排除はチェーン+支店名一致で行う**ため、同一店舗を YOLP が**支店名まで変えて**複数返す場合(例: 「KFCイオン◯◯店」と「ケンタッキー◯◯店」のように施設名の有無まで違う)は取りこぼし得る。座標基準にしないのは、同一モール内の同チェーン別店舗(レイクタウンの複数スターバックス等)を誤結合しないため。
-- **ジャンルコードが空の店舗**は `gc` で取れず店名キーワードで個別取得している(`YolpClient.KEYWORD_QUERIES`)。実 API 調査で判明した分: オーケー(ジャンル空)、上島珈琲(50 件中 27 件が gc 空)、はま寿司(29 件中 11 件が gc 空)。さらに空ジャンルのチェーンがあれば同様に取りこぼす。gc ソースと重複する同一店は座標+名前一致(YOLP は同一店に同一 Name+座標を返すことを実 API で確認)と ViewModel の `distinctBy`(merchantId+支店名)で 1 件化される。現状この一覧は YolpClient にハードコード。増えるようなら merchants.json 側に「キーワード検索が必要」メタデータを持たせ、データ駆動化するのが筋(data/domain の責務分離も明確になる)。
+- **ジャンルコードが空の店舗**は `gc` で取れず店名キーワードで個別取得する。実 API 調査で判明した分: オーケー(ジャンル空)、上島珈琲(50 件中 27 件が gc 空)、はま寿司(29 件中 11 件が gc 空)。さらに空ジャンルのチェーンがあれば同様に取りこぼす。対象は merchants.json の `yolp_search: "keyword"` / `yolp_keyword` でデータ駆動(当初の YolpClient ハードコードは Phase 2B で分離済み。code-guide.md 7.2)。gc ソースと重複する同一店は座標+名前一致と ViewModel の同一店舗集約で 1 件化される。
 - **`matchStore` の後方境界緩和は 5 文字以上のキーのみ**。4 文字以下のチェーン(ドミー/ポプラ/三和/フィール/ヤマナカ/オオゼキ/サンリブ等)で支店名がひらがな始まりだと取りこぼす可能性(漢字支店名なら可)。閾値は「フィール ⊂ フィールド」等の誤マッチ回避との妥協。
 - **施設内テナント除外は heuristic**(「店」の後ろに業種名が続く形のみ)。別パターンのテナント誤検知は取りこぼし得る。
 - **ビューポート検索の極端なズームアウト**: 「このエリアを検索」は地図の可視範囲(中心→北東角)から半径を算出するため、街全体まで縮小すると半径が大きくなり YOLP の件数上限(1 ソース最大 500 件=5 ページ)に当たって遠方の対象店を取りこぼし得る。これに対し `YolpClient.mergeAndClip` が「上限に達したソースの最遠距離の最小値」を共通カバー半径として全ソースを切り捨て、密度差で周縁が疎チェーン(カーブス等)ばかりになる偏りを抑える。
