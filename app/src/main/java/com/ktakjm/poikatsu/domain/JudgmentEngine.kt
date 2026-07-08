@@ -280,16 +280,14 @@ class JudgmentEngine(private val data: PoikatsuData) {
     }
 
     /**
-     * 地図POIの店舗名(例: "マクドナルド 渋谷駅前店")やブランドタグから該当チェーンを特定する。
+     * 地図POIの店舗名(例: "マクドナルド 渋谷駅前店")から該当チェーンを特定する。
      * 「ステーキガスト」が「ガスト」に誤マッチしないよう、一致したキーが最長のチェーンを採用する。
      */
-    fun matchStore(storeName: String, brand: String? = null): Merchant? {
+    fun matchStore(storeName: String): Merchant? {
         val normalizedName = JapaneseText.normalize(storeName)
-        val normalizedBrand = brand?.let { JapaneseText.normalize(it) }
         return searchIndex.mapNotNull { (merchant, keys) ->
-            val best = keys.filter { key ->
-                (isMatchableKey(key) && containsAsWord(normalizedName, key)) || key == normalizedBrand
-            }.maxOfOrNull { it.length }
+            val best = keys.filter { key -> isMatchableKey(key) && containsAsWord(normalizedName, key) }
+                .maxOfOrNull { it.length }
             if (best == null) null else merchant to best
         }.maxByOrNull { it.second }?.first
     }

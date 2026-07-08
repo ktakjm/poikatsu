@@ -200,7 +200,6 @@ object YolpClient {
             if (coords.size < 2) return@mapNotNull null
             val lon = coords[0].trim().toDoubleOrNull() ?: return@mapNotNull null
             val lat = coords[1].trim().toDoubleOrNull() ?: return@mapNotNull null
-            // YOLP は支店名を Name に内包する(branch を分けない)ので branch/brand は null
-            Poi(name = name, branch = null, brand = null, lat = lat, lon = lon)
+            Poi(name = name, lat = lat, lon = lon)
         }
 }

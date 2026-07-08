@@ -4,7 +4,6 @@ import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.GcGroup
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.MerchantRule
-import com.ktakjm.poikatsu.data.OverpassClient
 import com.ktakjm.poikatsu.data.Poi
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
@@ -62,11 +61,6 @@ class StoreMatchTest {
     }
 
     @Test
-    fun `brandタグでもマッチする`() {
-        assertEquals("lawson", engine.matchStore("三田二丁目店", brand = "ローソン")?.id)
-    }
-
-    @Test
     fun `無関係の店はマッチしない`() {
         assertNull(engine.matchStore("個人経営の喫茶店ポエム"))
     }
@@ -75,13 +69,6 @@ class StoreMatchTest {
     fun `マックスバリュがマック(マクドナルド)に誤マッチしない`() {
         assertNull(engine.matchStore("マックスバリュ 渋谷店"))
         assertNull(engine.matchStore("マックスバリュエクスプレス川崎店"))
-    }
-
-    @Test
-    fun `英字のbrandタグでもマッチする`() {
-        // OSMのbrandは "7-ELEVEN" "LAWSON" のような英字表記が多い
-        assertEquals("seven_eleven", engine.matchStore("名称不明", brand = "7-ELEVEN")?.id)
-        assertEquals("lawson", engine.matchStore("名称不明", brand = "LAWSON")?.id)
     }
 
     @Test
@@ -149,48 +136,6 @@ class StoreMatchTest {
     }
 }
 
-class OverpassParseTest {
-
-    @Test
-    fun `nodeとway(center)の両方をパースできる`() {
-        val body = """
-            {
-              "elements": [
-                {"type": "node", "id": 1, "lat": 35.658, "lon": 139.701,
-                 "tags": {"name": "マクドナルド 渋谷店", "brand": "マクドナルド", "amenity": "fast_food"}},
-                {"type": "way", "id": 2, "center": {"lat": 35.659, "lon": 139.702},
-                 "tags": {"name": "サイゼリヤ 渋谷店", "amenity": "restaurant"}},
-                {"type": "node", "id": 3, "lat": 35.660, "lon": 139.703, "tags": {"amenity": "cafe"}}
-              ]
-            }
-        """.trimIndent()
-        val pois = OverpassClient.parse(body)
-        // name のない要素(id=3)は除外される
-        assertEquals(2, pois.size)
-        assertEquals("マクドナルド 渋谷店", pois[0].name)
-        assertEquals("マクドナルド", pois[0].brand)
-        assertEquals(35.659, pois[1].lat, 0.0001)
-        assertNull(pois[1].brand)
-    }
-
-    @Test
-    fun `branchタグがあれば表示名に支店名が付く`() {
-        val body = """
-            {
-              "elements": [
-                {"type": "node", "id": 1, "lat": 35.658, "lon": 139.701,
-                 "tags": {"name": "セブン-イレブン", "branch": "渋谷一丁目店", "shop": "convenience"}},
-                {"type": "node", "id": 2, "lat": 35.659, "lon": 139.702,
-                 "tags": {"name": "セブン-イレブン", "shop": "convenience"}}
-              ]
-            }
-        """.trimIndent()
-        val pois = OverpassClient.parse(body)
-        assertEquals("セブン-イレブン 渋谷一丁目店", pois[0].displayName)
-        assertEquals("セブン-イレブン", pois[1].displayName)
-    }
-}
-
 class YolpParseTest {
 
     @Test
@@ -214,10 +159,8 @@ class YolpParseTest {
         """.trimIndent()
         val pois = YolpClient.parse(body)
         assertEquals(2, pois.size)
-        // 支店名は Name に内包される(branch は分けない) → displayName は Name と一致
+        // 支店名は Name に内包される(YOLP の Name をそのまま表示名に使う)
         assertEquals("セブン-イレブン渋谷道玄坂店", pois[0].name)
-        assertEquals("セブン-イレブン渋谷道玄坂店", pois[0].displayName)
-        assertNull(pois[0].branch)
         // Coordinates は "経度,緯度" の順
         assertEquals(35.6580, pois[0].lat, 0.0001)
         assertEquals(139.6976, pois[0].lon, 0.0001)
@@ -249,7 +192,7 @@ class YolpClipTest {
 
     // 中心(35.0, 135.0)から北に m メートルの POI(緯度1度≒111195m)
     private fun poi(name: String, meters: Double) = Poi(
-        name = name, branch = null, brand = null,
+        name = name,
         lat = 35.0 + meters / 111195.0, lon = 135.0,
     )
 

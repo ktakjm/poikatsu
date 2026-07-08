@@ -28,20 +28,15 @@ data class LocationHint(
 )
 
 /**
- * 周辺検索で得た店舗(POI)。データ源(YOLP / Overpass)に依存しない中立な形にしておき、
+ * 周辺検索で得た店舗(POI)。データ源(YOLP)に依存しない中立な形にしておき、
  * 取得元を差し替えても matchStore/judge 以降が無変更で済むようにする。
+ * name は支店名込みの表示名(YOLP の Name そのまま)。
  */
 data class Poi(
     val name: String,
-    val branch: String?,
-    val brand: String?,
     val lat: Double,
     val lon: Double,
-) {
-    /** 支店名が別フィールドのとき(OSM 等)に表示用へ結合する。YOLP は name に内包されるので name のまま */
-    val displayName: String
-        get() = if (branch.isNullOrBlank()) name else "$name $branch"
-}
+)
 
 @Serializable
 data class GcGroup(
