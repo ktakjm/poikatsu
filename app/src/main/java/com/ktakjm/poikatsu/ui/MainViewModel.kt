@@ -17,10 +17,12 @@ import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.YolpClient
 import com.ktakjm.poikatsu.data.YolpSearchConfig
 import com.ktakjm.poikatsu.data.AppSettings
+import com.ktakjm.poikatsu.data.MunicipalityMaster
 import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PointMultiplier
+import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.QrPayment
-import com.ktakjm.poikatsu.data.RegisteredMunicipality
+import com.ktakjm.poikatsu.data.RegisteredArea
 import com.ktakjm.poikatsu.data.SettingsRepository
 import com.ktakjm.poikatsu.data.ThemeMode
 import com.ktakjm.poikatsu.domain.BenefitLabel
@@ -32,6 +34,7 @@ import com.ktakjm.poikatsu.domain.StoreVerdict
 import com.ktakjm.poikatsu.domain.WALLET_APP_LABEL
 import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
+import com.ktakjm.poikatsu.domain.filterCampaignsByArea
 import com.ktakjm.poikatsu.domain.googlePayIneligibleWarning
 import com.ktakjm.poikatsu.domain.isTargetDay
 import com.ktakjm.poikatsu.domain.nextTargetDay
@@ -51,6 +54,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import timber.log.Timber
 
 /** 「近く」初回・「現在地で検索」時の既定半径(m)。以降の「このエリアを検索」は地図の可視範囲から算出する */
 private const val NEARBY_DEFAULT_RADIUS_M = 2000
@@ -241,10 +245,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val brandSettings: List<BrandSetting> = emptyList(),
         /** 設定画面の「QR 決済」用カタログ(payment_methods.json のカタログ + ユーザー差分) */
         val qrPaymentSettings: List<QrPaymentSetting> = emptyList(),
-        /** 登録済み自治体 */
-        val registeredMunicipalities: List<RegisteredMunicipality> = emptyList(),
-        /** 自治体マスタ(都道府県→市区町村リスト)。設定画面の追加ピッカー用 */
-        val municipalityMaster: Map<String, List<String>> = emptyMap(),
+        /** 登録済みエリア(自治体単体・グループ) */
+        val registeredAreas: List<RegisteredArea> = emptyList(),
+        /** 自治体マスタ。設定画面のピッカーとキャンペーンタブの地域フィルタに使う(起動時に assets から読む) */
+        val municipalityMaster: MunicipalityMaster = MunicipalityMaster(),
+        /** キャンペーンタブで「登録地域のみ」を解除して全件表示中か(セッション内のみ。永続化しない) */
+        val showAllCampaigns: Boolean = false,
         val dataCommitRef: String = "",
         val useTestData: Boolean = false,
     )
@@ -330,6 +336,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: Exception) {
             _state.update { it.copy(loading = false, error = "データの読み込みに失敗しました: ${e.message}") }
         }
+    }
+
+    // 自治体マスタ(assets 同梱)は起動時に読む。設定画面のピッカーに加え、キャンペーンタブの
+    // 地域フィルタ(rebuild)がグループ展開に使うため遅延ロードにしない。読めなければ空のまま
+    // =フィルタ無効(全表示)に倒す
+    private val masterLoad: Job = viewModelScope.launch(Dispatchers.IO) {
+        val master = try {
+            val app = getApplication<Application>()
+            val text = app.assets.open("municipalities.json").bufferedReader().use { it.readText() }
+            PoikatsuJson.parseMunicipalities(text)
+        } catch (e: Exception) {
+            Timber.w(e, "municipalities.json の読み込みに失敗")
+            MunicipalityMaster()
+        }
+        _state.update { it.copy(municipalityMaster = master) }
+        rebuild() // マスタ到着後にフィルタを適用し直す
     }
 
     // DataStore の設定変更を購読し、変わるたびにエンジン・状態を作り直す
@@ -458,10 +480,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         engine = newEngine
 
         val today = LocalDate.now()
-        val timeLimitedActive = newEngine.activeCampaigns(today)
-            .filter { it.campaignType != CampaignType.CARD_PROGRAM }
-        val timeLimitedUpcoming = newEngine.upcomingCampaigns(today)
-            .filter { it.campaignType != CampaignType.CARD_PROGRAM }
+        // キャンペーンタブの一覧。登録エリアがあれば既定で絞り込む(「すべて表示」トグルで解除可)
+        val applyAreaFilter: (List<Campaign>) -> List<Campaign> = { campaigns ->
+            if (_state.value.showAllCampaigns) campaigns
+            else filterCampaignsByArea(campaigns, settings.registeredAreas, _state.value.municipalityMaster)
+        }
+        val timeLimitedActive = applyAreaFilter(
+            newEngine.activeCampaigns(today).filter { it.campaignType != CampaignType.CARD_PROGRAM }
+        )
+        val timeLimitedUpcoming = applyAreaFilter(
+            newEngine.upcomingCampaigns(today).filter { it.campaignType != CampaignType.CARD_PROGRAM }
+        )
 
         // 設定画面「マイカード」カタログ: 未所有カードも含む全候補 + 現在の上書き値
         val hasBrandCampaign = loaded.data.campaigns.any { it.cardBrand != null }
@@ -525,7 +554,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 cardSettings = cardSettings,
                 brandSettings = brandSettings,
                 qrPaymentSettings = qrPaymentSettings,
-                registeredMunicipalities = settings.registeredMunicipalities,
+                registeredAreas = settings.registeredAreas,
                 dataCommitRef = settings.dataCommitRef,
                 useTestData = settings.useTestData,
                 timeLimitedActive = timeLimitedActive,
@@ -1276,24 +1305,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onSetBrandOwned(brand: String, owned: Boolean) =
         viewModelScope.launch { settingsRepo.setBrandOwned(brand, owned) }
 
-    fun onAddMunicipality(municipality: RegisteredMunicipality) =
-        viewModelScope.launch { settingsRepo.addMunicipality(municipality) }
+    fun onAddRegisteredArea(area: RegisteredArea) =
+        viewModelScope.launch { settingsRepo.addRegisteredArea(area) }
 
-    fun onRemoveMunicipality(municipality: RegisteredMunicipality) =
-        viewModelScope.launch { settingsRepo.removeMunicipality(municipality) }
+    fun onRemoveRegisteredArea(area: RegisteredArea) =
+        viewModelScope.launch { settingsRepo.removeRegisteredArea(area) }
 
-    fun loadMunicipalityMaster() {
-        if (_state.value.municipalityMaster.isNotEmpty()) return
-        viewModelScope.launch(Dispatchers.IO) {
-            val master = try {
-                val app = getApplication<Application>()
-                val text = app.assets.open("municipalities.json").bufferedReader().use { it.readText() }
-                val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-                json.decodeFromString<Map<String, List<String>>>(text)
-            } catch (_: Exception) {
-                emptyMap()
-            }
-            _state.update { it.copy(municipalityMaster = master) }
-        }
+    /** キャンペーンタブの「登録地域のみ / すべて」切替。設定でなく閲覧モードなので永続化しない */
+    fun onToggleShowAllCampaigns() {
+        _state.update { it.copy(showAllCampaigns = !it.showAllCampaigns) }
+        rebuild()
     }
 }

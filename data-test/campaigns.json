@@ -224,8 +224,7 @@
       "may_end_early": true,
       "region": {
         "name": "テスト市",
-        "prefecture": "テスト県",
-        "area_group": null
+        "prefecture": "テスト県"
       },
       "detail_url": "https://example.com/municipal-campaign",
       "store_search_url": "https://example.com/municipal-stores",

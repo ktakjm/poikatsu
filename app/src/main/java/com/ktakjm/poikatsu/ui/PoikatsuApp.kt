@@ -317,6 +317,10 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             campaignColors = state.campaignBrandColors,
                             filter = state.campaignFilter,
                             onFilterChange = viewModel::onSetCampaignFilter,
+                            showRegionChip = state.registeredAreas.isNotEmpty() &&
+                                !state.municipalityMaster.isEmpty(),
+                            regionFilterOn = !state.showAllCampaigns,
+                            onToggleRegionFilter = viewModel::onToggleShowAllCampaigns,
                             onSelectGroup = viewModel::onSelectCampaignGroup,
                         )
                     }
@@ -328,7 +332,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     cards = state.cardSettings,
                     brands = state.brandSettings,
                     qrPayments = state.qrPaymentSettings,
-                    registeredMunicipalities = state.registeredMunicipalities,
+                    registeredAreas = state.registeredAreas,
                     municipalityMaster = state.municipalityMaster,
                     dataStatus = dataStatusLabel(state.dataUpdatedAt, state.dataSource, state.useTestData),
                     refreshing = state.refreshing,
@@ -343,9 +347,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     onCardWelcatsuChange = viewModel::onSetCardWelcatsu,
                     onBrandOwnedChange = viewModel::onSetBrandOwned,
                     onQrEnabledChange = viewModel::onSetQrEnabled,
-                    onAddMunicipality = viewModel::onAddMunicipality,
-                    onRemoveMunicipality = viewModel::onRemoveMunicipality,
-                    onLoadMunicipalityMaster = viewModel::loadMunicipalityMaster,
+                    onAddRegisteredArea = viewModel::onAddRegisteredArea,
+                    onRemoveRegisteredArea = viewModel::onRemoveRegisteredArea,
                     onRefresh = viewModel::onManualRefresh,
                     onDataCommitRefChange = viewModel::onSetDataCommitRef,
                     onUseTestDataChange = viewModel::onSetUseTestData,

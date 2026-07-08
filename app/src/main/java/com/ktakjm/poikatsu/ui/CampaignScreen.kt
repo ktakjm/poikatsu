@@ -58,9 +58,16 @@ internal fun CampaignPane(
     campaignColors: Map<String, String>,
     filter: CampaignFilter,
     onFilterChange: (CampaignFilter) -> Unit,
+    /** 登録エリアによる絞り込みチップを出すか(自治体登録あり かつ マスタ読込済みのとき) */
+    showRegionChip: Boolean,
+    /** 「登録地域のみ」絞り込み中か(既定 ON。OFF=すべて表示) */
+    regionFilterOn: Boolean,
+    onToggleRegionFilter: () -> Unit,
     onSelectGroup: (List<Campaign>) -> Unit,
 ) {
-    if (activeCampaigns.isEmpty() && upcomingCampaigns.isEmpty()) {
+    // 地域絞り込みで 0 件のときは全画面の空表示にせず、チップ行と件数メッセージを出す
+    // (「すべて」へ切り替える導線を残すため)
+    if (activeCampaigns.isEmpty() && upcomingCampaigns.isEmpty() && !(showRegionChip && regionFilterOn)) {
         Centered {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -116,6 +123,13 @@ internal fun CampaignPane(
                         label = { Text(campaignFilterLabel(f)) },
                     )
                 }
+                if (showRegionChip) {
+                    FilterChip(
+                        selected = regionFilterOn,
+                        onClick = onToggleRegionFilter,
+                        label = { Text("登録地域のみ") },
+                    )
+                }
             }
         }
         if (activeGroups.isNotEmpty()) {
@@ -160,7 +174,11 @@ internal fun CampaignPane(
         if (allActiveGroups.isEmpty() && upcomingGroups.isEmpty()) {
             item {
                 Text(
-                    "このフィルタに一致するキャンペーンはありません。",
+                    if (showRegionChip && regionFilterOn) {
+                        "登録地域に該当するキャンペーンはありません。「登録地域のみ」を外すと全て表示されます。"
+                    } else {
+                        "このフィルタに一致するキャンペーンはありません。"
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 16.dp),
                 )

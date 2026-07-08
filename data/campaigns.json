@@ -140,8 +140,7 @@
       "may_end_early": true,
       "region": {
         "name": "湯沢市",
-        "prefecture": "秋田県",
-        "area_group": null
+        "prefecture": "秋田県"
       },
       "detail_url": "https://paypay.ne.jp/event/akita-yuzawa-city/",
       "store_search_url": null,
@@ -165,8 +164,7 @@
       "may_end_early": true,
       "region": {
         "name": "湯沢市",
-        "prefecture": "秋田県",
-        "area_group": null
+        "prefecture": "秋田県"
       },
       "detail_url": "https://media.aupay.wallet.auone.jp/articles/5059",
       "store_search_url": null,
@@ -190,8 +188,7 @@
       "may_end_early": true,
       "region": {
         "name": "奥州市",
-        "prefecture": "岩手県",
-        "area_group": null
+        "prefecture": "岩手県"
       },
       "detail_url": "https://paypay.ne.jp/event/iwate-oshu-city-20260701/",
       "store_search_url": null,
@@ -215,8 +212,7 @@
       "may_end_early": true,
       "region": {
         "name": "大田市",
-        "prefecture": "島根県",
-        "area_group": null
+        "prefecture": "島根県"
       },
       "detail_url": "https://paypay.ne.jp/notice/20260529/cp-jichitai/",
       "store_search_url": null,
@@ -265,8 +261,7 @@
       "may_end_early": true,
       "region": {
         "name": "杉並区",
-        "prefecture": "東京都",
-        "area_group": null
+        "prefecture": "東京都"
       },
       "detail_url": "https://paypay.ne.jp/event/tokyo-suginami-city-20260601/",
       "store_search_url": null,

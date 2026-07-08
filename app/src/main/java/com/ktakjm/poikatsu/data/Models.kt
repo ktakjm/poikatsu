@@ -122,7 +122,6 @@ data class MerchantRule(
 data class Region(
     val name: String,
     val prefecture: String,
-    @SerialName("area_group") val areaGroup: String? = null,
 )
 
 /**
@@ -264,11 +263,70 @@ data class PaymentMethodsFile(
     @SerialName("qr_payments") val qrPayments: List<QrPayment> = emptyList(),
 )
 
+// ==================== 自治体マスタ(municipalities.json) ====================
+
+/**
+ * 自治体マスタ。scripts/generate_municipalities.py が気象庁の予報区データから生成する
+ * (スキーマの詳細は data/README.md)。設定画面のピッカーと、キャンペーンタブの
+ * 地域フィルタ(グループ→自治体コードの展開)に使う。
+ */
 @Serializable
-data class RegisteredMunicipality(
-    val prefecture: String,
+data class MunicipalityMaster(
+    val version: Int = 2,
+    val prefectures: List<Prefecture> = emptyList(),
+) {
+    fun isEmpty(): Boolean = prefectures.isEmpty()
+}
+
+@Serializable
+data class Prefecture(
+    /** 都道府県コード(2桁) */
+    val code: String,
+    val name: String,
+    val municipalities: List<Municipality> = emptyList(),
+    val groups: List<AreaGroup> = emptyList(),
+)
+
+@Serializable
+data class Municipality(
+    /** 全国地方公共団体コード5桁(チェックディジットなし) */
+    val code: String,
     val name: String,
 )
+
+/**
+ * 自治体グループ(「東京23区」「埼玉県南部」等)。level は粒度:
+ * custom(補完定義) / primary(気象庁一次細分) / detail(市町村等をまとめた地域)。
+ * 表示順はマスタの並びのまま使う(custom → primary → その配下の detail)。
+ */
+@Serializable
+data class AreaGroup(
+    val id: String,
+    val name: String,
+    val level: String = "primary",
+    /** 構成自治体のコード */
+    val municipalities: List<String> = emptyList(),
+)
+
+/**
+ * ユーザーが設定画面で登録した居住地・行動圏(DataStore へ保存)。
+ * 自治体単体(type=municipality, code=自治体コード)とグループ(type=group, code=グループid)の
+ * どちらも取れる。name/prefecture は表示用のスナップショット(マスタ未ロードでも一覧表示できる)。
+ */
+@Serializable
+data class RegisteredArea(
+    val type: RegisteredAreaType,
+    /** 自治体コード(5桁) or グループ id */
+    val code: String,
+    val name: String,
+    val prefecture: String,
+)
+
+@Serializable
+enum class RegisteredAreaType {
+    @SerialName("municipality") MUNICIPALITY,
+    @SerialName("group") GROUP,
+}
 
 data class PoikatsuData(
     val merchants: List<Merchant>,
@@ -313,4 +371,7 @@ object PoikatsuJson {
             yolpConfig = merchantsFile.yolpConfig,
         )
     }
+
+    fun parseMunicipalities(municipalitiesJson: String): MunicipalityMaster =
+        json.decodeFromString<MunicipalityMaster>(municipalitiesJson)
 }

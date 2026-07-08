@@ -10,7 +10,6 @@ import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.QrPayment
 import com.ktakjm.poikatsu.data.Recurrence
 import com.ktakjm.poikatsu.data.Region
-import com.ktakjm.poikatsu.data.RegisteredMunicipality
 import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.domain.CampaignType
@@ -1414,42 +1413,7 @@ class JudgmentEngineRealDataTest {
     }
 }
 
-class MunicipalitiesTest {
-
-    @Test
-    fun `自治体マスタは全47都道府県を含む`() {
-        val file = File("../data/municipalities.json")
-        if (!file.exists()) return
-        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-        val master = json.decodeFromString<Map<String, List<String>>>(file.readText())
-        assertEquals(47, master.size)
-        assertTrue("北海道" in master)
-        assertTrue("東京都" in master)
-        assertTrue("沖縄県" in master)
-    }
-
-    @Test
-    fun `東京都は23区を含む`() {
-        val file = File("../data/municipalities.json")
-        if (!file.exists()) return
-        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-        val master = json.decodeFromString<Map<String, List<String>>>(file.readText())
-        val tokyo = master["東京都"] ?: return
-        val wards = tokyo.filter { it.endsWith("区") }
-        assertEquals(23, wards.size)
-        assertTrue("渋谷区" in wards)
-        assertTrue("千代田区" in wards)
-    }
-
-    @Test
-    fun `RegisteredMunicipalityのシリアライズが往復する`() {
-        val json = kotlinx.serialization.json.Json
-        val m = RegisteredMunicipality("東京都", "渋谷区")
-        val encoded = json.encodeToString(RegisteredMunicipality.serializer(), m)
-        val decoded = json.decodeFromString(RegisteredMunicipality.serializer(), encoded)
-        assertEquals(m, decoded)
-    }
-}
+// 自治体マスタ・登録エリア・地域フィルタのテストは RegionFilterTest.kt を参照
 
 /**
  * data-test/ のショーケースデータの整合性テスト。

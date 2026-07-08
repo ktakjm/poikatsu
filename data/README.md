@@ -7,7 +7,7 @@
 - `merchants.json` — チェーン店マスタ。`reading`(ひらがな読み)と `aliases`(略称・別ブランド名)は検索のヒット率に直結するので、追加時は必ず入れる。位置情報を持たない発行体(自販機など)は `location_hint`(`text`/`label`/`url`)を持たせる。これがあると判定詳細で「近くのこの店を探す」を出さず、代わりに位置を確認できる外部アプリ/サイトへ案内する(例: コカ・コーラ自販機 → Coke ON 公式アプリ)。`yolp_config` で YOLP 検索の gc グループ設定、各 merchant の `yolp_search`/`yolp_keyword` で検索方式を持つ(§ YOLP 検索設定 参照)。
 - `campaigns.json` — 還元施策。`merchant_rules[].merchant_id` は merchants.json の `id`、`card_id` は payment_methods.json の `cards[].id` を参照する。**ユーザー固有の前提はここに書かず、汎用的な施策情報のみを持つ。** 常設施策(`card_program`)・期間限定施策(`promotion`)・自治体施策(`municipal`) の 3 種類をサポート。
 - `payment_methods.json` — 決済手段(カード + QR 決済)の**カタログ(マスタ)**。`cards` は現状: 三井住友(`smcc`、7%、`point_multiplier` でウエル活×1.5)、三菱UFJ(`mufg`、基準7%)。`brands` はそのカード製品で**選べるブランドの選択肢**で、実際に持っているブランドはユーザー設定(`CardOverride.brand`)に分離する(カタログにユーザー属性を混ぜない)。**設定画面でカード所有・還元率・ブランド・ウエル活を編集でき、差分はカード id をキーに DataStore に保存して起動時にこのカタログへ重ねる(payment_methods.json 自体は書き換えない)**。判定エンジンは**所有カードのみ**を対象とし、実ブランドが Amex(または未選択で Amex を取りうる)なら `amex_excluded` の店を除外・他ブランドなら無視、`effective_rate_default` を実効還元率として用いる。`qr_payments` に QR 決済サービスのカタログを持つ。
-- `municipalities.json` — 全国自治体マスタ(47 都道府県・約 1,700 市区町村)。設定画面で居住地・行動圏の自治体を登録する際のピッカーデータとして使う。現在は手動生成だが、将来的には総務省の全国地方公共団体コード等のオープンデータから自動生成する方針(roadmap.md バックログ参照)。アプリ固有のロジック(東京 23区/市部 のグループ分け等)は UI コード側で扱い、マスタ自体はフラットな構造を保つ。
+- `municipalities.json` — 全国自治体マスタ(47 都道府県・1,741 市区町村・自治体グループ)。設定画面で居住地・行動圏を登録する際のピッカーデータと、キャンペーンタブの地域フィルタ(グループ→自治体の展開)に使う。`scripts/generate_municipalities.py` が気象庁の予報区データから自動生成する(§ municipalities.json 参照)。
 
 ## スキーマの要点
 
@@ -46,7 +46,7 @@
   - `apple_pay` エントリは起動リンクには使わず、上記の警告付記にのみ使う。sources と同じ「検証済み事実の記録」として断定できるものだけ書く(プラットフォーム非依存の施策側の事実。Android 固有の消費はコード側に閉じる)
 - `may_end_early` — 予算到達次第の早期終了があり得るか(省略時 false)。true なら判定詳細・キャンペーンタブに「早期終了の可能性」注記を出し、「残り○日」が断定に見えないようにする。**自治体系はほぼ全件 true にする**(標準条項のため)
 - `recurrence` — 繰り返し日付条件。`{ "days_of_week": ["FRI", "SAT"] }`(毎週金土)または `{ "days_of_month": [20, 30] }`(毎月20・30日)の**どちらか一方**(併用は実在確認できるまで未対応)。`period_start/end`(外枠の開催期間)と併用し、「探す」「近く」の判定は期間内かつ**今日が対象日**のときだけ出す。キャンペーンタブは期間内なら非対象日でも「開催中」に出し「次の対象日: ○/○」を案内する
-- `region` — 自治体施策用。`{ name, prefecture, area_group }`。`area_group` は将来のグループフィルタ用(現在 null)
+- `region` — 自治体施策用。`{ name, prefecture }`。名称は municipalities.json の自治体名と一致させる(キャンペーンタブの地域フィルタが (都道府県名, 自治体名) で突合するため。不一致でも施策は消えず全表示側に倒れる)。グループ所属はマスタ側(municipalities.json の groups)が持つので施策側には書かない
 - `detail_url` — 施策の詳細ページ URL（全タイプ共通。ユーザーに「詳細はこちら」として案内する先）
 - `store_search_url` — 対象店舗検索ページ URL(PayPay 等の公式)
 - `period_start` / `period_end` — 施策期間(ISO 8601 日付)。null = 常設
@@ -92,16 +92,35 @@
 
 ### municipalities.json
 
-都道府県名をキー、市区町村名の配列を値とする単純な Map 構造。
+`scripts/generate_municipalities.py` が気象庁の予報区データ([area.json](https://www.jma.go.jp/bosai/common/const/area.json)。政府標準利用規約 v2.0 = CC BY 4.0 互換)から生成する。市町村合併・名称変更時はスクリプトを再実行すれば追従できる(実行は手動。旧ファイルとの差分が表示されるので確認してからコミットする)。
 
 ```json
-{ "北海道": ["札幌市", "函館市", ...], "東京都": ["千代田区", ..., "八王子市", ...], ... }
+{
+  "version": 2,
+  "source": "気象庁 予報区等(市町村等)一覧 https://...",
+  "prefectures": [
+    {
+      "code": "13",
+      "name": "東京都",
+      "municipalities": [ { "code": "13101", "name": "千代田区" }, ... ],
+      "groups": [
+        { "id": "custom-tokyo23", "name": "東京23区", "level": "custom", "municipalities": ["13101", ...] },
+        { "id": "jma10-130010", "name": "東京地方", "level": "primary", "municipalities": [...] },
+        { "id": "jma15-130011", "name": "23区西部", "level": "detail", "municipalities": [...] }
+      ]
+    }, ...
+  ]
+}
 ```
 
-- 47 都道府県を標準順序(JIS)で保持
-- 東京都は 23 特別区を先に、その後に市・町・村の順で並べる(グループ分けは UI コード側)
-- 政令指定都市は市名のみ(行政区は含めない)
-- リモート更新の対象外(assets 同梱のみ)
+- `municipalities[].code` — 全国地方公共団体コード 5 桁(チェックディジットなし)。政令指定都市は市名のみ(行政区は含めない。気象庁側が区単位の神戸市・広島市はスクリプトが市へ集約)
+- `groups` — 自治体グループ(「まとめて登録」とキャンペーンタブの地域フィルタ用)。`level` は粒度:
+  - `primary` — 気象庁の一次細分区域(例: 埼玉県「南部」)
+  - `detail` — 市町村等をまとめた地域(例: 「23区西部」「多摩北部」)
+  - `custom` — 気象庁区分に無い補完定義(スクリプト内 `EXTRA_GROUPS`)。「東京23区」は気象庁だと 23区西部/東部に分かれるため補完している
+  - 自治体 1 つだけのグループと、primary と構成が同一の detail はスクリプトが除去する
+- `groups[].municipalities` は自治体コードの配列。並び順(custom → primary → 配下の detail)はそのままピッカーの表示順になる
+- リモート更新の対象外(assets 同梱のみ)。ユーザーの登録内容は `RegisteredArea`(type=municipality|group + code)として DataStore に保存される
 
 ## data-test/ — ショーケースデータ
 

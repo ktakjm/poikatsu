@@ -50,7 +50,10 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.ktakjm.poikatsu.BuildConfig
-import com.ktakjm.poikatsu.data.RegisteredMunicipality
+import com.ktakjm.poikatsu.data.MunicipalityMaster
+import com.ktakjm.poikatsu.data.Prefecture
+import com.ktakjm.poikatsu.data.RegisteredArea
+import com.ktakjm.poikatsu.data.RegisteredAreaType
 import com.ktakjm.poikatsu.data.ThemeMode
 import com.ktakjm.poikatsu.domain.trimRate
 import com.ktakjm.poikatsu.ui.theme.warningColor
@@ -68,8 +71,8 @@ internal fun SettingsScreen(
     cards: List<MainViewModel.CardSetting>,
     brands: List<MainViewModel.BrandSetting>,
     qrPayments: List<MainViewModel.QrPaymentSetting>,
-    registeredMunicipalities: List<RegisteredMunicipality>,
-    municipalityMaster: Map<String, List<String>>,
+    registeredAreas: List<RegisteredArea>,
+    municipalityMaster: MunicipalityMaster,
     dataStatus: String,
     refreshing: Boolean,
     dataCommitRef: String,
@@ -83,9 +86,8 @@ internal fun SettingsScreen(
     onCardWelcatsuChange: (String, Boolean) -> Unit,
     onBrandOwnedChange: (String, Boolean) -> Unit,
     onQrEnabledChange: (String, Boolean) -> Unit,
-    onAddMunicipality: (RegisteredMunicipality) -> Unit,
-    onRemoveMunicipality: (RegisteredMunicipality) -> Unit,
-    onLoadMunicipalityMaster: () -> Unit,
+    onAddRegisteredArea: (RegisteredArea) -> Unit,
+    onRemoveRegisteredArea: (RegisteredArea) -> Unit,
     onRefresh: () -> Unit,
     onDataCommitRefChange: (String) -> Unit,
     onUseTestDataChange: (Boolean) -> Unit,
@@ -179,17 +181,22 @@ internal fun SettingsScreen(
         // --- 自治体 ---
         SettingsSectionHeader("自治体")
         Text(
-            "居住地・行動圏の自治体を登録できます。",
+            "居住地・行動圏の自治体を登録すると、キャンペーンタブが登録地域の施策に絞られます。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
-        registeredMunicipalities.forEach { m ->
+        registeredAreas.forEach { area ->
             ListItem(
-                headlineContent = { Text(m.name) },
-                supportingContent = { Text(m.prefecture) },
+                headlineContent = { Text(area.name) },
+                supportingContent = {
+                    Text(
+                        if (area.type == RegisteredAreaType.GROUP) "${area.prefecture}・グループ"
+                        else area.prefecture
+                    )
+                },
                 trailingContent = {
-                    IconButton(onClick = { onRemoveMunicipality(m) }) {
+                    IconButton(onClick = { onRemoveRegisteredArea(area) }) {
                         Icon(Icons.Default.Close, contentDescription = "削除")
                     }
                 },
@@ -204,10 +211,7 @@ internal fun SettingsScreen(
                     tint = MaterialTheme.colorScheme.primary,
                 )
             },
-            modifier = Modifier.clickable {
-                onLoadMunicipalityMaster()
-                showMunicipalityPicker = true
-            },
+            modifier = Modifier.clickable { showMunicipalityPicker = true },
         )
 
         // --- データ ---
@@ -261,8 +265,8 @@ internal fun SettingsScreen(
     if (showMunicipalityPicker) {
         MunicipalityPickerDialog(
             master = municipalityMaster,
-            registered = registeredMunicipalities,
-            onAdd = onAddMunicipality,
+            registered = registeredAreas,
+            onAdd = onAddRegisteredArea,
             onDismiss = { showMunicipalityPicker = false },
         )
     }
@@ -450,20 +454,22 @@ private fun RateEditDialog(initial: Double, onDismiss: () -> Unit, onConfirm: (D
 }
 
 /**
- * 自治体追加ダイアログ。都道府県選択→市区町村選択の2段ピッカー。
- * 東京都は「23区」「市部」のグループ表示。
+ * 自治体追加ダイアログ。都道府県選択→「グループ」+「市区町村」の2段ピッカー。
+ * グループ(東京23区・埼玉県南部 等)はマスタ(municipalities.json)由来で、
+ * 並び順もマスタのまま出す(補完グループ→一次細分→その配下の細分)。
  */
 @Composable
 private fun MunicipalityPickerDialog(
-    master: Map<String, List<String>>,
-    registered: List<RegisteredMunicipality>,
-    onAdd: (RegisteredMunicipality) -> Unit,
+    master: MunicipalityMaster,
+    registered: List<RegisteredArea>,
+    onAdd: (RegisteredArea) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var selectedPrefecture by remember { mutableStateOf<String?>(null) }
+    var selectedPrefecture by remember { mutableStateOf<Prefecture?>(null) }
     val registeredKeys = remember(registered) {
-        registered.map { "${it.prefecture}:${it.name}" }.toSet()
+        registered.map { "${it.type}:${it.code}" }.toSet()
     }
+    fun isRegistered(area: RegisteredArea) = "${area.type}:${area.code}" in registeredKeys
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -474,10 +480,11 @@ private fun MunicipalityPickerDialog(
                         Icon(Icons.Default.Close, contentDescription = "戻る")
                     }
                 }
-                Text(selectedPrefecture ?: "都道府県を選択")
+                Text(selectedPrefecture?.name ?: "都道府県を選択")
             }
         },
         text = {
+            val prefecture = selectedPrefecture
             if (master.isEmpty()) {
                 Box(
                     Modifier.fillMaxWidth().height(200.dp),
@@ -485,68 +492,48 @@ private fun MunicipalityPickerDialog(
                 ) {
                     CircularProgressIndicator()
                 }
-            } else if (selectedPrefecture == null) {
+            } else if (prefecture == null) {
                 LazyColumn(Modifier.fillMaxWidth().height(400.dp)) {
-                    val prefectures = master.keys.toList()
-                    items(prefectures) { pref ->
+                    items(master.prefectures) { pref ->
                         ListItem(
-                            headlineContent = { Text(pref) },
+                            headlineContent = { Text(pref.name) },
                             modifier = Modifier.clickable { selectedPrefecture = pref },
                         )
                     }
                 }
             } else {
-                val municipalities = master[selectedPrefecture].orEmpty()
-                val isTokyoTo = selectedPrefecture == "東京都"
                 LazyColumn(Modifier.fillMaxWidth().height(400.dp)) {
-                    if (isTokyoTo) {
-                        val wards = municipalities.filter { it.endsWith("区") }
-                        val cities = municipalities.filter { !it.endsWith("区") }
-                        if (wards.isNotEmpty()) {
-                            item {
-                                Text(
-                                    "23区",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                )
-                            }
-                            items(wards) { name ->
-                                MunicipalityRow(
-                                    prefecture = selectedPrefecture!!,
-                                    name = name,
-                                    alreadyRegistered = "${selectedPrefecture}:$name" in registeredKeys,
-                                    onAdd = onAdd,
-                                )
-                            }
-                        }
-                        if (cities.isNotEmpty()) {
-                            item {
-                                Text(
-                                    "市部",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                )
-                            }
-                            items(cities) { name ->
-                                MunicipalityRow(
-                                    prefecture = selectedPrefecture!!,
-                                    name = name,
-                                    alreadyRegistered = "${selectedPrefecture}:$name" in registeredKeys,
-                                    onAdd = onAdd,
-                                )
-                            }
-                        }
-                    } else {
-                        items(municipalities) { name ->
-                            MunicipalityRow(
-                                prefecture = selectedPrefecture!!,
-                                name = name,
-                                alreadyRegistered = "${selectedPrefecture}:$name" in registeredKeys,
+                    if (prefecture.groups.isNotEmpty()) {
+                        item { PickerSectionHeader("グループ(まとめて登録)") }
+                        items(prefecture.groups, key = { it.id }) { group ->
+                            val area = RegisteredArea(
+                                type = RegisteredAreaType.GROUP,
+                                code = group.id,
+                                name = group.name,
+                                prefecture = prefecture.name,
+                            )
+                            AreaPickerRow(
+                                area = area,
+                                supporting = "${group.municipalities.size}市区町村",
+                                alreadyRegistered = isRegistered(area),
                                 onAdd = onAdd,
                             )
                         }
+                    }
+                    item { PickerSectionHeader("市区町村") }
+                    items(prefecture.municipalities, key = { it.code }) { m ->
+                        val area = RegisteredArea(
+                            type = RegisteredAreaType.MUNICIPALITY,
+                            code = m.code,
+                            name = m.name,
+                            prefecture = prefecture.name,
+                        )
+                        AreaPickerRow(
+                            area = area,
+                            supporting = null,
+                            alreadyRegistered = isRegistered(area),
+                            onAdd = onAdd,
+                        )
                     }
                 }
             }
@@ -558,28 +545,37 @@ private fun MunicipalityPickerDialog(
 }
 
 @Composable
-private fun MunicipalityRow(
-    prefecture: String,
-    name: String,
+private fun PickerSectionHeader(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+    )
+}
+
+@Composable
+private fun AreaPickerRow(
+    area: RegisteredArea,
+    supporting: String?,
     alreadyRegistered: Boolean,
-    onAdd: (RegisteredMunicipality) -> Unit,
+    onAdd: (RegisteredArea) -> Unit,
 ) {
     ListItem(
         headlineContent = {
             Text(
-                name,
+                area.name,
                 color = if (alreadyRegistered) MaterialTheme.colorScheme.outline
                 else MaterialTheme.colorScheme.onSurface,
             )
         },
+        supportingContent = supporting?.let { { Text(it) } },
         trailingContent = {
             if (alreadyRegistered) {
                 Text("登録済み", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
             }
         },
-        modifier = Modifier.clickable(enabled = !alreadyRegistered) {
-            onAdd(RegisteredMunicipality(prefecture, name))
-        },
+        modifier = Modifier.clickable(enabled = !alreadyRegistered) { onAdd(area) },
     )
 }
 

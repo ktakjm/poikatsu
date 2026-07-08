@@ -51,8 +51,8 @@ data class AppSettings(
      * card_brand 値から出すため、カタログ(payment_methods.json)にスキーマ追加は不要。
      */
     val ownedBrands: Set<String> = emptySet(),
-    /** 登録自治体(都道府県+市区町村)。キャンペーンタブのフィルタに使う */
-    val registeredMunicipalities: List<RegisteredMunicipality> = emptyList(),
+    /** 登録エリア(自治体単体 or グループ)。キャンペーンタブの地域フィルタに使う */
+    val registeredAreas: List<RegisteredArea> = emptyList(),
 )
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore("settings")
@@ -75,7 +75,9 @@ class SettingsRepository(private val context: Context) {
         val USE_TEST_DATA = booleanPreferencesKey("use_test_data")
         val QR_ENABLED = stringPreferencesKey("qr_enabled")
         val OWNED_BRANDS = stringPreferencesKey("owned_brands")
-        val MUNICIPALITIES = stringPreferencesKey("municipalities")
+        // 旧キー "municipalities"(RegisteredMunicipality のリスト)は公開前のスキーマ刷新で廃止。
+        // 移行せず捨てる(登録し直してもらう)
+        val REGISTERED_AREAS = stringPreferencesKey("registered_areas")
     }
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -90,7 +92,7 @@ class SettingsRepository(private val context: Context) {
             useTestData = prefs[Keys.USE_TEST_DATA] ?: false,
             enabledQrPaymentIds = prefs.decodeQrEnabled(),
             ownedBrands = prefs.decodeOwnedBrands(),
-            registeredMunicipalities = prefs.decodeMunicipalities(),
+            registeredAreas = prefs.decodeRegisteredAreas(),
         )
     }
 
@@ -151,21 +153,21 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun addMunicipality(municipality: RegisteredMunicipality) {
+    suspend fun addRegisteredArea(area: RegisteredArea) {
         context.settingsDataStore.edit { prefs ->
-            val current = prefs.decodeMunicipalities().toMutableList()
-            if (current.none { it.prefecture == municipality.prefecture && it.name == municipality.name }) {
-                current.add(municipality)
+            val current = prefs.decodeRegisteredAreas().toMutableList()
+            if (current.none { it.type == area.type && it.code == area.code }) {
+                current.add(area)
             }
-            prefs[Keys.MUNICIPALITIES] = json.encodeToString(current)
+            prefs[Keys.REGISTERED_AREAS] = json.encodeToString(current)
         }
     }
 
-    suspend fun removeMunicipality(municipality: RegisteredMunicipality) {
+    suspend fun removeRegisteredArea(area: RegisteredArea) {
         context.settingsDataStore.edit { prefs ->
-            val current = prefs.decodeMunicipalities()
-                .filter { it.prefecture != municipality.prefecture || it.name != municipality.name }
-            prefs[Keys.MUNICIPALITIES] = json.encodeToString(current)
+            val current = prefs.decodeRegisteredAreas()
+                .filter { it.type != area.type || it.code != area.code }
+            prefs[Keys.REGISTERED_AREAS] = json.encodeToString(current)
         }
     }
 
@@ -184,8 +186,8 @@ class SettingsRepository(private val context: Context) {
             ?.let { runCatching { json.decodeFromString<Set<String>>(it) }.getOrNull() }
             ?: emptySet()
 
-    private fun Preferences.decodeMunicipalities(): List<RegisteredMunicipality> =
-        this[Keys.MUNICIPALITIES]
-            ?.let { runCatching { json.decodeFromString<List<RegisteredMunicipality>>(it) }.getOrNull() }
+    private fun Preferences.decodeRegisteredAreas(): List<RegisteredArea> =
+        this[Keys.REGISTERED_AREAS]
+            ?.let { runCatching { json.decodeFromString<List<RegisteredArea>>(it) }.getOrNull() }
             ?: emptyList()
 }
