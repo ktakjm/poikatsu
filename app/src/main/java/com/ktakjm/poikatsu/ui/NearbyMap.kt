@@ -83,6 +83,7 @@ import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MapStyleOptions
 import com.google.maps.android.compose.ComposeMapColorScheme
+import com.google.maps.android.clustering.Cluster
 import com.google.maps.android.clustering.ClusterItem
 import com.google.maps.android.clustering.view.DefaultClusterRenderer
 import com.google.maps.android.compose.GoogleMap
@@ -310,7 +311,12 @@ fun NearbyMap(
                 // ズームしても永遠に分解できない(デッドエンド)ため、ズームせず sameSpot=true で
                 // 複合ピンと同じ「同じ場所に N 件」扱いにする。距離予測が外れて分解できなかった
                 // 場合も、上限到達後の再タップで必ず sameSpot=true に落ちる
-                clusterManager?.setOnClusterClickListener { cluster ->
+                // cluster/item は null で渡り得る: マーカーのタップはキャッシュ
+                // (DefaultClusterRenderer.mMarkerCache)を引いて解決されるが、レンダラー
+                // 差し替え時に旧レンダラーが非同期描画で残した孤児マーカーはキャッシュに
+                // 無く、ライブラリに null ガードが無いため null のままリスナーへ届く
+                clusterManager?.setOnClusterClickListener { cluster: Cluster<StoreClusterItem>? ->
+                    if (cluster == null) return@setOnClusterClickListener true
                     val currentZoom = cameraPositionState.position.zoom
                     val maxSpreadM = maxPairwiseDistanceMeters(cluster.items.map { it.position })
                     val unsplittable = currentZoom >= MAX_CLUSTER_ZOOM - 0.01f ||
@@ -326,19 +332,28 @@ fun NearbyMap(
                     onClusterOpen(cluster.items.map { it.marker }, unsplittable)
                     true
                 }
-                clusterManager?.setOnClusterItemClickListener { item ->
-                    item.marker.onClick()
+                clusterManager?.setOnClusterItemClickListener { item: StoreClusterItem? ->
+                    item?.marker?.onClick()
                     true
                 }
             }
+            // ClusterManager は生成直後は標準レンダラー(赤いデフォルトピン)を持つため、
+            // カスタムレンダラーの適用を待ってから Clustering にアイテムを流す
+            // (Clustering.kt の deprecation メッセージが示すライブラリ推奨パターン)。
+            // 適用前に流すと一瞬赤ピンで描かれ、描画が非同期なので差し替え時の掃除と
+            // すれ違うと赤ピンが孤児として残る(タップするとキャッシュ未登録→null→クラッシュ)。
+            // clusterManager.renderer は snapshot 状態ではなく composition で読んでも
+            // 変化時に再コンポーズされないため、SideEffect から状態へ書いて反映する。
+            var rendererApplied by remember { mutableStateOf(false) }
             SideEffect {
                 if (clusterManager != null && clusterRenderer != null &&
                     clusterManager.renderer !== clusterRenderer
                 ) {
                     clusterManager.renderer = clusterRenderer
                 }
+                rendererApplied = clusterManager != null && clusterManager.renderer === clusterRenderer
             }
-            if (clusterManager != null) {
+            if (clusterManager != null && rendererApplied) {
                 Clustering(items = clusterItems, clusterManager = clusterManager)
             }
         }
