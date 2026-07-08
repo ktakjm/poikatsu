@@ -90,6 +90,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.util.GeoMath
@@ -139,6 +140,20 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
     }
 
     val selectedTab = state.selectedTab
+
+    // 「近く」タブ表示中だけ現在地を継続購読して青ドットを追従させる(カメラ移動・YOLP 再検索はしない)。
+    // タブ離脱で composition から外れ、バックグラウンドでは repeatOnLifecycle(STARTED) が止めるので
+    // 購読は自動解除される。key の searchStamp は検索完了のたびに購読をやり直すためのもので、
+    // パーミッションを後から許可したケース(初回は購読ガードで即 return)を次の検索完了時に拾い直す。
+    if (selectedTab == AppTab.NEARBY && state.nearby != null) {
+        val searchStamp = state.nearby?.searchStamp
+        LaunchedEffect(searchStamp) {
+            lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.observeLocationUpdates()
+            }
+        }
+    }
+
     // 下位画面(詳細/店舗判定/キャンペーン詳細)やロード・エラーに重なっていないベースのタブ表示状態。下部ナビの表示条件。
     val baseTabsVisible = !state.loading && state.error == null &&
         state.selection == null && state.storeCheck == null &&
@@ -797,17 +812,32 @@ private fun NearbyPane(
                         Spacer(Modifier.height(8.dp))
                     }
                     if (visiblePlaces.isEmpty()) {
-                        Text(
-                            when {
-                                merchantFilter != null ->
-                                    "「${merchantFilter.name}」はこの範囲にありません。地図を動かすか、絞り込みを解除してください。"
-                                nearby.places.isEmpty() ->
-                                    "この範囲に対象施策のある店舗が見つかりませんでした。地図を動かして探してください。"
-                                else -> "選択中のジャンルに該当する周辺店舗がありません。"
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        )
+                        if (nearby.loading) {
+                            // 現在地確定→地図先出しの直後(結果待ち)。「見つからない」と誤読させない
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            ) {
+                                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    nearbyLoadingText(nearby.loadingPhase),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                        } else {
+                            Text(
+                                when {
+                                    merchantFilter != null ->
+                                        "「${merchantFilter.name}」はこの範囲にありません。地図を動かすか、絞り込みを解除してください。"
+                                    nearby.places.isEmpty() ->
+                                        "この範囲に対象施策のある店舗が見つかりませんでした。地図を動かして探してください。"
+                                    else -> "選択中のジャンルに該当する周辺店舗がありません。"
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            )
+                        }
                     } else {
                         LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
                             items(visiblePlaces, key = { "${it.lat},${it.lon},${it.name}" }) { place ->

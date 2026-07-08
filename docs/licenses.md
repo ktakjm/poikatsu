@@ -19,14 +19,15 @@
 | org.jetbrains:annotations | アノテーション | Apache-2.0 |
 | com.google.guava(listenablefuture スタブ) | AndroidXの推移的依存 | Apache-2.0 |
 | org.jspecify | null安全アノテーション | Apache-2.0 |
-| com.squareup.okhttp3:okhttp(+ 推移的依存 com.squareup.okio) | リモートデータ取得・YOLP/Overpass 呼び出し(M4で追加, 2026-06-12) | Apache-2.0 |
+| com.squareup.okhttp3:okhttp(+ 推移的依存 com.squareup.okio) | リモートデータ取得・YOLP 呼び出し(M4で追加, 2026-06-12) | Apache-2.0 |
 | com.google.maps.android:maps-compose | 近隣検索の地図表示(Compose ラッパー。2026-06-20 追加) | Apache-2.0 |
 | com.google.maps.android:maps-compose-utils(+ 推移的な android-maps-utils) | 地図ピンのクラスタリング(密集ピンを件数バッジにまとめる。2026-06-24 追加) | Apache-2.0 |
 | com.google.android.gms:play-services-maps(+ 推移的な play-services-* / Google Maps SDK) | 地図描画 SDK 本体(maps-compose の依存) | **プロプライエタリ**(Google APIs Terms of Service。OSS ではない) |
+| com.google.android.gms:play-services-location | 現在地取得(Fused Location Provider。2026-07-08 追加) | **プロプライエタリ**(play-services-maps と同じ Google APIs ToS 枠。API キー・課金は不要) |
 | androidx.datastore:datastore-preferences | 設定(テーマ・マイカード)の永続化(2026-06-19 追加) | Apache-2.0 |
 | com.jakewharton.timber:timber | ログ出力ラッパー(debug ビルドのみ Logcat 出力、release は無出力。2026-06-27 追加) | Apache-2.0 |
 
-**OSS 依存はすべて Apache License 2.0**(コピーレフト/GPL系は一切なし)。**唯一の例外が Google Maps SDK(`play-services-maps`)で、これは OSS ではなくプロプライエタリなサービス SDK**(Google APIs ToS 準拠)。バイナリ同梱はするが、Apache-2.0 §4 のような NOTICE 義務ではなく Google の規約・帰属表示(SDK が自動描画)に従う。判断の背景は下記「方針転換」と [map-data-stack.md](map-data-stack.md)。
+**OSS 依存はすべて Apache License 2.0**(コピーレフト/GPL系は一切なし)。**例外は Google Play Services 系(`play-services-maps` / `play-services-location`)で、これらは OSS ではなくプロプライエタリなサービス SDK**(Google APIs ToS 準拠)。location は maps で受け入れ済みの GMS 依存の範囲内であり、新たな規約・課金・キーは発生しない(位置情報取得は課金対象 API ではない)。バイナリ同梱はするが、Apache-2.0 §4 のような NOTICE 義務ではなく Google の規約・帰属表示(SDK が自動描画)に従う。判断の背景は下記「方針転換」と [map-data-stack.md](map-data-stack.md)。
 
 > 旧構成の osmdroid(Apache-2.0・OSM 公式タイル)は 2026-06-20 に Google Maps へ差し替えて**依存から除去**した。OSM 公式タイルの一般配布制限(OSM Tile Usage Policy)も併せて解消。経緯は次節と [map-data-stack.md](map-data-stack.md)。
 

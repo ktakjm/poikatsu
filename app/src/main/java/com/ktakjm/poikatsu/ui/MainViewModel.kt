@@ -3,6 +3,7 @@ package com.ktakjm.poikatsu.ui
 import android.app.Application
 import android.location.Address
 import android.location.Geocoder
+import android.location.Location
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -42,6 +43,7 @@ import java.util.Locale
 import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.launchIn
@@ -60,6 +62,12 @@ private const val NEARBY_DEFAULT_ZOOM = 16.0
 private const val NEARBY_DENSE_THRESHOLD = 10
 private const val NEARBY_DENSE_RADIUS_M = 500
 private const val NEARBY_WIDE_ZOOM = 15.0
+
+/**
+ * 2段階表示の補正しきい値(m)。キャッシュ位置で先に地図を出した後、新鮮な測位がこれ以上
+ * ずれていたら検索し直す。未満なら青ドットだけ直す(検索半径2kmに対し誤差として許容できる範囲)
+ */
+private const val LOCATION_CORRECTION_M = 100
 
 /** 位置情報を取得できないときのフォールバック地点(新宿駅) */
 private val FALLBACK_PLACE = MainViewModel.GeocodedPlace(
@@ -129,7 +137,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * 地図(Google Maps)はこの間まだ描画されていない=「地図の読み込み」ではない点に注意。
      */
     enum class NearbyLoadPhase {
-        /** 現在地の測位中(LocationProvider、最大15秒)。searchHere 経由では通らない */
+        /**
+         * 現在地の測位中(LocationProvider、最大10秒)。searchHere 経由では通らない。
+         * FLP のキャッシュ位置が新鮮なとき(2段階表示の1段目)はここを通らず即 SEARCHING になる
+         */
         LOCATING,
 
         /** YOLP で周辺店舗を取得中(待ち時間が最も読めない主因) */
@@ -562,23 +573,103 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
         viewModelScope.launch(Dispatchers.IO) {
-            val denied = !locationProvider.hasPermission()
-            val location = if (denied) null else locationProvider.currentLocation()
-            if (location != null) {
-                _state.update { it.copy(nearbyOrigin = null) }
-                setNearbyPhase(gen, NearbyLoadPhase.SEARCHING)
-                loadNearbyAround(
-                    gen, location.latitude, location.longitude, location.latitude, location.longitude,
-                    location.latitude, location.longitude,
-                    radiusM = NEARBY_DEFAULT_RADIUS_M, zoom = NEARBY_DEFAULT_ZOOM,
-                    adaptZoom = true,
-                )
-            } else {
-                val msg = if (denied) "位置情報の許可が必要です。端末の設定からこのアプリに位置情報を許可してください"
-                    else "現在地を取得できませんでした。位置情報設定を確認してください"
+            if (!locationProvider.hasPermission()) {
+                val msg = "位置情報の許可が必要です。端末の設定からこのアプリに位置情報を許可してください"
                 if (isInitial) fallbackToDefaultPlace(gen, msg) else failNearby(gen, msg)
+                return@launch
+            }
+            // 2段階表示: FLP のキャッシュ位置(新鮮なときだけ返る)があればまずそれで即座に
+            // 地図・検索を出し、並行して取っている新鮮な測位が大きくずれていたら検索し直す。
+            // キャッシュが無ければ従来どおり測位を待つ(LOCATING 表示)。
+            val freshDeferred = async { locationProvider.currentLocation() }
+            val cached = locationProvider.lastLocation()
+            if (cached != null) {
+                searchAroundLocation(gen, cached)
+                val fresh = freshDeferred.await() ?: return@launch
+                // 測位待ちの間に別の検索(このエリアを検索・地名検索・タブ移動)が始まっていたら
+                // 補正で上書きしない
+                if (gen != nearbyGeneration) return@launch
+                val movedM = GeoMath.distanceMeters(
+                    cached.latitude, cached.longitude, fresh.latitude, fresh.longitude,
+                )
+                if (movedM >= LOCATION_CORRECTION_M) {
+                    // キャッシュ位置がずれていた: 同じ操作の続きとして新鮮な位置で取り直す
+                    // (loading・カメラ寄せは searchAroundLocation → showMapAt が立て直す)
+                    searchAroundLocation(gen, fresh)
+                } else {
+                    // ずれが小さければ青ドットだけ実測位置に直す(地図・一覧はそのまま)
+                    updateUserLocation(fresh)
+                }
+            } else {
+                val fresh = freshDeferred.await()
+                if (fresh != null) {
+                    searchAroundLocation(gen, fresh)
+                } else {
+                    val msg = "現在地を取得できませんでした。位置情報設定を確認してください"
+                    if (isInitial) fallbackToDefaultPlace(gen, msg) else failNearby(gen, msg)
+                }
             }
         }
+    }
+
+    /** 現在地(GPS 起点)を中心に既定半径で検索する。fetchNearby の1段目・2段目補正の共通処理 */
+    private fun searchAroundLocation(gen: Int, location: Location) {
+        _state.update { it.copy(nearbyOrigin = null) }
+        showMapAt(gen, location.latitude, location.longitude, location.latitude, location.longitude)
+        loadNearbyAround(
+            gen, location.latitude, location.longitude, location.latitude, location.longitude,
+            location.latitude, location.longitude,
+            radiusM = NEARBY_DEFAULT_RADIUS_M, zoom = NEARBY_DEFAULT_ZOOM,
+            adaptZoom = true,
+        )
+    }
+
+    /**
+     * 検索中心が確定した時点で、YOLP 取得を待たずに先に地図を出す。loading は立てたままにし、
+     * 進捗(「周辺の店舗を探しています…」)はボトムシートと地図上のピルが表示する。
+     * searchStamp をこの世代に進めてカメラを新しい中心へ寄せる(結果反映時は同値なので再移動しない。
+     * adaptZoom による引きズームだけは zoom の変化で反映される)。
+     */
+    private fun showMapAt(gen: Int, centerLat: Double, centerLon: Double, userLat: Double?, userLon: Double?) {
+        _state.update {
+            if (gen != nearbyGeneration) return@update it
+            val base = it.nearby ?: NearbyUi()
+            it.copy(
+                nearby = base.copy(
+                    loading = true,
+                    loadingPhase = NearbyLoadPhase.SEARCHING,
+                    error = null,
+                    selectedPlace = null,
+                    centerLat = centerLat,
+                    centerLon = centerLon,
+                    userLat = userLat ?: base.userLat,
+                    userLon = userLon ?: base.userLon,
+                    zoom = NEARBY_DEFAULT_ZOOM,
+                    searchStamp = gen,
+                ),
+            )
+        }
+    }
+
+    /**
+     * 青ドット(現在地表示)だけを実測位置に更新する。カメラ・検索結果・距離ラベルには触らない
+     * (距離の再計算・YOLP 再検索はしない。再検索は「このエリアを検索」で明示的に行う方針)
+     */
+    private fun updateUserLocation(location: Location) {
+        _state.update { st ->
+            val nearby = st.nearby ?: return@update st
+            st.copy(nearby = nearby.copy(userLat = location.latitude, userLon = location.longitude))
+        }
+    }
+
+    /**
+     * 現在地の継続購読。「近く」タブ表示中のみ UI 側(PoikatsuApp)から lifecycle スコープで呼び、
+     * タブ離脱・バックグラウンドで collect ごとキャンセルされて購読解除される。
+     * 青ドットを追従させるだけで、カメラ移動・YOLP 再検索は行わない。
+     */
+    suspend fun observeLocationUpdates() {
+        if (!locationProvider.hasPermission()) return
+        locationProvider.locationUpdates().collect { updateUserLocation(it) }
     }
 
     /**
@@ -588,11 +679,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun searchHere(lat: Double, lon: Double, radiusM: Int, zoom: Double) {
         if (engine == null) return
         val prev = _state.value.nearby
-        val userLat = prev?.userLat ?: lat
-        val userLon = prev?.userLon ?: lon
+        // 現在地は「実際に測位できた値」だけを引き継ぐ(取れていないときに地図中心で捏造すると
+        // 青ドットが偽の場所に出る)。距離の起点だけは 起点指定 → 現在地 → 地図中心 の順で決める
+        val userLat = prev?.userLat
+        val userLon = prev?.userLon
         val origin = _state.value.nearbyOrigin
-        val originLat = origin?.lat ?: userLat
-        val originLon = origin?.lon ?: userLon
+        val originLat = origin?.lat ?: userLat ?: lat
+        val originLon = origin?.lon ?: userLon ?: lon
         val gen = ++nearbyGeneration
         // 再検索中も直前の地図・一覧を残し loading だけ立てる(画面をまっさらにしない)。
         // center は prev のまま保持して完了までカメラを動かさず、結果反映時に新しい中心へ寄せる。
@@ -621,8 +714,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         gen: Int,
         centerLat: Double,
         centerLon: Double,
-        userLat: Double,
-        userLon: Double,
+        userLat: Double?,
+        userLon: Double?,
         originLat: Double,
         originLon: Double,
         radiusM: Int,
@@ -650,14 +743,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val qrIds = enabledQrIds()
         val places = pois
             .mapNotNull { poi ->
-                val merchant = engine.matchStore(poi.name, poi.brand) ?: return@mapNotNull null
-                if (engine.isFacilityTenant(merchant.name, poi.displayName)) return@mapNotNull null
-                if (engine.isExcludedStore(merchant, poi.displayName)) return@mapNotNull null
+                val merchant = engine.matchStore(poi.name) ?: return@mapNotNull null
+                if (engine.isFacilityTenant(merchant.name, poi.name)) return@mapNotNull null
+                if (engine.isExcludedStore(merchant, poi.name)) return@mapNotNull null
                 val result = engine.judgeAll(merchant, today, qrIds)
                 if (result.judgments.isEmpty()) return@mapNotNull null
                 val allCampaigns = result.judgments.map { it.campaign }
                 NearbyPlace(
-                    name = poi.displayName,
+                    name = poi.name,
                     distanceMeters = GeoMath.distanceMeters(originLat, originLon, poi.lat, poi.lon),
                     distanceFromCenter = GeoMath.distanceMeters(centerLat, centerLon, poi.lat, poi.lon),
                     merchant = merchant,
@@ -727,18 +820,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** 近隣再検索失敗の Snackbar を表示し終えたら文言を消費する(同じ失敗を再表示しない) */
     fun onNearbySearchFailedShown() = _state.update { it.copy(nearbySearchFailed = null) }
 
-    /** 読込中のローディング段階だけを進める(最新世代かつ読込中のときのみ。完了済みは触らない) */
-    private fun setNearbyPhase(gen: Int, phase: NearbyLoadPhase) {
-        _state.update {
-            val n = it.nearby
-            if (gen == nearbyGeneration && n != null && n.loading) {
-                it.copy(nearby = n.copy(loadingPhase = phase))
-            } else {
-                it
-            }
-        }
-    }
-
     fun onLocationDenied() {
         if (engine == null) return
         val isInitial = _state.value.nearby?.centerLat == null
@@ -779,11 +860,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (gen != nearbyGeneration) return@update it
             it.copy(nearbyOrigin = place, nearbySearchFailed = message)
         }
-        setNearbyPhase(gen, NearbyLoadPhase.SEARCHING)
+        showMapAt(gen, place.lat, place.lon, userLat = null, userLon = null)
         loadNearbyAround(
             gen, place.lat, place.lon,
-            place.lat, place.lon,
-            place.lat, place.lon,
+            // 現在地は取れていないので捏造しない(青ドット非表示)。距離の起点はフォールバック地点
+            userLat = null, userLon = null,
+            originLat = place.lat, originLon = place.lon,
             radiusM = NEARBY_DEFAULT_RADIUS_M, zoom = NEARBY_DEFAULT_ZOOM,
             adaptZoom = true,
         )

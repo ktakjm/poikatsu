@@ -1,11 +1,18 @@
 package com.ktakjm.poikatsu.ui
 
+import android.Manifest
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
+import android.content.pm.PackageManager
 import android.graphics.Color as AndroidColor
-import android.graphics.Paint
-import android.graphics.RectF
+import android.hardware.GeomagneticField
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.location.Location
+import android.os.Build
+import android.view.Surface as ViewSurface
+import android.view.WindowManager
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -39,6 +46,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
@@ -66,11 +74,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMapOptions
-import com.google.android.gms.maps.model.BitmapDescriptor
+import com.google.android.gms.maps.LocationSource
 import com.google.android.gms.maps.model.MapColorScheme
-import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MapStyleOptions
@@ -81,14 +89,13 @@ import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.MapsComposeExperimentalApi
-import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.clustering.Clustering
 import com.google.maps.android.compose.clustering.rememberClusterManager
 import com.google.maps.android.compose.clustering.rememberClusterRenderer
 import com.google.maps.android.compose.rememberCameraPositionState
-import com.google.maps.android.compose.rememberMarkerState
 import com.ktakjm.poikatsu.util.GeoMath
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.pow
 
@@ -123,6 +130,7 @@ data class MapMarker(
 @Composable
 fun NearbyMap(
     center: MapPoint,
+    /** 現在地(my-location レイヤーへ流し込む位置。ViewModel の継続購読に追従)。null なら青ドット非表示 */
     userLocation: MapPoint?,
     markers: List<MapMarker>,
     initialZoom: Double,
@@ -173,8 +181,35 @@ fun NearbyMap(
     val suppressPoi by remember {
         derivedStateOf { cameraPositionState.position.zoom >= POI_SUPPRESS_ZOOM }
     }
-    val mapProperties = remember(suppressPoi) {
-        MapProperties(mapStyleOptions = if (suppressPoi) POI_SUPPRESS_STYLE else null)
+    // 現在地は SDK 純正の my-location レイヤー(青ドット+向きのシェブロン)で表示するが、
+    // 位置・向きは SDK 内蔵の購読でなく ManualLocationSource 経由でアプリが流し込む:
+    // 位置=ViewModel の現在地継続購読(userLocation)、向き=コンパス(rememberCompassHeading)。
+    // isMyLocationEnabled は権限未許可だと SecurityException を投げるため必ず権限でゲートする。
+    // searchStamp キーで検索完了のたびに再評価し、拒否→OS設定で許可→📍再検索の流れでも
+    // 次の検索から有効になる。
+    val myLocationEnabled = remember(searchStamp) {
+        listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            .any { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
+    }
+    val locationSource = remember { ManualLocationSource() }
+    val heading = if (userLocation != null) rememberCompassHeading(userLocation) else null
+    LaunchedEffect(userLocation, heading) {
+        if (userLocation != null) {
+            locationSource.update(
+                Location("poikatsu").apply {
+                    latitude = userLocation.lat
+                    longitude = userLocation.lon
+                    // bearing を立てるとドットのシェブロンがその方位を向く(センサー無し端末は向きなし)
+                    if (heading != null) bearing = heading
+                },
+            )
+        }
+    }
+    val mapProperties = remember(suppressPoi, myLocationEnabled) {
+        MapProperties(
+            isMyLocationEnabled = myLocationEnabled,
+            mapStyleOptions = if (suppressPoi) POI_SUPPRESS_STYLE else null,
+        )
     }
 
     // 検索完了のたびにカメラを検索中心へ寄せる。キーに searchStamp を含めるのは、現在地ボタンの
@@ -240,23 +275,10 @@ fun NearbyMap(
             },
             properties = mapProperties,
             uiSettings = uiSettings,
+            locationSource = locationSource,
             mapColorScheme = if (darkMode) ComposeMapColorScheme.DARK else ComposeMapColorScheme.LIGHT,
             contentPadding = PaddingValues(bottom = bottomPadding),
         ) {
-            if (userLocation != null) {
-                Marker(
-                    state = rememberMarkerState(
-                        key = "me:${userLocation.lat},${userLocation.lon}",
-                        position = userLocation.toLatLng(),
-                    ),
-                    icon = remember(userLocation) {
-                        dotDescriptor(context, AndroidColor.rgb(0x1A, 0x73, 0xE8), sizeDp = 16f)
-                    },
-                    anchor = Offset(0.5f, 0.5f),
-                    title = "現在地",
-                    zIndex = 0f,
-                )
-            }
             val clusterItems = remember(markers) { markers.map(::StoreClusterItem) }
             val clusterManager = rememberClusterManager<StoreClusterItem>()
             val clusterRenderer = rememberClusterRenderer(
@@ -453,18 +475,17 @@ fun NearbyMap(
             }
         }
 
-        // 📍 現在地で検索: 右下(ボトムシート peek の上)
-        if (userLocation != null) {
-            FilledTonalIconButton(
-                onClick = onSearchMyLocation,
-                enabled = loadingMessage == null,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(bottom = bottomPadding + 16.dp, end = 8.dp)
-                    .size(48.dp),
-            ) {
-                Icon(Icons.Default.LocationOn, contentDescription = "現在地で検索")
-            }
+        // 📍 現在地で検索: 右下(ボトムシート peek の上)。位置が取れていない(フォールバック表示)
+        // ときも出し、GPS 再試行の導線にする
+        FilledTonalIconButton(
+            onClick = onSearchMyLocation,
+            enabled = loadingMessage == null,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = bottomPadding + 16.dp, end = 8.dp)
+                .size(48.dp),
+        ) {
+            Icon(Icons.Default.LocationOn, contentDescription = "現在地で検索")
         }
     }
 }
@@ -674,26 +695,96 @@ private fun StorePin(marker: MapMarker) {
     )
 }
 
-/** 単色の丸ドット(白縁付き)。現在地ドットなど 1 色で足りる用途に使う */
-private fun dotDescriptor(context: Context, color: Int, sizeDp: Float): BitmapDescriptor {
-    val density = context.resources.displayMetrics.density
-    val px = (sizeDp * density).toInt().coerceAtLeast(1)
-    val strokePx = 2f * density
-    val bitmap = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    val inset = strokePx / 2f
-    val rect = RectF(inset, inset, px - inset, px - inset)
-    canvas.drawOval(rect, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; this.color = color })
-    canvas.drawOval(
-        rect,
-        Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            this.color = AndroidColor.WHITE
-            strokeWidth = strokePx
-        },
-    )
-    return BitmapDescriptorFactory.fromBitmap(bitmap)
+/**
+ * my-location レイヤー(SDK 純正の青ドット)へ位置と向きを流し込む差し込み口。
+ * SDK 内蔵の位置購読を使わず、アプリ側の現在地継続購読(userLocation)とコンパスの方位を
+ * `Location`(bearing 込み)にして push する。アイコン描画は SDK 純正のまま、
+ * 更新タイミングだけをアプリが制御できる。
+ */
+private class ManualLocationSource : LocationSource {
+    private var listener: LocationSource.OnLocationChangedListener? = null
+
+    /** レイヤー有効化前に届いた最新値。activate 時に流して初期表示を待たせない */
+    private var last: Location? = null
+
+    override fun activate(l: LocationSource.OnLocationChangedListener) {
+        listener = l
+        last?.let { l.onLocationChanged(it) }
+    }
+
+    override fun deactivate() {
+        listener = null
+    }
+
+    fun update(location: Location) {
+        last = location
+        listener?.onLocationChanged(location)
+    }
 }
+
+/**
+ * コンパス(回転ベクトルセンサー)による端末の方位角(真北基準・度)。センサーが無い端末は null。
+ * 磁北→真北の偏角(日本では西へ約7〜9度)を現在地から補正する。
+ * センサーの細かな揺れで再コンポーズが暴れないよう、約2度以上変わったときだけ値を更新する。
+ */
+@Composable
+private fun rememberCompassHeading(location: MapPoint): Float? {
+    val context = LocalContext.current
+    var heading by remember { mutableStateOf<Float?>(null) }
+    // 偏角は現在地依存だが、移動による変化は無視できるほど小さい(度単位の格子で足りる)
+    val declination = remember(location.lat.toInt(), location.lon.toInt()) {
+        GeomagneticField(
+            location.lat.toFloat(), location.lon.toFloat(), 0f, System.currentTimeMillis(),
+        ).declination
+    }
+    DisposableEffect(declination) {
+        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+        if (sensor == null) {
+            heading = null
+            return@DisposableEffect onDispose {}
+        }
+        val listener = object : SensorEventListener {
+            private val rotationMatrix = FloatArray(9)
+            private val remapped = FloatArray(9)
+            private val orientation = FloatArray(3)
+            override fun onSensorChanged(event: SensorEvent) {
+                SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
+                // 画面の向き(縦横回転)分を補正してから方位角を取り出す
+                val (axisX, axisY) = when (displayRotation(context)) {
+                    ViewSurface.ROTATION_90 -> SensorManager.AXIS_Y to SensorManager.AXIS_MINUS_X
+                    ViewSurface.ROTATION_180 -> SensorManager.AXIS_MINUS_X to SensorManager.AXIS_MINUS_Y
+                    ViewSurface.ROTATION_270 -> SensorManager.AXIS_MINUS_Y to SensorManager.AXIS_X
+                    else -> SensorManager.AXIS_X to SensorManager.AXIS_Y
+                }
+                SensorManager.remapCoordinateSystem(rotationMatrix, axisX, axisY, remapped)
+                SensorManager.getOrientation(remapped, orientation)
+                val azimuth =
+                    (Math.toDegrees(orientation[0].toDouble()).toFloat() + declination + 360f) % 360f
+                val prev = heading
+                // 359度→1度のような 0 跨ぎを正しく差分にする(±180 に折り返す)
+                val delta = prev?.let { abs(((azimuth - it + 540f) % 360f) - 180f) }
+                if (delta == null || delta >= HEADING_UPDATE_DEG) heading = azimuth
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+        }
+        sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)
+        onDispose { sensorManager.unregisterListener(listener) }
+    }
+    return heading
+}
+
+private fun displayRotation(context: Context): Int =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        context.display?.rotation ?: ViewSurface.ROTATION_0
+    } else {
+        @Suppress("DEPRECATION")
+        (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.rotation
+    }
+
+/** 方位更新のしきい値(度)。これ未満のセンサーの揺れは無視して更新の暴れを抑える */
+private const val HEADING_UPDATE_DEG = 2f
 
 /** "#RRGGBB" を Int 色に。不正なら既定色(プライマリ相当の緑) */
 private fun parseColor(hex: String?): Int =
