@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -20,6 +22,8 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.layout.Box
@@ -31,8 +35,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -46,7 +52,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.ktakjm.poikatsu.BuildConfig
@@ -267,6 +275,7 @@ internal fun SettingsScreen(
             master = municipalityMaster,
             registered = registeredAreas,
             onAdd = onAddRegisteredArea,
+            onRemove = onRemoveRegisteredArea,
             onDismiss = { showMunicipalityPicker = false },
         )
     }
@@ -457,26 +466,35 @@ private fun RateEditDialog(initial: Double, onDismiss: () -> Unit, onConfirm: (D
  * 自治体追加ダイアログ。都道府県選択→「グループ」+「市区町村」の2段ピッカー。
  * グループ(東京23区・埼玉県南部 等)はマスタ(municipalities.json)由来で、
  * 並び順もマスタのまま出す(補完グループ→一次細分→その配下の細分)。
+ * 行はチェックボックスのトグルで登録/解除が即時反映される(他の設定項目と同じ即時適用。
+ * 「登録済み=操作不能」にしないのは、押し間違いをその場で取り消せるようにするため)。
+ * グループ行は ▼ で構成自治体名を展開できる(「23区西部」がどこまでか行タップなしで確認できる)。
  */
 @Composable
 private fun MunicipalityPickerDialog(
     master: MunicipalityMaster,
     registered: List<RegisteredArea>,
     onAdd: (RegisteredArea) -> Unit,
+    onRemove: (RegisteredArea) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var selectedPrefecture by remember { mutableStateOf<Prefecture?>(null) }
+    var expandedGroupIds by remember { mutableStateOf(emptySet<String>()) }
     val registeredKeys = remember(registered) {
         registered.map { "${it.type}:${it.code}" }.toSet()
     }
     fun isRegistered(area: RegisteredArea) = "${area.type}:${area.code}" in registeredKeys
+    fun toggle(area: RegisteredArea) = if (isRegistered(area)) onRemove(area) else onAdd(area)
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (selectedPrefecture != null) {
-                    IconButton(onClick = { selectedPrefecture = null }) {
+                    IconButton(onClick = {
+                        selectedPrefecture = null
+                        expandedGroupIds = emptySet()
+                    }) {
                         Icon(Icons.Default.Close, contentDescription = "戻る")
                     }
                 }
@@ -497,27 +515,62 @@ private fun MunicipalityPickerDialog(
                     items(master.prefectures) { pref ->
                         ListItem(
                             headlineContent = { Text(pref.name) },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                             modifier = Modifier.clickable { selectedPrefecture = pref },
                         )
                     }
                 }
             } else {
+                val municipalityNames = remember(prefecture) {
+                    prefecture.municipalities.associate { it.code to it.name }
+                }
                 LazyColumn(Modifier.fillMaxWidth().height(400.dp)) {
                     if (prefecture.groups.isNotEmpty()) {
                         item { PickerSectionHeader("グループ(まとめて登録)") }
-                        items(prefecture.groups, key = { it.id }) { group ->
+                        prefecture.groups.forEach { group ->
                             val area = RegisteredArea(
                                 type = RegisteredAreaType.GROUP,
                                 code = group.id,
                                 name = group.name,
                                 prefecture = prefecture.name,
                             )
-                            AreaPickerRow(
-                                area = area,
-                                supporting = "${group.municipalities.size}市区町村",
-                                alreadyRegistered = isRegistered(area),
-                                onAdd = onAdd,
-                            )
+                            val expanded = group.id in expandedGroupIds
+                            item(key = group.id) {
+                                AreaPickerRow(
+                                    area = area,
+                                    supporting = "${group.municipalities.size}市区町村",
+                                    checked = isRegistered(area),
+                                    onToggle = ::toggle,
+                                    expanded = expanded,
+                                    onToggleExpand = {
+                                        expandedGroupIds =
+                                            if (expanded) expandedGroupIds - group.id
+                                            else expandedGroupIds + group.id
+                                    },
+                                )
+                            }
+                            if (expanded) {
+                                item(key = "${group.id}:members") {
+                                    // 行の直下にぶら下がる角丸パネル(プルダウン風)。start はチェック
+                                    // ボックス分を空けて行の文字位置に揃える
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 56.dp, end = 16.dp, bottom = 8.dp),
+                                    ) {
+                                        Text(
+                                            group.municipalities
+                                                .mapNotNull { municipalityNames[it] }
+                                                .joinToString("・"),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                     item { PickerSectionHeader("市区町村") }
@@ -531,8 +584,8 @@ private fun MunicipalityPickerDialog(
                         AreaPickerRow(
                             area = area,
                             supporting = null,
-                            alreadyRegistered = isRegistered(area),
-                            onAdd = onAdd,
+                            checked = isRegistered(area),
+                            onToggle = ::toggle,
                         )
                     }
                 }
@@ -558,24 +611,37 @@ private fun PickerSectionHeader(text: String) {
 private fun AreaPickerRow(
     area: RegisteredArea,
     supporting: String?,
-    alreadyRegistered: Boolean,
-    onAdd: (RegisteredArea) -> Unit,
+    checked: Boolean,
+    onToggle: (RegisteredArea) -> Unit,
+    /** グループ行の構成自治体の展開状態。null なら展開 UI を出さない(市区町村行) */
+    expanded: Boolean? = null,
+    onToggleExpand: (() -> Unit)? = null,
 ) {
     ListItem(
-        headlineContent = {
-            Text(
-                area.name,
-                color = if (alreadyRegistered) MaterialTheme.colorScheme.outline
-                else MaterialTheme.colorScheme.onSurface,
-            )
-        },
+        headlineContent = { Text(area.name) },
         supportingContent = supporting?.let { { Text(it) } },
-        trailingContent = {
-            if (alreadyRegistered) {
-                Text("登録済み", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+        leadingContent = {
+            // クリック処理は行全体の toggleable に一本化する(チェックボックス側にもハンドラを
+            // 張ると同一タップで二重発火し、解除→即再登録になることがある)
+            Checkbox(checked = checked, onCheckedChange = null)
+        },
+        trailingContent = expanded?.let { isExpanded ->
+            {
+                IconButton(onClick = { onToggleExpand?.invoke() }) {
+                    Icon(
+                        if (isExpanded) Icons.Default.KeyboardArrowUp
+                        else Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (isExpanded) "構成を閉じる" else "構成を表示",
+                    )
+                }
             }
         },
-        modifier = Modifier.clickable(enabled = !alreadyRegistered) { onAdd(area) },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = Modifier.toggleable(
+            value = checked,
+            role = Role.Checkbox,
+            onValueChange = { onToggle(area) },
+        ),
     )
 }
 
