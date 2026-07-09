@@ -1,6 +1,6 @@
 {
   "schema_version": 6,
-  "updated_at": "2026-07-07",
+  "updated_at": "2026-07-10",
   "card_brands": [
     { "name": "Visa", "color": "#1A1F71" },
     { "name": "Mastercard", "color": "#EB001B" },
@@ -30,6 +30,14 @@
       "brand_color": "#FF0033",
       "app_package": "jp.ne.paypay.android.app",
       "store_search_label": "テストPayPay対象店舗を探す",
+      "enabled_default": false
+    },
+    {
+      "id": "test_aupay",
+      "name": "テストauPAY",
+      "brand_color": "#FF5722",
+      "app_package": "com.kddi.android.aupay",
+      "store_search_label": "テストauPAY対象店舗を探す",
       "enabled_default": false
     }
   ]

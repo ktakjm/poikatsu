@@ -144,7 +144,9 @@
 | `test_rebate_fixed` | **後日定額** rebate+`discount_amount`(500 円還元)、`usage_limit`(3 回)、`usage_limit_note`、`period_total_cap` | 常時安定 |
 | `test_upcoming` | **UPCOMING** 状態(常時未開始) | 常時安定 |
 | `test_ending_soon` | **残り 3 日警告**(検証日に `period_end` を手直し) | **要手直し** |
-| `test_municipal` | 自治体施策(`municipal`+`external`)、`region`、`store_search_url`、`per_transaction_cap`+`period_total_cap`、`may_end_early` | 常時安定 |
+| `test_municipal` | 自治体施策(`municipal`+`external`)、`region`(北海道札幌市=実在自治体。地域フィルタ・お知らせ表示の実機検証用)、`store_search_url`、`per_transaction_cap`+`period_total_cap`、`may_end_early` | 常時安定 |
+| `test_municipal_hiroshima_paypay` | 同一自治体・複数決済手段の 1 本目(広島県広島市 × テストPayPay 25%)。自治体グルーピング(1 カードにストライプ 2 色)の検証用 | 常時安定 |
+| `test_municipal_hiroshima_aupay` | 同一自治体・複数決済手段の 2 本目(広島県広島市 × テストauPAY 15%) | 常時安定 |
 
 #### 複数施策競合の確認
 
