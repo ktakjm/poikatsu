@@ -36,6 +36,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Place
@@ -92,6 +93,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.util.GeoMath
 
@@ -180,7 +182,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         }
                     },
                 )
-                selectedTab == AppTab.CAMPAIGNS && state.selectedCampaignGroup != null -> {
+                // キャンペーン詳細はタブ非依存のオーバーレイ(探すバナー・地図ピルからも開くため)
+                state.selectedCampaignGroup != null -> {
                     val group = state.selectedCampaignGroup!!
                     val title = campaignGroupDisplayTitle(group.first().campaign, state.merchantNames)
                     TopAppBar(
@@ -270,6 +273,13 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         },
                     )
                 }
+                // キャンペーン詳細(タブ非依存のオーバーレイ)。topBar の分岐順と一致させること
+                state.selectedCampaignGroup != null -> PaddedColumn {
+                    CampaignDetail(
+                        judgments = state.selectedCampaignGroup!!,
+                        onBack = viewModel::onCloseCampaignDetail,
+                    )
+                }
                 selectedTab == AppTab.NEARBY -> {
                     val nearby = state.nearby
                     if (nearby != null) {
@@ -296,6 +306,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             onSelectCandidate = viewModel::onSelectGeocodedPlace,
                             onClearOrigin = viewModel::onClearOrigin,
                             onDismissSearch = viewModel::onDismissGeocoding,
+                            onOpenMunicipalGroup = viewModel::onSelectCampaignGroup,
                             topInset = innerPadding.calculateTopPadding(),
                         )
                     } else {
@@ -303,27 +314,19 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     }
                 }
                 selectedTab == AppTab.CAMPAIGNS -> PaddedColumn {
-                    val selectedGroup = state.selectedCampaignGroup
-                    if (selectedGroup != null) {
-                        CampaignDetail(
-                            judgments = selectedGroup,
-                            onBack = viewModel::onCloseCampaignDetail,
-                        )
-                    } else {
-                        CampaignPane(
-                            activeCampaigns = state.timeLimitedActive,
-                            upcomingCampaigns = state.timeLimitedUpcoming,
-                            merchantNames = state.merchantNames,
-                            campaignColors = state.campaignBrandColors,
-                            filter = state.campaignFilter,
-                            onFilterChange = viewModel::onSetCampaignFilter,
-                            showRegionChip = state.registeredAreas.isNotEmpty() &&
-                                !state.municipalityMaster.isEmpty(),
-                            regionFilterOn = !state.showAllCampaigns,
-                            onToggleRegionFilter = viewModel::onToggleShowAllCampaigns,
-                            onSelectGroup = viewModel::onSelectCampaignGroup,
-                        )
-                    }
+                    CampaignPane(
+                        activeCampaigns = state.timeLimitedActive,
+                        upcomingCampaigns = state.timeLimitedUpcoming,
+                        merchantNames = state.merchantNames,
+                        campaignColors = state.campaignBrandColors,
+                        filter = state.campaignFilter,
+                        onFilterChange = viewModel::onSetCampaignFilter,
+                        showRegionChip = state.registeredAreas.isNotEmpty() &&
+                            !state.municipalityMaster.isEmpty(),
+                        regionFilterOn = !state.showAllCampaigns,
+                        onToggleRegionFilter = viewModel::onToggleShowAllCampaigns,
+                        onSelectGroup = viewModel::onSelectCampaignGroup,
+                    )
                 }
                 selectedTab == AppTab.SETTINGS -> SettingsScreen(
                     themeMode = state.themeMode,
@@ -361,10 +364,12 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         results = state.results,
                         dataStatus = dataStatusLabel(state.dataUpdatedAt, state.dataSource, state.useTestData),
                         refreshing = state.refreshing,
+                        municipalAreaNames = state.searchMunicipalAreaNames,
                         onQueryChange = viewModel::onQueryChange,
                         onToggleCategory = viewModel::onToggleCategory,
                         onSelect = viewModel::onSelect,
                         onRefresh = viewModel::onManualRefresh,
+                        onOpenMunicipalCampaigns = viewModel::onOpenMunicipalCampaigns,
                     )
                 }
             }
@@ -383,10 +388,12 @@ private fun SearchPane(
     results: List<MainViewModel.SearchResult>,
     dataStatus: String,
     refreshing: Boolean,
+    municipalAreaNames: List<String>,
     onQueryChange: (String) -> Unit,
     onToggleCategory: (String) -> Unit,
     onSelect: (Merchant) -> Unit,
     onRefresh: () -> Unit,
+    onOpenMunicipalCampaigns: () -> Unit,
 ) {
     OutlinedTextField(
         value = query,
@@ -434,11 +441,21 @@ private fun SearchPane(
     }
     Spacer(Modifier.height(4.dp))
     when {
-        query.isBlank() && selectedCategories.isEmpty() -> Text(
-            "チェーン名を入力するか、カテゴリを選択すると、どのカードで払うのが得かを表示します。",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.outline,
-        )
+        // 初期画面(検索前)。自治体施策のお知らせは検索・判定と混ざらないようここだけに出す
+        query.isBlank() && selectedCategories.isEmpty() -> {
+            Text(
+                "チェーン名を入力するか、カテゴリを選択すると、どのカードで払うのが得かを表示します。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.outline,
+            )
+            if (municipalAreaNames.isNotEmpty()) {
+                Spacer(Modifier.height(16.dp))
+                MunicipalCampaignBanner(
+                    areaNames = municipalAreaNames,
+                    onClick = onOpenMunicipalCampaigns,
+                )
+            }
+        }
         results.isEmpty() -> Text(
             if (query.isBlank()) "選択中のカテゴリに店舗がありません。"
             else "「$query」に一致する店舗が見つかりませんでした。登録済みの高還元施策の対象外の可能性があります。",
@@ -450,6 +467,57 @@ private fun SearchPane(
             items(results, key = { it.merchant.id }) { result ->
                 SearchResultCard(result) { onSelect(result.merchant) }
             }
+        }
+    }
+}
+
+/**
+ * 探すタブ初期画面の自治体施策お知らせバナー。施策の中身は出さず「あること」だけ知らせ、
+ * タップでキャンペーンタブ(自治体フィルタ)へ送る。判定詳細(店舗カードタップ後)には出さない
+ * (チェーン店は自治体施策の対象外が多く、店舗単位の断定はできないため)。
+ */
+@Composable
+private fun MunicipalCampaignBanner(areaNames: List<String>, onClick: () -> Unit) {
+    val areaLabel = if (areaNames.size <= 2) {
+        areaNames.joinToString("・")
+    } else {
+        "${areaNames.take(2).joinToString("・")} 他${areaNames.size - 2}地域"
+    }
+    Surface(
+        onClick = onClick,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                Icons.Default.Star,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    "${areaLabel}で自治体キャンペーン開催中",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    "キャンペーンタブで詳細を確認できます",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -547,6 +615,7 @@ private fun NearbyPane(
     onSelectCandidate: (MainViewModel.GeocodedPlace) -> Unit,
     onClearOrigin: () -> Unit,
     onDismissSearch: () -> Unit,
+    onOpenMunicipalGroup: (List<Campaign>) -> Unit,
     topInset: Dp,
 ) {
     val selectedPlace = nearby.selectedPlace
@@ -899,6 +968,10 @@ private fun NearbyPane(
             onSelectCandidate = onSelectCandidate,
             onClearOrigin = onClearOrigin,
             onDismissSearch = onDismissSearch,
+            municipalNoticeText = nearby.municipalNotice?.let { "${it.label}のキャンペーン開催中" },
+            onMunicipalNoticeClick = {
+                nearby.municipalNotice?.let { onOpenMunicipalGroup(it.campaigns) }
+            },
             modifier = Modifier.fillMaxSize(),
             topInset = topInset,
             bottomPadding = sheetPeek,

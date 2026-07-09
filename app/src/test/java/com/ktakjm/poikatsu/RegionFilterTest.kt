@@ -7,6 +7,8 @@ import com.ktakjm.poikatsu.data.Region
 import com.ktakjm.poikatsu.data.RegisteredArea
 import com.ktakjm.poikatsu.data.RegisteredAreaType
 import com.ktakjm.poikatsu.domain.filterCampaignsByArea
+import com.ktakjm.poikatsu.domain.municipalCampaignsForAreas
+import com.ktakjm.poikatsu.domain.municipalCampaignsForLocation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -133,6 +135,92 @@ class RegionFilterTest {
         val registered = listOf(registeredGroup("custom-tokyo23"))
         val result = filterCampaignsByArea(campaigns + unknown, registered, master)
         assertTrue(unknown in result)
+    }
+
+    // ---------- 登録地域の自治体施策(探すタブのお知らせバナー用・厳密一致) ----------
+
+    @Test
+    fun `登録が無ければ自治体施策のお知らせは出さない`() {
+        assertEquals(emptyList<Campaign>(), municipalCampaignsForAreas(campaigns, emptyList(), master))
+    }
+
+    @Test
+    fun `マスタ未ロードなら自治体施策のお知らせは出さない`() {
+        val registered = listOf(
+            RegisteredArea(RegisteredAreaType.MUNICIPALITY, "13115", "杉並区", "東京都"),
+        )
+        assertEquals(
+            emptyList<Campaign>(),
+            municipalCampaignsForAreas(campaigns, registered, MunicipalityMaster()),
+        )
+    }
+
+    @Test
+    fun `自治体登録で一致する自治体施策だけ返り全国施策は含まない`() {
+        val suginamiCode = master.prefectures.first { it.name == "東京都" }
+            .municipalities.first { it.name == "杉並区" }.code
+        val registered = listOf(
+            RegisteredArea(RegisteredAreaType.MUNICIPALITY, suginamiCode, "杉並区", "東京都"),
+        )
+        assertEquals(listOf(suginami), municipalCampaignsForAreas(campaigns, registered, master))
+    }
+
+    @Test
+    fun `グループ登録は構成自治体に展開して自治体施策を拾う`() {
+        val registered = listOf(registeredGroup("custom-tokyo23"))
+        assertEquals(listOf(suginami), municipalCampaignsForAreas(campaigns, registered, master))
+    }
+
+    @Test
+    fun `マスタに無い地域の自治体施策はフィルタと逆に出さない`() {
+        val unknown = municipalCampaign("unknown", "東京都", "存在しない市")
+        val registered = listOf(registeredGroup("custom-tokyo23"))
+        val result = municipalCampaignsForAreas(campaigns + unknown, registered, master)
+        assertTrue(unknown !in result)
+    }
+
+    // ---------- 所在地の自治体施策(「近く」の地図お知らせピル用) ----------
+
+    @Test
+    fun `所在地の市区町村名が一致する自治体施策だけ返る`() {
+        assertEquals(
+            listOf(suginami),
+            municipalCampaignsForLocation(campaigns, "東京都", listOf("杉並区")),
+        )
+        assertEquals(
+            listOf(yuzawa),
+            municipalCampaignsForLocation(campaigns, "秋田県", listOf("湯沢市")),
+        )
+    }
+
+    @Test
+    fun `都道府県が違えば同名の自治体でも一致しない`() {
+        // 湯沢市(秋田県)と湯沢町(新潟県)のような同名・類似名の混同を防ぐ
+        assertEquals(
+            emptyList<Campaign>(),
+            municipalCampaignsForLocation(campaigns, "新潟県", listOf("湯沢市")),
+        )
+    }
+
+    @Test
+    fun `候補が複数あればいずれかに一致すれば返る`() {
+        // 政令市はジオコーダの locality=市名 / subLocality=行政区名 の両方を候補に渡す
+        assertEquals(
+            listOf(suginami),
+            municipalCampaignsForLocation(campaigns, "東京都", listOf("新宿区", "杉並区")),
+        )
+    }
+
+    @Test
+    fun `都道府県や候補が空なら何も返さない`() {
+        assertEquals(
+            emptyList<Campaign>(),
+            municipalCampaignsForLocation(campaigns, "", listOf("杉並区")),
+        )
+        assertEquals(
+            emptyList<Campaign>(),
+            municipalCampaignsForLocation(campaigns, "東京都", listOf("")),
+        )
     }
 
     // ---------- 永続化形式 ----------

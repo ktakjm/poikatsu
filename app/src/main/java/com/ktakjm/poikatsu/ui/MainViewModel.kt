@@ -36,6 +36,8 @@ import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.filterCampaignsByArea
 import com.ktakjm.poikatsu.domain.googlePayIneligibleWarning
+import com.ktakjm.poikatsu.domain.municipalCampaignsForAreas
+import com.ktakjm.poikatsu.domain.municipalCampaignsForLocation
 import com.ktakjm.poikatsu.domain.isTargetDay
 import com.ktakjm.poikatsu.domain.nextTargetDay
 import com.ktakjm.poikatsu.domain.walletAppPackage
@@ -159,6 +161,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val lon: Double,
     )
 
+    /**
+     * 「近く」の地図に出す自治体施策のお知らせ(検索中心の所在自治体で開催中の施策)。
+     * タップでキャンペーン詳細(施策別カード)を開くため、グループの施策一覧ごと持つ。
+     */
+    data class MunicipalNotice(
+        /** 自治体名(例: "杉並区")。ピルの文言に使う */
+        val label: String,
+        val campaigns: List<Campaign>,
+    )
+
     data class NearbyUi(
         val loading: Boolean = false,
         /** loading 中の段階。表示メッセージの出し分けに使う(loading=false のときは無意味) */
@@ -187,6 +199,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          * (現在地ボタンで GPS が同じ座標を返す等)カメラを検索中心へ寄せ直すためのキー。
          */
         val searchStamp: Int = 0,
+        /**
+         * 検索中心の所在自治体で開催中の自治体施策のお知らせ。検索完了後に非同期の
+         * リバースジオコーディングで解決するため、検索直後は null → 解決できたら入る。
+         * 解決失敗・該当なしは null のまま(参考情報なのでエラーは出さない)。
+         */
+        val municipalNotice: MunicipalNotice? = null,
     )
 
     data class UiState(
@@ -228,6 +246,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         /** ジオコーディング中フラグ */
         val isGeocoding: Boolean = false,
         val selectedTab: AppTab = AppTab.SEARCH,
+        /**
+         * 登録地域で開催中の自治体施策がある自治体名(探すタブ初期画面のお知らせバナー用)。
+         * 施策の詳細は出さず「あること」だけ知らせ、タップでキャンペーンタブへ送る。
+         */
+        val searchMunicipalAreaNames: List<String> = emptyList(),
         val campaignFilter: CampaignFilter = CampaignFilter.ALL,
         val timeLimitedActive: List<Campaign> = emptyList(),
         val timeLimitedUpcoming: List<Campaign> = emptyList(),
@@ -492,6 +515,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             newEngine.upcomingCampaigns(today).filter { it.campaignType != CampaignType.CARD_PROGRAM }
         )
 
+        // 探すタブ初期画面のお知らせバナー: 登録地域で開催中の自治体施策がある自治体名。
+        // フィルタと違い厳密一致(未登録・マスタ未ロードなら出さない)
+        val searchMunicipalAreaNames = municipalCampaignsForAreas(
+            newEngine.activeCampaigns(today),
+            settings.registeredAreas,
+            _state.value.municipalityMaster,
+        ).mapNotNull { it.region?.name }.distinct()
+
         // 設定画面「マイカード」カタログ: 未所有カードも含む全候補 + 現在の上書き値
         val hasBrandCampaign = loaded.data.campaigns.any { it.cardBrand != null }
         val cardSettings = baseCards.map { card ->
@@ -559,6 +590,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 useTestData = settings.useTestData,
                 timeLimitedActive = timeLimitedActive,
                 timeLimitedUpcoming = timeLimitedUpcoming,
+                searchMunicipalAreaNames = searchMunicipalAreaNames,
                 merchantNames = loaded.data.merchants.associate { it.id to it.name },
                 campaignBrandColors = loaded.data.campaigns
                     .mapNotNull { c -> loaded.data.brandColorOf(c)?.let { c.id to it } }
@@ -822,6 +854,55 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 searchStamp = gen,
             ),
         )
+        resolveMunicipalNotice(gen, centerLat, centerLon)
+    }
+
+    /**
+     * 検索中心の所在自治体を解決し、開催中の自治体施策があれば地図のお知らせピルに反映する。
+     * 検索完了ごとに1回だけリバースジオコーディングする(カメラ追従では呼ばない。境界付近の
+     * チラつきと Geocoder 呼び出しの嵩みを避けるため、更新は「このエリアを検索」等の再検索単位)。
+     * 参考情報なので、解決失敗・該当なしは黙って何もしない(エラーもスピナーも出さない)。
+     */
+    private fun resolveMunicipalNotice(gen: Int, lat: Double, lon: Double) {
+        val engine = engine ?: return
+        val municipal = engine.activeCampaigns(LocalDate.now())
+            .filter { it.campaignType == CampaignType.MUNICIPAL }
+        if (municipal.isEmpty()) return // 施策が1件も無ければ Geocoder 自体を呼ばない
+        viewModelScope.launch(Dispatchers.IO) {
+            if (!Geocoder.isPresent()) return@launch
+            val addr = try {
+                reverseGeocode(Geocoder(getApplication(), Locale.JAPAN), lat, lon)
+            } catch (e: Exception) {
+                Timber.w(e, "検索中心のリバースジオコーディングに失敗")
+                null
+            } ?: return@launch
+            val prefecture = addr.adminArea ?: return@launch
+            // 東京23区・一般市は locality、政令市の行政区は subLocality に入るため順に試す
+            val matched = listOfNotNull(addr.locality, addr.subLocality)
+                .firstNotNullOfOrNull { name ->
+                    municipalCampaignsForLocation(municipal, prefecture, listOf(name))
+                        .ifEmpty { null }
+                } ?: return@launch
+            val label = matched.first().region?.name ?: return@launch
+            _state.update { st ->
+                if (gen != nearbyGeneration) return@update st
+                val nearby = st.nearby ?: return@update st
+                st.copy(nearby = nearby.copy(municipalNotice = MunicipalNotice(label, matched)))
+            }
+        }
+    }
+
+    private suspend fun reverseGeocode(geocoder: Geocoder, lat: Double, lon: Double): Address? {
+        return if (Build.VERSION.SDK_INT >= 33) {
+            suspendCancellableCoroutine { cont ->
+                geocoder.getFromLocation(lat, lon, 1) { addresses ->
+                    if (cont.isActive) cont.resume(addresses.firstOrNull())
+                }
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            geocoder.getFromLocation(lat, lon, 1)?.firstOrNull()
+        }
     }
 
     /** 進行中の近隣取得が最新世代(タブ移動・再取得で破棄されていない)のときだけ結果を反映する */
@@ -1217,6 +1298,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onSetCampaignFilter(filter: CampaignFilter) {
         _state.update { it.copy(campaignFilter = filter) }
+    }
+
+    /**
+     * 探すタブのお知らせバナーから: キャンペーンタブへ移動し、自治体フィルタを効かせて着地させる
+     * (「登録地域のみ」は既定 ON なので、そのまま登録地域の自治体施策一覧になる)
+     */
+    fun onOpenMunicipalCampaigns() {
+        onSelectTab(AppTab.CAMPAIGNS)
+        _state.update { it.copy(campaignFilter = CampaignFilter.MUNICIPAL) }
     }
 
     fun onSelectCampaignGroup(group: List<Campaign>) {

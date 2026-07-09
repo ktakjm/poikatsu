@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -155,6 +156,9 @@ fun NearbyMap(
     onSelectCandidate: (MainViewModel.GeocodedPlace) -> Unit,
     onClearOrigin: () -> Unit,
     onDismissSearch: () -> Unit,
+    /** 検索中心の所在自治体で自治体施策が開催中のときのお知らせピル文言。null なら出さない */
+    municipalNoticeText: String? = null,
+    onMunicipalNoticeClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     topInset: Dp = 0.dp,
     bottomPadding: Dp = 0.dp,
@@ -486,6 +490,33 @@ fun NearbyMap(
                     },
                 ) {
                     Text("このエリアを検索")
+                }
+            }
+
+            // 自治体施策のお知らせピル(検索中心の所在自治体で開催中のとき)。タップで施策詳細へ。
+            // 検索バー活性中(候補リスト表示)と再検索中(文言が旧検索基準で古い)は出さない
+            if (municipalNoticeText != null && loadingMessage == null && !searchActive) {
+                Spacer(Modifier.height(8.dp))
+                Surface(
+                    onClick = onMunicipalNoticeClick,
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    tonalElevation = 3.dp,
+                    shadowElevation = 2.dp,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    ) {
+                        Icon(
+                            Icons.Default.Star,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(municipalNoticeText, style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             }
         }
