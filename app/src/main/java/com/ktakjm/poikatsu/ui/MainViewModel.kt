@@ -38,6 +38,7 @@ import com.ktakjm.poikatsu.domain.filterCampaignsByArea
 import com.ktakjm.poikatsu.domain.googlePayIneligibleWarning
 import com.ktakjm.poikatsu.domain.municipalCampaignsForAreas
 import com.ktakjm.poikatsu.domain.municipalCampaignsForLocation
+import com.ktakjm.poikatsu.domain.isPrefectureWide
 import com.ktakjm.poikatsu.domain.isTargetDay
 import com.ktakjm.poikatsu.domain.nextTargetDay
 import com.ktakjm.poikatsu.domain.walletAppPackage
@@ -877,13 +878,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 null
             } ?: return@launch
             val prefecture = addr.adminArea ?: return@launch
-            // 東京23区・一般市は locality、政令市の行政区は subLocality に入るため順に試す
-            val matched = listOfNotNull(addr.locality, addr.subLocality)
-                .firstNotNullOfOrNull { name ->
-                    municipalCampaignsForLocation(municipal, prefecture, listOf(name))
-                        .ifEmpty { null }
-                } ?: return@launch
-            val label = matched.first().region?.name ?: return@launch
+            // 市区町村候補は locality(東京23区・一般市)と subLocality(政令市の行政区)の両方を
+            // 渡し、一致した施策をすべて載せる(市の施策と県全域施策の併催もひとつの詳細で見せる)
+            val matched = municipalCampaignsForLocation(
+                municipal, prefecture, listOfNotNull(addr.locality, addr.subLocality),
+            )
+            if (matched.isEmpty()) return@launch
+            // ピルの文言はより狭い単位を優先(市区町村があればそれ、県全域施策だけなら県名)
+            val label = matched.mapNotNull { it.region }
+                .firstOrNull { !it.isPrefectureWide }?.name ?: prefecture
             _state.update { st ->
                 if (gen != nearbyGeneration) return@update st
                 val nearby = st.nearby ?: return@update st

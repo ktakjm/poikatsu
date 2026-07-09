@@ -1292,7 +1292,11 @@ class JudgmentEngineRealDataTest {
             assertTrue("${c.id}: municipal should be external", c.storeScope == "external")
             assertNotNull("${c.id}: municipal should have region", c.region)
             assertNotNull("${c.id}: municipal should have period_start", c.periodStart)
-            assertNotNull("${c.id}: municipal should have period_end", c.periodEnd)
+            // 終了日は明示されるか、未定なら早期終了型(予算上限到達で終了=かなトク等)であること
+            assertTrue(
+                "${c.id}: municipal should have period_end or be may_end_early",
+                c.periodEnd != null || c.mayEndEarly,
+            )
             assertNotNull("${c.id}: municipal should have payment_method_id", c.paymentMethodId)
             assertTrue("${c.id}: municipal merchant_rules should be empty", c.merchantRules.isEmpty())
         }

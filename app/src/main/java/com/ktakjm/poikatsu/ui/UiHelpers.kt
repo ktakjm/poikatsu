@@ -261,13 +261,14 @@ internal fun ConditionsList(conditions: List<String>, minPurchase: Int?) {
 
 /**
  * キャンペーングループの表示タイトル。
- * 自治体: "都道府県名 自治体名"、それ以外: merchant_rules の先頭 merchant 名(なければ campaign.name)
+ * 自治体: "都道府県名 自治体名"(県全域施策は県名のみ。「神奈川県 神奈川県」にしない)、
+ * それ以外: merchant_rules の先頭 merchant 名(なければ campaign.name)
  */
 internal fun campaignGroupDisplayTitle(first: Campaign, merchantNames: Map<String, String>): String =
     if (first.campaignType == CampaignType.MUNICIPAL) {
         val prefecture = first.region?.prefecture ?: ""
         val name = first.region?.name ?: first.name
-        if (prefecture.isNotBlank()) "$prefecture $name" else name
+        if (prefecture.isNotBlank() && name != prefecture) "$prefecture $name" else name
     } else {
         first.merchantRules.firstOrNull()?.merchantId
             ?.let { merchantNames[it] }

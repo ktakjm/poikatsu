@@ -35,7 +35,15 @@ class RegionFilterTest {
     private val national = Campaign(id = "national", operator = "テスト", name = "全国施策")
     private val suginami = municipalCampaign("suginami", "東京都", "杉並区")
     private val yuzawa = municipalCampaign("yuzawa", "秋田県", "湯沢市")
+    // 県全域施策(かながわトクトクキャンペーン等)は name == prefecture の規約で表す
+    private val kanagawa = municipalCampaign("kanagawa", "神奈川県", "神奈川県")
     private val campaigns = listOf(national, suginami, yuzawa)
+
+    private fun registeredMunicipality(prefName: String, muniName: String): RegisteredArea {
+        val pref = master.prefectures.first { it.name == prefName }
+        val code = pref.municipalities.first { it.name == muniName }.code
+        return RegisteredArea(RegisteredAreaType.MUNICIPALITY, code, muniName, prefName)
+    }
 
     private fun registeredGroup(id: String): RegisteredArea {
         val (pref, group) = master.prefectures
@@ -135,6 +143,69 @@ class RegionFilterTest {
         val registered = listOf(registeredGroup("custom-tokyo23"))
         val result = filterCampaignsByArea(campaigns + unknown, registered, master)
         assertTrue(unknown in result)
+    }
+
+    // ---------- 県全域施策(region.name == prefecture) ----------
+
+    @Test
+    fun `県全域施策は同県の自治体を1つでも登録していればフィルタを通る`() {
+        val registered = listOf(registeredMunicipality("神奈川県", "横浜市"))
+        val result = filterCampaignsByArea(campaigns + kanagawa, registered, master)
+        assertTrue(kanagawa in result)
+    }
+
+    @Test
+    fun `県全域施策は同県の登録が無ければフィルタで落ちる(防御的全通しに乗らない)`() {
+        val registered = listOf(registeredGroup("custom-tokyo23"))
+        val result = filterCampaignsByArea(campaigns + kanagawa, registered, master)
+        assertTrue(kanagawa !in result)
+    }
+
+    @Test
+    fun `県全域施策は同県の自治体登録があればお知らせバナーに出る`() {
+        val registered = listOf(registeredMunicipality("神奈川県", "川崎市"))
+        assertEquals(
+            listOf(kanagawa),
+            municipalCampaignsForAreas(campaigns + kanagawa, registered, master),
+        )
+    }
+
+    @Test
+    fun `県全域施策は他県の登録だけならお知らせバナーに出ない`() {
+        val registered = listOf(registeredGroup("custom-tokyo23"))
+        assertEquals(
+            listOf(suginami),
+            municipalCampaignsForAreas(campaigns + kanagawa, registered, master),
+        )
+    }
+
+    @Test
+    fun `県全域施策は県内の地点なら市区町村名に関係なくピルに出る`() {
+        assertEquals(
+            listOf(kanagawa),
+            municipalCampaignsForLocation(campaigns + kanagawa, "神奈川県", listOf("横浜市", "金沢区")),
+        )
+        // 市区町村候補が空(ジオコーダが locality を返さない)でも県一致だけで出る
+        assertEquals(
+            listOf(kanagawa),
+            municipalCampaignsForLocation(campaigns + kanagawa, "神奈川県", emptyList()),
+        )
+        // 他県の地点では出ない
+        assertEquals(
+            listOf(suginami),
+            municipalCampaignsForLocation(campaigns + kanagawa, "東京都", listOf("杉並区")),
+        )
+    }
+
+    @Test
+    fun `市の施策と県全域施策の併催は両方ピルに出る`() {
+        val yokohama = municipalCampaign("yokohama", "神奈川県", "横浜市")
+        assertEquals(
+            listOf(kanagawa, yokohama),
+            municipalCampaignsForLocation(
+                listOf(national, kanagawa, yokohama), "神奈川県", listOf("横浜市", "金沢区"),
+            ),
+        )
     }
 
     // ---------- 登録地域の自治体施策(探すタブのお知らせバナー用・厳密一致) ----------

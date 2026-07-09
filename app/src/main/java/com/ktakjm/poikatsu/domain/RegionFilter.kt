@@ -2,8 +2,16 @@ package com.ktakjm.poikatsu.domain
 
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.MunicipalityMaster
+import com.ktakjm.poikatsu.data.Region
 import com.ktakjm.poikatsu.data.RegisteredArea
 import com.ktakjm.poikatsu.data.RegisteredAreaType
+
+/**
+ * 県全域施策(かながわトクトクキャンペーン等)の規約: region.name に都道府県名をそのまま入れる
+ * (例: {name: "神奈川県", prefecture: "神奈川県"})。自治体マスタに「県」という行政単位は無いため、
+ * name == prefecture を県全域のマーカーとして扱う(data/README.md の region 仕様参照)。
+ */
+val Region.isPrefectureWide: Boolean get() = name == prefecture
 
 /**
  * 登録自治体(居住地・行動圏)によるキャンペーンの地域フィルタ。
@@ -27,9 +35,13 @@ fun filterCampaignsByArea(
     val knownMunicipalities = master.prefectures
         .flatMap { pref -> pref.municipalities.map { pref.name to it.name } }
         .toSet()
+    val registeredPrefectures = registered.map { it.prefecture }.toSet()
 
     return campaigns.filter { campaign ->
         val region = campaign.region ?: return@filter true
+        // 県全域施策は「その県の自治体を1つでも登録していれば通す」。マスタに県という単位は
+        // 無いので、防御的全通し(下の !in knownMunicipalities)より先に判定する
+        if (region.isPrefectureWide) return@filter region.prefecture in registeredPrefectures
         val key = region.prefecture to region.name
         key in allowed || key !in knownMunicipalities
     }
@@ -77,9 +89,13 @@ fun municipalCampaignsForAreas(
 ): List<Campaign> {
     if (registered.isEmpty() || master.isEmpty()) return emptyList()
     val allowed = allowedMunicipalities(registered, master)
+    val registeredPrefectures = registered.map { it.prefecture }.toSet()
     return campaigns.filter { campaign ->
         campaign.campaignType == CampaignType.MUNICIPAL &&
-            campaign.region?.let { (it.prefecture to it.name) in allowed } == true
+            campaign.region?.let { region ->
+                if (region.isPrefectureWide) region.prefecture in registeredPrefectures
+                else (region.prefecture to region.name) in allowed
+            } == true
     }
 }
 
@@ -87,6 +103,7 @@ fun municipalCampaignsForAreas(
  * 店舗・地点の所在地に一致する自治体施策(「近く」の地図お知らせピル用)。
  * localityCandidates にはリバースジオコーディング結果の市区町村名候補を渡す
  * (東京23区・一般市は locality、政令市の行政区は subLocality に入るため複数候補)。
+ * 県全域施策は都道府県の一致だけでマッチする(市区町村候補が空でも返る)。
  */
 fun municipalCampaignsForLocation(
     campaigns: List<Campaign>,
@@ -95,9 +112,11 @@ fun municipalCampaignsForLocation(
 ): List<Campaign> {
     if (prefecture.isBlank()) return emptyList()
     val candidates = localityCandidates.filter { it.isNotBlank() }.toSet()
-    if (candidates.isEmpty()) return emptyList()
     return campaigns.filter { campaign ->
         campaign.campaignType == CampaignType.MUNICIPAL &&
-            campaign.region?.let { it.prefecture == prefecture && it.name in candidates } == true
+            campaign.region?.let { region ->
+                region.prefecture == prefecture &&
+                    (region.isPrefectureWide || region.name in candidates)
+            } == true
     }
 }
