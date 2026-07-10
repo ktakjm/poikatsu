@@ -1,5 +1,5 @@
 {
-  "schema_version": 7,
+  "schema_version": 8,
   "updated_at": "2026-07-10",
   "campaigns": [
     {
@@ -281,6 +281,10 @@
       "name": "かながわトクトクキャンペーン『かなトク！』（最大20%戻ってくる）",
       "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイント・PayPayデビットで支払う",
       "rate_base": 20.0,
+      "rate_rules": [
+        { "condition": "中小企業・小規模企業の店舗", "rate": 20.0 },
+        { "condition": "大手企業の店舗", "rate": 10.0 }
+      ],
       "period_start": "2026-06-19",
       "period_end": null,
       "per_transaction_cap": 1500,
@@ -293,7 +297,6 @@
       "detail_url": "https://paypay.ne.jp/event/kanagawa-pref/",
       "store_search_url": null,
       "conditions": [
-        "中小企業・小規模企業の店舗は20%付与、大手企業の店舗は10%付与",
         "付与上限は20%店舗と10%店舗の合算で2,500ポイント",
         "対象店舗はキャンペーンツール掲出店（PayPayアプリの「近くのおトク」で確認）",
         "タバコ・オンライン決済・自動販売機・券売機での支払いは対象外",

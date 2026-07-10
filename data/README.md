@@ -30,7 +30,10 @@
   - `"managed"`: `merchant_rules` で管理。「探す」「近く」タブに表示
   - `"external"`: 外部参照のみ。キャンペーンタブにのみ表示
 - `payment_method_id` — QR 決済の識別子(payment_methods.json の `qr_payments[].id` と対応)。カード施策は null
-- `rate_base` — 定率の場合の率(%)。定額の場合は null。常設カード施策では現実的な基準還元率
+- `rate_base` — 定率の場合の率(%)。定額の場合は null。常設カード施策では現実的な基準還元率。`rate_rules`(段階制)がある施策では**必ずその最大値**を入れる(整合性テストで強制)
+- `rate_rules` — 店舗に紐づかない**条件別の還元率**(段階制)。`[{ "condition": "中小企業・小規模企業の店舗", "rate": 20.0 }, ...]`。managed の `merchant_rules[].rate_override`(店舗キーの上書き)と対になる、条件キーの構造。かなトク(中小20%/大手10%)のような external 施策で使う
+  - **登録規則(データ収集時)**: 公式に複数の率がある施策は、全条件と率をここに列挙し、`rate_base` にはその**最大値**を入れる。単一率の施策では書かない(空/省略)。「base に入れる値の判断」を推論に委ねないための無条件規則で、`rate_base == rate_rules の最大値` を CI(整合性テスト)が検証する
+  - 表示: これがある施策は数字に「最大」が付き、内訳が判定詳細に列挙される。率の内訳を `conditions` に重複して書かない
 - `discount_amount` — 定額の場合の金額(円)。定率の場合は null
   - **`rate_base` と `discount_amount` は排他(どちらか一方が non-null)**
 - `per_transaction_cap` — 1 回あたりの付与/割引上限(円相当)。null = 上限なし
@@ -147,7 +150,7 @@
 | `test_upcoming` | **UPCOMING** 状態(常時未開始) | 常時安定 |
 | `test_ending_soon` | **残り 3 日警告**(検証日に `period_end` を手直し) | **要手直し** |
 | `test_municipal` | 自治体施策(`municipal`+`external`)、`region`(北海道札幌市=実在自治体。地域フィルタ・お知らせ表示の実機検証用)、`store_search_url`、`per_transaction_cap`+`period_total_cap`、`may_end_early` | 常時安定 |
-| `test_municipal_hiroshima_paypay` | 同一自治体・複数決済手段の 1 本目(広島県広島市 × テストPayPay 25%)。自治体グルーピング(1 カードにストライプ 2 色)の検証用 | 常時安定 |
+| `test_municipal_hiroshima_paypay` | 同一自治体・複数決済手段の 1 本目(広島県広島市 × テストPayPay 最大25%)。自治体グルーピング(1 カードにストライプ 2 色)と `rate_rules`(段階制。中小25%/大手10%→「最大」表示+内訳)の検証用 | 常時安定 |
 | `test_municipal_hiroshima_aupay` | 同一自治体・複数決済手段の 2 本目(広島県広島市 × テストauPAY 15%) | 常時安定 |
 
 #### 複数施策競合の確認

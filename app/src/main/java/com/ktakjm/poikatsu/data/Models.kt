@@ -118,6 +118,19 @@ data class MerchantRule(
     @SerialName("official_store_list") val officialStoreList: OfficialStoreList? = null,
 )
 
+/**
+ * 店舗に紐づかない条件別の還元率(external 施策の段階制。例: 中小20%・大手10%)。
+ * managed の rate_base + merchant_rules[].rate_override と対になる構造で、これがある施策の
+ * rate_base にはリスト中の最大値を入れる(整合性テストで強制。「最大○%」表示の根拠)。
+ * 表示専用で、判定エンジンの最良比較は従来どおり rate_base(=最大の楽観値)を使う。
+ */
+@Serializable
+data class RateRule(
+    /** 率が適用される条件(例: "中小企業・小規模企業の店舗")。表示にそのまま使う */
+    val condition: String,
+    val rate: Double,
+)
+
 @Serializable
 data class Region(
     val name: String,
@@ -149,6 +162,8 @@ data class Campaign(
     val name: String,
     @SerialName("payment_instruction") val paymentInstruction: String = "",
     @SerialName("rate_base") val rateBase: Double? = null,
+    /** 条件別の還元率(段階制)。非空なら rate_base はこの最大値で、表示は「最大○%」+内訳になる */
+    @SerialName("rate_rules") val rateRules: List<RateRule> = emptyList(),
     @SerialName("period_start") val periodStart: String? = null,
     @SerialName("period_end") val periodEnd: String? = null,
     val conditions: List<String> = emptyList(),

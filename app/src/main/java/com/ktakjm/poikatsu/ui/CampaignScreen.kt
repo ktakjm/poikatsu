@@ -308,17 +308,25 @@ internal fun CampaignDetail(
 
 // ==================== 共通ヘルパー ====================
 
-/** グループの最大還元率/特典テキスト(サマリーカード右側用)。抽選は比較に載せず「抽選」と表示する */
+/**
+ * グループの最大還元率/特典テキスト(サマリーカード右側用)。抽選は比較に載せず「抽選」と表示する。
+ * 表示する数字が「変動する率の最大値」のとき(店舗別 rate_override・条件別 rate_rules・
+ * グループ内で率の異なる複数施策)は「最大」を冠し、一律の率と誤認されないようにする。
+ */
 private fun campaignGroupMaxBenefit(campaigns: List<Campaign>): String? {
     val comparable = campaigns.filter { BenefitType.fromString(it.benefitType) != BenefitType.LOTTERY }
     if (comparable.isEmpty()) return "抽選"
     val type = BenefitType.fromString(comparable.first().benefitType)
-    // 店舗別の rate_override がある施策は「最大○%」としてその最大値を出す
-    val maxRate = comparable
-        .mapNotNull { c -> (c.merchantRules.mapNotNull { it.rateOverride } + listOfNotNull(c.rateBase)).maxOrNull() }
-        .maxOrNull()
+    val allRates = comparable.flatMap { c ->
+        c.merchantRules.mapNotNull { it.rateOverride } +
+            c.rateRules.map { it.rate } +
+            listOfNotNull(c.rateBase)
+    }
+    val maxRate = allRates.maxOrNull()
     val maxDiscount = comparable.mapNotNull { it.discountAmount }.maxOrNull()
-    return formatBenefit(type, maxRate, maxDiscount)?.toString()
+    val label = formatBenefit(type, maxRate, maxDiscount)?.toString() ?: return null
+    val ratesVary = allRates.distinct().size > 1 || comparable.any { it.rateRules.isNotEmpty() }
+    return if (maxRate != null && ratesVary) "最大$label" else label
 }
 
 private fun buildPeriodLabel(earliestStart: LocalDate?, latestEnd: LocalDate?): String = buildString {

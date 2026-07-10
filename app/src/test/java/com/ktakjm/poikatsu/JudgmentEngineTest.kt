@@ -1303,6 +1303,23 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
+    fun `実データ_rate_rulesがある施策はrate_baseがその最大値`() {
+        // 段階制(中小20%/大手10%等)の登録規則: 全条件を rate_rules に列挙し、
+        // rate_base にはその最大値を入れる(表示は「最大○%」)。AI 収集時の登録ゆれをここで検出する
+        data.campaigns.filter { it.rateRules.isNotEmpty() }.forEach { c ->
+            c.rateRules.forEach { r ->
+                assertTrue("${c.id}: rate_rules の condition が空", r.condition.isNotBlank())
+                assertTrue("${c.id}: rate_rules の rate($r) は正の値", r.rate > 0)
+            }
+            assertEquals(
+                "${c.id}: rate_base(${c.rateBase}) は rate_rules の最大値であること",
+                c.rateRules.maxOf { it.rate },
+                c.rateBase,
+            )
+        }
+    }
+
+    @Test
     fun `実データ_同一自治体の複数決済手段がマージ可能`() {
         val municipal = data.campaigns.filter { it.campaignType == CampaignType.MUNICIPAL }
         val grouped = municipal.groupBy { it.region?.name }
@@ -1508,6 +1525,23 @@ class TestDataIntegrityTest {
             }
             val overlap = c.eligibleWallets.intersect(c.ineligibleWallets.toSet())
             assertTrue("${c.id}: eligible/ineligible が重複 $overlap", overlap.isEmpty())
+        }
+    }
+
+    @Test
+    fun `テストデータ_rate_rulesの段階制パターンを含み整合している`() {
+        val tiered = data.campaigns.filter { it.rateRules.isNotEmpty() }
+        assertTrue("段階制(rate_rules)のショーケース施策が存在する", tiered.isNotEmpty())
+        tiered.forEach { c ->
+            c.rateRules.forEach { r ->
+                assertTrue("${c.id}: rate_rules の condition が空", r.condition.isNotBlank())
+                assertTrue("${c.id}: rate_rules の rate($r) は正の値", r.rate > 0)
+            }
+            assertEquals(
+                "${c.id}: rate_base(${c.rateBase}) は rate_rules の最大値であること",
+                c.rateRules.maxOf { it.rate },
+                c.rateBase,
+            )
         }
     }
 

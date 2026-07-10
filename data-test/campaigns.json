@@ -1,5 +1,5 @@
 {
-  "schema_version": 7,
+  "schema_version": 8,
   "updated_at": "2026-07-10",
   "campaigns": [
     {
@@ -242,9 +242,13 @@
       "store_scope": "external",
       "operator": "テストPayPay",
       "payment_method_id": "test_paypay",
-      "name": "テスト広島市キャッシュレスキャンペーン（テストPayPayで25%還元）",
+      "name": "テスト広島市キャッシュレスキャンペーン（テストPayPayで最大25%還元）",
       "payment_instruction": "テストPayPay残高・テストPayPayクレジットで支払う",
       "rate_base": 25.0,
+      "rate_rules": [
+        { "condition": "中小企業・小規模企業の店舗", "rate": 25.0 },
+        { "condition": "大手企業の店舗", "rate": 10.0 }
+      ],
       "period_start": "2026-07-01",
       "period_end": "2026-09-30",
       "per_transaction_cap": 2000,
@@ -257,8 +261,7 @@
       "detail_url": "https://example.com/municipal-hiroshima-paypay",
       "store_search_url": "https://example.com/municipal-hiroshima-paypay-stores",
       "conditions": [
-        "対象の中小企業・小規模事業者の店舗が対象",
-        "大手チェーン店は対象外"
+        "付与上限は25%店舗と10%店舗の合算"
       ],
       "merchant_rules": [],
       "verified_date": "2026-07-10"

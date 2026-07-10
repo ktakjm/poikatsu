@@ -203,6 +203,7 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
                 )
             }
         }
+        RateRulesRows(judgment)
         PeriodRow(campaign)
         RecurrenceRow(judgment)
         if (campaign.paymentInstruction.isNotBlank()) {
@@ -286,6 +287,14 @@ private fun BenefitDisplay(judgment: CampaignJudgment) {
     }
     val label = formatBenefit(judgment.benefitType, judgment.effectiveRate, judgment.discountAmount) ?: return
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        // 段階制(rate_rules)の施策は rate_base = 最大値なので「最大」を冠し、断定に見せない
+        if (judgment.campaign.rateRules.isNotEmpty()) {
+            Text(
+                "最大",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
         Text(
             label.value,
             style = MaterialTheme.typography.displaySmall,
@@ -296,6 +305,27 @@ private fun BenefitDisplay(judgment: CampaignJudgment) {
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary,
         )
+    }
+}
+
+/**
+ * 条件別還元率(rate_rules=段階制)の内訳。「最大○%」の根拠をそのまま列挙する
+ * (例: ・中小企業・小規模企業の店舗: 20% 還元 / ・大手企業の店舗: 10% 還元)。
+ */
+@Composable
+private fun RateRulesRows(judgment: CampaignJudgment) {
+    val rules = judgment.campaign.rateRules
+    if (rules.isEmpty()) return
+    Column {
+        rules.forEach { rule ->
+            val label = formatBenefit(judgment.benefitType, rule.rate, null)?.toString()
+                ?: "${rule.rate}%"
+            Text(
+                "・${rule.condition}: $label",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+        }
     }
 }
 
