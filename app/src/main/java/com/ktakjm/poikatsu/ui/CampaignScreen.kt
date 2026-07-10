@@ -39,6 +39,7 @@ import com.ktakjm.poikatsu.domain.CampaignType
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.formatBenefit
 import com.ktakjm.poikatsu.domain.isTargetDay
+import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.nextTargetDay
 import com.ktakjm.poikatsu.domain.recurrenceLabel
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
@@ -203,7 +204,7 @@ private fun CampaignSummaryCard(
     val today = LocalDate.now()
     val first = campaigns.first()
     val title = campaignGroupDisplayTitle(first, merchantNames)
-    val hasTimeLimited = campaigns.any { it.periodEnd != null }
+    val hasTimeLimited = campaigns.any { it.isTimeLimited }
     val maxBenefit = campaignGroupMaxBenefit(campaigns)
 
     val allEnds = campaigns.mapNotNull { c -> c.periodEnd?.let { LocalDate.parse(it) } }

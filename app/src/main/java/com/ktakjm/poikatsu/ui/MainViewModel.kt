@@ -40,6 +40,7 @@ import com.ktakjm.poikatsu.domain.municipalCampaignsForAreas
 import com.ktakjm.poikatsu.domain.municipalCampaignsForLocation
 import com.ktakjm.poikatsu.domain.isPrefectureWide
 import com.ktakjm.poikatsu.domain.isTargetDay
+import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.nextTargetDay
 import com.ktakjm.poikatsu.domain.walletAppPackage
 import com.ktakjm.poikatsu.util.GeoMath
@@ -453,7 +454,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 bestBenefit = result.bestBenefitLabel(),
                 campaignCount = allCampaigns.distinctBy { it.id }.size,
                 brandColors = result.judgments.mapNotNull { it.brandColor }.distinct().take(3),
-                hasTimeLimited = allCampaigns.any { it.periodEnd != null },
+                hasTimeLimited = allCampaigns.any { it.isTimeLimited },
             )
         }
 
@@ -820,7 +821,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     lat = poi.lat,
                     lon = poi.lon,
                     brandColors = result.judgments.mapNotNull { it.brandColor }.distinct(),
-                    hasTimeLimited = allCampaigns.any { it.periodEnd != null },
+                    hasTimeLimited = allCampaigns.any { it.isTimeLimited },
                 )
             }
             // 同一店舗の重複を排除(YOLP は同じ店を別名・空白違いで複数返すことがある。

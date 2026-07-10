@@ -20,6 +20,7 @@ import com.ktakjm.poikatsu.domain.WALLET_APP_PACKAGE
 import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.formatBenefit
+import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.nextTargetDay
 import com.ktakjm.poikatsu.domain.recurrenceLabel
 import com.ktakjm.poikatsu.util.JapaneseText
@@ -1555,6 +1556,17 @@ class TestDataIntegrityTest {
             assertTrue("${c.id}: invalid benefitType '${c.benefitType}'", c.benefitType in validBenefitTypes)
             assertTrue("${c.id}: invalid storeScope '${c.storeScope}'", c.storeScope in validScopes)
         }
+    }
+}
+
+class CampaignFlagsTest {
+
+    @Test
+    fun `期間限定は終了日ありまたは早期終了型(終了日未定のかなトク型も含む)`() {
+        val base = Campaign(id = "x", operator = "テスト", name = "施策")
+        assertFalse("終了日なし・早期終了なし(常設)は期間限定でない", base.isTimeLimited)
+        assertTrue(base.copy(periodEnd = "2026-12-31").isTimeLimited)
+        assertTrue("終了日未定でも予算到達で終わり得るなら期間限定", base.copy(mayEndEarly = true).isTimeLimited)
     }
 }
 

@@ -96,6 +96,13 @@ enum class CampaignType(val jsonValue: String) {
 
 val Campaign.campaignType: CampaignType get() = CampaignType.fromString(type)
 
+/**
+ * 期間限定バッジの対象か。「終了日が決まっている」だけでなく「終了日未定でも予算到達で
+ * 早期終了があり得る」(かなトク等の may_end_early)も期間限定として扱う。
+ * false になるのは実質、終了予定の無い常設施策(card_program)のみ。
+ */
+val Campaign.isTimeLimited: Boolean get() = periodEnd != null || mayEndEarly
+
 // ---- ウォレット(スマホのタッチ決済)対応 ----
 // eligible_wallets / ineligible_wallets は「公式がウォレット単位で対象/対象外を言い切っている」
 // 事実だけを持つ(未掲載は不明の3状態)。Android 固有の消費(Google Pay → ウォレットアプリ起動)は
