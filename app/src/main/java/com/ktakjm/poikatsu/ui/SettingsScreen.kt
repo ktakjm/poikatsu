@@ -68,8 +68,10 @@ import com.ktakjm.poikatsu.ui.theme.warningColor
 
 /**
  * 設定画面(4 番目のタブ)。ListItem は端まで使うため PaddedColumn を介さず直接置く。
- * 表示/マイカード/QR決済/自治体/データ/このアプリのセクション。
+ * 表示/マイカード/QR決済/自治体/データ/開発者向け/このアプリのセクション。
  * 値は DataStore 由来(MainViewModel 経由)で、変更は即 ViewModel の setter へ流す。
+ * 開発者向け設定の項目本体は別画面([DeveloperSettingsScreen])に置き、ここは開発者モードの
+ * トグルと導線のみ(OFF 操作は確認ダイアログを経て一括リセット)。
  */
 @Composable
 internal fun SettingsScreen(
@@ -83,9 +85,10 @@ internal fun SettingsScreen(
     municipalityMaster: MunicipalityMaster,
     dataStatus: String,
     refreshing: Boolean,
-    dataCommitRef: String,
-    useTestData: Boolean,
     useBundledData: Boolean,
+    developerMode: Boolean,
+    /** 「開発者向け設定」行に出す非既定値のサマリ([developerSettingsSummary]) */
+    developerSummary: String,
     onThemeModeChange: (ThemeMode) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
     onAutoRefreshChange: (Boolean) -> Unit,
@@ -98,12 +101,15 @@ internal fun SettingsScreen(
     onAddRegisteredArea: (RegisteredArea) -> Unit,
     onRemoveRegisteredArea: (RegisteredArea) -> Unit,
     onRefresh: () -> Unit,
-    onDataCommitRefChange: (String) -> Unit,
-    onUseTestDataChange: (Boolean) -> Unit,
-    onUseBundledDataChange: (Boolean) -> Unit,
+    onDeveloperModeChange: (Boolean) -> Unit,
+    onOpenDeveloperSettings: () -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
     var showMunicipalityPicker by remember { mutableStateOf(false) }
+
+    // 開発者モードの切替確認ダイアログ。非 null なら表示中で、値が切替先(true=オン/false=オフ)。
+    // ON は想定外挙動の注意、OFF は一括リセットの注意と、どちらの方向も確認を挟む
+    var developerModeDialogTarget by remember { mutableStateOf<Boolean?>(null) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         // --- 表示 ---
         SettingsSectionHeader("表示")
@@ -262,17 +268,25 @@ internal fun SettingsScreen(
         // --- 開発者向け ---
         SettingsSectionHeader("開発者向け")
         ListItem(
-            headlineContent = { Text("テストデータを使う") },
-            supportingContent = { Text("data-test/ のショーケースデータに切り替えます") },
-            trailingContent = { Switch(checked = useTestData, onCheckedChange = onUseTestDataChange) },
+            headlineContent = { Text("開発者モード") },
+            supportingContent = { Text("開発・検証用の設定を表示します") },
+            trailingContent = {
+                Switch(
+                    checked = developerMode,
+                    onCheckedChange = { enabled -> developerModeDialogTarget = enabled },
+                )
+            },
         )
-        ListItem(
-            headlineContent = { Text("同梱データを使う") },
-            supportingContent = { Text("APK 同梱の JSON を直接表示します(リモート取得を停止)。push せずにデータ変更を実機検証する用") },
-            trailingContent = { Switch(checked = useBundledData, onCheckedChange = onUseBundledDataChange) },
-        )
-        // 同梱モード中はリモートを見ないため commit 指定は無意味 → グレーアウト
-        CommitRefRow(value = dataCommitRef, onChange = onDataCommitRefChange, enabled = !useBundledData)
+        if (developerMode) {
+            ListItem(
+                headlineContent = { Text("開発者向け設定") },
+                supportingContent = { Text(developerSummary) },
+                trailingContent = {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                },
+                modifier = Modifier.clickable(onClick = onOpenDeveloperSettings),
+            )
+        }
 
         // --- このアプリ ---
         SettingsSectionHeader("このアプリ")
@@ -297,6 +311,32 @@ internal fun SettingsScreen(
             onAdd = onAddRegisteredArea,
             onRemove = onRemoveRegisteredArea,
             onDismiss = { showMunicipalityPicker = false },
+        )
+    }
+
+    developerModeDialogTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { developerModeDialogTarget = null },
+            title = { Text(if (target) "開発者モードをオンにしますか？" else "開発者モードをオフにしますか？") },
+            text = {
+                Text(
+                    if (target) {
+                        "開発者モードは開発者専用です。テストデータの表示など、アプリが通常と異なる想定外の動作になることがあります。それでもオンにしますか？"
+                    } else {
+                        "開発者向け設定(テストデータ・同梱データ・データ取得先 commit)はすべて既定値に戻ります。"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDeveloperModeChange(target)
+                    developerModeDialogTarget = null
+                }) { Text(if (target) "オンにする" else "オフにする") }
+            },
+            dismissButton = {
+                TextButton(onClick = { developerModeDialogTarget = null }) { Text("キャンセル") }
+            },
         )
     }
 }
@@ -695,36 +735,5 @@ private fun SettingsSectionHeader(text: String) {
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
-    )
-}
-
-@Composable
-private fun CommitRefRow(value: String, onChange: (String) -> Unit, enabled: Boolean = true) {
-    var text by remember(value) { mutableStateOf(value) }
-    ListItem(
-        headlineContent = { Text("データ取得先 commit") },
-        supportingContent = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it.take(40) },
-                placeholder = { Text("空欄 = main") },
-                singleLine = true,
-                enabled = enabled,
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            )
-        },
-        trailingContent = {
-            TextButton(
-                onClick = { onChange(text) },
-                enabled = enabled && text.trim() != value,
-            ) { Text("適用") }
-        },
-        colors = if (enabled) {
-            ListItemDefaults.colors()
-        } else {
-            ListItemDefaults.colors(
-                headlineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-            )
-        },
     )
 }

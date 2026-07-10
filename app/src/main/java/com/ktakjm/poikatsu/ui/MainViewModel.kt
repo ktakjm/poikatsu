@@ -220,6 +220,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val storeCheck: StoreCheckState? = null,
         val dataUpdatedAt: String = "",
         val dataSource: DataSource? = null,
+        /** 表示中データのフル commit SHA(開発者向け設定の表示用)。同梱データ・解決失敗時は null */
+        val dataCommitSha: String? = null,
         val refreshing: Boolean = false,
         val refreshFailed: Boolean = false,
         val nearby: NearbyUi? = null,
@@ -279,6 +281,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val dataCommitRef: String = "",
         val useTestData: Boolean = false,
         val useBundledData: Boolean = false,
+        val developerMode: Boolean = false,
+        /** 開発者向け設定画面(設定タブ上のオーバーレイ)を表示中か */
+        val developerSettingsOpen: Boolean = false,
     )
 
     /**
@@ -332,6 +337,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         },
         cacheDir = File(app.filesDir, "remote_data"),
         fetchRemote = { fileName, ref, dataDir -> GithubRawClient.fetch(fileName, ref, dataDir) },
+        resolveSha = { ref -> GithubRawClient.resolveCommitSha(ref) },
     )
 
     private val settingsRepo = SettingsRepository(app)
@@ -603,6 +609,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 error = null,
                 dataUpdatedAt = loaded.data.updatedAt,
                 dataSource = loaded.source,
+                dataCommitSha = loaded.commitSha,
                 categories = newEngine.categories,
                 results = newEngine.searchRewarded(it.query, it.selectedCategories),
                 selection = it.selection?.let { sel ->
@@ -624,6 +631,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 dataCommitRef = settings.dataCommitRef,
                 useTestData = settings.useTestData,
                 useBundledData = settings.useBundledData,
+                developerMode = settings.developerMode,
                 timeLimitedActive = timeLimitedActive,
                 timeLimitedUpcoming = timeLimitedUpcoming,
                 searchMunicipalAreaNames = searchMunicipalAreaNames,
@@ -1416,6 +1424,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onSetUseTestData(enabled: Boolean) = viewModelScope.launch { settingsRepo.setUseTestData(enabled) }
 
     fun onSetUseBundledData(enabled: Boolean) = viewModelScope.launch { settingsRepo.setUseBundledData(enabled) }
+
+    /**
+     * 開発者モードの ON/OFF。OFF は単なるトグル書き込みでなく開発者向け設定の一括リセット
+     * (ref/testData/bundled を既定値へ)。リセットの emission を settings Flow の既存の変更検知が
+     * 拾い、必要なら refresh(force=true) で本番データへ自動復帰する。
+     */
+    fun onSetDeveloperMode(enabled: Boolean) = viewModelScope.launch {
+        if (enabled) settingsRepo.setDeveloperMode(true) else settingsRepo.resetDeveloperSettings()
+    }
+
+    fun onOpenDeveloperSettings() {
+        _state.update { it.copy(developerSettingsOpen = true) }
+    }
+
+    fun onCloseDeveloperSettings() {
+        _state.update { it.copy(developerSettingsOpen = false) }
+    }
 
     fun onSetCardOwned(cardId: String, owned: Boolean) =
         viewModelScope.launch { settingsRepo.setOwned(cardId, owned) }

@@ -48,6 +48,12 @@ data class AppSettings(
      * ローカル編集した JSON を push なしで実機検証できる(反映には installDebug が必要)。
      */
     val useBundledData: Boolean = false,
+    /**
+     * 開発者モード。ON の間だけ設定画面に「開発者向け設定」(dataCommitRef / useTestData /
+     * useBundledData)への導線を出す。OFF 操作時は [SettingsRepository.resetDeveloperSettings] で
+     * 開発者向け設定を一括で既定値に戻す(戻し忘れによる実データとの取り違え防止)。
+     */
+    val developerMode: Boolean = false,
     /** 利用中の QR 決済 ID。payment_methods.json の qr_payments カタログからユーザーが選択 */
     val enabledQrPaymentIds: Set<String> = emptySet(),
     /**
@@ -79,6 +85,7 @@ class SettingsRepository(private val context: Context) {
         val DATA_COMMIT_REF = stringPreferencesKey("data_commit_ref")
         val USE_TEST_DATA = booleanPreferencesKey("use_test_data")
         val USE_BUNDLED_DATA = booleanPreferencesKey("use_bundled_data")
+        val DEVELOPER_MODE = booleanPreferencesKey("developer_mode")
         val QR_ENABLED = stringPreferencesKey("qr_enabled")
         val OWNED_BRANDS = stringPreferencesKey("owned_brands")
         // 旧キー "municipalities"(RegisteredMunicipality のリスト)は公開前のスキーマ刷新で廃止。
@@ -97,6 +104,7 @@ class SettingsRepository(private val context: Context) {
             dataCommitRef = prefs[Keys.DATA_COMMIT_REF] ?: "",
             useTestData = prefs[Keys.USE_TEST_DATA] ?: false,
             useBundledData = prefs[Keys.USE_BUNDLED_DATA] ?: false,
+            developerMode = prefs[Keys.DEVELOPER_MODE] ?: false,
             enabledQrPaymentIds = prefs.decodeQrEnabled(),
             ownedBrands = prefs.decodeOwnedBrands(),
             registeredAreas = prefs.decodeRegisteredAreas(),
@@ -125,6 +133,24 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setUseBundledData(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.USE_BUNDLED_DATA] = enabled }
+    }
+
+    suspend fun setDeveloperMode(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.DEVELOPER_MODE] = enabled }
+    }
+
+    /**
+     * 開発者モード OFF: 開発者向け設定を既定値に戻し、モード自体も OFF にする。
+     * 1回の edit にまとめることで settings Flow の emission が1度で済み、
+     * 変更検知(ref/testData/bundled → refresh(force=true))が二重に走らない。
+     */
+    suspend fun resetDeveloperSettings() {
+        context.settingsDataStore.edit { prefs ->
+            prefs.remove(Keys.DATA_COMMIT_REF)
+            prefs.remove(Keys.USE_TEST_DATA)
+            prefs.remove(Keys.USE_BUNDLED_DATA)
+            prefs[Keys.DEVELOPER_MODE] = false
+        }
     }
 
     suspend fun setOwned(cardId: String, owned: Boolean) =

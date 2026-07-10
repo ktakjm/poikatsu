@@ -133,7 +133,7 @@
 
 ### 切替方法
 
-設定画面 → 開発者向け → 「テストデータを使う」トグルを ON にすると、アプリのデータ取得先が `data/` から `data-test/` に切り替わる(リモート取得・同梱 assets とも)。`data-test/` のデータは `data/` と同じスキーマ(campaigns.json / merchants.json / payment_methods.json / municipalities.json)に従い、カードもテスト専用カタログ(`test_card`)に切り替わる。municipalities.json はリモート取得の対象外だが assets の読み分けには追従するため、`data-test/` にも `data/` と同一内容のコピーを置く。
+設定画面 → 「開発者モード」を ON → 開発者向け設定画面の「テストデータを使う」トグルを ON にすると、アプリのデータ取得先が `data/` から `data-test/` に切り替わる(リモート取得・同梱 assets とも)。`data-test/` のデータは `data/` と同じスキーマ(campaigns.json / merchants.json / payment_methods.json / municipalities.json)に従い、カードもテスト専用カタログ(`test_card`)に切り替わる。municipalities.json はリモート取得の対象外だが assets の読み分けには追従するため、`data-test/` にも `data/` と同一内容のコピーを置く。
 
 さらに「同梱データを使う」トグルを ON にすると、リモート取得(GitHub raw)とキャッシュを使わず APK 同梱の assets を直接読む。ローカルで編集した JSON を **push せずに実機検証**できる(反映には `installDebug` での焼き直しが必要)。ON 中はリモート更新を停止し、「テストデータを使う」との組み合わせで assets 内の `data/`⇔`data-test/` を読み分ける。
 

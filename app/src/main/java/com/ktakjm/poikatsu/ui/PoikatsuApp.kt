@@ -162,10 +162,10 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
         }
     }
 
-    // 下位画面(詳細/店舗判定/キャンペーン詳細)やロード・エラーに重なっていないベースのタブ表示状態。下部ナビの表示条件。
+    // 下位画面(詳細/店舗判定/キャンペーン詳細/開発者向け設定)やロード・エラーに重なっていないベースのタブ表示状態。下部ナビの表示条件。
     val baseTabsVisible = !state.loading && state.error == null &&
         state.selection == null && state.storeCheck == null &&
-        state.selectedCampaignGroup == null
+        state.selectedCampaignGroup == null && !state.developerSettingsOpen
 
     Scaffold(
         topBar = {
@@ -201,6 +201,14 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         },
                     )
                 }
+                state.developerSettingsOpen -> TopAppBar(
+                    title = { Text("開発者向け設定") },
+                    navigationIcon = {
+                        IconButton(onClick = viewModel::onCloseDeveloperSettings) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+                        }
+                    },
+                )
                 selectedTab == AppTab.NEARBY -> Unit
                 selectedTab == AppTab.SEARCH -> TopAppBar(title = { Text("ポイ活ナビ") })
                 selectedTab == AppTab.CAMPAIGNS -> TopAppBar(title = { Text("キャンペーン") })
@@ -286,6 +294,16 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         onBack = viewModel::onCloseCampaignDetail,
                     )
                 }
+                state.developerSettingsOpen -> DeveloperSettingsScreen(
+                    dataCommitRef = state.dataCommitRef,
+                    dataCommitSha = state.dataCommitSha,
+                    useTestData = state.useTestData,
+                    useBundledData = state.useBundledData,
+                    onBack = viewModel::onCloseDeveloperSettings,
+                    onDataCommitRefChange = viewModel::onSetDataCommitRef,
+                    onUseTestDataChange = viewModel::onSetUseTestData,
+                    onUseBundledDataChange = viewModel::onSetUseBundledData,
+                )
                 selectedTab == AppTab.NEARBY -> {
                     val nearby = state.nearby
                     if (nearby != null) {
@@ -350,9 +368,13 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         state.useBundledData,
                     ),
                     refreshing = state.refreshing,
-                    dataCommitRef = state.dataCommitRef,
-                    useTestData = state.useTestData,
                     useBundledData = state.useBundledData,
+                    developerMode = state.developerMode,
+                    developerSummary = developerSettingsSummary(
+                        state.dataCommitRef,
+                        state.useTestData,
+                        state.useBundledData,
+                    ),
                     onThemeModeChange = viewModel::onSetThemeMode,
                     onDynamicColorChange = viewModel::onSetDynamicColor,
                     onAutoRefreshChange = viewModel::onSetAutoRefresh,
@@ -365,9 +387,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     onAddRegisteredArea = viewModel::onAddRegisteredArea,
                     onRemoveRegisteredArea = viewModel::onRemoveRegisteredArea,
                     onRefresh = viewModel::onManualRefresh,
-                    onDataCommitRefChange = viewModel::onSetDataCommitRef,
-                    onUseTestDataChange = viewModel::onSetUseTestData,
-                    onUseBundledDataChange = viewModel::onSetUseBundledData,
+                    onDeveloperModeChange = viewModel::onSetDeveloperMode,
+                    onOpenDeveloperSettings = viewModel::onOpenDeveloperSettings,
                 )
                 else -> PaddedColumn {
                     SearchPane(

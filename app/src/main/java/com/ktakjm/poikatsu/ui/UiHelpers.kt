@@ -66,6 +66,23 @@ internal fun dataStatusLabel(
 }
 
 /**
+ * 設定画面「開発者向け設定」行のサマリ。非既定値の項目だけ列挙し、開発者モード ON 中に
+ * どの設定が効いているかを画面遷移せず確認できるようにする(戻し忘れの気づき用)。
+ */
+internal fun developerSettingsSummary(
+    dataCommitRef: String,
+    useTestData: Boolean,
+    useBundledData: Boolean,
+): String {
+    val active = buildList {
+        if (useTestData) add("テストデータ ON")
+        if (useBundledData) add("同梱データ ON")
+        if (dataCommitRef.isNotBlank()) add("ref=$dataCommitRef")
+    }
+    return if (active.isEmpty()) "すべて既定値" else active.joinToString("・")
+}
+
+/**
  * 警告・注意のトーナル面表示(アイコン + 文)。container/content の対で error(致命) / warning(注意) を出し分ける。
  * グレーのカード地に色文字を直接乗せるとコントラストが不足するため、専用の淡い面の上に濃い文字で出す。
  * アイコン/文字の色は Surface の contentColor から自動で引き継ぐ。

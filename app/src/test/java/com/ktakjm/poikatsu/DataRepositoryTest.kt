@@ -56,14 +56,22 @@ class DataRepositoryTest {
 
     // readAsset は "data/merchants.json" のような assets 内パスを受ける。
     // data-test/ 側は updated_at を変えた別内容にして読み分けを検証できるようにする
-    private fun repository(fetchRemote: (String) -> String?) = DataRepository(
+    private fun repository(
+        resolveSha: (String) -> String? = { null },
+        fetchedRefs: MutableList<String>? = null,
+        fetchRemote: (String) -> String?,
+    ) = DataRepository(
         readAsset = { path ->
             val (dir, name) = path.split("/", limit = 2)
             val text = assetTexts.getValue(name)
             if (dir == "data-test") text.replace("\"2026-07-03\"", "\"2026-12-31\"") else text
         },
         cacheDir = File(tempFolder.root, "remote_data"),
-        fetchRemote = { name, _, _ -> fetchRemote(name) },
+        fetchRemote = { name, ref, _ ->
+            fetchedRefs?.add(ref)
+            fetchRemote(name)
+        },
+        resolveSha = resolveSha,
     )
 
     @Test
@@ -129,6 +137,42 @@ class DataRepositoryTest {
         val loaded = repository { null }.loadLocal(dataDir = "data-test")
         assertEquals(DataSource.BUNDLED, loaded.source)
         assertEquals("2026-12-31", loaded.data.updatedAt)
+    }
+
+    @Test
+    fun `refresh は ref を SHA に解決して取得しキャッシュ経由でも SHA が引き継がれる`() {
+        val sha = "abc1234def5678901234567890123456789012345"
+        val fetchedRefs = mutableListOf<String>()
+        val repo = repository(resolveSha = { sha }, fetchedRefs = fetchedRefs) { name ->
+            assetTexts.getValue(name)
+        }
+        val refreshed = repo.refresh()!!
+        assertEquals(sha, refreshed.commitSha)
+        // 3ファイルとも解決済み SHA で取得される(branch 名のままだと取得の合間の push で混ざり得る)
+        assertTrue(fetchedRefs.all { it == sha })
+
+        // 次回起動相当: キャッシュから読んでも SHA が分かる
+        val nextLaunch = repository { null }.loadLocal()
+        assertEquals(DataSource.CACHE, nextLaunch.source)
+        assertEquals(sha, nextLaunch.commitSha)
+    }
+
+    @Test
+    fun `SHA 解決に失敗しても ref のまま取得し commitSha は null になる`() {
+        val fetchedRefs = mutableListOf<String>()
+        val repo = repository(resolveSha = { null }, fetchedRefs = fetchedRefs) { name ->
+            assetTexts.getValue(name)
+        }
+        val refreshed = repo.refresh(ref = "main")!!
+        assertNull(refreshed.commitSha)
+        assertTrue(fetchedRefs.all { it == "main" })
+        // キャッシュにも SHA は残らない(別 commit のデータに古い SHA が付くのを防ぐ)
+        assertNull(repository { null }.loadLocal().commitSha)
+    }
+
+    @Test
+    fun `同梱データの commitSha は null`() {
+        assertNull(repository { null }.loadBundled().commitSha)
     }
 
     @Test

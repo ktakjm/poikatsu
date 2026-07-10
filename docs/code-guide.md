@@ -281,13 +281,22 @@ flowchart TD
 
 ### 同梱データ直読モード（開発者向け、#36）
 
-設定 → 開発者向け「同梱データを使う」を ON にすると `loadBundled(dataDir)` が assets を直読し、キャッシュ・リモート取得を両方バイパスする。データ（data/*.json、municipalities.json 含む）をローカル編集 → `installDebug` するだけで **push せずに実機検証**できる。仕組み:
+設定 → 開発者モード ON → 開発者向け設定「同梱データを使う」を ON にすると `loadBundled(dataDir)` が assets を直読し、キャッシュ・リモート取得を両方バイパスする。データ（data/*.json、municipalities.json 含む）をローカル編集 → `installDebug` するだけで **push せずに実機検証**できる。仕組み:
 
 - **Gradle**: `data/` と `data-test/` は同名ファイルを含むため srcDir 直付けでは asset マージが衝突する。`bundleDataAssets`（Sync タスク）が両ディレクトリを構造ごと `build/generated/dataAssets/` に集めて（`*.md` 除外）assets に同梱し、`preBuild` が依存する。assets 内は `data/xxx.json` / `data-test/xxx.json` のパス構造
 - **取得元マトリクス**: `useTestData`（data/⇔data-test/）と `useBundledData`（リモート⇔assets）は直交する。`readAsset` は `"data/merchants.json"` のようなパスを受け、`DataRepository` が `dataDir` を前置するため、リモートの `dataDir` 切替と対称になる
-- **ON 中の挙動**: `refresh()` は自動・手動とも即 return（設定画面の「今すぐ更新」「データ取得先 commit」はグレーアウト）。ON 中の useTestData 切替は assets の再読で反映。municipalities.json も `dataDir` に追従する（リモート取得の対象外は従来どおり）
+- **ON 中の挙動**: `refresh()` は自動・手動とも即 return（設定画面の「今すぐ更新」と開発者向け設定画面の「データ取得先 commit」「使用中データの commit」はグレーアウト）。ON 中の useTestData 切替は assets の再読で反映。municipalities.json も `dataDir` に追従する（リモート取得の対象外は従来どおり）
 - **OFF 復帰**: `refresh(force = true)` で通常運用へ（dataCommitRef 変更時と同じ扱い）
 - **表示**: データ更新状況欄に「同梱データ表示中(開発者設定)」。BUNDLED はキャッシュなしフォールバックでも立つため、トグル ON 時のみこの文言にして実データとの取り違えを防ぐ。同梱 JSON のパース失敗（編集ミス）は直前のデータを残して Snackbar で知らせる
+
+### 開発者モード（#37）
+
+開発者向け設定（`dataCommitRef` / `useTestData` / `useBundledData`。今後増える開発者向け項目もここ）は、設定画面の「開発者モード」トグルを ON にしたときだけ現れる別画面 `DeveloperSettingsScreen` に集約する。一般利用時に設定画面が長くならないこと、テストデータの戻し忘れ事故を防ぐことが目的。
+
+- **画面**: 既存のオーバーレイ方式（`UiState.developerSettingsOpen` + topBar/本文 when の分岐 + `BackHandler`。下部ナビは非表示）。設定画面の「開発者向け設定」導線行には非既定値のサマリ（`developerSettingsSummary`。例「テストデータ ON・ref=abc1234」）を出し、遷移せずに現在の状態が分かる
+- **切替確認**: ON/OFF とも `AlertDialog` で確認を挟む（ON=開発者専用・想定外挙動の注意、OFF=一括リセットの注意）
+- **OFF 時の一括リセット**: `SettingsRepository.resetDeveloperSettings()` が 1 回の edit で ref/testData/bundled を既定値へ戻し `developerMode=false` にする。emission が 1 度なので既存の変更検知（`settingsJob` → `refresh(force = true)`）が 1 回だけ働き本番データへ自動復帰する。ON にしたときは何も変えない（常に既定値から始まる）
+- **使用中データの commit 表示**: `refresh()` は先に GitHub API（`GithubRawClient.resolveCommitSha`。`Accept: application/vnd.github.sha` でプレーンテキスト取得）で ref をフル SHA に解決し、**3 ファイルの raw 取得をその SHA に固定**する（branch 名のまま順に取ると取得の合間の push で別 commit の内容が混ざり得るため）。SHA はキャッシュ（`commit_sha.txt`）にも保存し、CACHE 起動でも表示できる。解決失敗（オフライン・API 制限）は従来どおり ref のまま取得し「不明」、同梱モード中はグレーアウト（`LoadedData.commitSha` → `UiState.dataCommitSha`）
 
 ### リモート更新の発火タイミング（ui/MainViewModel.kt）
 
@@ -446,7 +455,7 @@ stateDiagram-v2
 
 下部ナビ（`NavigationBar`）で対等に切り替わる **4 タブ**（探す / 近く / キャンペーン / 設定）を `selectedTab`（`AppTab` enum: `SEARCH` / `NEARBY` / `CAMPAIGNS` / `SETTINGS`）で管理する。`Detail`（判定詳細）/`StoreCheck`（店舗判定）は探す・近くタブに**重なるオーバーレイ**で、`selectedTab` を変更しないため戻ると元のタブへ復帰する（近くで選んだ店の詳細から戻れば近くに戻る）。
 
-**設定**は 4 タブの 1 つ（`AppTab.SETTINGS`）として独立した `SettingsScreen` に分離されている。設定値（`themeMode`/`dynamicColor`/`autoRefresh`/`cardSettings`/`qrPaymentSettings`/`registeredAreas`）は `SettingsRepository`（DataStore）の Flow を購読して `UiState` に載せ、変更は VM の setter→DataStore へ書く（`onEach { rebuild() }` で再判定）。テーマだけは描画前にテーマ層へ渡す必要があるため、`MainActivity` で VM を生成し `state.themeMode`/`dynamicColor` を `PoikatsuTheme` に注入してから `PoikatsuApp` を包む。設定画面のセクション: 表示（テーマ・dynamic color）/ マイカード（所有・還元率・ブランド・ウエル活）/ **QR 決済**（利用中の QR 決済にチェック→判定に反映）/ **自治体**（居住地・行動圏を登録。都道府県→「グループ(まとめて登録)」+「市区町村」の 2 段ピッカー。グループは municipalities.json の `groups` 由来で「東京23区」「埼玉県南部」等。行はチェックボックスのトグルで登録/解除を**即時反映**——「登録済み=操作不能」にせず押し間違いをその場で取り消せる。グループ行は ▼ で構成自治体名を展開でき「23区西部」の範囲を確認できる。マスタは起動時に assets からロードし、登録内容はキャンペーンタブの地域フィルタに反映される）/ データ（自動更新・手動更新）/ 開発者向け / このアプリ。
+**設定**は 4 タブの 1 つ（`AppTab.SETTINGS`）として独立した `SettingsScreen` に分離されている。設定値（`themeMode`/`dynamicColor`/`autoRefresh`/`cardSettings`/`qrPaymentSettings`/`registeredAreas`）は `SettingsRepository`（DataStore）の Flow を購読して `UiState` に載せ、変更は VM の setter→DataStore へ書く（`onEach { rebuild() }` で再判定）。テーマだけは描画前にテーマ層へ渡す必要があるため、`MainActivity` で VM を生成し `state.themeMode`/`dynamicColor` を `PoikatsuTheme` に注入してから `PoikatsuApp` を包む。設定画面のセクション: 表示（テーマ・dynamic color）/ マイカード（所有・還元率・ブランド・ウエル活）/ **QR 決済**（利用中の QR 決済にチェック→判定に反映）/ **自治体**（居住地・行動圏を登録。都道府県→「グループ(まとめて登録)」+「市区町村」の 2 段ピッカー。グループは municipalities.json の `groups` 由来で「東京23区」「埼玉県南部」等。行はチェックボックスのトグルで登録/解除を**即時反映**——「登録済み=操作不能」にせず押し間違いをその場で取り消せる。グループ行は ▼ で構成自治体名を展開でき「23区西部」の範囲を確認できる。マスタは起動時に assets からロードし、登録内容はキャンペーンタブの地域フィルタに反映される）/ データ（自動更新・手動更新）/ 開発者向け（「開発者モード」トグルのみ。ON 中は「開発者向け設定」導線が現れ別画面 `DeveloperSettingsScreen` へ。詳細は「4. データ取得戦略」の開発者モード節）/ このアプリ。
 
 **キャンペーンタブの地域フィルタ**: 登録エリアがあると `rebuild()` が `filterCampaignsByArea`（domain/RegionFilter.kt・純 Kotlin）で `timeLimitedActive`/`timeLimitedUpcoming` を絞り込む。突合は (都道府県名, 自治体名)。region を持たない全国施策と、マスタで解決できない region（合併等で名称がずれた場合）は防御的に通す。タブのチップ行末尾に「登録地域のみ」チップ（登録あり かつ マスタ読込済みのときだけ表示・既定 ON）があり、OFF で全件表示（`showAllCampaigns`。閲覧モードなので永続化せず、再起動で既定のフィルタ ON に戻る）。
 
