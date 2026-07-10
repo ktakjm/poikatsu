@@ -1,6 +1,6 @@
 {
   "schema_version": 8,
-  "updated_at": "2026-07-10",
+  "updated_at": "2026-07-11",
   "campaigns": [
     {
       "id": "test_card_program",
@@ -201,8 +201,8 @@
       "payment_instruction": "テストカードのタッチ決済で支払う",
       "rate_base": 15.0,
       "period_start": "2026-07-05",
-      "period_end": "2026-07-10",
-      "verified_date": "2026-07-07",
+      "period_end": "2026-07-14",
+      "verified_date": "2026-07-11",
       "merchant_rules": [
         { "merchant_id": "test_combini" }
       ]
