@@ -14,8 +14,8 @@
          未宣言だとインストール済みでも null が返り Play Store フォールバックに落ちる。 -->
     <queries>
         <package android:name="jp.ne.paypay.android.app" />
-        <package android:name="com.kddi.android.aupay" />
-        <package android:name="com.nttdocomo.android.payment" />
+        <package android:name="jp.auone.wallet" />
+        <package android:name="com.nttdocomo.keitai.payment" />
         <package android:name="jp.co.rakuten.pay" />
         <!-- ウォレット(Google Pay)。domain の WALLET_APP_PACKAGE と対で管理 -->
         <package android:name="com.google.android.apps.walletnfcrel" />

@@ -1,6 +1,6 @@
 {
   "schema_version": 6,
-  "updated_at": "2026-07-06",
+  "updated_at": "2026-07-11",
   "card_brands": [
     { "name": "Visa", "color": "#1A1F71" },
     { "name": "Mastercard", "color": "#EB001B" },
@@ -37,7 +37,7 @@
       "id": "aupay",
       "name": "au PAY",
       "brand_color": "#FF5722",
-      "app_package": "com.kddi.android.aupay",
+      "app_package": "jp.auone.wallet",
       "store_search_label": "au PAYアプリで対象店舗を確認",
       "enabled_default": false
     },
@@ -45,7 +45,7 @@
       "id": "dpay",
       "name": "d払い",
       "brand_color": "#E60033",
-      "app_package": "com.nttdocomo.android.payment",
+      "app_package": "com.nttdocomo.keitai.payment",
       "store_search_label": "d払いアプリで対象店舗を確認",
       "enabled_default": false
     },
