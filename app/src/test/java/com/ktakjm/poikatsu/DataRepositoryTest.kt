@@ -54,8 +54,14 @@ class DataRepositoryTest {
         """.trimIndent(),
     )
 
+    // readAsset は "data/merchants.json" のような assets 内パスを受ける。
+    // data-test/ 側は updated_at を変えた別内容にして読み分けを検証できるようにする
     private fun repository(fetchRemote: (String) -> String?) = DataRepository(
-        readAsset = { name -> assetTexts.getValue(name) },
+        readAsset = { path ->
+            val (dir, name) = path.split("/", limit = 2)
+            val text = assetTexts.getValue(name)
+            if (dir == "data-test") text.replace("\"2026-07-03\"", "\"2026-12-31\"") else text
+        },
         cacheDir = File(tempFolder.root, "remote_data"),
         fetchRemote = { name, _, _ -> fetchRemote(name) },
     )
@@ -95,6 +101,34 @@ class DataRepositoryTest {
         assertFalse(File(tempFolder.root, "remote_data/${DataRepository.CAMPAIGNS}").exists())
         // ローカルロードは引き続き同梱データで動く
         assertEquals(DataSource.BUNDLED, repo.loadLocal().source)
+    }
+
+    @Test
+    fun `同梱直読はキャッシュがあっても assets を読む`() {
+        // リモート取得成功でキャッシュを作る(updated_at = 2099-01-01)
+        val repo = repository { name ->
+            assetTexts.getValue(name).replace("\"2026-07-03\"", "\"2099-01-01\"")
+        }
+        repo.refresh()
+        // loadLocal はキャッシュ優先だが、loadBundled はバイパスして assets を返す
+        assertEquals(DataSource.CACHE, repo.loadLocal().source)
+        val bundled = repo.loadBundled()
+        assertEquals(DataSource.BUNDLED, bundled.source)
+        assertEquals("2026-07-03", bundled.data.updatedAt)
+    }
+
+    @Test
+    fun `同梱直読は dataDir 指定で data-test 側の assets を読む`() {
+        val bundled = repository { null }.loadBundled(dataDir = "data-test")
+        assertEquals(DataSource.BUNDLED, bundled.source)
+        assertEquals("2026-12-31", bundled.data.updatedAt)
+    }
+
+    @Test
+    fun `キャッシュなしの loadLocal も dataDir 指定の assets へフォールバックする`() {
+        val loaded = repository { null }.loadLocal(dataDir = "data-test")
+        assertEquals(DataSource.BUNDLED, loaded.source)
+        assertEquals("2026-12-31", loaded.data.updatedAt)
     }
 
     @Test

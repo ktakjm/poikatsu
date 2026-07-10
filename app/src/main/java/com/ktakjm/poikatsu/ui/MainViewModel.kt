@@ -278,6 +278,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val showAllCampaigns: Boolean = false,
         val dataCommitRef: String = "",
         val useTestData: Boolean = false,
+        val useBundledData: Boolean = false,
     )
 
     /**
@@ -326,8 +327,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val locationProvider = LocationProvider(app)
 
     private val repository = DataRepository(
-        readAsset = { name ->
-            app.assets.open(name).bufferedReader().use { it.readText() }
+        readAsset = { path ->
+            app.assets.open(path).bufferedReader().use { it.readText() }
         },
         cacheDir = File(app.filesDir, "remote_data"),
         fetchRemote = { fileName, ref, dataDir -> GithubRawClient.fetch(fileName, ref, dataDir) },
@@ -365,28 +366,40 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // 自治体マスタ(assets 同梱)は起動時に読む。設定画面のピッカーに加え、キャンペーンタブの
     // 地域フィルタ(rebuild)がグループ展開に使うため遅延ロードにしない。読めなければ空のまま
-    // =フィルタ無効(全表示)に倒す
-    private val masterLoad: Job = viewModelScope.launch(Dispatchers.IO) {
+    // =フィルタ無効(全表示)に倒す。リモート取得の対象外だが data/⇔data-test/ の切替には追従する
+    private val masterLoad: Job = loadMunicipalityMaster()
+
+    private fun loadMunicipalityMaster(): Job = viewModelScope.launch(Dispatchers.IO) {
+        val path = "${dataDir()}/municipalities.json"
         val master = try {
             val app = getApplication<Application>()
-            val text = app.assets.open("municipalities.json").bufferedReader().use { it.readText() }
+            val text = app.assets.open(path).bufferedReader().use { it.readText() }
             PoikatsuJson.parseMunicipalities(text)
         } catch (e: Exception) {
-            Timber.w(e, "municipalities.json の読み込みに失敗")
+            Timber.w(e, "$path の読み込みに失敗")
             MunicipalityMaster()
         }
         _state.update { it.copy(municipalityMaster = master) }
         rebuild() // マスタ到着後にフィルタを適用し直す
     }
 
-    // DataStore の設定変更を購読し、変わるたびにエンジン・状態を作り直す
+    // DataStore の設定変更を購読し、変わるたびにエンジン・状態を作り直す。
+    // 初回 emission も既定値との差分として扱われる(useTestData 等が永続化済みならここで反映される)
     private val settingsJob: Job = settingsRepo.settings
         .onEach { new ->
             val refChanged = lastSettings.dataCommitRef != new.dataCommitRef
             val testDataChanged = lastSettings.useTestData != new.useTestData
+            val bundledChanged = lastSettings.useBundledData != new.useBundledData
             lastSettings = new
             rebuild()
-            if (refChanged || testDataChanged) refresh(force = true)
+            if (testDataChanged) loadMunicipalityMaster() // マスタも data/⇔data-test/ を読み分ける
+            when {
+                // 同梱モード中はリモートを見ない。ON 直後と ON 中の data/⇔data-test/ 切替は assets 再読
+                new.useBundledData && (bundledChanged || testDataChanged) -> loadBundled()
+                // OFF 復帰は dataCommitRef 変更と同じ扱いで通常運用へ(キャッシュをリモートで上書き)
+                !new.useBundledData && (bundledChanged || refChanged || testDataChanged) ->
+                    refresh(force = true)
+            }
         }
         .launchIn(viewModelScope)
 
@@ -402,14 +415,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onRefreshFailedShown() = _state.update { it.copy(refreshFailed = false) }
 
     private fun refresh(force: Boolean) {
+        // 同梱モード中はリモートで上書きしない(自動・手動とも。UI 側でも「今すぐ更新」を無効化)
+        if (lastSettings.useBundledData) return
         if (_state.value.refreshing) return
         if (!force && System.currentTimeMillis() - lastFetchSucceededAt < AUTO_REFRESH_MIN_INTERVAL_MS) return
         viewModelScope.launch(Dispatchers.IO) {
             initialLoad.join() // ローカルロード完了前にリモート結果で上書きされない順序を保証
             _state.update { it.copy(refreshing = true) }
             val ref = lastSettings.dataCommitRef.ifBlank { "main" }
-            val dataDir = if (lastSettings.useTestData) "data-test" else "data"
-            val loaded = repository.refresh(ref, dataDir)
+            val loaded = repository.refresh(ref, dataDir())
             if (loaded != null) {
                 lastFetchSucceededAt = System.currentTimeMillis()
                 applyData(loaded)
@@ -417,6 +431,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _state.update { it.copy(refreshing = false, refreshFailed = loaded == null) }
         }
     }
+
+    /**
+     * 同梱 assets を直読して反映する(「同梱データを使う」ON 時)。キャッシュは見ないため、
+     * installDebug で焼き直した JSON がそのまま出る。パース失敗(編集ミス等)は直前のデータを
+     * 残して refreshFailed の Snackbar で知らせる
+     */
+    private fun loadBundled() {
+        viewModelScope.launch(Dispatchers.IO) {
+            initialLoad.join()
+            val loaded = runCatching { repository.loadBundled(dataDir()) }
+                .onFailure { Timber.w(it, "同梱データの読み込みに失敗") }
+                .getOrNull()
+            if (loaded != null) applyData(loaded)
+            _state.update { it.copy(refreshFailed = loaded == null) }
+        }
+    }
+
+    /** データ取得元のディレクトリ。リモート(GitHub raw)・同梱 assets とも同じ構造で切り替わる */
+    private fun dataDir() = if (lastSettings.useTestData) "data-test" else "data"
 
     companion object {
         // 施策データの更新は月数回程度なので、自動再取得は1時間に1回で十分
@@ -590,6 +623,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 registeredAreas = settings.registeredAreas,
                 dataCommitRef = settings.dataCommitRef,
                 useTestData = settings.useTestData,
+                useBundledData = settings.useBundledData,
                 timeLimitedActive = timeLimitedActive,
                 timeLimitedUpcoming = timeLimitedUpcoming,
                 searchMunicipalAreaNames = searchMunicipalAreaNames,
@@ -1380,6 +1414,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onSetDataCommitRef(ref: String) = viewModelScope.launch { settingsRepo.setDataCommitRef(ref) }
 
     fun onSetUseTestData(enabled: Boolean) = viewModelScope.launch { settingsRepo.setUseTestData(enabled) }
+
+    fun onSetUseBundledData(enabled: Boolean) = viewModelScope.launch { settingsRepo.setUseBundledData(enabled) }
 
     fun onSetCardOwned(cardId: String, owned: Boolean) =
         viewModelScope.launch { settingsRepo.setOwned(cardId, owned) }

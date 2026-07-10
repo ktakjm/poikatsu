@@ -43,6 +43,11 @@ data class AppSettings(
     val dataCommitRef: String = "",
     /** テストデータ(data-test/)を使うか。true なら取得パスが data/ → data-test/ に切り替わる */
     val useTestData: Boolean = false,
+    /**
+     * APK 同梱の assets を直接読むか(開発者向け)。true の間はキャッシュ・リモート取得を使わず、
+     * ローカル編集した JSON を push なしで実機検証できる(反映には installDebug が必要)。
+     */
+    val useBundledData: Boolean = false,
     /** 利用中の QR 決済 ID。payment_methods.json の qr_payments カタログからユーザーが選択 */
     val enabledQrPaymentIds: Set<String> = emptySet(),
     /**
@@ -73,6 +78,7 @@ class SettingsRepository(private val context: Context) {
         val CARD_OVERRIDES = stringPreferencesKey("card_overrides")
         val DATA_COMMIT_REF = stringPreferencesKey("data_commit_ref")
         val USE_TEST_DATA = booleanPreferencesKey("use_test_data")
+        val USE_BUNDLED_DATA = booleanPreferencesKey("use_bundled_data")
         val QR_ENABLED = stringPreferencesKey("qr_enabled")
         val OWNED_BRANDS = stringPreferencesKey("owned_brands")
         // 旧キー "municipalities"(RegisteredMunicipality のリスト)は公開前のスキーマ刷新で廃止。
@@ -90,6 +96,7 @@ class SettingsRepository(private val context: Context) {
             cardOverrides = prefs.decodeOverrides(),
             dataCommitRef = prefs[Keys.DATA_COMMIT_REF] ?: "",
             useTestData = prefs[Keys.USE_TEST_DATA] ?: false,
+            useBundledData = prefs[Keys.USE_BUNDLED_DATA] ?: false,
             enabledQrPaymentIds = prefs.decodeQrEnabled(),
             ownedBrands = prefs.decodeOwnedBrands(),
             registeredAreas = prefs.decodeRegisteredAreas(),
@@ -114,6 +121,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setUseTestData(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.USE_TEST_DATA] = enabled }
+    }
+
+    suspend fun setUseBundledData(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.USE_BUNDLED_DATA] = enabled }
     }
 
     suspend fun setOwned(cardId: String, owned: Boolean) =

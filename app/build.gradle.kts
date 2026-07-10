@@ -56,12 +56,25 @@ android {
         buildConfig = true
     }
     sourceSets {
-        // 施策データはリポジトリ直下 data/ を単一ソースとし、assets としてそのまま同梱する
+        // 施策データはリポジトリ直下 data/・data-test/ を単一ソースとし、bundleDataAssets で
+        // ディレクトリ構造ごと assets に同梱する(assets 内は data/xxx.json / data-test/xxx.json)。
+        // AGP の SourceSet API は Provider を受け付けないため File に解決して渡す
+        // (タスク依存は下の preBuild.dependsOn で明示している)
         getByName("main") {
-            assets.srcDir(rootProject.file("data"))
+            assets.srcDir(layout.buildDirectory.dir("generated/dataAssets").get().asFile)
         }
     }
 }
+
+// data/ と data-test/ は同名ファイルを含むため srcDir 直付けだと asset マージで衝突する。
+// Sync でディレクトリ構造ごと生成ディレクトリへ集めてから同梱する(README 等の .md は除外)
+val bundleDataAssets = tasks.register<Sync>("bundleDataAssets") {
+    from(rootProject.file("data")) { into("data") }
+    from(rootProject.file("data-test")) { into("data-test") }
+    exclude("**/*.md")
+    into(layout.buildDirectory.dir("generated/dataAssets"))
+}
+tasks.named("preBuild") { dependsOn(bundleDataAssets) }
 
 dependencies {
     implementation(platform(libs.androidx.compose.bom))

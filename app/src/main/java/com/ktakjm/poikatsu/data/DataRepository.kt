@@ -10,10 +10,14 @@ data class LoadedData(val data: PoikatsuData, val source: DataSource)
  * 施策データ・決済手段カタログの取得戦略:
  * 1. 起動時は loadLocal() — 前回リモート取得のキャッシュ、なければ同梱 assets から即時ロード
  * 2. 裏で refresh() — リモート(GitHub raw)から取得し、パースに成功した場合のみキャッシュ保存
+ * 3. 開発者向け「同梱データを使う」ON 中は loadBundled() — キャッシュをバイパスして assets を直読
+ *    (push せずにローカル編集した JSON を実機検証するためのモード。呼び出し側で refresh を抑止する)
  *
  * merchants/campaigns/payment_methods の 3 ファイルすべてがリモート更新の対象
  * (ユーザー固有値はカタログでなく DataStore 差分に持つため、カタログはデータ扱いでよい)。
+ * dataDir("data" / "data-test")はリモート・assets とも同じディレクトリ構造で切り替わる。
  * Android 非依存(関数とFileを注入)にしてユニットテスト可能にしている。
+ * readAsset には "data/merchants.json" のような assets 内パスを渡す。
  */
 class DataRepository(
     private val readAsset: (String) -> String,
@@ -27,7 +31,7 @@ class DataRepository(
         private val ALL_FILES = listOf(MERCHANTS, CAMPAIGNS, PAYMENT_METHODS)
     }
 
-    fun loadLocal(): LoadedData {
+    fun loadLocal(dataDir: String = "data"): LoadedData {
         val cached = ALL_FILES.map { File(cacheDir, it) }
         if (cached.all { it.isFile }) {
             // キャッシュが壊れていたら捨てて assets にフォールバック
@@ -37,8 +41,13 @@ class DataRepository(
                 return LoadedData(data, DataSource.CACHE)
             }
         }
-        val data = PoikatsuJson.parse(readAsset(MERCHANTS), readAsset(CAMPAIGNS), readAsset(PAYMENT_METHODS))
-        return LoadedData(data, DataSource.BUNDLED)
+        return loadBundled(dataDir)
+    }
+
+    /** 同梱 assets を直読する(キャッシュを見ない)。「同梱データを使う」ON 中の再読み込みにも使う */
+    fun loadBundled(dataDir: String = "data"): LoadedData {
+        val (merchants, campaigns, paymentMethods) = ALL_FILES.map { readAsset("$dataDir/$it") }
+        return LoadedData(PoikatsuJson.parse(merchants, campaigns, paymentMethods), DataSource.BUNDLED)
     }
 
     /** 取得・パースのいずれかに失敗したら null(呼び出し側はローカルデータを使い続ける) */

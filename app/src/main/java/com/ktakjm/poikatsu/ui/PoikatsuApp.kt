@@ -136,7 +136,13 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(state.refreshFailed) {
         if (state.refreshFailed) {
-            snackbarHostState.showSnackbar("再取得できませんでした。通信状態を確認して再度お試しください。")
+            // 同梱モード中は refresh が走らないため、失敗 = 同梱 JSON のパース失敗(編集ミス等)
+            val message = if (state.useBundledData) {
+                "同梱データを読み込めませんでした。JSON の内容を確認してください。"
+            } else {
+                "再取得できませんでした。通信状態を確認して再度お試しください。"
+            }
+            snackbarHostState.showSnackbar(message)
             viewModel.onRefreshFailedShown()
         }
     }
@@ -337,10 +343,16 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     qrPayments = state.qrPaymentSettings,
                     registeredAreas = state.registeredAreas,
                     municipalityMaster = state.municipalityMaster,
-                    dataStatus = dataStatusLabel(state.dataUpdatedAt, state.dataSource, state.useTestData),
+                    dataStatus = dataStatusLabel(
+                        state.dataUpdatedAt,
+                        state.dataSource,
+                        state.useTestData,
+                        state.useBundledData,
+                    ),
                     refreshing = state.refreshing,
                     dataCommitRef = state.dataCommitRef,
                     useTestData = state.useTestData,
+                    useBundledData = state.useBundledData,
                     onThemeModeChange = viewModel::onSetThemeMode,
                     onDynamicColorChange = viewModel::onSetDynamicColor,
                     onAutoRefreshChange = viewModel::onSetAutoRefresh,
@@ -355,6 +367,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     onRefresh = viewModel::onManualRefresh,
                     onDataCommitRefChange = viewModel::onSetDataCommitRef,
                     onUseTestDataChange = viewModel::onSetUseTestData,
+                    onUseBundledDataChange = viewModel::onSetUseBundledData,
                 )
                 else -> PaddedColumn {
                     SearchPane(
@@ -362,7 +375,12 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         categories = state.categories,
                         selectedCategories = state.selectedCategories,
                         results = state.results,
-                        dataStatus = dataStatusLabel(state.dataUpdatedAt, state.dataSource, state.useTestData),
+                        dataStatus = dataStatusLabel(
+                            state.dataUpdatedAt,
+                            state.dataSource,
+                            state.useTestData,
+                            state.useBundledData,
+                        ),
                         refreshing = state.refreshing,
                         municipalAreaNames = state.searchMunicipalAreaNames,
                         onQueryChange = viewModel::onQueryChange,

@@ -125,7 +125,7 @@
   - `custom` — 気象庁区分に無い補完定義(スクリプト内 `EXTRA_GROUPS`)。「東京23区」は気象庁だと 23区西部/東部に分かれるため補完している
   - 自治体 1 つだけのグループと、primary と構成が同一の detail はスクリプトが除去する
 - `groups[].municipalities` は自治体コードの配列。並び順(custom → primary → 配下の detail)はそのままピッカーの表示順になる
-- リモート更新の対象外(assets 同梱のみ)。ユーザーの登録内容は `RegisteredArea`(type=municipality|group + code)として DataStore に保存される
+- リモート更新の対象外(assets 同梱のみ)。ただし「テストデータを使う」ON 時は assets の `data-test/municipalities.json`(`data/` と同一内容のコピー)を読む。ユーザーの登録内容は `RegisteredArea`(type=municipality|group + code)として DataStore に保存される
 
 ## data-test/ — ショーケースデータ
 
@@ -133,7 +133,9 @@
 
 ### 切替方法
 
-設定画面 → 開発者向け → 「テストデータを使う」トグルを ON にすると、アプリのリモート取得先が `data/` から `data-test/` に切り替わる。`data-test/` のデータは `data/` と同じスキーマ(campaigns.json / merchants.json / payment_methods.json)に従い、カードもテスト専用カタログ(`test_card`)に切り替わる。municipalities.json のみ assets 固定のため切替対象外。
+設定画面 → 開発者向け → 「テストデータを使う」トグルを ON にすると、アプリのデータ取得先が `data/` から `data-test/` に切り替わる(リモート取得・同梱 assets とも)。`data-test/` のデータは `data/` と同じスキーマ(campaigns.json / merchants.json / payment_methods.json / municipalities.json)に従い、カードもテスト専用カタログ(`test_card`)に切り替わる。municipalities.json はリモート取得の対象外だが assets の読み分けには追従するため、`data-test/` にも `data/` と同一内容のコピーを置く。
+
+さらに「同梱データを使う」トグルを ON にすると、リモート取得(GitHub raw)とキャッシュを使わず APK 同梱の assets を直接読む。ローカルで編集した JSON を **push せずに実機検証**できる(反映には `installDebug` での焼き直しが必要)。ON 中はリモート更新を停止し、「テストデータを使う」との組み合わせで assets 内の `data/`⇔`data-test/` を読み分ける。
 
 ### 収録パターン一覧
 
@@ -168,6 +170,7 @@
 ### 更新ルール
 
 - `data/` のスキーマ変更時は `data-test/` も同時に更新する(同一コミット)
+- `data/municipalities.json` を再生成したら `data-test/municipalities.json` にも同じものをコピーする(内容は常に同一)
 - CI の整合性テスト(`TestDataIntegrityTest`)がパース成功・参照切れ・フィールド排他を検証する
 - 日付依存パターンは 2 種類: 常時安定(期間を極端な未来/過去に設定)と検証時要手直し(残り 3 日警告等)。前者を基本とする
 

@@ -85,6 +85,7 @@ internal fun SettingsScreen(
     refreshing: Boolean,
     dataCommitRef: String,
     useTestData: Boolean,
+    useBundledData: Boolean,
     onThemeModeChange: (ThemeMode) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
     onAutoRefreshChange: (Boolean) -> Unit,
@@ -99,6 +100,7 @@ internal fun SettingsScreen(
     onRefresh: () -> Unit,
     onDataCommitRefChange: (String) -> Unit,
     onUseTestDataChange: (Boolean) -> Unit,
+    onUseBundledDataChange: (Boolean) -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
     var showMunicipalityPicker by remember { mutableStateOf(false) }
@@ -233,8 +235,19 @@ internal fun SettingsScreen(
             supportingContent = { Text("起動・復帰時に最新データを取得(1時間に1回まで)") },
             trailingContent = { Switch(checked = autoRefresh, onCheckedChange = onAutoRefreshChange) },
         )
+        // 同梱モード中はリモート取得を止めるため手動更新もグレーアウトする(無言 no-op にしない)
+        val disabledColors = ListItemDefaults.colors(
+            headlineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+            supportingColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+            trailingIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+        )
         ListItem(
             headlineContent = { Text("今すぐ更新") },
+            supportingContent = if (useBundledData) {
+                { Text("同梱データ使用中は更新できません") }
+            } else {
+                null
+            },
             trailingContent = {
                 if (refreshing) {
                     CircularProgressIndicator(Modifier.size(24.dp))
@@ -242,7 +255,8 @@ internal fun SettingsScreen(
                     Icon(Icons.Default.Refresh, contentDescription = null)
                 }
             },
-            modifier = Modifier.clickable(enabled = !refreshing, onClick = onRefresh),
+            colors = if (useBundledData) disabledColors else ListItemDefaults.colors(),
+            modifier = Modifier.clickable(enabled = !refreshing && !useBundledData, onClick = onRefresh),
         )
 
         // --- 開発者向け ---
@@ -252,7 +266,13 @@ internal fun SettingsScreen(
             supportingContent = { Text("data-test/ のショーケースデータに切り替えます") },
             trailingContent = { Switch(checked = useTestData, onCheckedChange = onUseTestDataChange) },
         )
-        CommitRefRow(value = dataCommitRef, onChange = onDataCommitRefChange)
+        ListItem(
+            headlineContent = { Text("同梱データを使う") },
+            supportingContent = { Text("APK 同梱の JSON を直接表示します(リモート取得を停止)。push せずにデータ変更を実機検証する用") },
+            trailingContent = { Switch(checked = useBundledData, onCheckedChange = onUseBundledDataChange) },
+        )
+        // 同梱モード中はリモートを見ないため commit 指定は無意味 → グレーアウト
+        CommitRefRow(value = dataCommitRef, onChange = onDataCommitRefChange, enabled = !useBundledData)
 
         // --- このアプリ ---
         SettingsSectionHeader("このアプリ")
@@ -679,7 +699,7 @@ private fun SettingsSectionHeader(text: String) {
 }
 
 @Composable
-private fun CommitRefRow(value: String, onChange: (String) -> Unit) {
+private fun CommitRefRow(value: String, onChange: (String) -> Unit, enabled: Boolean = true) {
     var text by remember(value) { mutableStateOf(value) }
     ListItem(
         headlineContent = { Text("データ取得先 commit") },
@@ -689,14 +709,22 @@ private fun CommitRefRow(value: String, onChange: (String) -> Unit) {
                 onValueChange = { text = it.take(40) },
                 placeholder = { Text("空欄 = main") },
                 singleLine = true,
+                enabled = enabled,
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             )
         },
         trailingContent = {
             TextButton(
                 onClick = { onChange(text) },
-                enabled = text.trim() != value,
+                enabled = enabled && text.trim() != value,
             ) { Text("適用") }
+        },
+        colors = if (enabled) {
+            ListItemDefaults.colors()
+        } else {
+            ListItemDefaults.colors(
+                headlineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+            )
         },
     )
 }

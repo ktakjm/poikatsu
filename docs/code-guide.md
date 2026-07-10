@@ -111,7 +111,7 @@ poikatsu/
     └── test/java/com/ktakjm/poikatsu/
         ├── JudgmentEngineTest.kt        # フィクスチャで検索・判定ロジックを検証（48 件）
         ├── JudgmentEngineRealDataTest.kt # 実データの整合性・施策固有の振る舞い検証（18 件）
-        ├── DataRepositoryTest.kt         # ロード戦略のテスト（5 件、インライン JSON フィクスチャ）
+        ├── DataRepositoryTest.kt         # ロード戦略のテスト（8 件、インライン JSON フィクスチャ）
         └── NearbyTest.kt                 # チェーン特定・YOLP パース・密度クリップ・YolpSearchConfig（25 件）
 ```
 
@@ -278,6 +278,16 @@ flowchart TD
 - **テスタビリティのための依存注入**: `DataRepository(readAsset, cacheDir, fetchRemote)` は Android の `Context` を一切受け取らない。本番では `app.assets.open(...)` と `GithubRawClient::fetch` を渡し、テストではラムダとテンポラリディレクトリを渡す
 - **「成功した場合のみキャッシュ」**: 取得した生テキストをまずパースし、成功したものだけ `writeText` する。壊れた JSON でキャッシュを汚染しない
 - **データソースの可視化**: `DataSource`（REMOTE / CACHE / BUNDLED）を UI まで運び、「最新データ取得済み / 前回取得データ(オフライン?)」と表示してデータ鮮度をユーザーに伝える
+
+### 同梱データ直読モード（開発者向け、#36）
+
+設定 → 開発者向け「同梱データを使う」を ON にすると `loadBundled(dataDir)` が assets を直読し、キャッシュ・リモート取得を両方バイパスする。データ（data/*.json、municipalities.json 含む）をローカル編集 → `installDebug` するだけで **push せずに実機検証**できる。仕組み:
+
+- **Gradle**: `data/` と `data-test/` は同名ファイルを含むため srcDir 直付けでは asset マージが衝突する。`bundleDataAssets`（Sync タスク）が両ディレクトリを構造ごと `build/generated/dataAssets/` に集めて（`*.md` 除外）assets に同梱し、`preBuild` が依存する。assets 内は `data/xxx.json` / `data-test/xxx.json` のパス構造
+- **取得元マトリクス**: `useTestData`（data/⇔data-test/）と `useBundledData`（リモート⇔assets）は直交する。`readAsset` は `"data/merchants.json"` のようなパスを受け、`DataRepository` が `dataDir` を前置するため、リモートの `dataDir` 切替と対称になる
+- **ON 中の挙動**: `refresh()` は自動・手動とも即 return（設定画面の「今すぐ更新」「データ取得先 commit」はグレーアウト）。ON 中の useTestData 切替は assets の再読で反映。municipalities.json も `dataDir` に追従する（リモート取得の対象外は従来どおり）
+- **OFF 復帰**: `refresh(force = true)` で通常運用へ（dataCommitRef 変更時と同じ扱い）
+- **表示**: データ更新状況欄に「同梱データ表示中(開発者設定)」。BUNDLED はキャッシュなしフォールバックでも立つため、トグル ON 時のみこの文言にして実データとの取り違えを防ぐ。同梱 JSON のパース失敗（編集ミス）は直前のデータを残して Snackbar で知らせる
 
 ### リモート更新の発火タイミング（ui/MainViewModel.kt）
 
@@ -556,7 +566,7 @@ sequenceDiagram
 | `JudgmentEngineTest` | 54 | 検索・正規化・判定・店舗対象判定・近隣除外・期間フィルタ・store_scope・QR判定・judgeAll・BenefitType・formatBenefit 4象限・bestBenefitLabel | **フィクスチャ**（Kotlin コード内定義） |
 | `JudgmentEngineRealDataTest` | 18 | merchant_id 参照切れ・プロファイル参照整合・アカチャンホンポ 3 状態・実データの新フィールド検証 | **実データ**（`data/*.json`） |
 | `MunicipalitiesTest`（3）+ `JapaneseTextTest`（3） | 6 | 47 都道府県・23 区の検証、シリアライズ往復、日本語正規化 | フィクスチャ |
-| `DataRepositoryTest` | 5 | ロード戦略（キャッシュあり/なし/破損、リモート成功/失敗） | **フィクスチャ**（インライン JSON） |
+| `DataRepositoryTest` | 8 | ロード戦略（キャッシュあり/なし/破損、リモート成功/失敗、同梱直読・dataDir 切替） | **フィクスチャ**（インライン JSON） |
 | `StoreMatchTest`（9）+ `YolpSearchConfigTest`（4） | 13 | チェーン特定・施設テナント除外・gc_group スキップ・maxPages | **フィクスチャ** |
 | `YolpSearchConfigRealDataTest` | 3 | gc グループ・キーワードの等価性検証 | **実データ** |
 | その他（`YolpParseTest`・`YolpClipTest`・`GeoMathTest`） | 9 | YOLP パース・密度差クリップ・距離計算 | 固定 JSON フィクスチャ |

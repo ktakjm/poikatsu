@@ -46,12 +46,20 @@ internal fun parseBrandColor(hex: String?): Color? {
 internal fun onColorFor(background: Color): Color =
     if (background.luminance() > 0.5f) Color.Black else Color.White
 
-internal fun dataStatusLabel(updatedAt: String, source: DataSource?, useTestData: Boolean = false): String {
-    val sourceLabel = when (source) {
-        DataSource.REMOTE -> "最新データ取得済み"
-        DataSource.CACHE -> "前回取得データ(オフライン?)"
-        DataSource.BUNDLED -> "同梱データ(オフライン?)"
-        null -> ""
+internal fun dataStatusLabel(
+    updatedAt: String,
+    source: DataSource?,
+    useTestData: Boolean = false,
+    useBundledData: Boolean = false,
+): String {
+    // BUNDLED はトグルによる意図的な同梱表示と、キャッシュなしフォールバックの両方で立つため、
+    // 実データとの取り違え防止にトグル ON 中は開発者設定によるものだと明示する
+    val sourceLabel = when {
+        source == DataSource.BUNDLED && useBundledData -> "同梱データ表示中(開発者設定)"
+        source == DataSource.REMOTE -> "最新データ取得済み"
+        source == DataSource.CACHE -> "前回取得データ(オフライン?)"
+        source == DataSource.BUNDLED -> "同梱データ(オフライン?)"
+        else -> ""
     }
     val testLabel = if (useTestData) " [テストデータ]" else ""
     return "データ更新日：$updatedAt $sourceLabel$testLabel"
