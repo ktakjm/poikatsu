@@ -57,8 +57,8 @@ internal fun dataStatusLabel(
     val sourceLabel = when {
         source == DataSource.BUNDLED && useBundledData -> "同梱データ表示中(開発者設定)"
         source == DataSource.REMOTE -> "最新データ取得済み"
-        source == DataSource.CACHE -> "前回取得データ(オフライン?)"
-        source == DataSource.BUNDLED -> "同梱データ(オフライン?)"
+        source == DataSource.CACHE -> "前回取得データ(オフライン？)"
+        source == DataSource.BUNDLED -> "同梱データ(オフライン？)"
         else -> ""
     }
     val testLabel = if (useTestData) " [テストデータ]" else ""
