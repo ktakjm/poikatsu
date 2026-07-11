@@ -62,7 +62,7 @@ data class AppSettings(
      * card_brand 値から出すため、カタログ(payment_methods.json)にスキーマ追加は不要。
      */
     val ownedBrands: Set<String> = emptySet(),
-    /** 登録エリア(自治体単体 or グループ)。キャンペーンタブの地域フィルタに使う */
+    /** 登録エリア(自治体単体 or グループ)。期間限定タブの地域フィルタに使う */
     val registeredAreas: List<RegisteredArea> = emptyList(),
 )
 

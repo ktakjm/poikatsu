@@ -197,7 +197,7 @@ internal fun SettingsScreen(
         // --- 自治体 ---
         SettingsSectionHeader("自治体")
         Text(
-            "居住地・行動圏の自治体を登録すると、キャンペーンタブが登録地域の施策に絞られます。",
+            "居住地・行動圏の自治体を登録すると、期間限定タブが登録地域の施策に絞られます。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),

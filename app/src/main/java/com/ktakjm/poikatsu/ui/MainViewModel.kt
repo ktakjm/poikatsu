@@ -60,10 +60,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import timber.log.Timber
 
-/** 「近く」初回・「現在地で検索」時の既定半径(m)。以降の「このエリアを検索」は地図の可視範囲から算出する */
+/** 「地図」初回・「現在地で検索」時の既定半径(m)。以降の「このエリアを検索」は地図の可視範囲から算出する */
 private const val NEARBY_DEFAULT_RADIUS_M = 2000
 
-/** 「近く」初回・「現在地で検索」時の既定ズーム。可視範囲検索では各回の地図ズームを引き継ぐ */
+/** 「地図」初回・「現在地で検索」時の既定ズーム。可視範囲検索では各回の地図ズームを引き継ぐ */
 private const val NEARBY_DEFAULT_ZOOM = 16.0
 
 /** 500m 以内の店舗がこの件数未満なら引きズーム(NEARBY_WIDE_ZOOM)にする */
@@ -164,7 +164,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     )
 
     /**
-     * 「近く」の地図に出す自治体施策のお知らせ(検索中心の所在自治体で開催中の施策)。
+     * 「地図」の地図に出す自治体施策のお知らせ(検索中心の所在自治体で開催中の施策)。
      * タップでキャンペーン詳細(施策別カード)を開くため、グループの施策一覧ごと持つ。
      */
     data class MunicipalNotice(
@@ -228,20 +228,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         /** 近隣の再検索が失敗したときの Snackbar 文言(地図は残す一時失敗)。表示後に null へ戻す */
         val nearbySearchFailed: String? = null,
         /**
-         * 「近く」のジャンル絞り込み。探す側の selectedCategories とは独立に持つ
+         * 「地図」のジャンル絞り込み。お店側の selectedCategories とは独立に持つ
          * (一方の絞り込みが他方に波及しないように)。空セットは全ジャンル。
          * クライアント側フィルタなので YOLP 再取得は不要で、再検索(searchHere/半径変更/
          * fetchNearby)をまたいで保持したいため NearbyUi(毎回作り直す)でなくここに置く。
          */
         val nearbySelectedCategories: Set<String> = emptySet(),
         /**
-         * 「近く」のチェーン絞り込み(レンズ2段目)。設定中はジャンル絞り込みより優先し、地図/一覧を
+         * 「地図」のチェーン絞り込み(レンズ2段目)。設定中はジャンル絞り込みより優先し、地図/一覧を
          * このチェーンだけに絞る。在チェーン選択((2))とブリッジ(探す→近く,(3))の着地状態を共有する。
          * null で未絞り込み。表示名にのみ使うので Merchant をそのまま保持(フィルタは id 比較)。
          */
         val nearbyMerchantFilter: Merchant? = null,
         /**
-         * 「近く」の起点(地名検索)。null は GPS 起点(既定)。設定中は距離・並び順をこの地点から測る。
+         * 「地図」の起点(地名検索)。null は GPS 起点(既定)。設定中は距離・並び順をこの地点から測る。
          * 再検索(searchHere/fetchNearby)をまたいで保持し、「現在地で検索」/検索バーの✕で null に戻す。
          */
         val nearbyOrigin: GeocodedPlace? = null,
@@ -251,8 +251,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val isGeocoding: Boolean = false,
         val selectedTab: AppTab = AppTab.SEARCH,
         /**
-         * 登録地域で開催中の自治体施策がある自治体名(探すタブ初期画面のお知らせバナー用)。
-         * 施策の詳細は出さず「あること」だけ知らせ、タップでキャンペーンタブへ送る。
+         * 登録地域で開催中の自治体施策がある自治体名(お店タブ初期画面のお知らせバナー用)。
+         * 施策の詳細は出さず「あること」だけ知らせ、タップで期間限定タブへ送る。
          */
         val searchMunicipalAreaNames: List<String> = emptyList(),
         val campaignFilter: CampaignFilter = CampaignFilter.ALL,
@@ -274,9 +274,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val qrPaymentSettings: List<QrPaymentSetting> = emptyList(),
         /** 登録済みエリア(自治体単体・グループ) */
         val registeredAreas: List<RegisteredArea> = emptyList(),
-        /** 自治体マスタ。設定画面のピッカーとキャンペーンタブの地域フィルタに使う(起動時に assets から読む) */
+        /** 自治体マスタ。設定画面のピッカーと期間限定タブの地域フィルタに使う(起動時に assets から読む) */
         val municipalityMaster: MunicipalityMaster = MunicipalityMaster(),
-        /** キャンペーンタブで「登録地域のみ」を解除して全件表示中か(セッション内のみ。永続化しない) */
+        /** 期間限定タブで「登録地域のみ」を解除して全件表示中か(セッション内のみ。永続化しない) */
         val showAllCampaigns: Boolean = false,
         val dataCommitRef: String = "",
         val useTestData: Boolean = false,
@@ -353,8 +353,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * 近隣取得の世代。タブ移動(onCloseNearby)や再取得のたびに進め、進行中の取得が
-     * 完了しても古い世代なら結果を捨てる。読込中に「近く」タブを離れたのに、取得完了の
-     * タイミングで勝手に近くタブへ戻されるのを防ぐ。書込はUIスレッドのみ・IOスレッドは
+     * 完了しても古い世代なら結果を捨てる。読込中に「地図」タブを離れたのに、取得完了の
+     * タイミングで勝手に地図タブへ戻されるのを防ぐ。書込はUIスレッドのみ・IOスレッドは
      * 読むだけなので @Volatile で可視性だけ確保する。
      */
     @Volatile
@@ -370,7 +370,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // 自治体マスタ(assets 同梱)は起動時に読む。設定画面のピッカーに加え、キャンペーンタブの
+    // 自治体マスタ(assets 同梱)は起動時に読む。設定画面のピッカーに加え、期間限定タブの
     // 地域フィルタ(rebuild)がグループ展開に使うため遅延ロードにしない。読めなければ空のまま
     // =フィルタ無効(全表示)に倒す。リモート取得の対象外だが data/⇔data-test/ の切替には追従する
     private val masterLoad: Job = loadMunicipalityMaster()
@@ -544,7 +544,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         engine = newEngine
 
         val today = LocalDate.now()
-        // キャンペーンタブの一覧。登録エリアがあれば既定で絞り込む(「すべて表示」トグルで解除可)
+        // 期間限定タブの一覧。登録エリアがあれば既定で絞り込む(「すべて表示」トグルで解除可)
         val applyAreaFilter: (List<Campaign>) -> List<Campaign> = { campaigns ->
             if (_state.value.showAllCampaigns) campaigns
             else filterCampaignsByArea(campaigns, settings.registeredAreas, _state.value.municipalityMaster)
@@ -556,7 +556,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             newEngine.upcomingCampaigns(today).filter { it.campaignType != CampaignType.CARD_PROGRAM }
         )
 
-        // 探すタブ初期画面のお知らせバナー: 登録地域で開催中の自治体施策がある自治体名。
+        // お店タブ初期画面のお知らせバナー: 登録地域で開催中の自治体施策がある自治体名。
         // フィルタと違い厳密一致(未登録・マスタ未ロードなら出さない)
         val searchMunicipalAreaNames = municipalCampaignsForAreas(
             newEngine.activeCampaigns(today),
@@ -768,7 +768,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * 現在地の継続購読。「近く」タブ表示中のみ UI 側(PoikatsuApp)から lifecycle スコープで呼び、
+     * 現在地の継続購読。「地図」タブ表示中のみ UI 側(PoikatsuApp)から lifecycle スコープで呼び、
      * タブ離脱・バックグラウンドで collect ごとキャンセルされて購読解除される。
      * 青ドットを追従させるだけで、カメラ移動・YOLP 再検索は行わない。
      */
@@ -1102,7 +1102,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * 「近く」のジャンル絞り込みトグル。表示集合の絞り込みは UI 側で nearby.places に対して行う
+     * 「地図」のジャンル絞り込みトグル。表示集合の絞り込みは UI 側で nearby.places に対して行う
      * クライアントフィルタなので、ここでは選択集合を更新するだけ(YOLP 再取得しない)。
      * チップは一覧表示時のみ出る(プレビュー中は出ない)ため selectedPlace は触らない。
      */
@@ -1118,7 +1118,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * 「近く」のチェーン絞り込み(在チェーンのピッカーから選択=レンズ2段目)。ジャンル選択は
+     * 「地図」のチェーン絞り込み(在チェーンのピッカーから選択=レンズ2段目)。ジャンル選択は
      * 残したまま(ピルを解除すると元のジャンル絞り込みに戻る=ドリルダウンの体験)。
      */
     fun onSelectNearbyChain(merchant: Merchant) {
@@ -1132,7 +1132,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * ブリッジ: 判定詳細(探す由来)から「近くのこの店を探す」。そのチェーンに絞った状態を作り、
-     * タブを NEARBY に切り替えて判定詳細を閉じる。実際の「近く」突入(位置情報パーミッション→fetchNearby)は
+     * タブを NEARBY に切り替えて判定詳細を閉じる。実際の「地図」突入(位置情報パーミッション→fetchNearby)は
      * UI 側が続けて行う。ジャンル絞り込みはクリアしてチェーン1点に集中する(ピル解除で全件に戻る)。
      */
     fun onFindNearby(merchant: Merchant) {
@@ -1347,7 +1347,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * 探すタブのお知らせバナーから: キャンペーンタブへ移動し、自治体フィルタを効かせて着地させる
+     * お店タブのお知らせバナーから: 期間限定タブへ移動し、自治体フィルタを効かせて着地させる
      * (「登録地域のみ」は既定 ON なので、そのまま登録地域の自治体施策一覧になる)
      */
     fun onOpenMunicipalCampaigns() {
@@ -1369,7 +1369,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 campaign = campaign,
                 // ブランド施策はイシュアー不問なので、バッジは運営者でなくブランド名を出す
                 badgeLabel = qr?.name ?: campaign.cardBrand ?: campaign.operator,
-                // 未所有カードの施策もキャンペーンタブには出るため、色は全カタログから引く
+                // 未所有カードの施策も期間限定タブには出るため、色は全カタログから引く
                 brandColor = catalog?.brandColorOf(campaign),
                 benefitType = benefitType,
                 effectiveRate = campaign.rateBase.takeUnless { isLottery },
@@ -1466,7 +1466,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onRemoveRegisteredArea(area: RegisteredArea) =
         viewModelScope.launch { settingsRepo.removeRegisteredArea(area) }
 
-    /** キャンペーンタブの「登録地域のみ / すべて」切替。設定でなく閲覧モードなので永続化しない */
+    /** 期間限定タブの「登録地域のみ / すべて」切替。設定でなく閲覧モードなので永続化しない */
     fun onToggleShowAllCampaigns() {
         _state.update { it.copy(showAllCampaigns = !it.showAllCampaigns) }
         rebuild()

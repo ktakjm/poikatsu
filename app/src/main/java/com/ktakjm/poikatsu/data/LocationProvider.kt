@@ -71,7 +71,7 @@ class LocationProvider(private val context: Context) {
     }
 
     /**
-     * 現在地の継続購読(「近く」タブ表示中の青ドット追従用)。collect のキャンセルで購読解除。
+     * 現在地の継続購読(「地図」タブ表示中の青ドット追従用)。collect のキャンセルで購読解除。
      * BALANCED 優先度(Wi-Fi/基地局主体、GPS は必要時のみ)+数秒間隔+最小移動距離つきなので
      * 電池消費は地図アプリとして常識的な範囲に収まる。
      */

@@ -39,11 +39,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
@@ -95,6 +93,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.Merchant
+import com.ktakjm.poikatsu.ui.theme.AppIcons
 import com.ktakjm.poikatsu.util.GeoMath
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -149,7 +148,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
 
     val selectedTab = state.selectedTab
 
-    // 「近く」タブ表示中だけ現在地を継続購読して青ドットを追従させる(カメラ移動・YOLP 再検索はしない)。
+    // 「地図」タブ表示中だけ現在地を継続購読して青ドットを追従させる(カメラ移動・YOLP 再検索はしない)。
     // タブ離脱で composition から外れ、バックグラウンドでは repeatOnLifecycle(STARTED) が止めるので
     // 購読は自動解除される。key の searchStamp は検索完了のたびに購読をやり直すためのもので、
     // パーミッションを後から許可したケース(初回は購読ガードで即 return)を次の検索完了時に拾い直す。
@@ -211,7 +210,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                 )
                 selectedTab == AppTab.NEARBY -> Unit
                 selectedTab == AppTab.SEARCH -> TopAppBar(title = { Text("ポイ活ナビ") })
-                selectedTab == AppTab.CAMPAIGNS -> TopAppBar(title = { Text("キャンペーン") })
+                selectedTab == AppTab.CAMPAIGNS -> TopAppBar(title = { Text("期間限定キャンペーン") })
                 selectedTab == AppTab.SETTINGS -> TopAppBar(title = { Text("設定") })
             }
         },
@@ -223,8 +222,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     NavigationBarItem(
                         selected = selectedTab == AppTab.SEARCH,
                         onClick = { if (selectedTab != AppTab.SEARCH) viewModel.onSelectTab(AppTab.SEARCH) },
-                        icon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        label = { Text("探す") },
+                        icon = { Icon(AppIcons.Storefront, contentDescription = null) },
+                        label = { Text("お店") },
                     )
                     NavigationBarItem(
                         selected = selectedTab == AppTab.NEARBY,
@@ -234,14 +233,14 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                                 onNearbyClick()
                             }
                         },
-                        icon = { Icon(Icons.Default.Place, contentDescription = null) },
-                        label = { Text("近く") },
+                        icon = { Icon(AppIcons.Map, contentDescription = null) },
+                        label = { Text("地図") },
                     )
                     NavigationBarItem(
                         selected = selectedTab == AppTab.CAMPAIGNS,
                         onClick = { if (selectedTab != AppTab.CAMPAIGNS) viewModel.onSelectTab(AppTab.CAMPAIGNS) },
-                        icon = { Icon(Icons.Default.Star, contentDescription = null) },
-                        label = { Text("キャンペーン") },
+                        icon = { Icon(AppIcons.LocalOffer, contentDescription = null) },
+                        label = { Text("期間限定") },
                     )
                     NavigationBarItem(
                         selected = selectedTab == AppTab.SETTINGS,
@@ -511,8 +510,8 @@ private fun SearchPane(
 }
 
 /**
- * 探すタブ初期画面の自治体施策お知らせバナー。施策の中身は出さず「あること」だけ知らせ、
- * タップでキャンペーンタブ(自治体フィルタ)へ送る。判定詳細(店舗カードタップ後)には出さない
+ * お店タブ初期画面の自治体施策お知らせバナー。施策の中身は出さず「あること」だけ知らせ、
+ * タップで期間限定タブ(自治体フィルタ)へ送る。判定詳細(店舗カードタップ後)には出さない
  * (チェーン店は自治体施策の対象外が多く、店舗単位の断定はできないため)。
  */
 @Composable
@@ -536,7 +535,7 @@ private fun MunicipalCampaignBanner(areaNames: List<String>, onClick: () -> Unit
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Icon(
-                Icons.Default.Star,
+                AppIcons.LocalOffer,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp),
@@ -547,7 +546,7 @@ private fun MunicipalCampaignBanner(areaNames: List<String>, onClick: () -> Unit
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
-                    "キャンペーンタブで詳細を確認できます",
+                    "期間限定タブで詳細を確認できます",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -726,7 +725,7 @@ private fun NearbyPane(
         }
     }
     // 「チェーンで絞る」ピッカー用: いま(ジャンル絞り込み後の)周辺に在るチェーンと件数。多い順→読み順。
-    // 全体ではなく周辺に在るものだけ出す(「近く」の約束)。merchantFilter 指定中はピル表示なので未使用。
+    // 全体ではなく周辺に在るものだけ出す(「地図」の約束)。merchantFilter 指定中はピル表示なので未使用。
     val presentChains = remember(nearby.places, selectedCategories) {
         nearby.places
             .filter { selectedCategories.isEmpty() || it.merchant?.category in selectedCategories }
@@ -1107,10 +1106,10 @@ private fun SheetAttribution() {
 }
 
 /**
- * 「近く」モードの絞り込みバー(横スクロール1行)。ボトムシートの peek 高さを圧迫しないよう1行に収める。
+ * 地図タブの絞り込みバー(横スクロール1行)。ボトムシートの peek 高さを圧迫しないよう1行に収める。
  * - チェーン絞り込み中(merchantFilter != null): そのチェーン名のピル(×で解除)だけを出す(チェーンはジャンルより優先)。
  * - 未絞り込み: 在チェーンが2つ以上あれば「チェーンで絞る」ピッカー + ジャンルチップ。
- * ジャンル選択集合は探すモードと独立(MainViewModel.nearbySelectedCategories)。
+ * ジャンル選択集合はお店モードと独立(MainViewModel.nearbySelectedCategories)。
  */
 @Composable
 private fun NearbyFilterBar(
@@ -1161,7 +1160,7 @@ private fun NearbyFilterBar(
 
 /**
  * 「チェーンで絞る」ピッカー。いま周辺に在るチェーンを件数つきで挙げ、選ぶと merchantFilter を設定する。
- * テキスト検索ではなく在チェーンからの選択にとどめる(レンズ層・検索の入口は「探す」に一本化)。
+ * テキスト検索ではなく在チェーンからの選択にとどめる(レンズ層・検索の入口は「お店」に一本化)。
  */
 @Composable
 private fun ChainFilterDropdown(

@@ -450,7 +450,7 @@ class JudgmentEngineTest {
         val campaign = campaignWithPeriod(start = "2026-07-01", end = "2026-07-31")
         val engine = periodTestEngine(campaign)
         assertEquals(CampaignStatus.UPCOMING, engine.campaignStatus(campaign, today))
-        // judge からはフィルタされる(探す/近くタブには出さない)
+        // judge からはフィルタされる(探す/地図タブには出さない)
         assertTrue(engine.judgeCards(testMerchant, today).isEmpty())
         // upcomingCampaigns には含まれる
         assertEquals(1, engine.upcomingCampaigns(today).size)
@@ -1070,9 +1070,9 @@ class JudgmentEngineTest {
     }
 
     @Test
-    fun `recurrence施策は期間内なら非対象日でもキャンペーンタブ用のactiveに残る`() {
+    fun `recurrence施策は期間内なら非対象日でも期間限定タブ用のactiveに残る`() {
         val engine = periodTestEngine(weeklyCampaign)
-        // 日曜: campaignStatus は期間の外枠だけで判定(キャンペーンタブは「次の対象日」を案内する)
+        // 日曜: campaignStatus は期間の外枠だけで判定(期間限定タブは「次の対象日」を案内する)
         assertEquals(CampaignStatus.ACTIVE, engine.campaignStatus(weeklyCampaign, today))
         assertTrue(engine.activeCampaigns(today).isNotEmpty())
         // 一方、YOLP 検索対象(判定に出る店)からは外れる
@@ -1356,7 +1356,7 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
-    fun `実データ_キャンペーンタブ用_6月30日にactiveとupcomingが存在する`() {
+    fun `実データ_期間限定タブ用_6月30日にactiveとupcomingが存在する`() {
         val june30 = LocalDate.of(2026, 6, 30)
         val active = engine.activeCampaigns(june30).filter { it.campaignType != CampaignType.CARD_PROGRAM }
         val upcoming = engine.upcomingCampaigns(june30).filter { it.campaignType != CampaignType.CARD_PROGRAM }
@@ -1364,7 +1364,7 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
-    fun `実データ_キャンペーンタブ用_7月1日にactive campaignsが存在する`() {
+    fun `実データ_期間限定タブ用_7月1日にactive campaignsが存在する`() {
         val july1 = LocalDate.of(2026, 7, 1)
         val timeLimited = engine.activeCampaigns(july1).filter { it.campaignType != CampaignType.CARD_PROGRAM }
         assertTrue("time-limited active not empty on 7/1: ${timeLimited.map { it.id }}", timeLimited.isNotEmpty())

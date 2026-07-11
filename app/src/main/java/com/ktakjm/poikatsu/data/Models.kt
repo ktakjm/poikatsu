@@ -12,7 +12,7 @@ data class Merchant(
     val reading: String = "",
     val aliases: List<String> = emptyList(),
     val category: String = "",
-    // 位置情報を持たない発行体(自販機など)の案内。これがあると「近く」探索が行き止まりになるため、
+    // 位置情報を持たない発行体(自販機など)の案内。これがあると「地図」探索が行き止まりになるため、
     // 判定詳細では「近くのこの店を探す」を出さず、代わりに外部アプリ/サイトでの確認を促す。
     @SerialName("location_hint") val locationHint: LocationHint? = null,
     @SerialName("yolp_search") val yolpSearch: String = "gc",
@@ -139,7 +139,7 @@ data class Region(
 
 /**
  * 繰り返し日付条件(毎週金土・毎月20日30日等)。period_start/end(外枠の開催期間)と併用し、
- * 「探す」「近く」の判定には期間内かつ対象日のみ出す。days_of_week / days_of_month はどちらか一方
+ * 「お店」「地図」の判定には期間内かつ対象日のみ出す。days_of_week / days_of_month はどちらか一方
  * (併用パターンは実在確認できるまで未対応)。
  */
 @Serializable
@@ -180,7 +180,7 @@ data class Campaign(
     @SerialName("min_purchase") val minPurchase: Int? = null,
     @SerialName("usage_limit") val usageLimit: Int? = null,
     @SerialName("usage_limit_note") val usageLimitNote: String? = null,
-    /** 予算到達次第の早期終了があり得るか(自治体系はほぼ全件 true)。判定詳細・キャンペーンタブに注記を出す */
+    /** 予算到達次第の早期終了があり得るか(自治体系はほぼ全件 true)。判定詳細・期間限定タブに注記を出す */
     @SerialName("may_end_early") val mayEndEarly: Boolean = false,
     /**
      * 公式が「還元対象」と明記しているウォレット("apple_pay" / "google_pay")。
@@ -282,7 +282,7 @@ data class PaymentMethodsFile(
 
 /**
  * 自治体マスタ。scripts/generate_municipalities.py が気象庁の予報区データから生成する
- * (スキーマの詳細は data/README.md)。設定画面のピッカーと、キャンペーンタブの
+ * (スキーマの詳細は data/README.md)。設定画面のピッカーと、期間限定タブの
  * 地域フィルタ(グループ→自治体コードの展開)に使う。
  */
 @Serializable

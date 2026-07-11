@@ -156,8 +156,8 @@ fun trimRate(rate: Double): String =
     if (rate == rate.toLong().toDouble()) rate.toLong().toString() else rate.toString()
 
 // ---- recurrence(繰り返し日付条件) ----
-// campaignStatus(期間の外枠)とは独立に「その日が対象日か」を判定する。「探す」「近く」の判定は
-// 期間内かつ対象日のみ、キャンペーンタブは期間内なら非対象日でも出して「次の対象日」を案内する。
+// campaignStatus(期間の外枠)とは独立に「その日が対象日か」を判定する。「お店」「地図」の判定は
+// 期間内かつ対象日のみ、期間限定タブは期間内なら非対象日でも出して「次の対象日」を案内する。
 
 /** recurrence 条件に date が一致するか。recurrence の無い施策は常に true(全日対象) */
 fun isTargetDay(campaign: Campaign, date: LocalDate): Boolean =
@@ -391,7 +391,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
     }
 
     // ---- 期間フィルタ ----
-    // recurrence(対象日)は含まない期間の外枠だけの判定。キャンペーンタブは期間内なら
+    // recurrence(対象日)は含まない期間の外枠だけの判定。期間限定タブは期間内なら
     // 非対象日でも「開催中」に出す(次の対象日を案内する)ため、対象日は isTargetDay で別判定する。
 
     fun campaignStatus(campaign: Campaign, today: LocalDate): CampaignStatus {

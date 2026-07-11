@@ -36,7 +36,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -95,6 +94,7 @@ import com.google.maps.android.compose.clustering.Clustering
 import com.google.maps.android.compose.clustering.rememberClusterManager
 import com.google.maps.android.compose.clustering.rememberClusterRenderer
 import com.google.maps.android.compose.rememberCameraPositionState
+import com.ktakjm.poikatsu.ui.theme.AppIcons
 import com.ktakjm.poikatsu.util.GeoMath
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -509,7 +509,7 @@ fun NearbyMap(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                     ) {
                         Icon(
-                            Icons.Default.Star,
+                            AppIcons.LocalOffer,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(16.dp),
