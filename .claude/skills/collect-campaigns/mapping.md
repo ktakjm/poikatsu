@@ -1,0 +1,88 @@
+# 事実 → campaigns.json 変換規則
+
+収集した事実を campaigns.json のエントリに落とすときの規則。スキーマの正本は data/README.md。ここは「収集時に迷いやすい点」の判定表に徹する。スキーマが変わったら data/README.md と一緒にこのファイルも更新すること(同一コミット)。**スキーマ変更後の初回は `maintenance` 等の小さいスコープで試運転**し、新フィールドが正しく埋まることを git diff で確認してから通常運用に戻ること。
+
+## id 命名
+
+既存パターンに合わせる:
+
+| 種別 | パターン | 例 |
+|---|---|---|
+| 自治体 | `{自治体ローマ字}_{決済id}_{YYYY_MM}`(開始月) | `yuzawa_paypay_2026_07` |
+| 県全域 | `{県名ローマ字}_{愛称等}_{YYYY_MM}` | `kanagawa_kanatoku_2026_06` |
+| 期間限定(promotion) | `{決済/カードid}_{チェーン}_{内容}_{YYYY_MM}` | `rakuten_pay_matsuya_60th_2026_07` |
+
+同一自治体×複数決済手段は決済 id 部分だけ変えて 1 施策 1 エントリ(湯沢市方式)。
+
+## type / store_scope / 帰属の判定
+
+- 自治体主催(地域限定・店舗データなし) → `municipal` + `external`。それ以外の期間限定 → `promotion`(対象チェーンが特定できるなら `managed` + `merchant_rules`、できなければ `external`)
+- 帰属は **`card_id` / `card_brand` / `payment_method_id` のちょうど 1 つ**。QR 決済の id: `paypay` / `aupay` / `dpay` / `rakuten_pay`。カード: `smcc` / `mufg`。ブランド施策(Amex 等): `card_brand`
+- `operator` は施策の運営者名(表示フォールバック用。例: "PayPay"、"楽天ペイ")
+
+## benefit_type と金額系フィールド
+
+| 特典の実態 | benefit_type | rate_base | discount_amount |
+|---|---|---|---|
+| 後日ポイント付与(定率) | `rebate` | 率 | null |
+| 後日ポイント付与(定額) | `rebate` | null | 金額 |
+| 即時割引(定率/定額) | `discount` | 率 or null | null or 金額 |
+| 抽選(スクラッチ・たぬきの抽選会等) | `lottery` | **null** | **null** |
+
+- PayPay の「クーポン」は実態が後日付与なので `rebate`
+- `rate_base` と `discount_amount` は排他(整合性テストで強制)
+- 抽選の当選確率・最大額は `conditions` の文章で持つ
+- **複数の率がある施策**(中小 20%/大手 10% 等)は全条件を `rate_rules` に列挙し、`rate_base` には**必ずその最大値**を入れる(CI が検証)。単一率なら `rate_rules` は書かない。率の内訳を `conditions` に重複記載しない
+
+## 上限・条件
+
+- `per_transaction_cap` / `period_total_cap`: 円相当の数値。null = 上限なし。**数値で表せる情報を `cap_note` に書かない**(cap_note は数値化できない但し書き専用)
+- `min_purchase`: 最低決済額(例: 800 円以上 → 800)
+- `usage_limit`: 回数上限(null = 無制限)。補足は `usage_limit_note`
+- `conditions`: 自前の文言で簡潔に(要エントリー、対象決済手段の内訳、対象外の支払い方法等)。**公表文のコピペ禁止**
+- `eligible_wallets` / `ineligible_wallets`: 公式がウォレット単位で対象/対象外を**言い切っている場合のみ**(値: `apple_pay` / `google_pay`)。未掲載 = 書かない
+- `payment_instruction`: 「◯◯で支払う」形の 1 文(既存エントリの文体に合わせる)
+
+## 期間・繰り返し
+
+- `period_start` / `period_end`: ISO 8601。null = 常設
+- `may_end_early`: 予算到達次第終了があり得るなら true。**自治体施策は標準条項のため原則 true**(明確に「早期終了なし」と書かれている場合のみ false)
+- `recurrence`: `days_of_week` か `days_of_month` の**どちらか一方**。外枠の期間(`period_start/end`)と併用
+
+## region(municipal のみ)
+
+- `{ name, prefecture }`。`name` は municipalities.json の自治体名と**一致させる**(不一致だと地域フィルタが効かない)
+- 県全域施策は `name` に都道府県名(`name == prefecture` が県全域マーカー)
+- 政令指定都市は市名で(行政区名はマスタに無いため突合が効かない)
+
+## merchant_rules(managed のみ)
+
+- `merchant_id` は merchants.json の `id`。**未収録チェーンは merchants.json への追加下書きが先**(下記)
+- その店だけ率が違う → `rate_override`。店固有の成立条件 → `note`。対象外ケースの但し書き → `exclusion_note`
+- `official_store_list` は**公式が店舗名で対象/対象外を言い切っている完全リストがある場合だけ**。例示レベル(「例: ◯◯店」)は `exclusion_note` の文章止まり(網羅性を仮定しない設計)
+- 「一部店舗のみ対象」の公式検索ページがあれば `store_list_url`
+
+## merchants.json への新規追加
+
+- `id`(ローマ字スネーク)・`name`・`reading`(ひらがな。検索ヒット率に直結、必須)・`aliases`(略称・別ブランド名、必須)・`category`
+- `yolp_search` / `yolp_keyword` は判断根拠(既存カテゴリの gc グループに載るか)が無ければ**要確認マークを付けて報告**し、勝手に決めない
+- `brand_color` は merchants 側には持たない(発行体側で一元管理)
+
+## メタ情報
+
+- `verified_date`: スキル実行日を入れる。ただし報告のチェックリストで「コミット前に人間が公式ページを目視確認」を必ず促す(この日付の意味は「人間が公式を見た日」)
+- `detail_url`: ユーザーに案内する公式ページ。楽天ペイ施策では**加盟店側 URL**を使う(楽天ドメイン URL は入れない)
+- campaigns.json 先頭の `updated_at` を実行日に更新
+
+## 見送り判定(報告の「見送り一覧」へ回す条件)
+
+| 理由 | 例 |
+|---|---|
+| 収録基準未満 | 還元率 5% 未満、クーポン 100 円未満 |
+| 全員配布でない | 抽選配布クーポン、特定会員ランク限定 |
+| ネット限定 | d曜日(現時点ではスキーマに区別が無いため一律見送り) |
+| 会員限定・要ログイン確認 | Amex オファー(「対象は会員により異なる」) |
+| アプリ内限定 | PayPay 小口クーポン、au PAY / d払いアプリ内クーポン |
+| 断定不能 | 自治体ページ未発見で対象決済手段を確認できない分 |
+| 商品券・プレミアム商品券型 | 決済還元でないもの |
+| 新規入会特典 | カード入会キャンペーン |
