@@ -1,6 +1,6 @@
 {
   "schema_version": 8,
-  "updated_at": "2026-07-10",
+  "updated_at": "2026-07-13",
   "campaigns": [
     {
       "id": "smcc_combini_restaurant",
@@ -64,7 +64,7 @@
         { "merchant_id": "hamazushi", "note": null, "exclusion_note": null },
         { "merchant_id": "kappazushi", "note": null, "exclusion_note": null }
       ],
-      "verified_date": "2026-06-12"
+      "verified_date": "2026-07-12"
     },
     {
       "id": "mufg_point_up_program",
@@ -121,7 +121,7 @@
         { "merchant_id": "akachan_honpo", "note": "Online Shop含む", "exclusion_note": "Amexは店頭決済のみ対象外(Online Shopは対象)", "amex_excluded": true, "official_store_list": {"eligible_stores": ["シーナシーナ屯田", "新さっぽろアークシティ", "アリオ札幌", "シーナシーナ青森", "仙台泉", "ヨークパーク郡山", "トナリエつくば", "ニューポートひたちなか", "ベルモール", "高崎", "スマーク伊勢崎", "ステラタウン大宮", "アリオ川口", "エミテラス所沢", "アリオ深谷", "アリオ上尾", "ALCo越谷", "和光イトーヨーカドー", "アリオ鷲宮", "テラスモール松戸", "アリオ柏", "アリオ市原", "四街道イトーヨーカドー", "アリオ北砂", "ウィラ大井", "池袋東武", "セブンタウン小豆沢", "アリオ西新井", "アリオ亀有", "アリオ葛西", "セレオ八王子", "昭島イトーヨーカドー", "武蔵小金井イトーヨーカドー", "東久留米イトーヨーカドー", "横浜別所イトーヨーカドー", "港南台バーズ", "グランツリー武蔵小杉", "溝口", "古淵イトーヨーカドー", "アリオ橋本", "テラスモール湘南", "大和鶴間イトーヨーカドー", "新潟亀田アピタ", "リバーサイド千秋", "ファボーレ", "アピタタウン金沢ベイ", "アルプラザ小松", "福井", "甲府昭和イトーヨーカドー", "アリオ上田", "アイシティ２１", "カラフルタウン岐阜", "静岡イトーヨーカドー", "浜松プラザ", "アクロスプラザ春日井", "リーフウォーク稲沢", "プライムツリー赤池", "ビバシティ彦根", "エイスクエア草津", "洛北阪急スクエア", "MOMOテラス", "精華台", "あべのイトーヨーカドー", "京阪シティモール", "大阪本町", "高槻阪急スクエア", "くずはモール", "アリオ八尾", "ホームズ寝屋川", "スマイル御影クラッセ", "ブルメール舞多聞", "カナート西神戸", "ゆめタウン姫路", "MEGAドン・キホーテ姫路広畑", "つかしん", "明石イトーヨーカドー", "トナリエ大和高田", "イズミヤ和歌山", "ゆめタウン出雲", "ハピータウン岡南", "ブランチ北長瀬", "フジグラン緑井", "ゆめタウンみゆき", "ゆめタウン福山", "ゆめタウン廿日市", "イオンタウン防府", "ゆめタウン徳島", "瓦町FLAG", "エミフルMASAKI", "リバーウォーク北九州", "福岡マリナタウン", "ガーデンズ千早", "ゆめタウン飯塚", "ゆめタウン筑紫野", "ゆめタウン佐賀", "ゆめタウンはません", "ゆめタウン光の森", "パークプレイス大分", "ニトリモール宮崎", "オプシアミスミ", "浦添西海岸パルコシティ", "ハンビータウン", "西原シティ"], "ineligible_stores": ["ララガーデン長町", "ララガーデン川口", "ララガーデン春日部", "ららぽーと富士見", "ららぽーと新三郷", "幕張イトーヨーカドー", "ららぽーとTOKYO-BAY", "ららぽーと柏の葉", "アルカキット錦糸町", "ららぽーと豊洲", "ららぽーと立川立飛", "ららぽーと横浜", "立場イトーヨーカドー", "ラゾーナ川崎", "ららぽーと湘南平塚", "ららぽーと海老名", "ららぽーと沼津", "ららぽーと磐田", "ららぽーと名古屋みなとアクルス", "ららぽーと安城", "ららぽーと愛知東郷", "ららぽーと堺", "ららぽーとEXPOCITY", "ららぽーと和泉", "ららぽーと門真", "ららぽーと甲子園"], "updated_date": "2026-06-15", "date_is_official": false, "source_url": "https://www.akachan.jp/topics/mufgCPlist/"} },
         { "merchant_id": "curves", "note": "入会金・月会費が対象", "exclusion_note": null, "amex_excluded": false }
       ],
-      "verified_date": "2026-06-12"
+      "verified_date": "2026-07-12"
     },
     {
       "id": "yuzawa_paypay_2026_07",
@@ -145,7 +145,7 @@
       "detail_url": "https://paypay.ne.jp/event/akita-yuzawa-city/",
       "store_search_url": null,
       "merchant_rules": [],
-      "verified_date": "2026-06-30"
+      "verified_date": "2026-07-12"
     },
     {
       "id": "yuzawa_aupay_2026_07",
@@ -169,7 +169,7 @@
       "detail_url": "https://media.aupay.wallet.auone.jp/articles/5059",
       "store_search_url": null,
       "merchant_rules": [],
-      "verified_date": "2026-06-30"
+      "verified_date": "2026-07-12"
     },
     {
       "id": "oshu_paypay_2026_07",
@@ -193,7 +193,7 @@
       "detail_url": "https://paypay.ne.jp/event/iwate-oshu-city-20260701/",
       "store_search_url": null,
       "merchant_rules": [],
-      "verified_date": "2026-06-30"
+      "verified_date": "2026-07-12"
     },
     {
       "id": "oda_paypay_2026_07",
@@ -202,7 +202,7 @@
       "store_scope": "external",
       "operator": "PayPay",
       "payment_method_id": "paypay",
-      "name": "おおだキャッシュレスキャンペーン",
+      "name": "おおだキャッシュレスキャンペーン 第5弾",
       "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイントで支払う",
       "rate_base": 20.0,
       "period_start": "2026-07-01",
@@ -217,7 +217,7 @@
       "detail_url": "https://paypay.ne.jp/notice/20260529/cp-jichitai/",
       "store_search_url": null,
       "merchant_rules": [],
-      "verified_date": "2026-06-30"
+      "verified_date": "2026-07-12"
     },
     {
       "id": "rakuten_pay_matsuya_60th_2026_07",
@@ -227,7 +227,7 @@
       "operator": "楽天ペイ",
       "payment_method_id": "rakuten_pay",
       "name": "松屋創業60周年記念！楽天ペイ決済で15%ポイント還元 第2弾",
-      "payment_instruction": "楽天ペイのコード決済・セルフ決済で支払う",
+      "payment_instruction": "松弁ネット・松屋モバイルオーダー・松弁デリバリーから楽天ペイで事前決済する",
       "rate_base": 15.0,
       "period_start": "2026-07-01",
       "period_end": "2026-07-15",
@@ -235,14 +235,13 @@
       "period_total_cap": 10000,
       "conditions": [
         "事前エントリー必要",
-        "1回の決済800円(税込)以上が対象",
-        "松弁ネット・モバイルオーダー・松弁デリバリーでの決済も対象"
+        "1回の決済800円(税込)以上が対象"
       ],
       "merchant_rules": [
-        { "merchant_id": "matsuya", "note": "松弁ネット・モバイルオーダー・松弁デリバリーも対象(松のや・マイカリー食堂等のグループブランド含む)", "exclusion_note": null }
+        { "merchant_id": "matsuya", "note": "対象は松弁ネット・松屋モバイルオーダー・松弁デリバリーでの楽天ペイ事前決済のみ(松のや・マイカリー食堂等のグループブランド含む)", "exclusion_note": "店頭(券売機・セルフレジ)での楽天ペイ決済は対象外" }
       ],
       "detail_url": "https://www.matsuyafoods.co.jp/matsuya/whatsnew/campaign/160563.html",
-      "verified_date": "2026-06-30"
+      "verified_date": "2026-07-13"
     },
     {
       "id": "suginami_paypay_2026_06",
@@ -303,7 +302,346 @@
         "終了日未定（予算上限到達時点で終了）"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-10"
+      "verified_date": "2026-07-12"
+    },
+    {
+      "id": "kanagawa_kanatoku_aupay_2026_06",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "かながわトクトクキャンペーン『かなトク！』（最大20%戻ってくる）",
+      "payment_instruction": "au PAYのコード支払いで支払う",
+      "rate_base": 20.0,
+      "rate_rules": [
+        { "condition": "中小企業・小規模企業の店舗", "rate": 20.0 },
+        { "condition": "大手企業の店舗", "rate": 10.0 }
+      ],
+      "period_start": "2026-06-19",
+      "period_end": null,
+      "per_transaction_cap": 1500,
+      "period_total_cap": 2500,
+      "may_end_early": true,
+      "region": {
+        "name": "神奈川県",
+        "prefecture": "神奈川県"
+      },
+      "detail_url": "https://media.aupay.wallet.auone.jp/dominant/lp/202606_kanagawa/",
+      "store_search_url": null,
+      "conditions": [
+        "還元はau PAY残高(不課税)",
+        "付与上限は20%店舗と10%店舗の合算で2,500円相当(決済サービスごと)",
+        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外",
+        "終了日未定（予算上限到達時点で終了）"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "kanagawa_kanatoku_dpay_2026_06",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "d払い",
+      "payment_method_id": "dpay",
+      "name": "かながわトクトクキャンペーン『かなトク！』（最大20%戻ってくる）",
+      "payment_instruction": "d払いのコード決済で支払う",
+      "rate_base": 20.0,
+      "rate_rules": [
+        { "condition": "中小企業・小規模企業の店舗", "rate": 20.0 },
+        { "condition": "大手企業の店舗", "rate": 10.0 }
+      ],
+      "period_start": "2026-06-19",
+      "period_end": null,
+      "per_transaction_cap": 1500,
+      "period_total_cap": 2500,
+      "may_end_early": true,
+      "region": {
+        "name": "神奈川県",
+        "prefecture": "神奈川県"
+      },
+      "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/kanagawa/",
+      "store_search_url": null,
+      "conditions": [
+        "還元はdポイント(期間・用途限定)",
+        "付与上限は20%店舗と10%店舗の合算で2,500ポイント(決済サービスごと)",
+        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外",
+        "終了日未定（予算上限到達時点で終了）"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "kanagawa_kanatoku_rakuten_pay_2026_06",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "楽天ペイ",
+      "payment_method_id": "rakuten_pay",
+      "name": "かながわトクトクキャンペーン『かなトク！』（最大20%戻ってくる）",
+      "payment_instruction": "楽天ペイのコード決済で支払う",
+      "rate_base": 20.0,
+      "rate_rules": [
+        { "condition": "中小企業・小規模企業の店舗", "rate": 20.0 },
+        { "condition": "大手企業の店舗", "rate": 10.0 }
+      ],
+      "period_start": "2026-06-19",
+      "period_end": null,
+      "per_transaction_cap": 1500,
+      "period_total_cap": 2500,
+      "may_end_early": true,
+      "region": {
+        "name": "神奈川県",
+        "prefecture": "神奈川県"
+      },
+      "detail_url": "https://www.kanatokucpn.pref.kanagawa.jp/",
+      "store_search_url": null,
+      "conditions": [
+        "付与上限は20%店舗と10%店舗の合算で2,500円相当(決済サービスごと)",
+        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外",
+        "終了日未定（予算上限到達時点で終了）"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "chiba_pref_paypay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "PayPay",
+      "payment_method_id": "paypay",
+      "name": "千葉県キャッシュレス決済キャンペーン 第3弾（最大10%戻ってくる）",
+      "payment_instruction": "PayPay残高・PayPayクレジットで支払う",
+      "rate_base": 10.0,
+      "period_start": "2026-08-07",
+      "period_end": "2026-08-30",
+      "per_transaction_cap": null,
+      "period_total_cap": 3000,
+      "may_end_early": true,
+      "region": {
+        "name": "千葉県",
+        "prefecture": "千葉県"
+      },
+      "detail_url": "https://paypay.ne.jp/notice/20260615/cp-jichitai/",
+      "store_search_url": null,
+      "conditions": [
+        "県内在住・在勤を問わず対象",
+        "付与上限は決済サービスごとに期間中3,000円相当(1回ごとの上限は設けられていない)",
+        "PayPayカードのPayPayクレジット以外のクレジットカード併用は対象外",
+        "コンビニ・行政機関・金融機関・保険会社・医療機関・風俗店等は対象外店舗",
+        "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "chiba_pref_aupay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "千葉県キャッシュレス決済キャンペーン 第3弾（最大10%戻ってくる）",
+      "payment_instruction": "au PAYのコード支払いで支払う",
+      "rate_base": 10.0,
+      "period_start": "2026-08-07",
+      "period_end": "2026-08-30",
+      "per_transaction_cap": null,
+      "period_total_cap": 3000,
+      "may_end_early": true,
+      "region": {
+        "name": "千葉県",
+        "prefecture": "千葉県"
+      },
+      "detail_url": "https://www.pref.chiba.lg.jp/keisei/press/2026/r8cashless-campaign.html",
+      "store_search_url": null,
+      "conditions": [
+        "還元はau PAY残高(不課税)",
+        "県内在住・在勤を問わず対象",
+        "付与上限は決済サービスごとに期間中3,000円相当(1回ごとの上限は設けられていない)",
+        "コンビニ・行政機関・金融機関・保険会社・医療機関・風俗店等は対象外店舗",
+        "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "chiba_pref_dpay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "d払い",
+      "payment_method_id": "dpay",
+      "name": "千葉県キャッシュレス決済キャンペーン 第3弾（最大10%戻ってくる）",
+      "payment_instruction": "d払いのコード決済で支払う",
+      "rate_base": 10.0,
+      "period_start": "2026-08-07",
+      "period_end": "2026-08-30",
+      "per_transaction_cap": null,
+      "period_total_cap": 3000,
+      "may_end_early": true,
+      "region": {
+        "name": "千葉県",
+        "prefecture": "千葉県"
+      },
+      "detail_url": "https://www.pref.chiba.lg.jp/keisei/press/2026/r8cashless-campaign.html",
+      "store_search_url": null,
+      "conditions": [
+        "県内在住・在勤を問わず対象",
+        "付与上限は決済サービスごとに期間中3,000円相当(1回ごとの上限は設けられていない)",
+        "コンビニ・行政機関・金融機関・保険会社・医療機関・風俗店等は対象外店舗",
+        "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "chiba_pref_rakuten_pay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "楽天ペイ",
+      "payment_method_id": "rakuten_pay",
+      "name": "千葉県キャッシュレス決済キャンペーン 第3弾（最大10%戻ってくる）",
+      "payment_instruction": "楽天ペイのコード決済で支払う",
+      "rate_base": 10.0,
+      "period_start": "2026-08-07",
+      "period_end": "2026-08-30",
+      "per_transaction_cap": null,
+      "period_total_cap": 3000,
+      "may_end_early": true,
+      "region": {
+        "name": "千葉県",
+        "prefecture": "千葉県"
+      },
+      "detail_url": "https://www.pref.chiba.lg.jp/keisei/press/2026/r8cashless-campaign.html",
+      "store_search_url": null,
+      "conditions": [
+        "県内在住・在勤を問わず対象",
+        "付与上限は決済サービスごとに期間中3,000円相当(1回ごとの上限は設けられていない)",
+        "コンビニ・行政機関・金融機関・保険会社・医療機関・風俗店等は対象外店舗",
+        "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "chiba_city_paypay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "PayPay",
+      "payment_method_id": "paypay",
+      "name": "千葉市キャッシュレスキャンペーン 第2弾（最大5%戻ってくる）",
+      "payment_instruction": "PayPay残高・PayPayクレジットで支払う",
+      "rate_base": 5.0,
+      "period_start": "2026-08-07",
+      "period_end": "2026-08-30",
+      "per_transaction_cap": 1500,
+      "period_total_cap": 3000,
+      "may_end_early": true,
+      "region": {
+        "name": "千葉市",
+        "prefecture": "千葉県"
+      },
+      "detail_url": "https://paypay.ne.jp/notice/20260615/cp-jichitai/",
+      "store_search_url": null,
+      "conditions": [
+        "千葉県キャンペーンと併用可（合わせて最大15%）",
+        "付与上限は決済サービスごとに期間中3,000円相当",
+        "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "chiba_city_aupay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "千葉市キャッシュレスキャンペーン 第2弾（最大5%戻ってくる）",
+      "payment_instruction": "au PAYのコード支払いで支払う",
+      "rate_base": 5.0,
+      "period_start": "2026-08-07",
+      "period_end": "2026-08-30",
+      "per_transaction_cap": 1500,
+      "period_total_cap": 3000,
+      "may_end_early": true,
+      "region": {
+        "name": "千葉市",
+        "prefecture": "千葉県"
+      },
+      "detail_url": "https://www.city.chiba.jp/keizainosei/keizai/kikaku/2026_cashlesscampaign.html",
+      "store_search_url": null,
+      "conditions": [
+        "千葉県キャンペーンと併用可（合わせて最大15%）",
+        "付与上限は決済サービスごとに期間中3,000円相当",
+        "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "chiba_city_dpay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "d払い",
+      "payment_method_id": "dpay",
+      "name": "千葉市キャッシュレスキャンペーン 第2弾（最大5%戻ってくる）",
+      "payment_instruction": "d払いのコード決済で支払う",
+      "rate_base": 5.0,
+      "period_start": "2026-08-07",
+      "period_end": "2026-08-30",
+      "per_transaction_cap": 1500,
+      "period_total_cap": 3000,
+      "may_end_early": true,
+      "region": {
+        "name": "千葉市",
+        "prefecture": "千葉県"
+      },
+      "detail_url": "https://www.city.chiba.jp/keizainosei/keizai/kikaku/2026_cashlesscampaign.html",
+      "store_search_url": null,
+      "conditions": [
+        "千葉県キャンペーンと併用可（合わせて最大15%）",
+        "付与上限は決済サービスごとに期間中3,000円相当",
+        "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "chiba_city_rakuten_pay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "楽天ペイ",
+      "payment_method_id": "rakuten_pay",
+      "name": "千葉市キャッシュレスキャンペーン 第2弾（最大5%戻ってくる）",
+      "payment_instruction": "楽天ペイのコード決済で支払う",
+      "rate_base": 5.0,
+      "period_start": "2026-08-07",
+      "period_end": "2026-08-30",
+      "per_transaction_cap": 1500,
+      "period_total_cap": 3000,
+      "may_end_early": true,
+      "region": {
+        "name": "千葉市",
+        "prefecture": "千葉県"
+      },
+      "detail_url": "https://www.city.chiba.jp/keizainosei/keizai/kikaku/2026_cashlesscampaign.html",
+      "store_search_url": null,
+      "conditions": [
+        "千葉県キャンペーンと併用可（合わせて最大15%）",
+        "付与上限は決済サービスごとに期間中3,000円相当",
+        "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
     }
   ]
 }
