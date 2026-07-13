@@ -172,6 +172,62 @@
       "verified_date": "2026-07-12"
     },
     {
+      "id": "yuzawa_dpay_2026_07",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "d払い",
+      "payment_method_id": "dpay",
+      "name": "湯沢市キャッシュレスで買い物キャンペーン",
+      "payment_instruction": "d払いのコード決済で支払う",
+      "rate_base": 10.0,
+      "period_start": "2026-07-01",
+      "period_end": "2026-09-30",
+      "per_transaction_cap": 3000,
+      "period_total_cap": 5000,
+      "may_end_early": true,
+      "region": {
+        "name": "湯沢市",
+        "prefecture": "秋田県"
+      },
+      "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/yuzawa/",
+      "store_search_url": null,
+      "conditions": [
+        "還元はdポイント(期間・用途限定)",
+        "d払い(ネット)・d払いタッチ・自動販売機/券売機・タバコを含む購入は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "yuzawa_rakuten_pay_2026_07",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "楽天ペイ",
+      "payment_method_id": "rakuten_pay",
+      "name": "湯沢市キャッシュレスで買い物キャンペーン",
+      "payment_instruction": "楽天ペイのコード決済で支払う",
+      "rate_base": 10.0,
+      "period_start": "2026-07-01",
+      "period_end": "2026-09-30",
+      "per_transaction_cap": 3000,
+      "period_total_cap": 5000,
+      "may_end_early": true,
+      "region": {
+        "name": "湯沢市",
+        "prefecture": "秋田県"
+      },
+      "detail_url": "https://yuzawa-cashless.jp/",
+      "store_search_url": null,
+      "conditions": [
+        "付与上限は決済サービスごとに適用(PayPay・au PAY・d払い・楽天ペイが対象)",
+        "インターネット販売・モバイルオーダー・公共料金・タバコ・換金性の高い商品は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
       "id": "oshu_paypay_2026_07",
       "type": "municipal",
       "benefit_type": "rebate",
@@ -203,7 +259,7 @@
       "operator": "PayPay",
       "payment_method_id": "paypay",
       "name": "おおだキャッシュレスキャンペーン 第5弾",
-      "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイントで支払う",
+      "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイント・PayPayデビットで支払う",
       "rate_base": 20.0,
       "period_start": "2026-07-01",
       "period_end": "2026-08-10",
@@ -214,10 +270,98 @@
         "name": "大田市",
         "prefecture": "島根県"
       },
-      "detail_url": "https://paypay.ne.jp/notice/20260529/cp-jichitai/",
+      "detail_url": "https://paypay.ne.jp/event/shimane-oda-city-20260701/",
       "store_search_url": null,
+      "conditions": [
+        "付与上限は決済サービスごとに1回2,000ポイント・期間中5,000ポイント",
+        "タバコ・自動販売機/券売機・オンラインショップ・他社アプリ経由・PayPay商品券での支払いは対象外"
+      ],
       "merchant_rules": [],
-      "verified_date": "2026-07-12"
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "oda_aupay_2026_07",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "おおだキャッシュレスキャンペーン（最大20%戻ってくる）",
+      "payment_instruction": "au PAYのコード支払いで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-07-01",
+      "period_end": "2026-08-10",
+      "per_transaction_cap": 2000,
+      "period_total_cap": 5000,
+      "may_end_early": true,
+      "region": {
+        "name": "大田市",
+        "prefecture": "島根県"
+      },
+      "detail_url": "https://media.aupay.wallet.auone.jp/dominant/lp/202607_oda/",
+      "store_search_url": null,
+      "conditions": [
+        "還元はau PAY残高(不課税)",
+        "au PAY カード・au PAY プリペイドカードの利用は対象外",
+        "金券・タバコ等の指定商品は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "oda_dpay_2026_07",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "d払い",
+      "payment_method_id": "dpay",
+      "name": "おおだキャッシュレスキャンペーン（最大20%戻ってくる）",
+      "payment_instruction": "d払いのコード決済で支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-07-01",
+      "period_end": "2026-08-10",
+      "per_transaction_cap": 2000,
+      "period_total_cap": 5000,
+      "may_end_early": true,
+      "region": {
+        "name": "大田市",
+        "prefecture": "島根県"
+      },
+      "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/oda_03/",
+      "store_search_url": null,
+      "conditions": [
+        "還元はdポイント(期間・用途限定)",
+        "d払い(ネット)・d払いタッチ・クーポン利用分・自動販売機/券売機・タバコを含む購入は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "oda_rakuten_pay_2026_07",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "楽天ペイ",
+      "payment_method_id": "rakuten_pay",
+      "name": "おおだキャッシュレスキャンペーン（最大20%戻ってくる）",
+      "payment_instruction": "楽天ペイのコード決済で支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-07-01",
+      "period_end": "2026-08-10",
+      "per_transaction_cap": 2000,
+      "period_total_cap": 5000,
+      "may_end_early": true,
+      "region": {
+        "name": "大田市",
+        "prefecture": "島根県"
+      },
+      "detail_url": "https://www.city.oda.lg.jp/update_info/10976",
+      "store_search_url": null,
+      "conditions": [
+        "付与上限は決済サービスごとに適用(PayPay・au PAY・d払い・楽天ペイ・AEON Payが対象)"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
     },
     {
       "id": "rakuten_pay_matsuya_60th_2026_07",
@@ -639,6 +783,147 @@
         "千葉県キャンペーンと併用可（合わせて最大15%）",
         "付与上限は決済サービスごとに期間中3,000円相当",
         "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "gifu_paypay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "PayPay",
+      "payment_method_id": "paypay",
+      "name": "岐阜市物価高騰支援事業20%還元キャンペーン（最大20%戻ってくる）",
+      "payment_instruction": "PayPay残高・PayPayクレジットで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-01",
+      "period_end": "2026-08-31",
+      "per_transaction_cap": 1000,
+      "period_total_cap": 5000,
+      "may_end_early": true,
+      "region": {
+        "name": "岐阜市",
+        "prefecture": "岐阜県"
+      },
+      "detail_url": "https://paypay.ne.jp/notice/20260615/cp-jichitai/",
+      "store_search_url": null,
+      "conditions": [
+        "対象店舗は岐阜市とPayPayが指定する市内加盟店",
+        "クレジットカード(PayPayクレジット以外)の併用は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "matsubara_paypay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "PayPay",
+      "payment_method_id": "paypay",
+      "name": "まつばらキャッシュレスキャンペーン（最大20%戻ってくる）",
+      "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイントで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-01",
+      "period_end": "2026-09-30",
+      "per_transaction_cap": 1000,
+      "period_total_cap": 5000,
+      "may_end_early": true,
+      "region": {
+        "name": "松原市",
+        "prefecture": "大阪府"
+      },
+      "detail_url": "https://paypay.ne.jp/notice/20260630/cp-jichitai/",
+      "store_search_url": null,
+      "conditions": [
+        "対象店舗は松原市とPayPayが指定する市内加盟店",
+        "クレジットカード(PayPayクレジット以外)の併用は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "kakogawa_paypay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "PayPay",
+      "payment_method_id": "paypay",
+      "name": "加古川で買おう！対象のお店で最大20%戻ってくるキャンペーン",
+      "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイント・PayPayデビットで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-01",
+      "period_end": "2026-08-31",
+      "per_transaction_cap": 1000,
+      "period_total_cap": 3000,
+      "may_end_early": true,
+      "region": {
+        "name": "加古川市",
+        "prefecture": "兵庫県"
+      },
+      "detail_url": "https://www.city.kakogawa.lg.jp/soshikikarasagasu/chiikishinkobu/shokorosei/syogyo_kogyo/syogyosinko/40284.html",
+      "store_search_url": null,
+      "conditions": [
+        "クレジットカード(PayPayクレジット以外)の併用は対象外",
+        "公共機関・病院・調剤薬局・金券ショップ・コンビニ等は対象外店舗",
+        "たばこ・金券・電子マネーチャージ・公共料金・金融商品等は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "takehara_paypay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "PayPay",
+      "payment_method_id": "paypay",
+      "name": "第7弾 がんばろう竹原！対象店舗で最大20%戻ってくるキャンペーン",
+      "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイントで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-01",
+      "period_end": "2026-09-25",
+      "per_transaction_cap": 1000,
+      "period_total_cap": 10000,
+      "may_end_early": true,
+      "region": {
+        "name": "竹原市",
+        "prefecture": "広島県"
+      },
+      "detail_url": "https://www.city.takehara.lg.jp/soshikikarasagasu/sangyoshinkoka/gyomuannai/6/2/2261.html",
+      "store_search_url": null,
+      "conditions": [
+        "対象は本店・本社が竹原市内にあるPayPay加盟店",
+        "コンビニ・病院/医院・調剤薬局・介護施設・保険代理店・公共料金・金券・プリペイドカード・たばこ・市指定ごみ袋等は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-13"
+    },
+    {
+      "id": "tsukumi_paypay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "PayPay",
+      "payment_method_id": "paypay",
+      "name": "キャッシュレスで津久見市のお店を応援しよう！最大30%戻ってくるつくみんサマーキャンペーン",
+      "payment_instruction": "PayPay残高・PayPayクレジットで支払う",
+      "rate_base": 30.0,
+      "period_start": "2026-08-01",
+      "period_end": "2026-08-31",
+      "per_transaction_cap": 1000,
+      "period_total_cap": 5000,
+      "may_end_early": true,
+      "region": {
+        "name": "津久見市",
+        "prefecture": "大分県"
+      },
+      "detail_url": "https://paypay.ne.jp/notice/20260615/cp-jichitai/",
+      "store_search_url": null,
+      "conditions": [
+        "対象は津久見市内の中規模・小規模のPayPay加盟店",
+        "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
       "verified_date": "2026-07-13"
