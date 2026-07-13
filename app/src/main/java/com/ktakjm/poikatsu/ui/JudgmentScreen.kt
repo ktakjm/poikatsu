@@ -196,6 +196,9 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
                     if (campaign.isTimeLimited) {
                         TimeLimitedBadge()
                     }
+                    if (campaign.productScope != null) {
+                        ProductScopeBadge()
+                    }
                 }
                 Text(
                     campaign.name,
@@ -219,6 +222,13 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
         judgment.exclusionNote?.let {
             NoticeRow(it, warningContainerColor(), onWarningContainerColor())
         }
+        // 対象商品限定(メーカー縛り)。全商品に効く率と誤認させない(最良比較からも分離済み。#43)
+        judgment.campaign.productScope?.let {
+            NoticeRow("対象商品限定：${it.label}", warningContainerColor(), onWarningContainerColor())
+        }
+        if (judgment.campaign.requiresEntry) {
+            NoticeRow("事前エントリーが必要です(詳細ページから)", warningContainerColor(), onWarningContainerColor())
+        }
         if (judgment.mayEndEarly) {
             NoticeRow("予算上限あり。期限より早く終了する可能性があります", warningContainerColor(), onWarningContainerColor())
         }
@@ -229,7 +239,7 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
                 color = MaterialTheme.colorScheme.outline,
             )
         }
-        MinPurchaseRow(judgment.minPurchase)
+        MinPurchaseRow(judgment.minPurchase, judgment.campaign.minPurchaseScope)
         judgment.usageLimitText?.let {
             Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
         }
@@ -288,10 +298,15 @@ private fun BenefitDisplay(judgment: CampaignJudgment) {
     }
     val label = formatBenefit(judgment.benefitType, judgment.effectiveRate, judgment.discountAmount) ?: return
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        // 段階制(rate_rules)の施策は rate_base = 最大値なので「最大」を冠し、断定に見せない
-        if (judgment.campaign.rateRules.isNotEmpty()) {
+        // 断定に見せない修飾: 段階制(rate_rules)は rate_base = 最大値なので「最大」、
+        // 対象商品限定(product_scope)は全商品に効かないので「対象商品」を冠する
+        val qualifier = listOfNotNull(
+            "対象商品".takeIf { judgment.campaign.productScope != null },
+            "最大".takeIf { judgment.campaign.rateRules.isNotEmpty() },
+        ).joinToString("")
+        if (qualifier.isNotEmpty()) {
             Text(
-                "最大",
+                qualifier,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
             )

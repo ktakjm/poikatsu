@@ -28,11 +28,15 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Path
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.DataSource
+import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_PERIOD_TOTAL
+import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_TRANSACTION
 import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.CampaignType
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.formatBenefit
 import com.ktakjm.poikatsu.domain.trimRate
+import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
+import com.ktakjm.poikatsu.ui.theme.warningContainerColor
 import java.time.LocalDate
 
 /** "#RRGGBB" を Color に変換。形式が不正なら null */
@@ -179,6 +183,26 @@ internal fun TimeLimitedBadge(modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * 対象商品限定(product_scope)バッジ。期間限定と同列に出す。
+ * 「全商品には効かない」注意の意味なので warning 系(期間限定の tertiary と区別)。
+ */
+@Composable
+internal fun ProductScopeBadge(modifier: Modifier = Modifier) {
+    Surface(
+        color = warningContainerColor(),
+        contentColor = onWarningContainerColor(),
+        shape = RoundedCornerShape(4.dp),
+        modifier = modifier,
+    ) {
+        Text(
+            "商品限定",
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+    }
+}
+
 // ---- 共通カード部品 ----
 
 /** カード左端のブランドカラーストライプ(単色 or 斜め分割マルチカラー) */
@@ -268,9 +292,15 @@ internal fun buildCapText(perTransaction: Int?, periodTotal: Int?): String? {
 }
 
 @Composable
-internal fun MinPurchaseRow(minPurchase: Int?) {
+internal fun MinPurchaseRow(minPurchase: Int?, scope: String = MIN_PURCHASE_SCOPE_TRANSACTION) {
     if (minPurchase == null) return
-    Text("%,d円(税込)以上の決済で適用".format(minPurchase), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+    // period_total は「期間中の合計で超えればよい」型(PayPay×花王等)。1決済ごとと誤読させない
+    val text = if (scope == MIN_PURCHASE_SCOPE_PERIOD_TOTAL) {
+        "期間中の購入合計%,d円(税込)以上で適用(複数回の買い物の合算可)".format(minPurchase)
+    } else {
+        "%,d円(税込)以上の決済で適用".format(minPurchase)
+    }
+    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
 }
 
 @Composable

@@ -1,12 +1,15 @@
 package com.ktakjm.poikatsu
 
 import com.ktakjm.poikatsu.data.Campaign
+import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_PERIOD_TOTAL
+import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_TRANSACTION
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.OfficialStoreList
 import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
+import com.ktakjm.poikatsu.data.ProductScope
 import com.ktakjm.poikatsu.data.QrPayment
 import com.ktakjm.poikatsu.data.Recurrence
 import com.ktakjm.poikatsu.data.Region
@@ -836,6 +839,50 @@ class JudgmentEngineTest {
         assertEquals("5% 還元", label.toString())
     }
 
+    // ---- product_scope(対象商品限定。メーカー×小売×決済連動キャンペーン #43)のテスト ----
+
+    @Test
+    fun `bestOptionは対象商品限定の施策を除外する`() {
+        val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
+        val unconditional = campaignWithPeriod(rateBase = 7.0).copy(id = "base")
+        val productScoped = campaignWithPeriod(
+            type = CampaignType.PROMOTION,
+            cardId = null,
+            paymentMethodId = "paypay",
+            rateBase = 30.0,
+        ).copy(id = "maker30", productScope = ProductScope(label = "花王商品(一部除く)"))
+        val engine = JudgmentEngine(
+            PoikatsuData(
+                merchants = listOf(testMerchant),
+                campaigns = listOf(unconditional, productScoped),
+                cards = listOf(testCard.copy(effectiveRateDefault = 7.0)),
+                qrPayments = listOf(paypay),
+                updatedAt = "2026-06-01",
+            ),
+        )
+        val result = engine.judgeAll(testMerchant, today, setOf("paypay"))
+        // 判定カードには両方出るが、「最良」は全商品に効く7%(対象商品を買わない人に30%と誤提示しない)
+        assertEquals(2, result.judgments.size)
+        assertEquals("テストカード", result.bestOption!!.method)
+        assertEquals(7.0, result.bestOption!!.rate!!, 0.001)
+        assertEquals("7% 還元", result.bestBenefitLabel().toString())
+    }
+
+    @Test
+    fun `bestBenefitLabel_対象商品限定しか無いチェーンは対象商品の付記つきラベル`() {
+        val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
+        val productScoped = campaignWithPeriod(
+            type = CampaignType.PROMOTION,
+            cardId = null,
+            paymentMethodId = "paypay",
+            rateBase = 30.0,
+        ).copy(productScope = ProductScope(label = "花王商品(一部除く)"))
+        val engine = periodTestEngine(productScoped, cards = emptyList(), qrPayments = listOf(paypay))
+        val result = engine.judgeAll(testMerchant, today, setOf("paypay"))
+        assertNull(result.bestOption)
+        assertEquals("30% 還元(対象商品)", result.bestBenefitLabel().toString())
+    }
+
     @Test
     fun `bestBenefitLabel_定額同士は金額が大きいものを出す`() {
         val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
@@ -1321,6 +1368,23 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
+    fun `実データ_min_purchase_scopeとproduct_scopeが整合している`() {
+        val validScopes = setOf(MIN_PURCHASE_SCOPE_TRANSACTION, MIN_PURCHASE_SCOPE_PERIOD_TOTAL)
+        data.campaigns.forEach { c ->
+            assertTrue(
+                "${c.id}: invalid min_purchase_scope '${c.minPurchaseScope}'",
+                c.minPurchaseScope in validScopes,
+            )
+            if (c.minPurchaseScope != MIN_PURCHASE_SCOPE_TRANSACTION) {
+                assertNotNull("${c.id}: min_purchase_scope を指定するなら min_purchase が必要", c.minPurchase)
+            }
+            c.productScope?.let {
+                assertTrue("${c.id}: product_scope の label が空", it.label.isNotBlank())
+            }
+        }
+    }
+
+    @Test
     fun `実データ_同一自治体の複数決済手段がマージ可能`() {
         val municipal = data.campaigns.filter { it.campaignType == CampaignType.MUNICIPAL }
         val grouped = municipal.groupBy { it.region?.name }
@@ -1403,9 +1467,10 @@ class JudgmentEngineRealDataTest {
     fun `実データ_yolpConfigが読み込めている`() {
         val config = data.yolpConfig
         assertNotNull(config)
-        assertEquals(2, config!!.gcGroups.size)
+        assertEquals(3, config!!.gcGroups.size)
         assertEquals("0123,0115,0101013", config.gcGroups[0].gc)
         assertEquals("0205", config.gcGroups[1].gc)
+        assertEquals("0202001", config.gcGroups[2].gc)
     }
 
     @Test
@@ -1544,6 +1609,29 @@ class TestDataIntegrityTest {
                 c.rateBase,
             )
         }
+    }
+
+    @Test
+    fun `テストデータ_product_scopeのショーケースを含み整合している`() {
+        val validScopes = setOf(MIN_PURCHASE_SCOPE_TRANSACTION, MIN_PURCHASE_SCOPE_PERIOD_TOTAL)
+        data.campaigns.forEach { c ->
+            assertTrue(
+                "${c.id}: invalid min_purchase_scope '${c.minPurchaseScope}'",
+                c.minPurchaseScope in validScopes,
+            )
+            if (c.minPurchaseScope != MIN_PURCHASE_SCOPE_TRANSACTION) {
+                assertNotNull("${c.id}: min_purchase_scope を指定するなら min_purchase が必要", c.minPurchase)
+            }
+            c.productScope?.let {
+                assertTrue("${c.id}: product_scope の label が空", it.label.isNotBlank())
+            }
+        }
+        // ショーケース(対象商品限定 + 期間累計の最低購入額 + 要エントリー)が揃っていること
+        val showcase = data.campaigns.first { it.id == "test_product_scope" }
+        assertNotNull("product_scope ショーケースが必要", showcase.productScope)
+        assertEquals(MIN_PURCHASE_SCOPE_PERIOD_TOTAL, showcase.minPurchaseScope)
+        assertNotNull(showcase.minPurchase)
+        assertTrue("requires_entry のショーケースが必要", showcase.requiresEntry)
     }
 
     @Test

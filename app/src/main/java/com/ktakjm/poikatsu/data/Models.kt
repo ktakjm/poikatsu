@@ -137,6 +137,23 @@ data class Region(
     val prefecture: String,
 )
 
+/** min_purchase_scope: 最低購入額が 1 決済ごとに掛かる(省略時) */
+const val MIN_PURCHASE_SCOPE_TRANSACTION = "transaction"
+
+/** min_purchase_scope: 最低購入額が期間中の購入合計に掛かる(累積可) */
+const val MIN_PURCHASE_SCOPE_PERIOD_TOTAL = "period_total"
+
+/**
+ * 対象商品限定(メーカー×小売×決済連動キャンペーンの「花王商品のみ」等)。
+ * これがある施策は店の全商品に効かないため、「最良特典」比較(determineBest)から分離し、
+ * 一覧ラベル・判定詳細には対象商品の条件を明示する。
+ */
+@Serializable
+data class ProductScope(
+    /** 対象商品の表示ラベル(例: "花王商品(メリーズ・キュレル・ソフィーナ・カネボウ除く)") */
+    val label: String,
+)
+
 /**
  * 繰り返し日付条件(毎週金土・毎月20日30日等)。period_start/end(外枠の開催期間)と併用し、
  * 「お店」「地図」の判定には期間内かつ対象日のみ出す。days_of_week / days_of_month はどちらか一方
@@ -178,6 +195,15 @@ data class Campaign(
     @SerialName("cap_note") val capNote: String? = null,
     @SerialName("discount_amount") val discountAmount: Int? = null,
     @SerialName("min_purchase") val minPurchase: Int? = null,
+    /**
+     * min_purchase の集計単位: "transaction"(1決済ごと。省略時) | "period_total"(期間中の購入合計。
+     * PayPay×花王等の「期間累計3,000円以上」型)。表示文言の切り替えに使う
+     */
+    @SerialName("min_purchase_scope") val minPurchaseScope: String = MIN_PURCHASE_SCOPE_TRANSACTION,
+    /** 対象商品限定(メーカー縛り等)。非 null なら「最良特典」比較から分離する */
+    @SerialName("product_scope") val productScope: ProductScope? = null,
+    /** 事前エントリーしないと還元されない施策(楽天ペイ×花王等)。判定詳細に警告を出す */
+    @SerialName("requires_entry") val requiresEntry: Boolean = false,
     @SerialName("usage_limit") val usageLimit: Int? = null,
     @SerialName("usage_limit_note") val usageLimitNote: String? = null,
     /** 予算到達次第の早期終了があり得るか(自治体系はほぼ全件 true)。判定詳細・期間限定タブに注記を出す */

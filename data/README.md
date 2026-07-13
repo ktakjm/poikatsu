@@ -40,6 +40,9 @@
 - `period_total_cap` — 期間合計の付与/割引上限(円相当)。null = 上限なし
 - `cap_note` — 上限の但し書き（数値で表せない補足専用）。`per_transaction_cap` / `period_total_cap` と重複する情報は書かない（UI で数値から自動生成する）
 - `min_purchase` — 適用条件の最低購入額(円)。例: 200 →「200 円以上の決済で」
+- `min_purchase_scope` — `min_purchase` の集計単位: `"transaction"`(1決済ごと。省略時) | `"period_total"`(期間中の購入合計に掛かる型。PayPay×花王の「期間累計3,000円以上」等)。`period_total` は表示が「期間中の購入合計○円以上で適用(複数回の買い物の合算可)」になる。指定するなら `min_purchase` 必須(整合性テストで強制)
+- `product_scope` — 対象商品限定(メーカー×小売×決済連動キャンペーンの「花王商品のみ」等)。`{ "label": "花王商品(メリーズ・キュレル・ソフィーナ・カネボウ除く)" }`。これがある施策は店の全商品に効かないため**「最良特典」比較(bestOption)から分離**される: 一覧・地図のラベルは無条件の特典を優先し、商品限定しか無いチェーンは「○% 還元(対象商品)」と付記、判定詳細では率の数字に「対象商品」を冠し「対象商品限定：{label}」の注意を表示する。判定カード・期間限定タブのサマリーには「期間限定」と同列に**「商品限定」バッジ**(warning 系)が付く。なお**メーカー主催のレシート応募型**(決済不問。P&G ツルハ/ウエルシア等)は帰属先が無く「どの支払いを選ぶか」にも影響しないため収録対象外(#43)
+- `requires_entry` — 事前エントリーしないと還元されない施策(楽天ペイ×花王等)は true(省略時 false)。判定詳細に「事前エントリーが必要です(詳細ページから)」の警告を出す。エントリー導線は `detail_url` が担う
 - `usage_limit` — 利用回数上限。null = 期間中無制限、1 = 1 回限り
 - `usage_limit_note` — 利用条件の人間向け補足
 - `eligible_wallets` / `ineligible_wallets` — **公式がウォレット単位で還元対象/対象外を言い切っている場合のみ**登録する(値: `"apple_pay"` / `"google_pay"`)。未掲載 = 不明として扱い、網羅性を仮定しない(official_store_list と同じ3状態の設計思想)。抽象フラグにしないのは「Apple Pay は対象・Google Pay は対象外」(MUFG)のような非対称な事実を表現するため:
@@ -149,6 +152,7 @@
 | `test_lottery` | 抽選型(`lottery`)、`conditions`、`ineligible_wallets` Google Pay のみ対象外・Apple Pay 情報なし(付記なし警告) | 常時安定 |
 | `test_discount_fixed` | **即時定額** discount+`discount_amount`(300 円引き)、`min_purchase`(500 円)、`usage_limit`(1 回) | 常時安定 |
 | `test_rebate_fixed` | **後日定額** rebate+`discount_amount`(500 円還元)、`usage_limit`(3 回)、`usage_limit_note`、`period_total_cap` | 常時安定 |
+| `test_product_scope` | **対象商品限定**(`product_scope`。最良比較から分離・「対象商品」冠表示)、`min_purchase_scope: period_total`(期間累計の最低購入額表示)、`requires_entry`(要エントリー警告) | 常時安定 |
 | `test_upcoming` | **UPCOMING** 状態(常時未開始) | 常時安定 |
 | `test_ending_soon` | **残り 3 日警告**(検証日に `period_end` を手直し) | **要手直し** |
 | `test_municipal` | 自治体施策(`municipal`+`external`)、`region`(北海道札幌市=実在自治体。地域フィルタ・お知らせ表示の実機検証用)、`store_search_url`、`per_transaction_cap`+`period_total_cap`、`may_end_early` | 常時安定 |
@@ -159,6 +163,8 @@
 
 - **テストコンビニ**: test_card_program(7%)・test_promotion(10%)・test_recurrence_weekly(20% 金土)・test_lottery(抽選)・test_rebate_fixed(500 円還元 PayPay)・test_upcoming(25% 未開始)・test_ending_soon(15% 終了間近)
 - **テストバーガー**: test_card_program(7%)・test_promotion(15% override)・test_brand_promotion(Visa 30% OFF)・test_recurrence_monthly(12% 5・20・30 日)・test_discount_fixed(300 円引き PayPay)・test_upcoming(25% 未開始)
+- **テストスーパー**: test_card_program(7%・Amex 除外)・test_product_scope(30% 対象商品限定 PayPay)。無条件の 7% と商品限定 30% が並んでも最大おトク率が 7% のまま(商品限定を最良比較に載せない)ことを確認できる
+- **テストドラッグ**: test_product_scope(30% 対象商品限定 PayPay)のみ。商品限定施策しか無いチェーンの一覧ラベル「30% 還元(対象商品)」の確認用。実在ドラッグストア 6 チェーン(ウエルシア・スギ薬局・ツルハ・マツキヨ・サンドラッグ・ココカラファイン)を aliases に持ち、gc グループ `0202001` で地図表示・店舗ピンの実機確認ができる
 
 #### 日付依存パターンの手直し手順
 

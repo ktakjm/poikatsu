@@ -225,12 +225,17 @@ data class JudgmentResult(
  * (judgeAll のソートで定額同士は金額降順)の特典を整形する。
  * 定額は購入額に依存し定率と比較できないため、比較ポリシー(determineBest)は変えず
  * 見せ方だけをラベル化する(定額のみのチェーンが「0%」表示になる問題への対処。#29)。
+ * 対象商品限定(product_scope)の特典しか無いチェーンは「(対象商品)」を付記し、
+ * 全商品に効く率と誤認されないようにする(#43)。
  */
 fun JudgmentResult.bestBenefitLabel(): BenefitLabel? {
     bestOption?.let { return formatBenefit(it.benefitType, it.rate, it.discountAmount) }
+    judgments.filter { it.campaign.productScope == null }
+        .firstNotNullOfOrNull { formatBenefit(it.benefitType, it.effectiveRate, it.discountAmount) }
+        ?.let { return it }
     return judgments.firstNotNullOfOrNull {
         formatBenefit(it.benefitType, it.effectiveRate, it.discountAmount)
-    }
+    }?.let { BenefitLabel(it.value, "${it.suffix}(対象商品)") }
 }
 
 class JudgmentEngine(private val data: PoikatsuData) {
@@ -606,9 +611,12 @@ class JudgmentEngine(private val data: PoikatsuData) {
     }
 
     private fun determineBest(judgments: List<CampaignJudgment>): BestPaymentOption? {
-        // 抽選は確定還元でないため比較に載せない(buildJudgment で率を null にしているが意図を明示)
+        // 抽選は確定還元でないため比較に載せない(buildJudgment で率を null にしているが意図を明示)。
+        // 対象商品限定(product_scope)も店の全商品には効かないため載せない(対象商品を買わない人に
+        // 「この店は30%」と誤提示しないため。#43)
         val best = judgments
             .filter { it.benefitType != BenefitType.LOTTERY }
+            .filter { it.campaign.productScope == null }
             .filter { it.effectiveRate != null && it.discountAmount == null }
             .maxByOrNull { it.effectiveRate!! }
             ?: return null

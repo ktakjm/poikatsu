@@ -1,6 +1,6 @@
 {
-  "schema_version": 8,
-  "updated_at": "2026-07-11",
+  "schema_version": 9,
+  "updated_at": "2026-07-13",
   "campaigns": [
     {
       "id": "test_card_program",
@@ -166,6 +166,33 @@
       "verified_date": "2026-07-07",
       "merchant_rules": [
         { "merchant_id": "test_combini" }
+      ]
+    },
+    {
+      "id": "test_product_scope",
+      "type": "promotion",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "テストPayPay",
+      "payment_method_id": "test_paypay",
+      "name": "テストメーカー商品の購入で30%戻ってくる（対象商品限定）",
+      "payment_instruction": "テストPayPayのコード決済で支払う",
+      "rate_base": 30.0,
+      "product_scope": { "label": "テストメーカー商品(一部対象外商品あり)" },
+      "min_purchase": 3000,
+      "min_purchase_scope": "period_total",
+      "requires_entry": true,
+      "period_total_cap": 1500,
+      "period_start": "2026-01-01",
+      "period_end": "2099-12-31",
+      "conditions": [
+        "対象商品の購入金額が期間中の合計で3,000円(税込)以上になると付与"
+      ],
+      "detail_url": "https://example.com/product-scope-campaign",
+      "verified_date": "2026-07-13",
+      "merchant_rules": [
+        { "merchant_id": "test_drugstore" },
+        { "merchant_id": "test_super" }
       ]
     },
     {

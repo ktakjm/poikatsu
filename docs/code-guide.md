@@ -415,13 +415,13 @@ data class CampaignJudgment(
 )
 ```
 
-`judgeAll(merchant, today, enabledQrIds)` は `judgeCards` + `judgeQr` を統合し、定率（`effectiveRate` 降順）→ 定額（`discountAmount` 降順）の統一ソートで `JudgmentResult`（`judgments` + `bestOption`）を返す。`bestOption` は定率（`rate_base` あり・`discount_amount` なし）で最高還元率のものを選ぶ。定額は購入額に依存するため比較せず並列表示とする。
+`judgeAll(merchant, today, enabledQrIds)` は `judgeCards` + `judgeQr` を統合し、定率（`effectiveRate` 降順）→ 定額（`discountAmount` 降順）の統一ソートで `JudgmentResult`（`judgments` + `bestOption`）を返す。`bestOption` は定率（`rate_base` あり・`discount_amount` なし）で最高還元率のものを選ぶ。定額は購入額に依存するため比較せず並列表示とする。抽選（lottery）と**対象商品限定（`product_scope`。店の全商品に効かないため。#43）**も比較から除外する。
 
 `BenefitType`（`REBATE` / `DISCOUNT`）と `CampaignType`（`CARD_PROGRAM` / `PROMOTION` / `MUNICIPAL`）はそれぞれ `jsonValue` プロパティを持つ enum で、`fromString()` で JSON 文字列から変換する。`Campaign.campaignType` 拡張プロパティで `type` 文字列を enum に変換でき、コード中で生 String 比較を排除している。rebate は後日ポイント付与（PayPay の「クーポン」含む）、discount は即時値引き。定率/定額は `rate_base` / `discount_amount` のどちらが入っているかで導出する（2 軸直交）。
 
 特典の表示ラベルは `formatBenefit(benefitType, rate, discount): BenefitLabel?` に集約されている。`BenefitLabel`（`value` + `suffix`）が 2×2 のラベル行列（`%還元` / `円還元` / `% OFF` / `円引き`）を返し、UI 層はこれを `toString()` するだけで統一的に表示できる
 
-一覧系（検索一覧・近くリスト・地図プレビュー）の「最良特典」は `JudgmentResult.bestBenefitLabel(): BenefitLabel?` で組み立てる（#29）。`bestOption`（定率の最大）があればそれを、定額特典しか無いチェーンでは判定リスト先頭（定額同士は金額降順ソート済み）の特典をラベル化する。定額を比較対象にしない `determineBest` のポリシーはそのままに見せ方だけをラベルにしたもので、これにより定額のみのチェーンが「0%」と表示される問題を防ぐ。UI 側は `SearchResult.bestBenefit` / `NearbyPlace.bestBenefit`（ともに `BenefitLabel?`）を表示するだけで、率の `Double` は一覧系のモデルに持たない
+一覧系（検索一覧・近くリスト・地図プレビュー）の「最良特典」は `JudgmentResult.bestBenefitLabel(): BenefitLabel?` で組み立てる（#29）。`bestOption`（定率の最大）があればそれを、定額特典しか無いチェーンでは判定リスト先頭（定額同士は金額降順ソート済み）の特典をラベル化する。定額を比較対象にしない `determineBest` のポリシーはそのままに見せ方だけをラベルにしたもので、これにより定額のみのチェーンが「0%」と表示される問題を防ぐ。**対象商品限定（`product_scope`）の特典しか無いチェーンは「○% 還元(対象商品)」と付記**し、全商品に効く率と誤認されないようにする（#43）。UI 側は `SearchResult.bestBenefit` / `NearbyPlace.bestBenefit`（ともに `BenefitLabel?`）を表示するだけで、率の `Double` は一覧系のモデルに持たない
 
 ## 6. UI レイヤ（ui/）
 
@@ -465,7 +465,7 @@ stateDiagram-v2
 
 ### 6.2 判定カード表示
 
-`CampaignJudgmentCard` は施策ごとに 1 枚の統一カード。カード決済・QR 決済・キャンペーン詳細で共用し、各フィールドの null / 空チェックだけで表示を出し分ける。左端のストライプとバッジに `brand_color` を使い、ロゴ画像なしで発行体を識別する。表示要素は「特典表示（`formatBenefit()` で統一生成。抽選＝lottery は率を持たないため専用の「抽選」表示）→ バッジ（badgeLabel）→ 期間 → 対象日（recurrence 施策のみ。「今日は対象日」/「次の対象日: ○/○」）→ 支払い方法 → 店固有条件 → 警告 → 除外注記 → 早期終了注記（may_end_early）→ 抽選の但し書き → 公式店舗一覧リンク → 最低購入額 → 利用回数制限 → 上限 → 対象店舗確認 → 詳細リンク → アプリ起動 → ポイント倍率注記 → **情報確認日**」の順。**ポイント倍率**（`PointMultiplier`）を持つカードは、バッジの右に `badge_label`（例: 「ウエル活利用可」）を表示し、適用時は `applied_note`（例: 「還元率はウエル活利用時の実質還元率」）を末尾に注記する。文言は `PointMultiplier` のデータから取り、UI にハードコードしない。`verified_date` の表示は必須ルール（データが古くなるリスクへの対処）。
+`CampaignJudgmentCard` は施策ごとに 1 枚の統一カード。カード決済・QR 決済・キャンペーン詳細で共用し、各フィールドの null / 空チェックだけで表示を出し分ける。左端のストライプとバッジに `brand_color` を使い、ロゴ画像なしで発行体を識別する。表示要素は「特典表示（`formatBenefit()` で統一生成。抽選＝lottery は率を持たないため専用の「抽選」表示。段階制＝rate_rules は「最大」、対象商品限定＝product_scope は「対象商品」を数字に冠する）→ バッジ（badgeLabel。期間限定・**商品限定**（product_scope。warning 系）バッジ併記）→ 期間 → 対象日（recurrence 施策のみ。「今日は対象日」/「次の対象日: ○/○」）→ 支払い方法 → 店固有条件 → 警告 → 除外注記 → 対象商品限定注記（product_scope.label）→ 要エントリー警告（requires_entry）→ 早期終了注記（may_end_early）→ 抽選の但し書き → 公式店舗一覧リンク → 最低購入額（min_purchase_scope=period_total なら「期間中の購入合計○円以上」表示）→ 利用回数制限 → 上限 → 対象店舗確認 → 詳細リンク → アプリ起動 → ポイント倍率注記 → **情報確認日**」の順。**ポイント倍率**（`PointMultiplier`）を持つカードは、バッジの右に `badge_label`（例: 「ウエル活利用可」）を表示し、適用時は `applied_note`（例: 「還元率はウエル活利用時の実質還元率」）を末尾に注記する。文言は `PointMultiplier` のデータから取り、UI にハードコードしない。`verified_date` の表示は必須ルール（データが古くなるリスクへの対処）。
 
 公式リストを持つチェーン（`canCheckStore` が true）では判定詳細に「この店舗が対象か調べる →」ボタンを出し、別画面 `StoreCheckScreen` へ遷移する。同画面は店舗名入力に対し `StoreVerdictCard` で 対象（`CheckCircle`）/ 対象外（`Close`）/ 要確認（`Info`）を Material アイコン＋**トーナル面のステータスピル**（`Surface` の container/content 対：対象＝`primaryContainer`、対象外＝`errorContainer`、要確認＝`warningContainerColor()`）で表示し、断定の鮮度（`date_is_official` に応じて「公式情報の更新日」or「確認日」）を併記する。色をカード地（`surfaceVariant`）に直接乗せず container 対で出すのは、コントラスト担保のため（6.4 警告色 参照）。公式リストの無いチェーンはボタンを出さない（判定画面を意識させない）。
 
