@@ -177,6 +177,14 @@ data class Campaign(
     /** ブランド施策(イシュアー不問。例: Amex 30% OFF)の対象ブランド。card_id / payment_method_id と排他 */
     @SerialName("card_brand") val cardBrand: String? = null,
     val name: String,
+    /**
+     * 期間限定タブのカード表示用の短いタイトル(任意)。実質、多チェーン promotion 専用
+     * (単一チェーンは merchant 名、自治体系は region タイトルで足りる)。name は公式表記の写し
+     * (照合キー+判定詳細の説明文)の役割を持つため、略記の編集判断はこちらに分離する。
+     * 未指定時のフォールバック: 単一チェーンは merchant 名 → 複数チェーンは「{先頭チェーン} 他Nチェーン」。
+     * 登録規則(率・期間は入れない等)は collect-campaigns スキルの mapping.md 参照。
+     */
+    @SerialName("display_name") val displayName: String? = null,
     @SerialName("payment_instruction") val paymentInstruction: String = "",
     @SerialName("rate_base") val rateBase: Double? = null,
     /** 条件別の還元率(段階制)。非空なら rate_base はこの最大値で、表示は「最大○%」+内訳になる */

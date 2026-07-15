@@ -317,7 +317,9 @@ internal fun ConditionsList(conditions: List<String>, minPurchase: Int?) {
 /**
  * キャンペーングループの表示タイトル。
  * 自治体: "都道府県名 自治体名"(県全域施策は県名のみ。「神奈川県 神奈川県」にしない)、
- * それ以外: merchant_rules の先頭 merchant 名(なければ campaign.name)
+ * それ以外はフォールバック連鎖: display_name → 単一チェーンは merchant 名 →
+ * 複数チェーンは「{先頭チェーン} 他Nチェーン」(→ merchant_rules が無ければ campaign.name)。
+ * 多チェーン施策が先頭 merchant 名だけで「1チェーンの施策」に見えないようにする。
  */
 internal fun campaignGroupDisplayTitle(first: Campaign, merchantNames: Map<String, String>): String =
     if (first.campaignType == CampaignType.MUNICIPAL) {
@@ -325,9 +327,15 @@ internal fun campaignGroupDisplayTitle(first: Campaign, merchantNames: Map<Strin
         val name = first.region?.name ?: first.name
         if (prefecture.isNotBlank() && name != prefecture) "$prefecture $name" else name
     } else {
-        first.merchantRules.firstOrNull()?.merchantId
-            ?.let { merchantNames[it] }
-            ?: first.name
+        first.displayName ?: run {
+            val chainIds = first.merchantRules.map { it.merchantId }.distinct()
+            val head = chainIds.firstOrNull()?.let { merchantNames[it] }
+            when {
+                head == null -> first.name
+                chainIds.size == 1 -> head
+                else -> "$head 他${chainIds.size - 1}チェーン"
+            }
+        }
     }
 
 @Composable

@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -290,7 +291,12 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                 state.selectedCampaignGroup != null -> PaddedColumn {
                     CampaignDetail(
                         judgments = state.selectedCampaignGroup!!,
+                        merchantNames = state.merchantNames,
                         onBack = viewModel::onCloseCampaignDetail,
+                        onFindChains = { ids ->
+                            viewModel.onFindNearbyByIds(ids)
+                            onNearbyClick()
+                        },
                     )
                 }
                 state.developerSettingsOpen -> DeveloperSettingsScreen(
@@ -310,15 +316,14 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             nearby = nearby,
                             categories = state.categories,
                             selectedCategories = state.nearbySelectedCategories,
-                            merchantFilter = state.nearbyMerchantFilter,
+                            merchantFilters = state.nearbyMerchantFilters,
                             searchFailed = state.nearbySearchFailed,
                             originName = stableOriginName.value,
                             geocodeCandidates = state.geocodeCandidates,
                             isGeocoding = state.isGeocoding,
                             onClose = viewModel::onCloseNearby,
                             onToggleCategory = viewModel::onToggleNearbyCategory,
-                            onSelectChain = viewModel::onSelectNearbyChain,
-                            onClearChain = viewModel::onClearNearbyChain,
+                            onToggleChain = viewModel::onToggleNearbyChain,
                             onReload = viewModel::fetchNearby,
                             onSearchFailedShown = viewModel::onNearbySearchFailedShown,
                             onPreviewPlace = viewModel::onPreviewNearby,
@@ -634,7 +639,7 @@ private fun NearbyPane(
     nearby: MainViewModel.NearbyUi,
     categories: List<String>,
     selectedCategories: Set<String>,
-    merchantFilter: Merchant?,
+    merchantFilters: Set<Merchant>,
     searchFailed: String?,
     originName: String?,
     geocodeCandidates: List<MainViewModel.GeocodedPlace>,
@@ -643,8 +648,7 @@ private fun NearbyPane(
     onReload: () -> Unit,
     onSearchFailedShown: () -> Unit,
     onToggleCategory: (String) -> Unit,
-    onSelectChain: (Merchant) -> Unit,
-    onClearChain: () -> Unit,
+    onToggleChain: (Merchant) -> Unit,
     onPreviewPlace: (MainViewModel.NearbyPlace) -> Unit,
     onClearPreview: () -> Unit,
     onOpenDetail: (MainViewModel.NearbyPlace) -> Unit,
@@ -716,16 +720,17 @@ private fun NearbyPane(
         MapPoint(nearby.userLat, nearby.userLon)
     } else null
     // 絞り込み(レンズ)を適用した表示集合。地図ピン・一覧の両方でこれを使う。
-    // チェーン絞り込み(merchantFilter)はジャンルより優先。未指定なら参照同一で再計算を避ける。
-    val visiblePlaces = remember(nearby.places, selectedCategories, merchantFilter) {
+    // チェーン絞り込み(merchantFilters)はジャンルより優先。未指定なら参照同一で再計算を避ける。
+    val visiblePlaces = remember(nearby.places, selectedCategories, merchantFilters) {
+        val filterIds = merchantFilters.map { it.id }.toSet()
         when {
-            merchantFilter != null -> nearby.places.filter { it.merchant?.id == merchantFilter.id }
+            filterIds.isNotEmpty() -> nearby.places.filter { it.merchant?.id in filterIds }
             selectedCategories.isEmpty() -> nearby.places
             else -> nearby.places.filter { it.merchant?.category in selectedCategories }
         }
     }
     // 「チェーンで絞る」ピッカー用: いま(ジャンル絞り込み後の)周辺に在るチェーンと件数。多い順→読み順。
-    // 全体ではなく周辺に在るものだけ出す(「地図」の約束)。merchantFilter 指定中はピル表示なので未使用。
+    // 全体ではなく周辺に在るものだけ出す(「地図」の約束)。絞り込み中もピッカーは残し、追加・解除を続けられる。
     val presentChains = remember(nearby.places, selectedCategories) {
         nearby.places
             .filter { selectedCategories.isEmpty() || it.merchant?.category in selectedCategories }
@@ -908,15 +913,14 @@ private fun NearbyPane(
             } else {
                 Column(Modifier.heightIn(max = sheetMaxHeight)) {
                     SheetAttribution()
-                    if (nearby.places.isNotEmpty() || merchantFilter != null) {
+                    if (nearby.places.isNotEmpty() || merchantFilters.isNotEmpty()) {
                         NearbyFilterBar(
                             categories = categories,
                             selectedCategories = selectedCategories,
                             presentChains = presentChains,
-                            merchantFilter = merchantFilter,
+                            merchantFilters = merchantFilters,
                             onToggleCategory = onToggleCategory,
-                            onSelectChain = onSelectChain,
-                            onClearChain = onClearChain,
+                            onToggleChain = onToggleChain,
                             modifier = Modifier.padding(horizontal = 16.dp),
                         )
                         Spacer(Modifier.height(8.dp))
@@ -938,8 +942,9 @@ private fun NearbyPane(
                         } else {
                             Text(
                                 when {
-                                    merchantFilter != null ->
-                                        "「${merchantFilter.name}」はこの範囲にありません。地図を動かすか、絞り込みを解除してください。"
+                                    merchantFilters.isNotEmpty() ->
+                                        merchantFilters.joinToString("") { "「${it.name}」" } +
+                                            "はこの範囲にありません。地図を動かすか、絞り込みを解除してください。"
                                     nearby.places.isEmpty() ->
                                         "この範囲に対象施策のある店舗が見つかりませんでした。地図を動かして探してください。"
                                     else -> "選択中のジャンルに該当する周辺店舗がありません。"
@@ -1107,7 +1112,8 @@ private fun SheetAttribution() {
 
 /**
  * 地図タブの絞り込みバー(横スクロール1行)。ボトムシートの peek 高さを圧迫しないよう1行に収める。
- * - チェーン絞り込み中(merchantFilter != null): そのチェーン名のピル(×で解除)だけを出す(チェーンはジャンルより優先)。
+ * - チェーン絞り込み中(merchantFilters 非空): 「チェーンで絞る」ピッカー + 選択チェーンのピル
+ *   (各×で個別解除)。チェーンはジャンルより優先で、ジャンルチップは隠す(選択は保持)。
  * - 未絞り込み: 在チェーンが2つ以上あれば「チェーンで絞る」ピッカー + ジャンルチップ。
  * ジャンル選択集合はお店モードと独立(MainViewModel.nearbySelectedCategories)。
  */
@@ -1116,37 +1122,42 @@ private fun NearbyFilterBar(
     categories: List<String>,
     selectedCategories: Set<String>,
     presentChains: List<Pair<Merchant, Int>>,
-    merchantFilter: Merchant?,
+    merchantFilters: Set<Merchant>,
     onToggleCategory: (String) -> Unit,
-    onSelectChain: (Merchant) -> Unit,
-    onClearChain: () -> Unit,
+    onToggleChain: (Merchant) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (merchantFilter != null) {
-        Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            InputChip(
-                selected = true,
-                onClick = onClearChain,
-                label = { Text(merchantFilter.name) },
-                trailingIcon = {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = "チェーン絞り込みを解除",
-                        modifier = Modifier.size(18.dp),
-                    )
-                },
+    val filtering = merchantFilters.isNotEmpty()
+    Row(
+        modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // 未絞り込みでは在チェーンが2つ以上のときだけ出す(1つなら絞る意味がない)。
+        // 絞り込み中は常に出し、解除せずにチェーンを追加・入れ替えできるようにする。
+        if (filtering || presentChains.size >= 2) {
+            ChainFilterDropdown(
+                chains = presentChains,
+                selected = merchantFilters,
+                onToggle = onToggleChain,
             )
         }
-    } else {
-        Row(
-            modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // 在チェーンが2つ以上のときだけ「チェーンで絞る」を出す(1つなら絞る意味がない)
-            if (presentChains.size >= 2) {
-                ChainFilterDropdown(chains = presentChains, onSelect = onSelectChain)
+        if (filtering) {
+            merchantFilters.forEach { merchant ->
+                InputChip(
+                    selected = true,
+                    onClick = { onToggleChain(merchant) },
+                    label = { Text(merchant.name) },
+                    trailingIcon = {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "${merchant.name}の絞り込みを解除",
+                            modifier = Modifier.size(18.dp),
+                        )
+                    },
+                )
             }
+        } else {
             categories.forEach { category ->
                 FilterChip(
                     selected = category in selectedCategories,
@@ -1159,15 +1170,18 @@ private fun NearbyFilterBar(
 }
 
 /**
- * 「チェーンで絞る」ピッカー。いま周辺に在るチェーンを件数つきで挙げ、選ぶと merchantFilter を設定する。
+ * 「チェーンで絞る」ピッカー。いま周辺に在るチェーンを件数つきのチェックボックスで挙げ、
+ * 複数チェーンを選べる(トグルしてもメニューは閉じず続けて選べる)。
  * テキスト検索ではなく在チェーンからの選択にとどめる(レンズ層・検索の入口は「お店」に一本化)。
  */
 @Composable
 private fun ChainFilterDropdown(
     chains: List<Pair<Merchant, Int>>,
-    onSelect: (Merchant) -> Unit,
+    selected: Set<Merchant>,
+    onToggle: (Merchant) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val selectedIds = selected.map { it.id }.toSet()
     Box {
         AssistChip(
             onClick = { expanded = true },
@@ -1178,10 +1192,13 @@ private fun ChainFilterDropdown(
             chains.forEach { (merchant, count) ->
                 DropdownMenuItem(
                     text = { Text("${merchant.name}（$count）") },
-                    onClick = {
-                        onSelect(merchant)
-                        expanded = false
+                    leadingIcon = {
+                        Checkbox(
+                            checked = merchant.id in selectedIds,
+                            onCheckedChange = null, // 行タップに委ねる(タッチ領域を行全体にする)
+                        )
                     },
+                    onClick = { onToggle(merchant) },
                 )
             }
         }

@@ -15,10 +15,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -192,6 +197,7 @@ internal fun CampaignPane(
  * 左: 名前 + 期間限定バッジ / 期間
  * 右: 最大還元率
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CampaignSummaryCard(
     campaigns: List<Campaign>,
@@ -230,11 +236,18 @@ private fun CampaignSummaryCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    // バッジを常に見せるため、バッジが先に幅を確保しタイトルは残り幅で折り返す
+                    // (weight(fill=false)。FlowRow は外側 IntrinsicSize.Min と相性が悪く、
+                    // 折り返した2行目がカード高さからクリップされるため使わない)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Text(title, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
                         if (hasTimeLimited) {
                             TimeLimitedBadge()
                         }
@@ -295,16 +308,101 @@ private fun CampaignSummaryCard(
 @Composable
 internal fun CampaignDetail(
     judgments: List<CampaignJudgment>,
+    merchantNames: Map<String, String>,
     onBack: () -> Unit,
+    /** 対象チェーンの地図ブリッジ(merchant_id 群を渡す。チップは1件、まとめては全件) */
+    onFindChains: (List<String>) -> Unit,
 ) {
     BackHandler(onBack = onBack)
+
+    // managed 施策の対象チェーン(自治体系は merchant_rules を持たないため出ない)。
+    // グループは promotion なら1施策なので、実質その施策の merchant_rules を解決した一覧
+    val chainIds = judgments
+        .filter { it.campaign.storeScope == "managed" }
+        .flatMap { j -> j.campaign.merchantRules.map { it.merchantId } }
+        .distinct()
 
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(bottom = 16.dp),
     ) {
+        // ブリッジは判定詳細(お店タブ)と同じく本文の上に置き、見た目・文言も揃える
+        if (chainIds.isNotEmpty()) {
+            item {
+                TargetChainSection(
+                    campaign = judgments.first { it.campaign.storeScope == "managed" }.campaign,
+                    chainIds = chainIds,
+                    merchantNames = merchantNames,
+                    onFindChains = onFindChains,
+                )
+            }
+        }
         items(judgments, key = { it.campaign.id }) { judgment ->
             CampaignJudgmentCard(judgment)
+        }
+    }
+}
+
+/**
+ * 対象チェーンの地図ブリッジ。主動線はお店タブと同じ FilledTonalButton(全チェーンで地図へ)。
+ * チェーン個別の絞り込みは地図タブ側のフィルタピル(各✕で解除)に一本化し、ここではやらない
+ * (チップだと「単独チェーンで地図表示」のアクションに読めないため廃止。2026-07)。
+ * 複数チェーンのときは対象チェーン名の一覧を情報表示として添える。
+ * 開始前・recurrence 非対象日でも遷移は許可する(店舗の場所の下見用途。ブリッジ中の
+ * チェーンは YOLP 検索対象に加わるが、判定が無いため還元率ラベルは出ない)。
+ * その旨とタイミング(開始日/次の対象日)は warning 色の注意面(container 対)で目立たせる。
+ */
+@Composable
+private fun TargetChainSection(
+    campaign: Campaign,
+    chainIds: List<String>,
+    merchantNames: Map<String, String>,
+    onFindChains: (List<String>) -> Unit,
+) {
+    val today = LocalDate.now()
+    val started = campaign.periodStart?.let { LocalDate.parse(it) <= today } != false
+    val isTarget = started && isTargetDay(campaign, today)
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilledTonalButton(
+            onClick = { onFindChains(chainIds) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(Icons.Default.Place, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(if (chainIds.size == 1) "近くのこのお店を探す" else "近くの対象店舗を探す")
+        }
+        if (chainIds.size >= 2) {
+            val names = chainIds.mapNotNull { merchantNames[it] }
+            Text(
+                "対象: ${names.joinToString("・")}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (!isTarget) {
+            val note = if (!started) {
+                "開始前です。地図では店舗の場所のみ確認できます"
+            } else {
+                val next = nextTargetDay(campaign, today)
+                    ?.let { "（次の対象日: ${it.monthValue}/${it.dayOfMonth}）" }.orEmpty()
+                "本日は対象日ではありません$next。地図では店舗の場所のみ確認できます"
+            }
+            Surface(
+                color = warningContainerColor(),
+                contentColor = onWarningContainerColor(),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                ) {
+                    Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(note, style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
     }
 }

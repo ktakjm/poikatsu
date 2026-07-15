@@ -1385,6 +1385,20 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
+    fun `実データ_display_nameは空白でなく自治体施策には持たせない`() {
+        data.campaigns.forEach { c ->
+            c.displayName?.let { dn ->
+                assertTrue("${c.id}: display_name が空文字・空白", dn.isNotBlank())
+                // 自治体は region タイトル固定で display_name を参照しない(登録しても表示されない)
+                assertTrue(
+                    "${c.id}: municipal は display_name を持たせない",
+                    c.campaignType != CampaignType.MUNICIPAL,
+                )
+            }
+        }
+    }
+
+    @Test
     fun `実データ_同一自治体の複数決済手段がマージ可能`() {
         val municipal = data.campaigns.filter { it.campaignType == CampaignType.MUNICIPAL }
         val grouped = municipal.groupBy { it.region?.name }
@@ -1632,6 +1646,26 @@ class TestDataIntegrityTest {
         assertEquals(MIN_PURCHASE_SCOPE_PERIOD_TOTAL, showcase.minPurchaseScope)
         assertNotNull(showcase.minPurchase)
         assertTrue("requires_entry のショーケースが必要", showcase.requiresEntry)
+    }
+
+    @Test
+    fun `テストデータ_display_nameのショーケースを含み空白でない`() {
+        data.campaigns.forEach { c ->
+            c.displayName?.let { dn ->
+                assertTrue("${c.id}: display_name が空文字・空白", dn.isNotBlank())
+                assertTrue(
+                    "${c.id}: municipal は display_name を持たせない",
+                    c.campaignType != CampaignType.MUNICIPAL,
+                )
+            }
+        }
+        // 多チェーン + display_name のショーケース(カードタイトルの手動略記)が揃っていること
+        val showcase = data.campaigns.first { it.id == "test_product_scope" }
+        assertNotNull("display_name ショーケースが必要", showcase.displayName)
+        assertTrue(
+            "display_name ショーケースは多チェーン施策であること",
+            showcase.merchantRules.map { it.merchantId }.distinct().size >= 2,
+        )
     }
 
     @Test

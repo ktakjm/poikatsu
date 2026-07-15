@@ -4,7 +4,7 @@
 
 ## ファイル
 
-- `merchants.json` — チェーン店マスタ。`reading`(ひらがな読み)と `aliases`(略称・別ブランド名)は検索のヒット率に直結するので、追加時は必ず入れる。位置情報を持たない発行体(自販機など)は `location_hint`(`text`/`label`/`url`)を持たせる。これがあると判定詳細で「近くのこの店を探す」を出さず、代わりに位置を確認できる外部アプリ/サイトへ案内する(例: コカ・コーラ自販機 → Coke ON 公式アプリ)。`yolp_config` で YOLP 検索の gc グループ設定、各 merchant の `yolp_search`/`yolp_keyword` で検索方式を持つ(§ YOLP 検索設定 参照)。
+- `merchants.json` — チェーン店マスタ。`reading`(ひらがな読み)と `aliases`(略称・別ブランド名)は検索のヒット率に直結するので、追加時は必ず入れる。位置情報を持たない発行体(自販機など)は `location_hint`(`text`/`label`/`url`)を持たせる。これがあると判定詳細で「近くのこのお店を探す」を出さず、代わりに位置を確認できる外部アプリ/サイトへ案内する(例: コカ・コーラ自販機 → Coke ON 公式アプリ)。`yolp_config` で YOLP 検索の gc グループ設定、各 merchant の `yolp_search`/`yolp_keyword` で検索方式を持つ(§ YOLP 検索設定 参照)。
 - `campaigns.json` — 還元施策。`merchant_rules[].merchant_id` は merchants.json の `id`、`card_id` は payment_methods.json の `cards[].id` を参照する。**ユーザー固有の前提はここに書かず、汎用的な施策情報のみを持つ。** 常設施策(`card_program`)・期間限定施策(`promotion`)・自治体施策(`municipal`) の 3 種類をサポート。
 - `payment_methods.json` — 決済手段(カード + QR 決済)の**カタログ(マスタ)**。`cards` は現状: 三井住友(`smcc`、7%、`point_multiplier` でウエル活×1.5)、三菱UFJ(`mufg`、基準7%)。`brands` はそのカード製品で**選べるブランドの選択肢**で、実際に持っているブランドはユーザー設定(`CardOverride.brand`)に分離する(カタログにユーザー属性を混ぜない)。**設定画面でカード所有・還元率・ブランド・ウエル活を編集でき、差分はカード id をキーに DataStore に保存して起動時にこのカタログへ重ねる(payment_methods.json 自体は書き換えない)**。判定エンジンは**所有カードのみ**を対象とし、実ブランドが Amex(または未選択で Amex を取りうる)なら `amex_excluded` の店を除外・他ブランドなら無視、`effective_rate_default` を実効還元率として用いる。`qr_payments` に QR 決済サービスのカタログを持つ。
 - `municipalities.json` — 全国自治体マスタ(47 都道府県・1,741 市区町村・自治体グループ)。設定画面で居住地・行動圏を登録する際のピッカーデータと、期間限定タブの地域フィルタ(グループ→自治体の展開)に使う。`scripts/generate_municipalities.py` が気象庁の予報区データから自動生成する(§ municipalities.json 参照)。
@@ -18,6 +18,7 @@
   - `"promotion"`: カード/QR 会社の期間限定(特定チェーン対象)。`merchant_rules` で管理、「お店」「地図」タブに表示
   - `"municipal"`: 自治体施策(店舗データなし)。期間限定タブにのみ表示(`detail_url`/`store_search_url` で公式ページへリンク)
 - `operator` — 施策の運営者(カード会社・QR 決済事業者)。バッジ表示のフォールバックに使う
+- `display_name` — (任意)期間限定タブのカード表示用の短いタイトル。**実質、多チェーン promotion 専用**(単一チェーンは merchant 名、自治体系は region タイトルが使われるため不要。municipal には持たせない=整合性テストで検証)。`name` は公式表記の写し(メンテ時の照合キー+判定詳細の説明文)の役割を持つため、「ウエル/スギ」のような**略記の編集判断はこちらに分離**する。未指定時のフォールバック: 単一チェーンは merchant 名 → 複数チェーンは「{先頭チェーン} 他Nチェーン」の自動生成。登録規則(`{メーカー/運営}×{対象の略}` 形式・15 文字目安・率と期間は入れない)は collect-campaigns スキルの mapping.md 参照
 - 施策の帰属は **`card_id` / `card_brand` / `payment_method_id` のちょうど 1 つ**(残り 2 つは null):
   - `card_id` — 紐づくカード(payment_methods.json の `cards[].id`)。card_program / promotion で使う。1 カードに複数施策を紐づけられる
   - `card_brand` — ブランド施策(イシュアー不問。例: 「タッチで Visa 割」、Amex 30% OFF)の対象ブランド。値は payment_methods.json の `card_brands` にあるものを使う。所有カードのうち実ブランド(ユーザー設定。単一ブランド製品は自動確定)が一致するカードが 1 枚でもあれば判定に出る(複数一致でも判定は施策につき 1 件)。バッジは特定カード名でなく**ブランド名**(イシュアー不問のため)。**カタログに無いカードの保有ブランド**は設定画面「カードブランド」(DataStore の `owned_brands` に保存)で登録でき、仮想カードとしてマッチする。セクションは常時表示し、事前登録しておけば施策開始と同時に判定へ現れる
@@ -152,7 +153,7 @@
 | `test_lottery` | 抽選型(`lottery`)、`conditions`、`ineligible_wallets` Google Pay のみ対象外・Apple Pay 情報なし(付記なし警告) | 常時安定 |
 | `test_discount_fixed` | **即時定額** discount+`discount_amount`(300 円引き)、`min_purchase`(500 円)、`usage_limit`(1 回) | 常時安定 |
 | `test_rebate_fixed` | **後日定額** rebate+`discount_amount`(500 円還元)、`usage_limit`(3 回)、`usage_limit_note`、`period_total_cap` | 常時安定 |
-| `test_product_scope` | **対象商品限定**(`product_scope`。最良比較から分離・「対象商品」冠表示)、`min_purchase_scope: period_total`(期間累計の最低購入額表示)、`requires_entry`(要エントリー警告) | 常時安定 |
+| `test_product_scope` | **対象商品限定**(`product_scope`。最良比較から分離・「対象商品」冠表示)、`min_purchase_scope: period_total`(期間累計の最低購入額表示)、`requires_entry`(要エントリー警告)、**多チェーン+`display_name`**(カードタイトルの手動略記。`display_name` の無い多チェーンの自動生成「{先頭} 他Nチェーン」は `test_promotion` で確認) | 常時安定 |
 | `test_upcoming` | **UPCOMING** 状態(常時未開始) | 常時安定 |
 | `test_ending_soon` | **残り 3 日警告**(検証日に `period_end` を手直し) | **要手直し** |
 | `test_municipal` | 自治体施策(`municipal`+`external`)、`region`(北海道札幌市=実在自治体。地域フィルタ・お知らせ表示の実機検証用)、`store_search_url`、`per_transaction_cap`+`period_total_cap`、`may_end_early` | 常時安定 |

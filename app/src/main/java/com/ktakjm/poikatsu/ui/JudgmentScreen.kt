@@ -81,7 +81,7 @@ internal fun JudgmentDetail(
             FilledTonalButton(onClick = onFindNearby, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Place, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("近くのこの店を探す")
+                Text("近くのこのお店を探す")
             }
         } else {
             LocationHintNote(locationHint)

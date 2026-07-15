@@ -176,6 +176,7 @@
       "operator": "テストPayPay",
       "payment_method_id": "test_paypay",
       "name": "テストメーカー商品の購入で30%戻ってくる（対象商品限定）",
+      "display_name": "テストメーカー×ドラッグ/スーパー",
       "payment_instruction": "テストPayPayのコード決済で支払う",
       "rate_base": 30.0,
       "product_scope": { "label": "テストメーカー商品(一部対象外商品あり)" },

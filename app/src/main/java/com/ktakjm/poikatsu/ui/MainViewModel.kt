@@ -235,11 +235,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          */
         val nearbySelectedCategories: Set<String> = emptySet(),
         /**
-         * 「地図」のチェーン絞り込み(レンズ2段目)。設定中はジャンル絞り込みより優先し、地図/一覧を
-         * このチェーンだけに絞る。在チェーン選択((2))とブリッジ(探す→近く,(3))の着地状態を共有する。
-         * null で未絞り込み。表示名にのみ使うので Merchant をそのまま保持(フィルタは id 比較)。
+         * 「地図」のチェーン絞り込み(レンズ2段目)。非空なら ジャンル絞り込みより優先し、地図/一覧を
+         * これらのチェーンだけに絞る。在チェーン選択((2))とブリッジ(探す→近く・期間限定の施策詳細,(3))の
+         * 着地状態を共有する(単一チェーンのブリッジは要素1個の Set)。空セットで未絞り込み。
+         * 表示名にのみ使うので Merchant をそのまま保持(フィルタは id 比較)。
          */
-        val nearbyMerchantFilter: Merchant? = null,
+        val nearbyMerchantFilters: Set<Merchant> = emptySet(),
         /**
          * 「地図」の起点(地名検索)。null は GPS 起点(既定)。設定中は距離・並び順をこの地点から測る。
          * 再検索(searchHere/fetchNearby)をまたいで保持し、「現在地で検索」/検索バーの✕で null に戻す。
@@ -262,6 +263,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         /** 施策 id → 発行体の識別色(#RRGGBB)。色は施策でなく発行体カタログ側に持つため、ここで解決して配る */
         val campaignBrandColors: Map<String, String> = emptyMap(),
         val selectedCampaignGroup: List<CampaignJudgment>? = null,
+        /**
+         * 施策詳細→地図ブリッジの復元先。ブリッジ時に閉じた施策詳細(selectedCampaignGroup)を保持し、
+         * 地図タブで戻る操作をしたときに期間限定タブ+施策詳細へ復帰する。下部ナビでの手動タブ切替は
+         * 通常のタブ移動なので破棄する(onSelectTab)。
+         */
+        val campaignBridgeReturn: List<CampaignJudgment>? = null,
+        /**
+         * 判定詳細→地図ブリッジの復元先(campaignBridgeReturn のお店タブ版)。「近くのこのお店を探す」で
+         * 閉じた判定詳細(selection)を保持し、地図タブで戻る操作をしたときにお店タブ+判定詳細へ復帰する。
+         */
+        val selectionBridgeReturn: Selection? = null,
         // --- 設定値(DataStore 由来) ---
         val themeMode: ThemeMode = ThemeMode.SYSTEM,
         val dynamicColor: Boolean = true,
@@ -829,8 +841,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     ) {
         val engine = engine ?: return
         val data = lastLoaded?.data
+        // チェーン絞り込み中の merchant は、非対象日・開始前でも YOLP 検索対象に加える
+        // (施策詳細からのブリッジで「場所の下見」ができるように。判定が無い店は還元率ラベルなしで出す)
+        val filterIds = _state.value.nearbyMerchantFilters.map { it.id }.toSet()
         val config = data?.yolpConfig?.let { yolpConfig ->
-            YolpSearchConfig.build(yolpConfig, data.merchants, engine.activeManagedMerchantIds(LocalDate.now()))
+            YolpSearchConfig.build(yolpConfig, data.merchants, engine.activeManagedMerchantIds(LocalDate.now()) + filterIds)
         }
         if (config == null) {
             failNearby(gen, "検索設定を構築できませんでした。データを更新してください")
@@ -852,7 +867,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (engine.isFacilityTenant(merchant.name, poi.name)) return@mapNotNull null
                 if (engine.isExcludedStore(merchant, poi.name)) return@mapNotNull null
                 val result = engine.judgeAll(merchant, today, qrIds)
-                if (result.judgments.isEmpty()) return@mapNotNull null
+                // 判定なしは通常出さないが、チェーン絞り込み中(ブリッジ由来)の merchant は
+                // 非対象日の場所確認用に残す(bestBenefit なし=還元率ラベルなしで表示)
+                if (result.judgments.isEmpty() && merchant.id !in filterIds) return@mapNotNull null
                 val allCampaigns = result.judgments.map { it.campaign }
                 NearbyPlace(
                     name = poi.name,
@@ -1037,6 +1054,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 selection = null,
                 storeCheck = null,
                 selectedCampaignGroup = null,
+                campaignBridgeReturn = null,
+                selectionBridgeReturn = null,
             )
             if (prev == AppTab.NEARBY) {
                 s = s.copy(
@@ -1052,6 +1071,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onCloseNearby() {
+        // ブリッジ経由なら、戻る操作でブリッジ元(施策詳細/判定詳細)へ復帰する
+        val st = _state.value
+        if (st.campaignBridgeReturn != null || st.selectionBridgeReturn != null) {
+            nearbyGeneration++
+            _state.update {
+                it.copy(
+                    selectedTab = if (it.campaignBridgeReturn != null) AppTab.CAMPAIGNS else AppTab.SEARCH,
+                    selectedCampaignGroup = it.campaignBridgeReturn,
+                    selection = it.selectionBridgeReturn,
+                    campaignBridgeReturn = null,
+                    selectionBridgeReturn = null,
+                    nearby = null,
+                    nearbySearchFailed = null,
+                    nearbyOrigin = null,
+                    geocodeCandidates = emptyList(),
+                    isGeocoding = false,
+                    nearbyMerchantFilters = emptySet(),
+                )
+            }
+            return
+        }
         onSelectTab(AppTab.SEARCH)
     }
 
@@ -1118,33 +1158,64 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * 「地図」のチェーン絞り込み(在チェーンのピッカーから選択=レンズ2段目)。ジャンル選択は
-     * 残したまま(ピルを解除すると元のジャンル絞り込みに戻る=ドリルダウンの体験)。
+     * 「地図」のチェーン絞り込みのトグル(在チェーンのピッカーのチェック/ピルの×=レンズ2段目)。
+     * ジャンル選択は残したまま(全ピルを解除すると元のジャンル絞り込みに戻る=ドリルダウンの体験)。
      */
-    fun onSelectNearbyChain(merchant: Merchant) {
-        _state.update { it.copy(nearbyMerchantFilter = merchant) }
-    }
-
-    /** チェーン絞り込みを解除(ピルの×)。ジャンル絞り込みは元の選択に戻る。 */
-    fun onClearNearbyChain() {
-        _state.update { it.copy(nearbyMerchantFilter = null) }
+    fun onToggleNearbyChain(merchant: Merchant) {
+        _state.update {
+            val current = it.nearbyMerchantFilters
+            val next = if (current.any { m -> m.id == merchant.id }) {
+                current.filterNot { m -> m.id == merchant.id }.toSet()
+            } else {
+                current + merchant
+            }
+            it.copy(nearbyMerchantFilters = next)
+        }
     }
 
     /**
-     * ブリッジ: 判定詳細(探す由来)から「近くのこの店を探す」。そのチェーンに絞った状態を作り、
-     * タブを NEARBY に切り替えて判定詳細を閉じる。実際の「地図」突入(位置情報パーミッション→fetchNearby)は
-     * UI 側が続けて行う。ジャンル絞り込みはクリアしてチェーン1点に集中する(ピル解除で全件に戻る)。
+     * ブリッジ: 判定詳細(探す由来)の「近くのこのお店を探す」は単一チェーン、期間限定タブの施策詳細
+     * (「近くの対象店舗を探す」)は 1〜N チェーン。そのチェーン群に絞った状態を作り、
+     * タブを NEARBY に切り替えて元の画面を閉じる。実際の「地図」突入(位置情報パーミッション→fetchNearby)は
+     * UI 側が続けて行う。ジャンル絞り込みはクリアしてチェーンに集中する(ピル解除で全件に戻る)。
+     * 閉じた判定詳細は selectionBridgeReturn に保存し、地図タブの戻る操作で判定詳細へ復帰できるようにする。
      */
     fun onFindNearby(merchant: Merchant) {
+        val returnSelection = _state.value.selection
+        onFindNearby(setOf(merchant))
+        _state.update { it.copy(selectionBridgeReturn = returnSelection) }
+    }
+
+    /**
+     * 施策詳細から: merchant_rules の merchant_id 群を解決してブリッジする(解決できた分だけ)。
+     * location_hint 持ち(自販機等)は地図で探せないので除く。閉じる施策詳細を campaignBridgeReturn に
+     * 保存し、地図タブの戻る操作で施策詳細へ復帰できるようにする。
+     */
+    fun onFindNearbyByIds(merchantIds: Collection<String>) {
+        val idSet = merchantIds.toSet()
+        val merchants = lastLoaded?.data?.merchants.orEmpty()
+            .filter { it.id in idSet && it.locationHint == null }
+            .toSet()
+        if (merchants.isEmpty()) return
+        val returnGroup = _state.value.selectedCampaignGroup
+        onFindNearby(merchants)
+        _state.update { it.copy(campaignBridgeReturn = returnGroup) }
+    }
+
+    private fun onFindNearby(merchants: Set<Merchant>) {
         val prev = _state.value.selectedTab
         if (prev == AppTab.NEARBY) nearbyGeneration++
         _state.update { st ->
             var s = st.copy(
                 selectedTab = AppTab.NEARBY,
-                nearbyMerchantFilter = merchant,
+                nearbyMerchantFilters = merchants,
                 nearbySelectedCategories = emptySet(),
                 selection = null,
                 storeCheck = null,
+                selectedCampaignGroup = null,
+                // 新しいブリッジは古い復元先を無効化する(呼び出し元の public 関数が自分の復元先を上書き保存する)
+                campaignBridgeReturn = null,
+                selectionBridgeReturn = null,
             )
             if (prev == AppTab.NEARBY) {
                 s = s.copy(
