@@ -1,6 +1,6 @@
 {
   "schema_version": 9,
-  "updated_at": "2026-07-13",
+  "updated_at": "2026-07-16",
   "campaigns": [
     {
       "id": "smcc_combini_restaurant",
@@ -121,7 +121,7 @@
         { "merchant_id": "akachan_honpo", "note": "Online Shop含む", "exclusion_note": "Amexは店頭決済のみ対象外(Online Shopは対象)", "amex_excluded": true, "official_store_list": {"eligible_stores": ["シーナシーナ屯田", "新さっぽろアークシティ", "アリオ札幌", "シーナシーナ青森", "仙台泉", "ヨークパーク郡山", "トナリエつくば", "ニューポートひたちなか", "ベルモール", "高崎", "スマーク伊勢崎", "ステラタウン大宮", "アリオ川口", "エミテラス所沢", "アリオ深谷", "アリオ上尾", "ALCo越谷", "和光イトーヨーカドー", "アリオ鷲宮", "テラスモール松戸", "アリオ柏", "アリオ市原", "四街道イトーヨーカドー", "アリオ北砂", "ウィラ大井", "池袋東武", "セブンタウン小豆沢", "アリオ西新井", "アリオ亀有", "アリオ葛西", "セレオ八王子", "昭島イトーヨーカドー", "武蔵小金井イトーヨーカドー", "東久留米イトーヨーカドー", "横浜別所イトーヨーカドー", "港南台バーズ", "グランツリー武蔵小杉", "溝口", "古淵イトーヨーカドー", "アリオ橋本", "テラスモール湘南", "大和鶴間イトーヨーカドー", "新潟亀田アピタ", "リバーサイド千秋", "ファボーレ", "アピタタウン金沢ベイ", "アルプラザ小松", "福井", "甲府昭和イトーヨーカドー", "アリオ上田", "アイシティ２１", "カラフルタウン岐阜", "静岡イトーヨーカドー", "浜松プラザ", "アクロスプラザ春日井", "リーフウォーク稲沢", "プライムツリー赤池", "ビバシティ彦根", "エイスクエア草津", "洛北阪急スクエア", "MOMOテラス", "精華台", "あべのイトーヨーカドー", "京阪シティモール", "大阪本町", "高槻阪急スクエア", "くずはモール", "アリオ八尾", "ホームズ寝屋川", "スマイル御影クラッセ", "ブルメール舞多聞", "カナート西神戸", "ゆめタウン姫路", "MEGAドン・キホーテ姫路広畑", "つかしん", "明石イトーヨーカドー", "トナリエ大和高田", "イズミヤ和歌山", "ゆめタウン出雲", "ハピータウン岡南", "ブランチ北長瀬", "フジグラン緑井", "ゆめタウンみゆき", "ゆめタウン福山", "ゆめタウン廿日市", "イオンタウン防府", "ゆめタウン徳島", "瓦町FLAG", "エミフルMASAKI", "リバーウォーク北九州", "福岡マリナタウン", "ガーデンズ千早", "ゆめタウン飯塚", "ゆめタウン筑紫野", "ゆめタウン佐賀", "ゆめタウンはません", "ゆめタウン光の森", "パークプレイス大分", "ニトリモール宮崎", "オプシアミスミ", "浦添西海岸パルコシティ", "ハンビータウン", "西原シティ"], "ineligible_stores": ["ララガーデン長町", "ララガーデン川口", "ララガーデン春日部", "ららぽーと富士見", "ららぽーと新三郷", "幕張イトーヨーカドー", "ららぽーとTOKYO-BAY", "ららぽーと柏の葉", "アルカキット錦糸町", "ららぽーと豊洲", "ららぽーと立川立飛", "ららぽーと横浜", "立場イトーヨーカドー", "ラゾーナ川崎", "ららぽーと湘南平塚", "ららぽーと海老名", "ららぽーと沼津", "ららぽーと磐田", "ららぽーと名古屋みなとアクルス", "ららぽーと安城", "ららぽーと愛知東郷", "ららぽーと堺", "ららぽーとEXPOCITY", "ららぽーと和泉", "ららぽーと門真", "ららぽーと甲子園"], "updated_date": "2026-06-15", "date_is_official": false, "source_url": "https://www.akachan.jp/topics/mufgCPlist/"} },
         { "merchant_id": "curves", "note": "入会金・月会費が対象", "exclusion_note": null, "amex_excluded": false }
       ],
-      "verified_date": "2026-07-12"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "yuzawa_paypay_2026_07",
@@ -145,7 +145,7 @@
       "detail_url": "https://paypay.ne.jp/event/akita-yuzawa-city/",
       "store_search_url": null,
       "merchant_rules": [],
-      "verified_date": "2026-07-12"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "yuzawa_aupay_2026_07",
@@ -169,7 +169,7 @@
       "detail_url": "https://media.aupay.wallet.auone.jp/articles/5059",
       "store_search_url": null,
       "merchant_rules": [],
-      "verified_date": "2026-07-12"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "yuzawa_dpay_2026_07",
@@ -197,7 +197,7 @@
         "d払い(ネット)・d払いタッチ・自動販売機/券売機・タバコを含む購入は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "yuzawa_rakuten_pay_2026_07",
@@ -225,7 +225,7 @@
         "インターネット販売・モバイルオーダー・公共料金・タバコ・換金性の高い商品は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "oshu_paypay_2026_07",
@@ -249,7 +249,7 @@
       "detail_url": "https://paypay.ne.jp/event/iwate-oshu-city-20260701/",
       "store_search_url": null,
       "merchant_rules": [],
-      "verified_date": "2026-07-12"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "oda_paypay_2026_07",
@@ -277,7 +277,7 @@
         "タバコ・自動販売機/券売機・オンラインショップ・他社アプリ経由・PayPay商品券での支払いは対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "oda_aupay_2026_07",
@@ -306,7 +306,7 @@
         "金券・タバコ等の指定商品は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "oda_dpay_2026_07",
@@ -334,7 +334,7 @@
         "d払い(ネット)・d払いタッチ・クーポン利用分・自動販売機/券売機・タバコを含む購入は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "oda_rakuten_pay_2026_07",
@@ -361,7 +361,7 @@
         "付与上限は決済サービスごとに適用(PayPay・au PAY・d払い・楽天ペイ・AEON Payが対象)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "rakuten_pay_matsuya_60th_2026_07",
@@ -446,7 +446,7 @@
         "終了日未定（予算上限到達時点で終了）"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-12"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "kanagawa_kanatoku_aupay_2026_06",
@@ -480,7 +480,7 @@
         "終了日未定（予算上限到達時点で終了）"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "kanagawa_kanatoku_dpay_2026_06",
@@ -514,7 +514,7 @@
         "終了日未定（予算上限到達時点で終了）"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "kanagawa_kanatoku_rakuten_pay_2026_06",
@@ -547,7 +547,7 @@
         "終了日未定（予算上限到達時点で終了）"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "chiba_pref_paypay_2026_08",
@@ -578,7 +578,7 @@
         "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "chiba_pref_aupay_2026_08",
@@ -609,7 +609,7 @@
         "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "chiba_pref_dpay_2026_08",
@@ -639,7 +639,7 @@
         "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "chiba_pref_rakuten_pay_2026_08",
@@ -669,7 +669,7 @@
         "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "chiba_city_paypay_2026_08",
@@ -698,7 +698,7 @@
         "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "chiba_city_aupay_2026_08",
@@ -727,7 +727,7 @@
         "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "chiba_city_dpay_2026_08",
@@ -756,7 +756,7 @@
         "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "chiba_city_rakuten_pay_2026_08",
@@ -785,7 +785,7 @@
         "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "gifu_paypay_2026_08",
@@ -813,7 +813,7 @@
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "matsubara_paypay_2026_08",
@@ -841,7 +841,7 @@
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "kakogawa_paypay_2026_08",
@@ -870,7 +870,7 @@
         "たばこ・金券・電子マネーチャージ・公共料金・金融商品等は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "takehara_paypay_2026_08",
@@ -898,7 +898,7 @@
         "コンビニ・病院/医院・調剤薬局・介護施設・保険代理店・公共料金・金券・プリペイドカード・たばこ・市指定ごみ袋等は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
     },
     {
       "id": "tsukumi_paypay_2026_08",
@@ -926,7 +926,271 @@
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-13"
+      "verified_date": "2026-07-16"
+    },
+    {
+      "id": "iwate_pref_paypay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "PayPay",
+      "payment_method_id": "paypay",
+      "name": "いわて県民応援！プレミアムポイント還元キャンペーン",
+      "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイント・PayPayデビットで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-17",
+      "period_end": "2026-09-18",
+      "per_transaction_cap": 2000,
+      "period_total_cap": 5000,
+      "may_end_early": true,
+      "region": {
+        "name": "岩手県",
+        "prefecture": "岩手県"
+      },
+      "detail_url": "https://iwate-premiumpoint.pref.iwate.jp/",
+      "store_search_url": null,
+      "conditions": [
+        "岩手県外在住でも対象",
+        "付与上限は決済サービスごとに適用(PayPay・au PAY・d払い・楽天ペイの4サービス合計で最大20,000円相当)",
+        "コンビニ・医療機関・調剤薬局・デリバリー専門店等は対象外店舗",
+        "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-16"
+    },
+    {
+      "id": "iwate_pref_aupay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "いわて県民応援！プレミアムポイント還元キャンペーン",
+      "payment_instruction": "au PAYのコード支払いで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-17",
+      "period_end": "2026-09-18",
+      "per_transaction_cap": 2000,
+      "period_total_cap": 5000,
+      "may_end_early": true,
+      "region": {
+        "name": "岩手県",
+        "prefecture": "岩手県"
+      },
+      "detail_url": "https://iwate-premiumpoint.pref.iwate.jp/",
+      "store_search_url": null,
+      "conditions": [
+        "岩手県外在住でも対象",
+        "付与上限は決済サービスごとに適用(PayPay・au PAY・d払い・楽天ペイの4サービス合計で最大20,000円相当)",
+        "コンビニ・医療機関・調剤薬局・デリバリー専門店等は対象外店舗",
+        "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-16"
+    },
+    {
+      "id": "iwate_pref_dpay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "d払い",
+      "payment_method_id": "dpay",
+      "name": "いわて県民応援！プレミアムポイント還元キャンペーン",
+      "payment_instruction": "d払いのコード決済で支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-17",
+      "period_end": "2026-09-18",
+      "per_transaction_cap": 2000,
+      "period_total_cap": 5000,
+      "may_end_early": true,
+      "region": {
+        "name": "岩手県",
+        "prefecture": "岩手県"
+      },
+      "detail_url": "https://iwate-premiumpoint.pref.iwate.jp/",
+      "store_search_url": null,
+      "conditions": [
+        "岩手県外在住でも対象",
+        "付与上限は決済サービスごとに適用(PayPay・au PAY・d払い・楽天ペイの4サービス合計で最大20,000円相当)",
+        "コンビニ・医療機関・調剤薬局・デリバリー専門店等は対象外店舗",
+        "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-16"
+    },
+    {
+      "id": "iwate_pref_rakuten_pay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "楽天ペイ",
+      "payment_method_id": "rakuten_pay",
+      "name": "いわて県民応援！プレミアムポイント還元キャンペーン",
+      "payment_instruction": "楽天ペイのコード・QR・セルフ払いで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-17",
+      "period_end": "2026-09-18",
+      "per_transaction_cap": 2000,
+      "period_total_cap": 5000,
+      "may_end_early": true,
+      "region": {
+        "name": "岩手県",
+        "prefecture": "岩手県"
+      },
+      "detail_url": "https://iwate-premiumpoint.pref.iwate.jp/",
+      "store_search_url": null,
+      "conditions": [
+        "岩手県外在住でも対象",
+        "付与上限は決済サービスごとに適用(PayPay・au PAY・d払い・楽天ペイの4サービス合計で最大20,000円相当)",
+        "コンビニ・医療機関・調剤薬局・デリバリー専門店等は対象外店舗",
+        "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-16"
+    },
+    {
+      "id": "yurihonjo_paypay_2026_09",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "PayPay",
+      "payment_method_id": "paypay",
+      "name": "由利本荘市 一般店で最大20％、大型店で最大5％が戻ってくるキャンペーン",
+      "payment_instruction": "PayPay残高・PayPayクレジットで支払う",
+      "rate_base": 20.0,
+      "rate_rules": [
+        { "condition": "一般店", "rate": 20.0 },
+        { "condition": "大型店", "rate": 5.0 }
+      ],
+      "period_start": "2026-09-01",
+      "period_end": "2026-12-31",
+      "per_transaction_cap": 1000,
+      "period_total_cap": 5000,
+      "may_end_early": true,
+      "region": {
+        "name": "由利本荘市",
+        "prefecture": "秋田県"
+      },
+      "detail_url": "https://paypay.ne.jp/notice/20260715/cp-jichitai/",
+      "store_search_url": null,
+      "conditions": [
+        "対象店舗は由利本荘市とPayPayが指定する市内加盟店",
+        "クレジットカード(PayPayクレジット以外)の併用は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-16"
+    },
+    {
+      "id": "asaka_paypay_2026_09",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "PayPay",
+      "payment_method_id": "paypay",
+      "name": "朝霞のお店を応援しよう！～最大15％戻ってくるキャンペーン～",
+      "payment_instruction": "PayPay残高・PayPayクレジットで支払う",
+      "rate_base": 15.0,
+      "period_start": "2026-09-28",
+      "period_end": "2026-10-27",
+      "per_transaction_cap": 1500,
+      "period_total_cap": 6000,
+      "may_end_early": true,
+      "region": {
+        "name": "朝霞市",
+        "prefecture": "埼玉県"
+      },
+      "detail_url": "https://paypay.ne.jp/notice/20260715/cp-jichitai/",
+      "store_search_url": null,
+      "conditions": [
+        "対象は朝霞市内の中規模・小規模のPayPay加盟店のうち指定店舗",
+        "クレジットカード(PayPayクレジット以外)の併用は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-16"
+    },
+    {
+      "id": "ama_paypay_2026_09",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "PayPay",
+      "payment_method_id": "paypay",
+      "name": "市内事業者応援！あまトク！キャッシュレスキャンペーン",
+      "payment_instruction": "PayPay残高・PayPayクレジットで支払う",
+      "rate_base": 10.0,
+      "period_start": "2026-09-01",
+      "period_end": "2026-09-30",
+      "per_transaction_cap": 1000,
+      "period_total_cap": 4000,
+      "may_end_early": true,
+      "region": {
+        "name": "あま市",
+        "prefecture": "愛知県"
+      },
+      "detail_url": "https://paypay.ne.jp/notice/20260715/cp-jichitai/",
+      "store_search_url": null,
+      "conditions": [
+        "対象店舗はあま市とPayPayが指定する市内加盟店",
+        "クレジットカード(PayPayクレジット以外)の併用は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-16"
+    },
+    {
+      "id": "kimino_paypay_2026_09",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "PayPay",
+      "payment_method_id": "paypay",
+      "name": "第5弾！星ふるさと紀美野町 対象店舗で最大25％戻ってくるキャンペーン！",
+      "payment_instruction": "PayPay残高・PayPayクレジットで支払う",
+      "rate_base": 25.0,
+      "period_start": "2026-09-01",
+      "period_end": "2026-10-31",
+      "per_transaction_cap": 2500,
+      "period_total_cap": 5000,
+      "may_end_early": true,
+      "region": {
+        "name": "紀美野町",
+        "prefecture": "和歌山県"
+      },
+      "detail_url": "https://paypay.ne.jp/notice/20260715/cp-jichitai/",
+      "store_search_url": null,
+      "conditions": [
+        "対象店舗は紀美野町とPayPayが指定する町内加盟店",
+        "クレジットカード(PayPayクレジット以外)の併用は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-16"
+    },
+    {
+      "id": "makurazaki_paypay_2026_09",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "PayPay",
+      "payment_method_id": "paypay",
+      "name": "枕崎市キャッシュレスキャンペーン第6弾！",
+      "payment_instruction": "PayPay残高・PayPayクレジットで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-09-01",
+      "period_end": "2026-09-30",
+      "per_transaction_cap": 6000,
+      "period_total_cap": 12000,
+      "may_end_early": true,
+      "region": {
+        "name": "枕崎市",
+        "prefecture": "鹿児島県"
+      },
+      "detail_url": "https://paypay.ne.jp/notice/20260715/cp-jichitai/",
+      "store_search_url": null,
+      "conditions": [
+        "対象店舗は枕崎市とPayPayが指定する市内加盟店",
+        "クレジットカード(PayPayクレジット以外)の併用は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-16"
     }
   ]
 }
