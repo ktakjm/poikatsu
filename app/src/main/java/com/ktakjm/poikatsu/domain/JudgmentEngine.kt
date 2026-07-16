@@ -37,9 +37,8 @@ data class CampaignJudgment(
     val conditions: List<String>,
     val storeSearchUrl: String?,
     val detailUrl: String?,
-    val appPackage: String?,
-    /** 起動リンクのラベル(「◯◯を開く →」の◯◯)。QR は「◯◯アプリ」、カードは「ウォレット(Google Pay)」 */
-    val appLabel: String? = null,
+    /** 起動リンク(0〜N 件)。QR は決済アプリ(AEON Pay のように複数あり得る)、カードはウォレット(Google Pay) */
+    val appLinks: List<AppLink> = emptyList(),
     val pointMultiplier: PointMultiplier?,
     val welcatsuApplied: Boolean,
     /** 予算到達次第の早期終了があり得る施策か。true なら注記を出す */
@@ -48,6 +47,15 @@ data class CampaignJudgment(
     val todayIsTarget: Boolean = true,
     /** recurrence 施策で今日が非対象日のときの次の対象日。対象日当日・recurrence 無しは null */
     val nextTargetDate: LocalDate? = null,
+)
+
+/**
+ * 判定詳細の起動リンク 1 件。label は「◯◯を開く」の◯◯で、バッジ(カード/サービス名)でなく
+ * 起動先アプリの名前を入れる(「三井住友カードアプリを開く」でウォレットが起動する齟齬を避ける)
+ */
+data class AppLink(
+    val packageName: String,
+    val label: String,
 )
 
 enum class StoreEligibility {
@@ -122,6 +130,14 @@ const val WALLET_APP_LABEL = "ウォレット(Google Pay)"
 /** 公式が Google Pay を還元対象と明記している施策ならウォレットアプリのパッケージ名。それ以外は null */
 val Campaign.walletAppPackage: String?
     get() = WALLET_APP_PACKAGE.takeIf { WALLET_GOOGLE_PAY in eligibleWallets }
+
+/** ウォレット起動リンク(walletAppPackage の AppLink 形) */
+val Campaign.walletAppLink: AppLink?
+    get() = walletAppPackage?.let { AppLink(it, WALLET_APP_LABEL) }
+
+/** QR 決済サービスの起動リンク一覧。ラベルは「{アプリ実名}アプリ」 */
+val QrPayment.appLinks: List<AppLink>
+    get() = appPackages.map { AppLink(it.packageName, "${it.label}アプリ") }
 
 /** 公式が Google Pay を還元対象外と明記している施策への警告文。該当しなければ null */
 val Campaign.googlePayIneligibleWarning: String?
@@ -456,8 +472,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
         discountAmount: Int?,
         pointMultiplier: PointMultiplier?,
         welcatsuApplied: Boolean,
-        appPackage: String?,
-        appLabel: String?,
+        appLinks: List<AppLink>,
         today: LocalDate,
     ): CampaignJudgment {
         val days = daysRemaining(campaign, today)
@@ -489,8 +504,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
             conditions = campaign.conditions,
             storeSearchUrl = if (campaign.storeScope == "external") campaign.storeSearchUrl else null,
             detailUrl = campaign.detailUrl,
-            appPackage = appPackage,
-            appLabel = appLabel,
+            appLinks = appLinks,
             pointMultiplier = pointMultiplier,
             welcatsuApplied = welcatsuApplied,
             mayEndEarly = campaign.mayEndEarly,
@@ -552,8 +566,6 @@ class JudgmentEngine(private val data: PoikatsuData) {
                 // ブランド施策はどのカード会社のカードでも使えるため、バッジは特定カード名でなく
                 // ブランド名(Visa 等)を出す。ポイント倍率もカード固有の話なので出さない
                 val isBrandCampaign = campaign.cardBrand != null
-                // Google Pay が還元対象と公式が明記している施策だけウォレット起動リンクを出す
-                val walletPackage = campaign.walletAppPackage
                 buildJudgment(
                     campaign = campaign,
                     rule = rule,
@@ -564,8 +576,8 @@ class JudgmentEngine(private val data: PoikatsuData) {
                     // ウエル活倍率はカードの実効率にだけ掛かっている。施策側の率を採用したときに
                     // 「ウエル活利用時の実質還元率」の注記が出ると誤りなのでフラグを落とす
                     welcatsuApplied = card.welcatsuApplied && !usesCampaignRate && !isBrandCampaign,
-                    appPackage = walletPackage,
-                    appLabel = if (walletPackage != null) WALLET_APP_LABEL else null,
+                    // Google Pay が還元対象と公式が明記している施策だけウォレット起動リンクを出す
+                    appLinks = listOfNotNull(campaign.walletAppLink),
                     today = today,
                 )
             }
@@ -590,8 +602,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
                     discountAmount = campaign.discountAmount,
                     pointMultiplier = null,
                     welcatsuApplied = false,
-                    appPackage = qr.appPackage.ifBlank { null },
-                    appLabel = "${qr.name}アプリ".takeIf { qr.appPackage.isNotBlank() },
+                    appLinks = qr.appLinks,
                     today = today,
                 )
             }

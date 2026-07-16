@@ -10,9 +10,11 @@ import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.ProductScope
+import com.ktakjm.poikatsu.data.QrAppPackage
 import com.ktakjm.poikatsu.data.QrPayment
 import com.ktakjm.poikatsu.data.Recurrence
 import com.ktakjm.poikatsu.data.Region
+import com.ktakjm.poikatsu.domain.AppLink
 import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.domain.CampaignType
@@ -508,8 +510,7 @@ class JudgmentEngineTest {
     fun `google_payがeligibleならウォレット起動リンクが付く`() {
         val campaign = campaignWithPeriod(eligibleWallets = listOf("apple_pay", "google_pay"))
         val judgment = periodTestEngine(campaign).judgeCards(testMerchant, today).first()
-        assertEquals(WALLET_APP_PACKAGE, judgment.appPackage)
-        assertEquals(WALLET_APP_LABEL, judgment.appLabel)
+        assertEquals(listOf(AppLink(WALLET_APP_PACKAGE, WALLET_APP_LABEL)), judgment.appLinks)
         assertTrue(judgment.warnings.isEmpty())
     }
 
@@ -517,8 +518,7 @@ class JudgmentEngineTest {
     fun `google_payがineligibleなら警告が出て起動リンクは付かない`() {
         val campaign = campaignWithPeriod(ineligibleWallets = listOf("google_pay"))
         val judgment = periodTestEngine(campaign).judgeCards(testMerchant, today).first()
-        assertNull(judgment.appPackage)
-        assertNull(judgment.appLabel)
+        assertTrue(judgment.appLinks.isEmpty())
         assertTrue(judgment.warnings.any { it.contains("Google Pay") })
         // apple_pay が eligible と分かっていないときは Apple Pay に言及しない(断定しない)
         assertTrue(judgment.warnings.none { it.contains("Apple Pay") })
@@ -531,7 +531,7 @@ class JudgmentEngineTest {
             ineligibleWallets = listOf("google_pay"),
         )
         val judgment = periodTestEngine(campaign).judgeCards(testMerchant, today).first()
-        assertNull(judgment.appPackage)
+        assertTrue(judgment.appLinks.isEmpty())
         assertTrue(judgment.warnings.any { it.contains("Google Pay") && it.contains("Apple Payは対象") })
     }
 
@@ -539,8 +539,7 @@ class JudgmentEngineTest {
     fun `ウォレット未指定なら起動リンクも警告も出ない`() {
         // 3状態の「不明」: 断定できないので何も出さない(payment_instruction の文章が担う)
         val judgment = periodTestEngine(campaignWithPeriod()).judgeCards(testMerchant, today).first()
-        assertNull(judgment.appPackage)
-        assertNull(judgment.appLabel)
+        assertTrue(judgment.appLinks.isEmpty())
         assertTrue(judgment.warnings.isEmpty())
     }
 
@@ -549,8 +548,7 @@ class JudgmentEngineTest {
         // apple_pay は起動リンクには使わない(Google Pay 対象外警告の付記にのみ使う)
         val campaign = campaignWithPeriod(eligibleWallets = listOf("apple_pay"))
         val judgment = periodTestEngine(campaign).judgeCards(testMerchant, today).first()
-        assertNull(judgment.appPackage)
-        assertNull(judgment.appLabel)
+        assertTrue(judgment.appLinks.isEmpty())
         assertTrue(judgment.warnings.isEmpty())
     }
 
@@ -590,9 +588,8 @@ class JudgmentEngineTest {
         val results = engine.judgeQr(testMerchant, julyToday, setOf("paypay"))
         assertEquals(1, results.size)
         assertEquals("PayPay", results.first().badgeLabel)
-        // app_package の無いカタログでは起動リンク(appPackage/appLabel)は付かない
-        assertNull(results.first().appPackage)
-        assertNull(results.first().appLabel)
+        // app_packages の無いカタログでは起動リンク(appLinks)は付かない
+        assertTrue(results.first().appLinks.isEmpty())
         assertEquals(20.0, results.first().effectiveRate!!, 0.001)
         assertEquals(BenefitType.REBATE, results.first().benefitType)
 
@@ -604,19 +601,33 @@ class JudgmentEngineTest {
     }
 
     @Test
-    fun `QR決済のapp_packageがあれば起動リンクは決済名アプリのラベル`() {
-        val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033", appPackage = "jp.ne.paypay.android.app")
+    fun `QR決済のapp_packagesがあれば起動リンクは全アプリぶん_ラベルはアプリ実名`() {
+        // AEON Pay のように 1 サービスを複数アプリが担うケース: 起動リンクは候補全部を順に出す
+        val aeonPay = QrPayment(
+            id = "aeon_pay",
+            name = "AEON Pay",
+            brandColor = "#B60081",
+            appPackages = listOf(
+                QrAppPackage(packageName = "jp.co.aeon.credit.android.wallet", label = "AEON Pay"),
+                QrAppPackage(packageName = "jp.co.aeonst.app.myaeon", label = "iAEON"),
+            ),
+        )
         val campaign = campaignWithPeriod(
             type = CampaignType.PROMOTION,
             cardId = null,
-            paymentMethodId = "paypay",
+            paymentMethodId = "aeon_pay",
             start = "2026-07-01",
             end = "2026-07-31",
         )
-        val engine = periodTestEngine(campaign, cards = emptyList(), qrPayments = listOf(paypay))
-        val judgment = engine.judgeQr(testMerchant, LocalDate.of(2026, 7, 15), setOf("paypay")).first()
-        assertEquals("jp.ne.paypay.android.app", judgment.appPackage)
-        assertEquals("PayPayアプリ", judgment.appLabel)
+        val engine = periodTestEngine(campaign, cards = emptyList(), qrPayments = listOf(aeonPay))
+        val judgment = engine.judgeQr(testMerchant, LocalDate.of(2026, 7, 15), setOf("aeon_pay")).first()
+        assertEquals(
+            listOf(
+                AppLink("jp.co.aeon.credit.android.wallet", "AEON Payアプリ"),
+                AppLink("jp.co.aeonst.app.myaeon", "iAEONアプリ"),
+            ),
+            judgment.appLinks,
+        )
     }
 
     @Test
@@ -1316,10 +1327,9 @@ class JudgmentEngineRealDataTest {
         val merchant = data.merchants.first { it.id == "seven_eleven" }
         val judgments = engine.judgeCards(merchant, LocalDate.of(2026, 7, 8))
         val smcc = judgments.first { it.campaign.id == "smcc_combini_restaurant" }
-        assertEquals(WALLET_APP_PACKAGE, smcc.appPackage)
-        assertEquals(WALLET_APP_LABEL, smcc.appLabel)
+        assertEquals(listOf(AppLink(WALLET_APP_PACKAGE, WALLET_APP_LABEL)), smcc.appLinks)
         val mufg = judgments.first { it.campaign.id == "mufg_point_up_program" }
-        assertNull(mufg.appPackage)
+        assertTrue(mufg.appLinks.isEmpty())
         // MUFG は apple_pay が eligible なので「Apple Payは対象」の付記まで出る
         assertTrue(mufg.warnings.any { it.contains("Google Pay") && it.contains("Apple Payは対象") })
     }

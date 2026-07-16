@@ -1,5 +1,5 @@
 {
-  "schema_version": 6,
+  "schema_version": 7,
   "updated_at": "2026-07-11",
   "card_brands": [
     { "name": "Visa", "color": "#1A1F71" },
@@ -28,7 +28,9 @@
       "id": "test_paypay",
       "name": "テストPayPay",
       "brand_color": "#FF0033",
-      "app_package": "jp.ne.paypay.android.app",
+      "app_packages": [
+        { "package": "jp.ne.paypay.android.app", "label": "テストPayPay" }
+      ],
       "store_search_label": "テストPayPay対象店舗を探す",
       "enabled_default": false
     },
@@ -36,7 +38,9 @@
       "id": "test_aupay",
       "name": "テストauPAY",
       "brand_color": "#FF5722",
-      "app_package": "jp.auone.wallet",
+      "app_packages": [
+        { "package": "jp.auone.wallet", "label": "テストauPAY" }
+      ],
       "store_search_label": "テストauPAY対象店舗を探す",
       "enabled_default": false
     }

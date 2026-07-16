@@ -254,15 +254,15 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
             judgment.detailUrl?.let { url ->
                 ExternalLinkButton("詳細を見る") { uriHandler.openUri(url) }
             }
-            judgment.appPackage?.let { pkg ->
-                // ラベルは起動先アプリの名前(appLabel)。バッジ(カード名)だと「三井住友カードアプリを開く」で
-                // ウォレットが起動する齟齬が出る
-                ExternalLinkButton("${judgment.appLabel ?: "${judgment.badgeLabel}アプリ"}を開く") {
-                    val intent = context.packageManager.getLaunchIntentForPackage(pkg)
+            // 1 サービス複数アプリ(AEON Pay = 単独アプリ / iAEON)はインストール判定で絞らず全候補を出す。
+            // 未インストールのアプリは起動 Intent が取れないので Play ストアのページに送る
+            judgment.appLinks.forEach { link ->
+                ExternalLinkButton("${link.label}を開く") {
+                    val intent = context.packageManager.getLaunchIntentForPackage(link.packageName)
                     if (intent != null) {
                         context.startActivity(intent)
                     } else {
-                        uriHandler.openUri("https://play.google.com/store/apps/details?id=$pkg")
+                        uriHandler.openUri("https://play.google.com/store/apps/details?id=${link.packageName}")
                     }
                 }
             }

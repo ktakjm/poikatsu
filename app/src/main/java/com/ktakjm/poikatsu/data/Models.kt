@@ -287,12 +287,24 @@ data class CardBrand(
     val color: String? = null,
 )
 
+/**
+ * QR 決済サービスの決済アプリ 1 件(qr_payments[].app_packages)。1 サービスを複数アプリが担える
+ * (AEON Pay = 単独アプリ / iAEON の 2 本立て等)ため、サービス:アプリ = 1:N で持つ。
+ * label はボタン表示に使う起動先アプリの実名(サービス名と一致するとは限らない。メルペイ→メルカリ)。
+ * パッケージ名は AndroidManifest の <queries> と対で管理する(宣言が無いと Android 11+ で起動検出できない)
+ */
+@Serializable
+data class QrAppPackage(
+    @SerialName("package") val packageName: String,
+    val label: String,
+)
+
 @Serializable
 data class QrPayment(
     val id: String,
     val name: String,
     @SerialName("brand_color") val brandColor: String,
-    @SerialName("app_package") val appPackage: String = "",
+    @SerialName("app_packages") val appPackages: List<QrAppPackage> = emptyList(),
     @SerialName("store_search_label") val storeSearchLabel: String = "",
     @SerialName("enabled_default") val enabledDefault: Boolean = false,
 )

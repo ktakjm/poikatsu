@@ -12,11 +12,19 @@
     <!-- Android 11+ のパッケージ可視性制限対応。QR決済・ウォレットアプリ起動(JudgmentScreen)で
          getLaunchIntentForPackage() が正しく検出できるよう、対象アプリを明示する。
          未宣言だとインストール済みでも null が返り Play Store フォールバックに落ちる。 -->
+    <!-- payment_methods.json の qr_payments[].app_packages と対で管理する(宣言が無いと Android 11+ で
+         起動 Intent が取れず Play ストア送りになる)。リモート JSON でパッケージを追加してもここは
+         アプリ更新でしか増やせない点に注意 -->
     <queries>
         <package android:name="jp.ne.paypay.android.app" />
         <package android:name="jp.auone.wallet" />
         <package android:name="com.nttdocomo.keitai.payment" />
         <package android:name="jp.co.rakuten.pay" />
+        <!-- AEON Pay は単独アプリと iAEON の2本立て -->
+        <package android:name="jp.co.aeon.credit.android.wallet" />
+        <package android:name="jp.co.aeonst.app.myaeon" />
+        <!-- メルペイ(メルカリアプリ内) -->
+        <package android:name="com.kouzoh.mercari" />
         <!-- ウォレット(Google Pay)。domain の WALLET_APP_PACKAGE と対で管理 -->
         <package android:name="com.google.android.apps.walletnfcrel" />
     </queries>

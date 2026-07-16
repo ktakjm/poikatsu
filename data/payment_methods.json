@@ -1,5 +1,5 @@
 {
-  "schema_version": 6,
+  "schema_version": 7,
   "updated_at": "2026-07-16",
   "card_brands": [
     { "name": "Visa", "color": "#1A1F71" },
@@ -29,7 +29,9 @@
       "id": "paypay",
       "name": "PayPay",
       "brand_color": "#FF0033",
-      "app_package": "jp.ne.paypay.android.app",
+      "app_packages": [
+        { "package": "jp.ne.paypay.android.app", "label": "PayPay" }
+      ],
       "store_search_label": "PayPayアプリの「近くのおトク」で対象店舗を確認",
       "enabled_default": false
     },
@@ -37,7 +39,9 @@
       "id": "aupay",
       "name": "au PAY",
       "brand_color": "#FF5722",
-      "app_package": "jp.auone.wallet",
+      "app_packages": [
+        { "package": "jp.auone.wallet", "label": "au PAY" }
+      ],
       "store_search_label": "au PAYアプリで対象店舗を確認",
       "enabled_default": false
     },
@@ -45,7 +49,9 @@
       "id": "dpay",
       "name": "d払い",
       "brand_color": "#E60033",
-      "app_package": "com.nttdocomo.keitai.payment",
+      "app_packages": [
+        { "package": "com.nttdocomo.keitai.payment", "label": "d払い" }
+      ],
       "store_search_label": "d払いアプリで対象店舗を確認",
       "enabled_default": false
     },
@@ -53,7 +59,9 @@
       "id": "rakuten_pay",
       "name": "楽天ペイ",
       "brand_color": "#BF0000",
-      "app_package": "jp.co.rakuten.pay",
+      "app_packages": [
+        { "package": "jp.co.rakuten.pay", "label": "楽天ペイ" }
+      ],
       "store_search_label": "楽天ペイアプリで対象店舗を確認",
       "enabled_default": false
     },
@@ -61,15 +69,20 @@
       "id": "aeon_pay",
       "name": "AEON Pay",
       "brand_color": "#B60081",
-      "app_package": "jp.co.aeonst.app.myaeon",
-      "store_search_label": "iAEONアプリで対象店舗を確認",
+      "app_packages": [
+        { "package": "jp.co.aeon.credit.android.wallet", "label": "AEON Pay" },
+        { "package": "jp.co.aeonst.app.myaeon", "label": "iAEON" }
+      ],
+      "store_search_label": "AEON Payアプリで対象店舗を確認",
       "enabled_default": false
     },
     {
       "id": "merpay",
       "name": "メルペイ",
       "brand_color": "#55BEEE",
-      "app_package": "com.kouzoh.mercari",
+      "app_packages": [
+        { "package": "com.kouzoh.mercari", "label": "メルカリ" }
+      ],
       "store_search_label": "メルカリアプリで対象店舗を確認",
       "enabled_default": false
     }
