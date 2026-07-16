@@ -364,6 +364,33 @@
       "verified_date": "2026-07-16"
     },
     {
+      "id": "oda_aeon_pay_2026_07",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "AEON Pay",
+      "payment_method_id": "aeon_pay",
+      "name": "おおだキャッシュレスキャンペーン（最大20%戻ってくる）",
+      "payment_instruction": "AEON Payのコード決済で支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-07-01",
+      "period_end": "2026-08-10",
+      "per_transaction_cap": 2000,
+      "period_total_cap": 5000,
+      "may_end_early": true,
+      "region": {
+        "name": "大田市",
+        "prefecture": "島根県"
+      },
+      "detail_url": "https://www.city.oda.lg.jp/update_info/10976",
+      "store_search_url": null,
+      "conditions": [
+        "付与上限は決済サービスごとに適用(PayPay・au PAY・d払い・楽天ペイ・AEON Payが対象)"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-16"
+    },
+    {
       "id": "rakuten_pay_matsuya_60th_2026_07",
       "type": "promotion",
       "benefit_type": "rebate",
