@@ -1,6 +1,6 @@
 {
   "schema_version": 6,
-  "updated_at": "2026-07-11",
+  "updated_at": "2026-07-16",
   "card_brands": [
     { "name": "Visa", "color": "#1A1F71" },
     { "name": "Mastercard", "color": "#EB001B" },
@@ -55,6 +55,22 @@
       "brand_color": "#BF0000",
       "app_package": "jp.co.rakuten.pay",
       "store_search_label": "楽天ペイアプリで対象店舗を確認",
+      "enabled_default": false
+    },
+    {
+      "id": "aeon_pay",
+      "name": "AEON Pay",
+      "brand_color": "#B60081",
+      "app_package": "jp.co.aeonst.app.myaeon",
+      "store_search_label": "iAEONアプリで対象店舗を確認",
+      "enabled_default": false
+    },
+    {
+      "id": "merpay",
+      "name": "メルペイ",
+      "brand_color": "#55BEEE",
+      "app_package": "com.kouzoh.mercari",
+      "store_search_label": "メルカリアプリで対象店舗を確認",
       "enabled_default": false
     }
   ]

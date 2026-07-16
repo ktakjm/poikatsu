@@ -26,7 +26,7 @@
 ## type / store_scope / 帰属の判定
 
 - 自治体主催(地域限定・店舗データなし) → `municipal` + `external`。それ以外の期間限定 → `promotion`(対象チェーンが特定できるなら `managed` + `merchant_rules`、できなければ `external`)
-- 帰属は **`card_id` / `card_brand` / `payment_method_id` のちょうど 1 つ**。QR 決済の id: `paypay` / `aupay` / `dpay` / `rakuten_pay`。カード: `smcc` / `mufg`。ブランド施策(Amex 等): `card_brand`
+- 帰属は **`card_id` / `card_brand` / `payment_method_id` のちょうど 1 つ**。QR 決済の id: `paypay` / `aupay` / `dpay` / `rakuten_pay` / `aeon_pay` / `merpay`。カード: `smcc` / `mufg`。ブランド施策(Amex 等): `card_brand`
 - メーカー×小売×決済連動キャンペーン(ドラッグストア×花王等)のうち「**ポイントカード提示でも対象**」の変種(楽天・d払いに実例)は QR サービスに帰属させ、提示でも OK の旨は `conditions` に書く。**メーカー主催のレシート応募型**(決済不問)は帰属先が無いため収録しない(見送り一覧へ)
 - `operator` は施策の運営者名(表示フォールバック用。例: "PayPay"、"楽天ペイ")
 

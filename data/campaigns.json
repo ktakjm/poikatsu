@@ -550,6 +550,74 @@
       "verified_date": "2026-07-16"
     },
     {
+      "id": "kanagawa_kanatoku_aeon_pay_2026_06",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "AEON Pay",
+      "payment_method_id": "aeon_pay",
+      "name": "かながわトクトクキャンペーン『かなトク！』（最大20%戻ってくる）",
+      "payment_instruction": "AEON Payのコード決済で支払う",
+      "rate_base": 20.0,
+      "rate_rules": [
+        { "condition": "中小企業・小規模企業の店舗", "rate": 20.0 },
+        { "condition": "大手企業の店舗", "rate": 10.0 }
+      ],
+      "period_start": "2026-06-19",
+      "period_end": null,
+      "per_transaction_cap": 1500,
+      "period_total_cap": 2500,
+      "may_end_early": true,
+      "region": {
+        "name": "神奈川県",
+        "prefecture": "神奈川県"
+      },
+      "detail_url": "https://www.kanatokucpn.pref.kanagawa.jp/",
+      "store_search_url": null,
+      "conditions": [
+        "還元はAEON Pay残高(有効期限なし・キャンペーン終了後翌々月末までに付与)",
+        "付与上限は20%店舗と10%店舗の合算で2,500円相当(決済サービスごと)",
+        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外",
+        "終了日未定（予算上限到達時点で終了）"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-16"
+    },
+    {
+      "id": "kanagawa_kanatoku_merpay_2026_06",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "メルペイ",
+      "payment_method_id": "merpay",
+      "name": "かながわトクトクキャンペーン『かなトク！』（最大20%戻ってくる）",
+      "payment_instruction": "メルペイのコード決済で支払う",
+      "rate_base": 20.0,
+      "rate_rules": [
+        { "condition": "中小企業・小規模企業の店舗", "rate": 20.0 },
+        { "condition": "大手企業の店舗", "rate": 10.0 }
+      ],
+      "period_start": "2026-06-19",
+      "period_end": null,
+      "per_transaction_cap": 1500,
+      "period_total_cap": 2500,
+      "may_end_early": true,
+      "region": {
+        "name": "神奈川県",
+        "prefecture": "神奈川県"
+      },
+      "detail_url": "https://www.kanatokucpn.pref.kanagawa.jp/",
+      "store_search_url": null,
+      "conditions": [
+        "還元はメルカリポイント(有効期限180日・キャンペーン終了後翌月末までに付与)",
+        "付与上限は20%店舗と10%店舗の合算で2,500ポイント(決済サービスごと)",
+        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外",
+        "終了日未定（予算上限到達時点で終了）"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-16"
+    },
+    {
       "id": "chiba_pref_paypay_2026_08",
       "type": "municipal",
       "benefit_type": "rebate",
@@ -672,6 +740,37 @@
       "verified_date": "2026-07-16"
     },
     {
+      "id": "chiba_pref_aeon_pay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "AEON Pay",
+      "payment_method_id": "aeon_pay",
+      "name": "千葉県キャッシュレス決済キャンペーン 第3弾（最大10%戻ってくる）",
+      "payment_instruction": "AEON Payのコード決済で支払う",
+      "rate_base": 10.0,
+      "period_start": "2026-08-07",
+      "period_end": "2026-08-30",
+      "per_transaction_cap": null,
+      "period_total_cap": 3000,
+      "may_end_early": true,
+      "region": {
+        "name": "千葉県",
+        "prefecture": "千葉県"
+      },
+      "detail_url": "https://www.pref.chiba.lg.jp/keisei/press/2026/r8cashless-campaign.html",
+      "store_search_url": null,
+      "conditions": [
+        "還元はAEON Pay残高",
+        "県内在住・在勤を問わず対象",
+        "付与上限は決済サービスごとに期間中3,000円相当(1回ごとの上限は設けられていない)",
+        "コンビニ・行政機関・金融機関・保険会社・医療機関・風俗店等は対象外店舗",
+        "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-16"
+    },
+    {
       "id": "chiba_city_paypay_2026_08",
       "type": "municipal",
       "benefit_type": "rebate",
@@ -780,6 +879,36 @@
       "detail_url": "https://www.city.chiba.jp/keizainosei/keizai/kikaku/2026_cashlesscampaign.html",
       "store_search_url": null,
       "conditions": [
+        "千葉県キャンペーンと併用可（合わせて最大15%）",
+        "付与上限は決済サービスごとに期間中3,000円相当",
+        "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-16"
+    },
+    {
+      "id": "chiba_city_aeon_pay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "AEON Pay",
+      "payment_method_id": "aeon_pay",
+      "name": "千葉市キャッシュレスキャンペーン 第2弾（最大5%戻ってくる）",
+      "payment_instruction": "AEON Payのコード決済で支払う",
+      "rate_base": 5.0,
+      "period_start": "2026-08-07",
+      "period_end": "2026-08-30",
+      "per_transaction_cap": 1500,
+      "period_total_cap": 3000,
+      "may_end_early": true,
+      "region": {
+        "name": "千葉市",
+        "prefecture": "千葉県"
+      },
+      "detail_url": "https://www.city.chiba.jp/keizainosei/keizai/kikaku/2026_cashlesscampaign.html",
+      "store_search_url": null,
+      "conditions": [
+        "還元はAEON Pay残高",
         "千葉県キャンペーンと併用可（合わせて最大15%）",
         "付与上限は決済サービスごとに期間中3,000円相当",
         "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
