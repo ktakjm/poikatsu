@@ -1,6 +1,6 @@
 {
-  "schema_version": 9,
-  "updated_at": "2026-07-13",
+  "schema_version": 10,
+  "updated_at": "2026-07-18",
   "campaigns": [
     {
       "id": "test_card_program",
@@ -16,18 +16,25 @@
       "period_start": null,
       "period_end": null,
       "cap_note": "月間ポイント上限なし。ただし1万円超はタッチ決済不可",
+      "ineligible_notes": [
+        "テストカード現物のタッチ決済・差し込みは対象外(スマホのタッチ決済のみ対象)",
+        "他社アプリ経由の支払いは対象外"
+      ],
+      "memo": [
+        "加算ポイントは利用月の原則3ヶ月以内に付与(memo は UI 非表示の検証用)"
+      ],
       "verified_date": "2026-07-07",
       "merchant_rules": [
         { "merchant_id": "test_combini" },
-        { "merchant_id": "test_fastfood", "exclusion_note": "一部店舗のみ対象。公式の対象店舗検索で要確認", "store_list_url": "https://example.com/store-list" },
-        { "merchant_id": "test_super", "amex_excluded": true, "note": "テストマート含む", "exclusion_note": "商業施設内の一部店舗は対象外", "official_store_list": {
+        { "merchant_id": "test_fastfood", "ineligible_notes": ["一部店舗のみ対象。公式の対象店舗検索で要確認"], "store_list_url": "https://example.com/store-list" },
+        { "merchant_id": "test_super", "amex_excluded": true, "eligible_notes": ["テストマート含む"], "ineligible_notes": ["商業施設内の一部店舗は対象外"], "official_store_list": {
           "eligible_stores": ["テスト駅前", "テストモール", "テスト中央"],
           "ineligible_stores": ["テスト商業施設内", "テスト空港"],
           "updated_date": "2026-07-01",
           "date_is_official": false,
           "source_url": "https://example.com/official-list"
         }},
-        { "merchant_id": "test_vending", "note": "テストアプリ対応自販機が対象" }
+        { "merchant_id": "test_vending", "eligible_notes": ["テストアプリ対応自販機が対象"] }
       ]
     },
     {
@@ -38,6 +45,7 @@
       "operator": "テストカード発行会社",
       "card_id": "test_card",
       "name": "テスト期間限定施策（10%・バーガーのみ15%還元）",
+      "payment_instruction": "テストカードのタッチ決済で支払う",
       "eligible_wallets": ["apple_pay"],
       "ineligible_wallets": ["google_pay"],
       "rate_base": 10.0,
@@ -77,6 +85,7 @@
       "operator": "テストカード発行会社",
       "card_id": "test_card",
       "name": "テスト曜日限定施策（毎週金土20%還元）",
+      "payment_instruction": "テストカードのタッチ決済で支払う",
       "rate_base": 20.0,
       "period_start": "2026-01-01",
       "period_end": "2099-12-31",
@@ -94,6 +103,7 @@
       "operator": "テストカード発行会社",
       "card_id": "test_card",
       "name": "テスト日付限定施策（5・20・30日は12%還元）",
+      "payment_instruction": "テストカードのタッチ決済で支払う",
       "rate_base": 12.0,
       "period_start": "2026-01-01",
       "period_end": "2099-12-31",
@@ -111,10 +121,11 @@
       "operator": "テストカード発行会社",
       "card_id": "test_card",
       "name": "テスト抽選施策（1/4の確率で最大全額還元）",
+      "payment_instruction": "テストカードのタッチ決済で支払う",
       "ineligible_wallets": ["google_pay"],
       "period_start": "2026-01-01",
       "period_end": "2099-12-31",
-      "conditions": [
+      "memo": [
         "抽選で4分の1の確率で当選",
         "当選すると決済額の最大全額(上限1000円相当)を還元"
       ],
@@ -140,7 +151,7 @@
       "detail_url": "https://example.com/discount-coupon",
       "verified_date": "2026-07-07",
       "merchant_rules": [
-        { "merchant_id": "test_fastfood", "note": "モバイルオーダーも対象" }
+        { "merchant_id": "test_fastfood", "eligible_notes": ["モバイルオーダーも対象"] }
       ]
     },
     {
@@ -158,10 +169,6 @@
       "period_total_cap": 1500,
       "period_start": "2026-01-01",
       "period_end": "2099-12-31",
-      "conditions": [
-        "お一人様期間中3回まで",
-        "付与上限1,500円"
-      ],
       "detail_url": "https://example.com/rebate-campaign",
       "verified_date": "2026-07-07",
       "merchant_rules": [
@@ -186,9 +193,6 @@
       "period_total_cap": 1500,
       "period_start": "2026-01-01",
       "period_end": "2099-12-31",
-      "conditions": [
-        "対象商品の購入金額が期間中の合計で3,000円(税込)以上になると付与"
-      ],
       "detail_url": "https://example.com/product-scope-campaign",
       "verified_date": "2026-07-13",
       "merchant_rules": [
@@ -208,9 +212,7 @@
       "rate_base": 25.0,
       "period_start": "2099-01-01",
       "period_end": "2099-12-31",
-      "conditions": [
-        "事前エントリー必要"
-      ],
+      "requires_entry": true,
       "detail_url": "https://example.com/upcoming-campaign",
       "verified_date": "2026-07-07",
       "merchant_rules": [
@@ -256,8 +258,11 @@
       },
       "detail_url": "https://example.com/municipal-campaign",
       "store_search_url": "https://example.com/municipal-stores",
-      "conditions": [
-        "対象の中小企業・小規模事業者の店舗が対象",
+      "eligible_notes": [
+        "市外在住でも対象"
+      ],
+      "ineligible_notes": [
+        "中小企業・小規模事業者の店舗以外は対象外",
         "大手チェーン店は対象外"
       ],
       "merchant_rules": [],
@@ -281,6 +286,7 @@
       "period_end": "2026-09-30",
       "per_transaction_cap": 2000,
       "period_total_cap": 6000,
+      "cap_note": "25%店舗と10%店舗の合算で適用",
       "may_end_early": true,
       "region": {
         "name": "広島市",
@@ -288,9 +294,6 @@
       },
       "detail_url": "https://example.com/municipal-hiroshima-paypay",
       "store_search_url": "https://example.com/municipal-hiroshima-paypay-stores",
-      "conditions": [
-        "付与上限は25%店舗と10%店舗の合算"
-      ],
       "merchant_rules": [],
       "verified_date": "2026-07-10"
     },
@@ -315,8 +318,8 @@
       },
       "detail_url": "https://example.com/municipal-hiroshima-aupay",
       "store_search_url": "https://example.com/municipal-hiroshima-aupay-stores",
-      "conditions": [
-        "対象の中小企業・小規模事業者の店舗が対象",
+      "ineligible_notes": [
+        "中小企業・小規模事業者の店舗以外は対象外",
         "大手チェーン店は対象外"
       ],
       "merchant_rules": [],

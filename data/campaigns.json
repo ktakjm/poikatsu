@@ -1,6 +1,6 @@
 {
-  "schema_version": 9,
-  "updated_at": "2026-07-16",
+  "schema_version": 10,
+  "updated_at": "2026-07-18",
   "campaigns": [
     {
       "id": "smcc_combini_restaurant",
@@ -17,52 +17,57 @@
       "period_end": null,
       "cap_note": "公式に月間ポイント上限の記載なし。ただし原則1万円超(店舗により異なる)はタッチ決済にならずカード差し込みとなり、その分は加算対象外",
       "detail_url": "https://www.smbc-card.com/nyukai/merit/proper_p5.jsp",
-      "conditions": [
-        "対象になるのはスマホのタッチ決済とモバイルオーダーのみ(2025年12月利用分から)。カード現物のタッチ決済・iD・ICチップ差し込み・磁気は対象外",
-        "セルフレジで「Apple Pay」ボタンを選ぶとiD払いになり対象外。「クレジットカード」を選んでからスマホをタッチする",
-        "Google Pay / Samsung WalletではMastercardタッチ決済は使えない(Visaのみ)。Apple Watchは対象",
-        "モバイルオーダー対象はマクドナルド・モスバーガー・KFC・吉野家・すき家・スターバックスの6チェーン",
-        "楽天ペイ・PayPay経由の支払い、スターバックスカードへのチャージは対象外",
-        "事前エントリー不要。加算ポイントは利用月の原則3ヶ月以内に付与",
-        "商業施設内(空港・遊園地・スタジアム・駅ビル等)の一部店舗は対象外",
-        "デリバリー利用は対象外(モスバーガー・KFCの自社配達モバイルオーダーは対象)"
+      "ineligible_notes": [
+        "スマホのタッチ決済のみ対象(カード現物・iD・差し込み、楽天ペイ・PayPay経由は対象外)",
+        "セルフレジは「クレジットカード」を選んでタッチ(「Apple Pay」ボタンはiD払いになり対象外)",
+        "Google PayではMastercardタッチ決済不可(Visaのみ)",
+        "商業施設内の一部店舗・デリバリーは対象外"
+      ],
+      "memo": [
+        "モバイルオーダー対象はマクドナルド・モスバーガー・KFC・吉野家・すき家・スターバックスの6チェーン(各 merchant_rules に反映済み)",
+        "スターバックスカードへのチャージ対象外は starbucks の merchant_rules に反映済み",
+        "スマホのタッチ決済への限定は2025年12月利用分から適用済み(磁気決済含めカード現物は不可)",
+        "Samsung WalletもMastercardタッチ決済不可。Apple Watchのタッチ決済は対象",
+        "商業施設内の一部店舗=空港・遊園地・スタジアム・駅ビル等",
+        "デリバリー対象外の例外(モス・KFCの自社配達モバイルオーダーは対象)は各 merchant_rules に反映済み",
+        "加算ポイントは利用月の原則3ヶ月以内に付与"
       ],
       "merchant_rules": [
-        { "merchant_id": "seven_eleven", "note": null, "exclusion_note": "スマホレジ(セブンスマホレジ)は対象外" },
-        { "merchant_id": "lawson", "note": "ナチュラルローソン・ローソンストア100・ローソンスリーエフ含む", "exclusion_note": "ローソンスマホレジは対象外" },
-        { "merchant_id": "ministop", "note": null, "exclusion_note": null },
-        { "merchant_id": "seicomart", "note": "タイエー・ハマナスクラブ・ハセガワストア含む", "exclusion_note": null },
-        { "merchant_id": "poplar", "note": "生活彩家含む", "exclusion_note": null },
-        { "merchant_id": "mcdonalds", "note": "モバイルオーダーも対象", "exclusion_note": "デリバリー(マックデリバリー等)は対象外" },
-        { "merchant_id": "mos_burger", "note": "モバイルオーダー(自社配達含む)も対象", "exclusion_note": null },
-        { "merchant_id": "kfc", "note": "モバイルオーダー(自社配達含む)も対象", "exclusion_note": "一部店舗のみ対象。公式の対象店舗検索で要確認", "store_list_url": "https://www.smbc-card.com/mem/wp/store_list/kfc.jsp" },
-        { "merchant_id": "yoshinoya", "note": "モバイルオーダーも対象", "exclusion_note": null },
-        { "merchant_id": "sukiya", "note": "モバイルオーダーも対象", "exclusion_note": null },
-        { "merchant_id": "saizeriya", "note": null, "exclusion_note": "一部店舗のみ対象。公式の対象店舗一覧で要確認", "store_list_url": "https://www.smbc-card.com/mem/wp/store_list/saizeriya.jsp" },
-        { "merchant_id": "gusto", "note": null, "exclusion_note": null },
-        { "merchant_id": "bamiyan", "note": null, "exclusion_note": null },
-        { "merchant_id": "syabuyo", "note": null, "exclusion_note": null },
-        { "merchant_id": "jonathans", "note": null, "exclusion_note": null },
-        { "merchant_id": "yumean", "note": null, "exclusion_note": null },
-        { "merchant_id": "steak_gusto", "note": null, "exclusion_note": null },
-        { "merchant_id": "karayoshi", "note": null, "exclusion_note": null },
-        { "merchant_id": "aiya", "note": null, "exclusion_note": null },
-        { "merchant_id": "grazie_gardens", "note": null, "exclusion_note": null },
-        { "merchant_id": "totoyamichi", "note": null, "exclusion_note": null },
-        { "merchant_id": "chawan", "note": null, "exclusion_note": null },
-        { "merchant_id": "la_ohana", "note": null, "exclusion_note": null },
-        { "merchant_id": "tonkaratei", "note": null, "exclusion_note": null },
-        { "merchant_id": "yumean_shokudo", "note": null, "exclusion_note": null },
-        { "merchant_id": "tousai", "note": null, "exclusion_note": null },
-        { "merchant_id": "hachiro_soba", "note": null, "exclusion_note": null },
-        { "merchant_id": "sanmarusan", "note": null, "exclusion_note": null },
-        { "merchant_id": "cocos", "note": null, "exclusion_note": null },
-        { "merchant_id": "doutor", "note": null, "exclusion_note": null },
-        { "merchant_id": "excelsior", "note": null, "exclusion_note": null },
-        { "merchant_id": "musashino_mori", "note": null, "exclusion_note": null },
-        { "merchant_id": "starbucks", "note": "モバイルオーダー(公式アプリ/App Clip経由のApple Pay決済)のみ対象", "exclusion_note": "店頭でのタッチ決済・スターバックスカードへのチャージは対象外" },
-        { "merchant_id": "hamazushi", "note": null, "exclusion_note": null },
-        { "merchant_id": "kappazushi", "note": null, "exclusion_note": null }
+        { "merchant_id": "seven_eleven", "ineligible_notes": ["スマホレジ(セブンスマホレジ)は対象外"] },
+        { "merchant_id": "lawson", "eligible_notes": ["ナチュラルローソン・ローソンストア100・ローソンスリーエフ含む"], "ineligible_notes": ["ローソンスマホレジは対象外"] },
+        { "merchant_id": "ministop" },
+        { "merchant_id": "seicomart", "eligible_notes": ["タイエー・ハマナスクラブ・ハセガワストア含む"] },
+        { "merchant_id": "poplar", "eligible_notes": ["生活彩家含む"] },
+        { "merchant_id": "mcdonalds", "eligible_notes": ["モバイルオーダーも対象"], "ineligible_notes": ["デリバリー(マックデリバリー等)は対象外"] },
+        { "merchant_id": "mos_burger", "eligible_notes": ["モバイルオーダー(自社配達含む)も対象"] },
+        { "merchant_id": "kfc", "eligible_notes": ["モバイルオーダー(自社配達含む)も対象"], "ineligible_notes": ["一部店舗のみ対象。公式の対象店舗検索で要確認"], "store_list_url": "https://www.smbc-card.com/mem/wp/store_list/kfc.jsp" },
+        { "merchant_id": "yoshinoya", "eligible_notes": ["モバイルオーダーも対象"] },
+        { "merchant_id": "sukiya", "eligible_notes": ["モバイルオーダーも対象"] },
+        { "merchant_id": "saizeriya", "ineligible_notes": ["一部店舗のみ対象。公式の対象店舗一覧で要確認"], "store_list_url": "https://www.smbc-card.com/mem/wp/store_list/saizeriya.jsp" },
+        { "merchant_id": "gusto" },
+        { "merchant_id": "bamiyan" },
+        { "merchant_id": "syabuyo" },
+        { "merchant_id": "jonathans" },
+        { "merchant_id": "yumean" },
+        { "merchant_id": "steak_gusto" },
+        { "merchant_id": "karayoshi" },
+        { "merchant_id": "aiya" },
+        { "merchant_id": "grazie_gardens" },
+        { "merchant_id": "totoyamichi" },
+        { "merchant_id": "chawan" },
+        { "merchant_id": "la_ohana" },
+        { "merchant_id": "tonkaratei" },
+        { "merchant_id": "yumean_shokudo" },
+        { "merchant_id": "tousai" },
+        { "merchant_id": "hachiro_soba" },
+        { "merchant_id": "sanmarusan" },
+        { "merchant_id": "cocos" },
+        { "merchant_id": "doutor" },
+        { "merchant_id": "excelsior" },
+        { "merchant_id": "musashino_mori" },
+        { "merchant_id": "starbucks", "ineligible_notes": ["店頭でのタッチ決済・スターバックスカードへのチャージは対象外(公式アプリ/App Clip経由のモバイルオーダーのApple Pay決済のみ対象)"] },
+        { "merchant_id": "hamazushi" },
+        { "merchant_id": "kappazushi" }
       ],
       "verified_date": "2026-07-12"
     },
@@ -82,44 +87,47 @@
       "period_end": null,
       "cap_note": "スペシャルポイント対象となる対象店舗利用は集計期間(毎月16日〜翌月15日)あたり合計5万円まで。超過分は基本0.5%のみ",
       "detail_url": "https://www.cr.mufg.jp/apply/card/mucard/pup/index03.html",
-      "conditions": [
-        "参加必須: ①支払口座を三菱UFJ銀行に設定 ②MDCアプリから本人会員がエントリー(カードごと)",
-        "エントリー後に支払口座を他行へ変更すると7%に低下",
-        "対象の支払方法はクレカ払い・カードのタッチ決済・Apple Pay(QUICPay)。スマホのタッチ決済・グローバルポイントWallet決済は対象外",
+      "requires_entry": true,
+      "ineligible_notes": [
+        "グローバルポイントWallet決済は対象外"
+      ],
+      "memo": [
+        "エントリーはMDCアプリから本人会員がカードごとに行う(参加条件: 支払口座の三菱UFJ銀行設定+エントリー。他行へ変更すると7%に低下)",
+        "対象の支払方法(クレカ払い・カードのタッチ決済・Apple Pay(QUICPay)。スマホのタッチ決済は対象外)は payment_instruction と wallets に反映済み",
+        "対象店舗でもオンラインストア・ネットスーパー・デリバリー・テナント売場は概ね対象外(各 merchant_rules に店舗別で反映済み)",
         "条件達成判定は毎月1日〜末日、達成状況が翌月16日〜翌々月15日の利用分に適用",
         "スペシャルポイントは請求確定の翌々月25日頃付与",
         "エントリー初回特典: エントリー月の翌月15日まで一律10%適用",
-        "対象店舗でもオンラインストア・ネットスーパー・デリバリー・テナント売場は概ね対象外",
-        "キャッシング・年会費・リボ/分割手数料等は月5万円利用条件の集計対象外"
+        "キャッシング・年会費・リボ/分割手数料等は月5万円利用条件の集計に入らない"
       ],
       "merchant_rules": [
-        { "merchant_id": "seven_eleven", "note": null, "exclusion_note": "複合商業施設内の一部店舗・オンライン/デリバリー・セブン自販機・スマホレジは対象外", "amex_excluded": false },
-        { "merchant_id": "lawson", "note": "ナチュラルローソン・ローソンストア100含む", "exclusion_note": "複合商業施設内・駅ビル内・GS併設の一部店舗、オンライン/デリバリー、スマホレジは対象外", "amex_excluded": false },
-        { "merchant_id": "coke_on", "note": "タッチ決済/QUICPay/Coke ON Pay・Coke ON Passが対象", "exclusion_note": "Coke ONのApple Pay利用分は対象外", "amex_excluded": false },
-        { "merchant_id": "kurazushi", "note": null, "exclusion_note": "一部店舗(例: ららぽーとTOKYO-BAY店)、オンライン事前決済(スマホでお持ち帰り等)は対象外", "amex_excluded": true },
-        { "merchant_id": "sushiro", "note": null, "exclusion_note": "一部店舗、オンライン決済、京樽スシロー・スシローToGoは対象外", "amex_excluded": false },
-        { "merchant_id": "pizza_hut", "note": "公式サイト・公式アプリのオンライン注文のみ対象", "exclusion_note": "店頭・電話注文は対象外", "amex_excluded": false },
-        { "merchant_id": "matsuya", "note": "店舗の券売機・セルフレジ利用分と松弁ネット・モバイルオーダー・松弁デリバリーが対象(松のや・マイカリー食堂等の対応ブランド含む)", "exclusion_note": "高速道路SA/PA内の一部店舗、松屋公式オンラインショップは対象外", "amex_excluded": false },
-        { "merchant_id": "zetteria", "note": "店頭および公式アプリのモバイルオーダーが対象", "exclusion_note": null, "amex_excluded": false },
-        { "merchant_id": "ueshima_coffee", "note": "UCC Cafe Plaza含む", "exclusion_note": null, "amex_excluded": true },
-        { "merchant_id": "cafe_de_crie", "note": null, "exclusion_note": "モバイルオーダー・クリエカードチャージは対象外", "amex_excluded": true },
-        { "merchant_id": "starbucks", "note": "スターバックスカードへのオンライン入金のみ対象", "exclusion_note": "店頭での入金・店頭利用は対象外", "amex_excluded": false },
-        { "merchant_id": "ok_store", "note": null, "exclusion_note": "ネットスーパー等は対象外", "amex_excluded": true },
-        { "merchant_id": "ozeki", "note": null, "exclusion_note": null, "amex_excluded": true },
-        { "merchant_id": "aoki_super", "note": "フードストアあおき含む", "exclusion_note": null, "amex_excluded": true },
-        { "merchant_id": "sunlive", "note": "マルショク・リブホール・サンク・サンリブBUONO含む", "exclusion_note": "テナント/専門店売場は対象外", "amex_excluded": false },
-        { "merchant_id": "sanwa", "note": "フードワン含む", "exclusion_note": null, "amex_excluded": true },
-        { "merchant_id": "super_uochou", "note": "生鮮乃木市場・生鮮げんき市場含む", "exclusion_note": null, "amex_excluded": true },
-        { "merchant_id": "kinsho_store", "note": "ハーベス・Pochette含む", "exclusion_note": "ネットスーパー等は対象外", "amex_excluded": false },
-        { "merchant_id": "tokyu_store", "note": "プレッセ・フードステーション含む", "exclusion_note": "ネットスーパー等は対象外", "amex_excluded": true },
-        { "merchant_id": "tobu_store", "note": null, "exclusion_note": "ネットスーパー等は対象外", "amex_excluded": false },
-        { "merchant_id": "domy", "note": null, "exclusion_note": null, "amex_excluded": true },
-        { "merchant_id": "hanamasa", "note": null, "exclusion_note": "フランチャイズ店は対象外", "amex_excluded": true },
-        { "merchant_id": "japan_meat", "note": "MEATMeet・パワーマート含む", "exclusion_note": null, "amex_excluded": true },
-        { "merchant_id": "feel", "note": null, "exclusion_note": null, "amex_excluded": true },
-        { "merchant_id": "yamanaka", "note": "フランテ・フランテロゼ含む", "exclusion_note": null, "amex_excluded": true },
-        { "merchant_id": "akachan_honpo", "note": "Online Shop含む", "exclusion_note": "Amexは店頭決済のみ対象外(Online Shopは対象)", "amex_excluded": true, "official_store_list": {"eligible_stores": ["シーナシーナ屯田", "新さっぽろアークシティ", "アリオ札幌", "シーナシーナ青森", "仙台泉", "ヨークパーク郡山", "トナリエつくば", "ニューポートひたちなか", "ベルモール", "高崎", "スマーク伊勢崎", "ステラタウン大宮", "アリオ川口", "エミテラス所沢", "アリオ深谷", "アリオ上尾", "ALCo越谷", "和光イトーヨーカドー", "アリオ鷲宮", "テラスモール松戸", "アリオ柏", "アリオ市原", "四街道イトーヨーカドー", "アリオ北砂", "ウィラ大井", "池袋東武", "セブンタウン小豆沢", "アリオ西新井", "アリオ亀有", "アリオ葛西", "セレオ八王子", "昭島イトーヨーカドー", "武蔵小金井イトーヨーカドー", "東久留米イトーヨーカドー", "横浜別所イトーヨーカドー", "港南台バーズ", "グランツリー武蔵小杉", "溝口", "古淵イトーヨーカドー", "アリオ橋本", "テラスモール湘南", "大和鶴間イトーヨーカドー", "新潟亀田アピタ", "リバーサイド千秋", "ファボーレ", "アピタタウン金沢ベイ", "アルプラザ小松", "福井", "甲府昭和イトーヨーカドー", "アリオ上田", "アイシティ２１", "カラフルタウン岐阜", "静岡イトーヨーカドー", "浜松プラザ", "アクロスプラザ春日井", "リーフウォーク稲沢", "プライムツリー赤池", "ビバシティ彦根", "エイスクエア草津", "洛北阪急スクエア", "MOMOテラス", "精華台", "あべのイトーヨーカドー", "京阪シティモール", "大阪本町", "高槻阪急スクエア", "くずはモール", "アリオ八尾", "ホームズ寝屋川", "スマイル御影クラッセ", "ブルメール舞多聞", "カナート西神戸", "ゆめタウン姫路", "MEGAドン・キホーテ姫路広畑", "つかしん", "明石イトーヨーカドー", "トナリエ大和高田", "イズミヤ和歌山", "ゆめタウン出雲", "ハピータウン岡南", "ブランチ北長瀬", "フジグラン緑井", "ゆめタウンみゆき", "ゆめタウン福山", "ゆめタウン廿日市", "イオンタウン防府", "ゆめタウン徳島", "瓦町FLAG", "エミフルMASAKI", "リバーウォーク北九州", "福岡マリナタウン", "ガーデンズ千早", "ゆめタウン飯塚", "ゆめタウン筑紫野", "ゆめタウン佐賀", "ゆめタウンはません", "ゆめタウン光の森", "パークプレイス大分", "ニトリモール宮崎", "オプシアミスミ", "浦添西海岸パルコシティ", "ハンビータウン", "西原シティ"], "ineligible_stores": ["ララガーデン長町", "ララガーデン川口", "ララガーデン春日部", "ららぽーと富士見", "ららぽーと新三郷", "幕張イトーヨーカドー", "ららぽーとTOKYO-BAY", "ららぽーと柏の葉", "アルカキット錦糸町", "ららぽーと豊洲", "ららぽーと立川立飛", "ららぽーと横浜", "立場イトーヨーカドー", "ラゾーナ川崎", "ららぽーと湘南平塚", "ららぽーと海老名", "ららぽーと沼津", "ららぽーと磐田", "ららぽーと名古屋みなとアクルス", "ららぽーと安城", "ららぽーと愛知東郷", "ららぽーと堺", "ららぽーとEXPOCITY", "ららぽーと和泉", "ららぽーと門真", "ららぽーと甲子園"], "updated_date": "2026-06-15", "date_is_official": false, "source_url": "https://www.akachan.jp/topics/mufgCPlist/"} },
-        { "merchant_id": "curves", "note": "入会金・月会費が対象", "exclusion_note": null, "amex_excluded": false }
+        { "merchant_id": "seven_eleven", "ineligible_notes": ["複合商業施設内の一部店舗・オンライン/デリバリー・セブン自販機・スマホレジは対象外"], "amex_excluded": false },
+        { "merchant_id": "lawson", "eligible_notes": ["ナチュラルローソン・ローソンストア100含む"], "ineligible_notes": ["複合商業施設内・駅ビル内・GS併設の一部店舗、オンライン/デリバリー、スマホレジは対象外"], "amex_excluded": false },
+        { "merchant_id": "coke_on", "eligible_notes": ["タッチ決済/QUICPay/Coke ON Pay・Coke ON Passが対象"], "ineligible_notes": ["Coke ONのApple Pay利用分は対象外"], "amex_excluded": false },
+        { "merchant_id": "kurazushi", "ineligible_notes": ["一部店舗(例: ららぽーとTOKYO-BAY店)、オンライン事前決済(スマホでお持ち帰り等)は対象外"], "amex_excluded": true },
+        { "merchant_id": "sushiro", "ineligible_notes": ["一部店舗、オンライン決済、京樽スシロー・スシローToGoは対象外"], "amex_excluded": false },
+        { "merchant_id": "pizza_hut", "ineligible_notes": ["店頭・電話注文は対象外(公式サイト・公式アプリのオンライン注文のみ対象)"], "amex_excluded": false },
+        { "merchant_id": "matsuya", "eligible_notes": ["店舗の券売機・セルフレジ利用分と松弁ネット・モバイルオーダー・松弁デリバリーが対象(松のや・マイカリー食堂等の対応ブランド含む)"], "ineligible_notes": ["高速道路SA/PA内の一部店舗、松屋公式オンラインショップは対象外"], "amex_excluded": false },
+        { "merchant_id": "zetteria", "eligible_notes": ["店頭および公式アプリのモバイルオーダーが対象"], "amex_excluded": false },
+        { "merchant_id": "ueshima_coffee", "eligible_notes": ["UCC Cafe Plaza含む"], "amex_excluded": true },
+        { "merchant_id": "cafe_de_crie", "ineligible_notes": ["モバイルオーダー・クリエカードチャージは対象外"], "amex_excluded": true },
+        { "merchant_id": "starbucks", "ineligible_notes": ["店頭での入金・店頭利用は対象外(スターバックスカードへのオンライン入金のみ対象)"], "amex_excluded": false },
+        { "merchant_id": "ok_store", "ineligible_notes": ["ネットスーパー等は対象外"], "amex_excluded": true },
+        { "merchant_id": "ozeki", "amex_excluded": true },
+        { "merchant_id": "aoki_super", "eligible_notes": ["フードストアあおき含む"], "amex_excluded": true },
+        { "merchant_id": "sunlive", "eligible_notes": ["マルショク・リブホール・サンク・サンリブBUONO含む"], "ineligible_notes": ["テナント/専門店売場は対象外"], "amex_excluded": false },
+        { "merchant_id": "sanwa", "eligible_notes": ["フードワン含む"], "amex_excluded": true },
+        { "merchant_id": "super_uochou", "eligible_notes": ["生鮮乃木市場・生鮮げんき市場含む"], "amex_excluded": true },
+        { "merchant_id": "kinsho_store", "eligible_notes": ["ハーベス・Pochette含む"], "ineligible_notes": ["ネットスーパー等は対象外"], "amex_excluded": false },
+        { "merchant_id": "tokyu_store", "eligible_notes": ["プレッセ・フードステーション含む"], "ineligible_notes": ["ネットスーパー等は対象外"], "amex_excluded": true },
+        { "merchant_id": "tobu_store", "ineligible_notes": ["ネットスーパー等は対象外"], "amex_excluded": false },
+        { "merchant_id": "domy", "amex_excluded": true },
+        { "merchant_id": "hanamasa", "ineligible_notes": ["フランチャイズ店は対象外"], "amex_excluded": true },
+        { "merchant_id": "japan_meat", "eligible_notes": ["MEATMeet・パワーマート含む"], "amex_excluded": true },
+        { "merchant_id": "feel", "amex_excluded": true },
+        { "merchant_id": "yamanaka", "eligible_notes": ["フランテ・フランテロゼ含む"], "amex_excluded": true },
+        { "merchant_id": "akachan_honpo", "eligible_notes": ["Online Shop含む"], "ineligible_notes": ["Amexは店頭決済のみ対象外(Online Shopは対象)"], "amex_excluded": true, "official_store_list": {"eligible_stores": ["シーナシーナ屯田", "新さっぽろアークシティ", "アリオ札幌", "シーナシーナ青森", "仙台泉", "ヨークパーク郡山", "トナリエつくば", "ニューポートひたちなか", "ベルモール", "高崎", "スマーク伊勢崎", "ステラタウン大宮", "アリオ川口", "エミテラス所沢", "アリオ深谷", "アリオ上尾", "ALCo越谷", "和光イトーヨーカドー", "アリオ鷲宮", "テラスモール松戸", "アリオ柏", "アリオ市原", "四街道イトーヨーカドー", "アリオ北砂", "ウィラ大井", "池袋東武", "セブンタウン小豆沢", "アリオ西新井", "アリオ亀有", "アリオ葛西", "セレオ八王子", "昭島イトーヨーカドー", "武蔵小金井イトーヨーカドー", "東久留米イトーヨーカドー", "横浜別所イトーヨーカドー", "港南台バーズ", "グランツリー武蔵小杉", "溝口", "古淵イトーヨーカドー", "アリオ橋本", "テラスモール湘南", "大和鶴間イトーヨーカドー", "新潟亀田アピタ", "リバーサイド千秋", "ファボーレ", "アピタタウン金沢ベイ", "アルプラザ小松", "福井", "甲府昭和イトーヨーカドー", "アリオ上田", "アイシティ２１", "カラフルタウン岐阜", "静岡イトーヨーカドー", "浜松プラザ", "アクロスプラザ春日井", "リーフウォーク稲沢", "プライムツリー赤池", "ビバシティ彦根", "エイスクエア草津", "洛北阪急スクエア", "MOMOテラス", "精華台", "あべのイトーヨーカドー", "京阪シティモール", "大阪本町", "高槻阪急スクエア", "くずはモール", "アリオ八尾", "ホームズ寝屋川", "スマイル御影クラッセ", "ブルメール舞多聞", "カナート西神戸", "ゆめタウン姫路", "MEGAドン・キホーテ姫路広畑", "つかしん", "明石イトーヨーカドー", "トナリエ大和高田", "イズミヤ和歌山", "ゆめタウン出雲", "ハピータウン岡南", "ブランチ北長瀬", "フジグラン緑井", "ゆめタウンみゆき", "ゆめタウン福山", "ゆめタウン廿日市", "イオンタウン防府", "ゆめタウン徳島", "瓦町FLAG", "エミフルMASAKI", "リバーウォーク北九州", "福岡マリナタウン", "ガーデンズ千早", "ゆめタウン飯塚", "ゆめタウン筑紫野", "ゆめタウン佐賀", "ゆめタウンはません", "ゆめタウン光の森", "パークプレイス大分", "ニトリモール宮崎", "オプシアミスミ", "浦添西海岸パルコシティ", "ハンビータウン", "西原シティ"], "ineligible_stores": ["ララガーデン長町", "ララガーデン川口", "ララガーデン春日部", "ららぽーと富士見", "ららぽーと新三郷", "幕張イトーヨーカドー", "ららぽーとTOKYO-BAY", "ららぽーと柏の葉", "アルカキット錦糸町", "ららぽーと豊洲", "ららぽーと立川立飛", "ららぽーと横浜", "立場イトーヨーカドー", "ラゾーナ川崎", "ららぽーと湘南平塚", "ららぽーと海老名", "ららぽーと沼津", "ららぽーと磐田", "ららぽーと名古屋みなとアクルス", "ららぽーと安城", "ららぽーと愛知東郷", "ららぽーと堺", "ららぽーとEXPOCITY", "ららぽーと和泉", "ららぽーと門真", "ららぽーと甲子園"], "updated_date": "2026-06-15", "date_is_official": false, "source_url": "https://www.akachan.jp/topics/mufgCPlist/"} },
+        { "merchant_id": "curves", "eligible_notes": ["入会金・月会費が対象"], "amex_excluded": false }
       ],
       "verified_date": "2026-07-16"
     },
@@ -137,6 +145,7 @@
       "period_end": "2026-09-30",
       "per_transaction_cap": 3000,
       "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "湯沢市",
@@ -161,6 +170,7 @@
       "period_end": "2026-09-30",
       "per_transaction_cap": 3000,
       "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "湯沢市",
@@ -185,6 +195,7 @@
       "period_end": "2026-09-30",
       "per_transaction_cap": 3000,
       "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "湯沢市",
@@ -192,9 +203,11 @@
       },
       "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/yuzawa/",
       "store_search_url": null,
-      "conditions": [
-        "還元はdポイント(期間・用途限定)",
+      "ineligible_notes": [
         "d払い(ネット)・d払いタッチ・自動販売機/券売機・タバコを含む購入は対象外"
+      ],
+      "memo": [
+        "還元はdポイント(期間・用途限定)"
       ],
       "merchant_rules": [],
       "verified_date": "2026-07-16"
@@ -213,6 +226,7 @@
       "period_end": "2026-09-30",
       "per_transaction_cap": 3000,
       "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "湯沢市",
@@ -220,8 +234,7 @@
       },
       "detail_url": "https://yuzawa-cashless.jp/",
       "store_search_url": null,
-      "conditions": [
-        "付与上限は決済サービスごとに適用(PayPay・au PAY・d払い・楽天ペイが対象)",
+      "ineligible_notes": [
         "インターネット販売・モバイルオーダー・公共料金・タバコ・換金性の高い商品は対象外"
       ],
       "merchant_rules": [],
@@ -265,6 +278,7 @@
       "period_end": "2026-08-10",
       "per_transaction_cap": 2000,
       "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "大田市",
@@ -272,8 +286,7 @@
       },
       "detail_url": "https://paypay.ne.jp/event/shimane-oda-city-20260701/",
       "store_search_url": null,
-      "conditions": [
-        "付与上限は決済サービスごとに1回2,000ポイント・期間中5,000ポイント",
+      "ineligible_notes": [
         "タバコ・自動販売機/券売機・オンラインショップ・他社アプリ経由・PayPay商品券での支払いは対象外"
       ],
       "merchant_rules": [],
@@ -293,6 +306,7 @@
       "period_end": "2026-08-10",
       "per_transaction_cap": 2000,
       "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "大田市",
@@ -300,10 +314,12 @@
       },
       "detail_url": "https://media.aupay.wallet.auone.jp/dominant/lp/202607_oda/",
       "store_search_url": null,
-      "conditions": [
-        "還元はau PAY残高(不課税)",
+      "ineligible_notes": [
         "au PAY カード・au PAY プリペイドカードの利用は対象外",
         "金券・タバコ等の指定商品は対象外"
+      ],
+      "memo": [
+        "還元はau PAY残高(不課税)"
       ],
       "merchant_rules": [],
       "verified_date": "2026-07-16"
@@ -322,6 +338,7 @@
       "period_end": "2026-08-10",
       "per_transaction_cap": 2000,
       "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "大田市",
@@ -329,9 +346,11 @@
       },
       "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/oda_03/",
       "store_search_url": null,
-      "conditions": [
-        "還元はdポイント(期間・用途限定)",
+      "ineligible_notes": [
         "d払い(ネット)・d払いタッチ・クーポン利用分・自動販売機/券売機・タバコを含む購入は対象外"
+      ],
+      "memo": [
+        "還元はdポイント(期間・用途限定)"
       ],
       "merchant_rules": [],
       "verified_date": "2026-07-16"
@@ -350,6 +369,7 @@
       "period_end": "2026-08-10",
       "per_transaction_cap": 2000,
       "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "大田市",
@@ -357,9 +377,6 @@
       },
       "detail_url": "https://www.city.oda.lg.jp/update_info/10976",
       "store_search_url": null,
-      "conditions": [
-        "付与上限は決済サービスごとに適用(PayPay・au PAY・d払い・楽天ペイ・AEON Payが対象)"
-      ],
       "merchant_rules": [],
       "verified_date": "2026-07-16"
     },
@@ -377,6 +394,7 @@
       "period_end": "2026-08-10",
       "per_transaction_cap": 2000,
       "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "大田市",
@@ -384,9 +402,6 @@
       },
       "detail_url": "https://www.city.oda.lg.jp/update_info/10976",
       "store_search_url": null,
-      "conditions": [
-        "付与上限は決済サービスごとに適用(PayPay・au PAY・d払い・楽天ペイ・AEON Payが対象)"
-      ],
       "merchant_rules": [],
       "verified_date": "2026-07-16"
     },
@@ -404,12 +419,15 @@
       "period_end": "2026-07-15",
       "min_purchase": 800,
       "period_total_cap": 10000,
-      "conditions": [
-        "事前エントリー必要",
-        "1回の決済800円(税込)以上が対象"
+      "requires_entry": true,
+      "eligible_notes": [
+        "松のや・マイカリー食堂等のグループブランドも対象"
+      ],
+      "ineligible_notes": [
+        "店頭(券売機・セルフレジ)での楽天ペイ決済は対象外(対象は松弁ネット・松屋モバイルオーダー・松弁デリバリーでの事前決済のみ)"
       ],
       "merchant_rules": [
-        { "merchant_id": "matsuya", "note": "対象は松弁ネット・松屋モバイルオーダー・松弁デリバリーでの楽天ペイ事前決済のみ(松のや・マイカリー食堂等のグループブランド含む)", "exclusion_note": "店頭(券売機・セルフレジ)での楽天ペイ決済は対象外" }
+        { "merchant_id": "matsuya" }
       ],
       "detail_url": "https://www.matsuyafoods.co.jp/matsuya/whatsnew/campaign/160563.html",
       "verified_date": "2026-07-13"
@@ -435,7 +453,7 @@
       },
       "detail_url": "https://paypay.ne.jp/event/tokyo-suginami-city-20260601/",
       "store_search_url": null,
-      "conditions": [
+      "ineligible_notes": [
         "PayPay商品券・クレジットカードは対象外"
       ],
       "merchant_rules": [],
@@ -459,6 +477,7 @@
       "period_end": null,
       "per_transaction_cap": 1500,
       "period_total_cap": 2500,
+      "cap_note": "20%店舗と10%店舗の合算・決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "神奈川県",
@@ -466,11 +485,9 @@
       },
       "detail_url": "https://paypay.ne.jp/event/kanagawa-pref/",
       "store_search_url": null,
-      "conditions": [
-        "付与上限は20%店舗と10%店舗の合算で2,500ポイント",
-        "対象店舗はキャンペーンツール掲出店（PayPayアプリの「近くのおトク」で確認）",
-        "タバコ・オンライン決済・自動販売機・券売機での支払いは対象外",
-        "終了日未定（予算上限到達時点で終了）"
+      "ineligible_notes": [
+        "キャンペーンツール掲出店以外は対象外（PayPayアプリの「近くのおトク」で確認）",
+        "タバコ・オンライン決済・自動販売機・券売機での支払いは対象外"
       ],
       "merchant_rules": [],
       "verified_date": "2026-07-16"
@@ -493,6 +510,7 @@
       "period_end": null,
       "per_transaction_cap": 1500,
       "period_total_cap": 2500,
+      "cap_note": "20%店舗と10%店舗の合算・決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "神奈川県",
@@ -500,11 +518,11 @@
       },
       "detail_url": "https://media.aupay.wallet.auone.jp/dominant/lp/202606_kanagawa/",
       "store_search_url": null,
-      "conditions": [
-        "還元はau PAY残高(不課税)",
-        "付与上限は20%店舗と10%店舗の合算で2,500円相当(決済サービスごと)",
-        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外",
-        "終了日未定（予算上限到達時点で終了）"
+      "ineligible_notes": [
+        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外"
+      ],
+      "memo": [
+        "還元はau PAY残高(不課税)"
       ],
       "merchant_rules": [],
       "verified_date": "2026-07-16"
@@ -527,6 +545,7 @@
       "period_end": null,
       "per_transaction_cap": 1500,
       "period_total_cap": 2500,
+      "cap_note": "20%店舗と10%店舗の合算・決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "神奈川県",
@@ -534,11 +553,11 @@
       },
       "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/kanagawa/",
       "store_search_url": null,
-      "conditions": [
-        "還元はdポイント(期間・用途限定)",
-        "付与上限は20%店舗と10%店舗の合算で2,500ポイント(決済サービスごと)",
-        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外",
-        "終了日未定（予算上限到達時点で終了）"
+      "ineligible_notes": [
+        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外"
+      ],
+      "memo": [
+        "還元はdポイント(期間・用途限定)"
       ],
       "merchant_rules": [],
       "verified_date": "2026-07-16"
@@ -561,6 +580,7 @@
       "period_end": null,
       "per_transaction_cap": 1500,
       "period_total_cap": 2500,
+      "cap_note": "20%店舗と10%店舗の合算・決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "神奈川県",
@@ -568,10 +588,8 @@
       },
       "detail_url": "https://www.kanatokucpn.pref.kanagawa.jp/",
       "store_search_url": null,
-      "conditions": [
-        "付与上限は20%店舗と10%店舗の合算で2,500円相当(決済サービスごと)",
-        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外",
-        "終了日未定（予算上限到達時点で終了）"
+      "ineligible_notes": [
+        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外"
       ],
       "merchant_rules": [],
       "verified_date": "2026-07-16"
@@ -594,6 +612,7 @@
       "period_end": null,
       "per_transaction_cap": 1500,
       "period_total_cap": 2500,
+      "cap_note": "20%店舗と10%店舗の合算・決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "神奈川県",
@@ -601,11 +620,11 @@
       },
       "detail_url": "https://www.kanatokucpn.pref.kanagawa.jp/",
       "store_search_url": null,
-      "conditions": [
-        "還元はAEON Pay残高(有効期限なし・キャンペーン終了後翌々月末までに付与)",
-        "付与上限は20%店舗と10%店舗の合算で2,500円相当(決済サービスごと)",
-        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外",
-        "終了日未定（予算上限到達時点で終了）"
+      "ineligible_notes": [
+        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外"
+      ],
+      "memo": [
+        "還元はAEON Pay残高(有効期限なし・キャンペーン終了後翌々月末までに付与)"
       ],
       "merchant_rules": [],
       "verified_date": "2026-07-16"
@@ -628,6 +647,7 @@
       "period_end": null,
       "per_transaction_cap": 1500,
       "period_total_cap": 2500,
+      "cap_note": "20%店舗と10%店舗の合算・決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "神奈川県",
@@ -635,11 +655,11 @@
       },
       "detail_url": "https://www.kanatokucpn.pref.kanagawa.jp/",
       "store_search_url": null,
-      "conditions": [
-        "還元はメルカリポイント(有効期限180日・キャンペーン終了後翌月末までに付与)",
-        "付与上限は20%店舗と10%店舗の合算で2,500ポイント(決済サービスごと)",
-        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外",
-        "終了日未定（予算上限到達時点で終了）"
+      "ineligible_notes": [
+        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外"
+      ],
+      "memo": [
+        "還元はメルカリポイント(有効期限180日・キャンペーン終了後翌月末までに付与)"
       ],
       "merchant_rules": [],
       "verified_date": "2026-07-16"
@@ -658,6 +678,7 @@
       "period_end": "2026-08-30",
       "per_transaction_cap": null,
       "period_total_cap": 3000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "千葉県",
@@ -665,9 +686,10 @@
       },
       "detail_url": "https://paypay.ne.jp/notice/20260615/cp-jichitai/",
       "store_search_url": null,
-      "conditions": [
-        "県内在住・在勤を問わず対象",
-        "付与上限は決済サービスごとに期間中3,000円相当(1回ごとの上限は設けられていない)",
+      "eligible_notes": [
+        "県内在住・在勤を問わず対象"
+      ],
+      "ineligible_notes": [
         "PayPayカードのPayPayクレジット以外のクレジットカード併用は対象外",
         "コンビニ・行政機関・金融機関・保険会社・医療機関・風俗店等は対象外店舗",
         "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
@@ -689,6 +711,7 @@
       "period_end": "2026-08-30",
       "per_transaction_cap": null,
       "period_total_cap": 3000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "千葉県",
@@ -696,12 +719,15 @@
       },
       "detail_url": "https://www.pref.chiba.lg.jp/keisei/press/2026/r8cashless-campaign.html",
       "store_search_url": null,
-      "conditions": [
-        "還元はau PAY残高(不課税)",
-        "県内在住・在勤を問わず対象",
-        "付与上限は決済サービスごとに期間中3,000円相当(1回ごとの上限は設けられていない)",
+      "eligible_notes": [
+        "県内在住・在勤を問わず対象"
+      ],
+      "ineligible_notes": [
         "コンビニ・行政機関・金融機関・保険会社・医療機関・風俗店等は対象外店舗",
         "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
+      ],
+      "memo": [
+        "還元はau PAY残高(不課税)"
       ],
       "merchant_rules": [],
       "verified_date": "2026-07-16"
@@ -720,6 +746,7 @@
       "period_end": "2026-08-30",
       "per_transaction_cap": null,
       "period_total_cap": 3000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "千葉県",
@@ -727,9 +754,10 @@
       },
       "detail_url": "https://www.pref.chiba.lg.jp/keisei/press/2026/r8cashless-campaign.html",
       "store_search_url": null,
-      "conditions": [
-        "県内在住・在勤を問わず対象",
-        "付与上限は決済サービスごとに期間中3,000円相当(1回ごとの上限は設けられていない)",
+      "eligible_notes": [
+        "県内在住・在勤を問わず対象"
+      ],
+      "ineligible_notes": [
         "コンビニ・行政機関・金融機関・保険会社・医療機関・風俗店等は対象外店舗",
         "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
       ],
@@ -750,6 +778,7 @@
       "period_end": "2026-08-30",
       "per_transaction_cap": null,
       "period_total_cap": 3000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "千葉県",
@@ -757,9 +786,10 @@
       },
       "detail_url": "https://www.pref.chiba.lg.jp/keisei/press/2026/r8cashless-campaign.html",
       "store_search_url": null,
-      "conditions": [
-        "県内在住・在勤を問わず対象",
-        "付与上限は決済サービスごとに期間中3,000円相当(1回ごとの上限は設けられていない)",
+      "eligible_notes": [
+        "県内在住・在勤を問わず対象"
+      ],
+      "ineligible_notes": [
         "コンビニ・行政機関・金融機関・保険会社・医療機関・風俗店等は対象外店舗",
         "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
       ],
@@ -780,6 +810,7 @@
       "period_end": "2026-08-30",
       "per_transaction_cap": null,
       "period_total_cap": 3000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "千葉県",
@@ -787,12 +818,15 @@
       },
       "detail_url": "https://www.pref.chiba.lg.jp/keisei/press/2026/r8cashless-campaign.html",
       "store_search_url": null,
-      "conditions": [
-        "還元はAEON Pay残高",
-        "県内在住・在勤を問わず対象",
-        "付与上限は決済サービスごとに期間中3,000円相当(1回ごとの上限は設けられていない)",
+      "eligible_notes": [
+        "県内在住・在勤を問わず対象"
+      ],
+      "ineligible_notes": [
         "コンビニ・行政機関・金融機関・保険会社・医療機関・風俗店等は対象外店舗",
         "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
+      ],
+      "memo": [
+        "還元はAEON Pay残高"
       ],
       "merchant_rules": [],
       "verified_date": "2026-07-16"
@@ -811,6 +845,7 @@
       "period_end": "2026-08-30",
       "per_transaction_cap": 1500,
       "period_total_cap": 3000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "千葉市",
@@ -818,9 +853,10 @@
       },
       "detail_url": "https://paypay.ne.jp/notice/20260615/cp-jichitai/",
       "store_search_url": null,
-      "conditions": [
-        "千葉県キャンペーンと併用可（合わせて最大15%）",
-        "付与上限は決済サービスごとに期間中3,000円相当",
+      "eligible_notes": [
+        "千葉県キャンペーンと併用可（合わせて最大15%）"
+      ],
+      "ineligible_notes": [
         "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
       ],
       "merchant_rules": [],
@@ -840,6 +876,7 @@
       "period_end": "2026-08-30",
       "per_transaction_cap": 1500,
       "period_total_cap": 3000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "千葉市",
@@ -847,9 +884,10 @@
       },
       "detail_url": "https://www.city.chiba.jp/keizainosei/keizai/kikaku/2026_cashlesscampaign.html",
       "store_search_url": null,
-      "conditions": [
-        "千葉県キャンペーンと併用可（合わせて最大15%）",
-        "付与上限は決済サービスごとに期間中3,000円相当",
+      "eligible_notes": [
+        "千葉県キャンペーンと併用可（合わせて最大15%）"
+      ],
+      "ineligible_notes": [
         "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
       ],
       "merchant_rules": [],
@@ -869,6 +907,7 @@
       "period_end": "2026-08-30",
       "per_transaction_cap": 1500,
       "period_total_cap": 3000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "千葉市",
@@ -876,9 +915,10 @@
       },
       "detail_url": "https://www.city.chiba.jp/keizainosei/keizai/kikaku/2026_cashlesscampaign.html",
       "store_search_url": null,
-      "conditions": [
-        "千葉県キャンペーンと併用可（合わせて最大15%）",
-        "付与上限は決済サービスごとに期間中3,000円相当",
+      "eligible_notes": [
+        "千葉県キャンペーンと併用可（合わせて最大15%）"
+      ],
+      "ineligible_notes": [
         "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
       ],
       "merchant_rules": [],
@@ -898,6 +938,7 @@
       "period_end": "2026-08-30",
       "per_transaction_cap": 1500,
       "period_total_cap": 3000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "千葉市",
@@ -905,9 +946,10 @@
       },
       "detail_url": "https://www.city.chiba.jp/keizainosei/keizai/kikaku/2026_cashlesscampaign.html",
       "store_search_url": null,
-      "conditions": [
-        "千葉県キャンペーンと併用可（合わせて最大15%）",
-        "付与上限は決済サービスごとに期間中3,000円相当",
+      "eligible_notes": [
+        "千葉県キャンペーンと併用可（合わせて最大15%）"
+      ],
+      "ineligible_notes": [
         "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
       ],
       "merchant_rules": [],
@@ -927,6 +969,7 @@
       "period_end": "2026-08-30",
       "per_transaction_cap": 1500,
       "period_total_cap": 3000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "千葉市",
@@ -934,11 +977,14 @@
       },
       "detail_url": "https://www.city.chiba.jp/keizainosei/keizai/kikaku/2026_cashlesscampaign.html",
       "store_search_url": null,
-      "conditions": [
-        "還元はAEON Pay残高",
-        "千葉県キャンペーンと併用可（合わせて最大15%）",
-        "付与上限は決済サービスごとに期間中3,000円相当",
+      "eligible_notes": [
+        "千葉県キャンペーンと併用可（合わせて最大15%）"
+      ],
+      "ineligible_notes": [
         "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
+      ],
+      "memo": [
+        "還元はAEON Pay残高"
       ],
       "merchant_rules": [],
       "verified_date": "2026-07-16"
@@ -964,8 +1010,8 @@
       },
       "detail_url": "https://paypay.ne.jp/notice/20260615/cp-jichitai/",
       "store_search_url": null,
-      "conditions": [
-        "対象店舗は岐阜市とPayPayが指定する市内加盟店",
+      "ineligible_notes": [
+        "岐阜市とPayPayが指定する市内加盟店以外は対象外",
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
@@ -992,8 +1038,8 @@
       },
       "detail_url": "https://paypay.ne.jp/notice/20260630/cp-jichitai/",
       "store_search_url": null,
-      "conditions": [
-        "対象店舗は松原市とPayPayが指定する市内加盟店",
+      "ineligible_notes": [
+        "松原市とPayPayが指定する市内加盟店以外は対象外",
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
@@ -1020,7 +1066,7 @@
       },
       "detail_url": "https://www.city.kakogawa.lg.jp/soshikikarasagasu/chiikishinkobu/shokorosei/syogyo_kogyo/syogyosinko/40284.html",
       "store_search_url": null,
-      "conditions": [
+      "ineligible_notes": [
         "クレジットカード(PayPayクレジット以外)の併用は対象外",
         "公共機関・病院・調剤薬局・金券ショップ・コンビニ等は対象外店舗",
         "たばこ・金券・電子マネーチャージ・公共料金・金融商品等は対象外"
@@ -1049,8 +1095,8 @@
       },
       "detail_url": "https://www.city.takehara.lg.jp/soshikikarasagasu/sangyoshinkoka/gyomuannai/6/2/2261.html",
       "store_search_url": null,
-      "conditions": [
-        "対象は本店・本社が竹原市内にあるPayPay加盟店",
+      "ineligible_notes": [
+        "本店・本社が竹原市内にあるPayPay加盟店以外は対象外",
         "コンビニ・病院/医院・調剤薬局・介護施設・保険代理店・公共料金・金券・プリペイドカード・たばこ・市指定ごみ袋等は対象外"
       ],
       "merchant_rules": [],
@@ -1077,8 +1123,8 @@
       },
       "detail_url": "https://paypay.ne.jp/notice/20260615/cp-jichitai/",
       "store_search_url": null,
-      "conditions": [
-        "対象は津久見市内の中規模・小規模のPayPay加盟店",
+      "ineligible_notes": [
+        "津久見市内の中規模・小規模のPayPay加盟店以外は対象外",
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
@@ -1098,6 +1144,7 @@
       "period_end": "2026-09-18",
       "per_transaction_cap": 2000,
       "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用(4サービス合計で最大20,000円相当)",
       "may_end_early": true,
       "region": {
         "name": "岩手県",
@@ -1105,9 +1152,10 @@
       },
       "detail_url": "https://iwate-premiumpoint.pref.iwate.jp/",
       "store_search_url": null,
-      "conditions": [
-        "岩手県外在住でも対象",
-        "付与上限は決済サービスごとに適用(PayPay・au PAY・d払い・楽天ペイの4サービス合計で最大20,000円相当)",
+      "eligible_notes": [
+        "岩手県外在住でも対象"
+      ],
+      "ineligible_notes": [
         "コンビニ・医療機関・調剤薬局・デリバリー専門店等は対象外店舗",
         "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
       ],
@@ -1128,6 +1176,7 @@
       "period_end": "2026-09-18",
       "per_transaction_cap": 2000,
       "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用(4サービス合計で最大20,000円相当)",
       "may_end_early": true,
       "region": {
         "name": "岩手県",
@@ -1135,9 +1184,10 @@
       },
       "detail_url": "https://iwate-premiumpoint.pref.iwate.jp/",
       "store_search_url": null,
-      "conditions": [
-        "岩手県外在住でも対象",
-        "付与上限は決済サービスごとに適用(PayPay・au PAY・d払い・楽天ペイの4サービス合計で最大20,000円相当)",
+      "eligible_notes": [
+        "岩手県外在住でも対象"
+      ],
+      "ineligible_notes": [
         "コンビニ・医療機関・調剤薬局・デリバリー専門店等は対象外店舗",
         "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
       ],
@@ -1158,6 +1208,7 @@
       "period_end": "2026-09-18",
       "per_transaction_cap": 2000,
       "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用(4サービス合計で最大20,000円相当)",
       "may_end_early": true,
       "region": {
         "name": "岩手県",
@@ -1165,9 +1216,10 @@
       },
       "detail_url": "https://iwate-premiumpoint.pref.iwate.jp/",
       "store_search_url": null,
-      "conditions": [
-        "岩手県外在住でも対象",
-        "付与上限は決済サービスごとに適用(PayPay・au PAY・d払い・楽天ペイの4サービス合計で最大20,000円相当)",
+      "eligible_notes": [
+        "岩手県外在住でも対象"
+      ],
+      "ineligible_notes": [
         "コンビニ・医療機関・調剤薬局・デリバリー専門店等は対象外店舗",
         "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
       ],
@@ -1188,6 +1240,7 @@
       "period_end": "2026-09-18",
       "per_transaction_cap": 2000,
       "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用(4サービス合計で最大20,000円相当)",
       "may_end_early": true,
       "region": {
         "name": "岩手県",
@@ -1195,9 +1248,10 @@
       },
       "detail_url": "https://iwate-premiumpoint.pref.iwate.jp/",
       "store_search_url": null,
-      "conditions": [
-        "岩手県外在住でも対象",
-        "付与上限は決済サービスごとに適用(PayPay・au PAY・d払い・楽天ペイの4サービス合計で最大20,000円相当)",
+      "eligible_notes": [
+        "岩手県外在住でも対象"
+      ],
+      "ineligible_notes": [
         "コンビニ・医療機関・調剤薬局・デリバリー専門店等は対象外店舗",
         "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
       ],
@@ -1229,8 +1283,8 @@
       },
       "detail_url": "https://paypay.ne.jp/notice/20260715/cp-jichitai/",
       "store_search_url": null,
-      "conditions": [
-        "対象店舗は由利本荘市とPayPayが指定する市内加盟店",
+      "ineligible_notes": [
+        "由利本荘市とPayPayが指定する市内加盟店以外は対象外",
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
@@ -1257,8 +1311,8 @@
       },
       "detail_url": "https://paypay.ne.jp/notice/20260715/cp-jichitai/",
       "store_search_url": null,
-      "conditions": [
-        "対象は朝霞市内の中規模・小規模のPayPay加盟店のうち指定店舗",
+      "ineligible_notes": [
+        "朝霞市内の中規模・小規模PayPay加盟店のうち指定店舗以外は対象外",
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
@@ -1285,8 +1339,8 @@
       },
       "detail_url": "https://paypay.ne.jp/notice/20260715/cp-jichitai/",
       "store_search_url": null,
-      "conditions": [
-        "対象店舗はあま市とPayPayが指定する市内加盟店",
+      "ineligible_notes": [
+        "あま市とPayPayが指定する市内加盟店以外は対象外",
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
@@ -1313,8 +1367,8 @@
       },
       "detail_url": "https://paypay.ne.jp/notice/20260715/cp-jichitai/",
       "store_search_url": null,
-      "conditions": [
-        "対象店舗は紀美野町とPayPayが指定する町内加盟店",
+      "ineligible_notes": [
+        "紀美野町とPayPayが指定する町内加盟店以外は対象外",
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
@@ -1341,8 +1395,8 @@
       },
       "detail_url": "https://paypay.ne.jp/notice/20260715/cp-jichitai/",
       "store_search_url": null,
-      "conditions": [
-        "対象店舗は枕崎市とPayPayが指定する市内加盟店",
+      "ineligible_notes": [
+        "枕崎市とPayPayが指定する市内加盟店以外は対象外",
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],

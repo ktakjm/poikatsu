@@ -114,6 +114,42 @@ internal fun NoticeRow(text: String, containerColor: Color, contentColor: Color)
     }
 }
 
+/**
+ * NoticeRow の複数項目版(「対象外」セクション等)。項目ごとに面を積むと視覚的に重いため、
+ * 1 つのトーナル面の中に箇条書きでまとめる(1 件なら箇条書き記号を付けず NoticeRow と同じ見た目)。
+ */
+@Composable
+internal fun NoticeList(items: List<String>, containerColor: Color, contentColor: Color) {
+    if (items.isEmpty()) return
+    if (items.size == 1) {
+        NoticeRow(items[0], containerColor, contentColor)
+        return
+    }
+    Surface(
+        color = containerColor,
+        contentColor = contentColor,
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Icon(
+                Icons.Default.Warning,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp).padding(top = 2.dp),
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                items.forEach {
+                    Text("・$it", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+    }
+}
+
 /** 非インタラクティブなカテゴリ表示。押せる見た目(Chip)を持たせない静的タグ */
 @Composable
 internal fun CategoryTag(text: String) {
@@ -301,17 +337,6 @@ internal fun MinPurchaseRow(minPurchase: Int?, scope: String = MIN_PURCHASE_SCOP
         "%,d円(税込)以上の決済で適用".format(minPurchase)
     }
     Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-}
-
-@Composable
-internal fun ConditionsList(conditions: List<String>, minPurchase: Int?) {
-    if (conditions.isEmpty()) return
-    val minPurchaseStr = minPurchase?.let { "${it}円" }
-    conditions
-        .filter { cond -> minPurchaseStr == null || !cond.contains(minPurchaseStr) }
-        .forEach { condition ->
-            Text("・$condition", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-        }
 }
 
 /**

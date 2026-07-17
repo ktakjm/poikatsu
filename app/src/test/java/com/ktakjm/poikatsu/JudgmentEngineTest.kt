@@ -1211,9 +1211,10 @@ class JudgmentEngineTest {
  */
 class JudgmentEngineRealDataTest {
 
+    private val campaignsRaw = File("../data/campaigns.json").readText()
     private val data = PoikatsuJson.parse(
         merchantsJson = File("../data/merchants.json").readText(),
-        campaignsJson = File("../data/campaigns.json").readText(),
+        campaignsJson = campaignsRaw,
         paymentMethodsJson = File("../data/payment_methods.json").readText(),
     )
     private val engine = JudgmentEngine(data)
@@ -1284,7 +1285,7 @@ class JudgmentEngineRealDataTest {
         data.campaigns.forEach { c ->
             val hasRate = c.rateBase != null
             val hasDiscount = c.discountAmount != null
-            // 抽選は確定特典ではないため率・額を持たない(当選確率・最大額は conditions の文章)
+            // 抽選は確定特典ではないため率・額を持たない(当選確率・最大額は memo の文章)
             if (BenefitType.fromString(c.benefitType) == BenefitType.LOTTERY) {
                 assertTrue("${c.id}: lottery は rate_base / discount_amount を持たない", !hasRate && !hasDiscount)
             } else {
@@ -1319,6 +1320,46 @@ class JudgmentEngineRealDataTest {
             }
             val overlap = c.eligibleWallets.intersect(c.ineligibleWallets.toSet())
             assertTrue("${c.id}: eligible/ineligible が重複 $overlap", overlap.isEmpty())
+        }
+    }
+
+    @Test
+    fun `実データ_旧スキーマのキーが残っていない`() {
+        // #41 で note/exclusion_note → eligible_notes/ineligible_notes、conditions → memo に改名した。
+        // ignoreUnknownKeys のため旧キーはパース時に黙って捨てられる(静かに壊れる)ので生テキストで検出する
+        listOf("\"note\":", "\"exclusion_note\":", "\"conditions\":").forEach { key ->
+            assertTrue("旧スキーマのキー $key が残っている", key !in campaignsRaw)
+        }
+    }
+
+    @Test
+    fun `実データ_payment_instructionが空でない`() {
+        // 支払い手段は必ず明示する(同名ブランドで対象決済手段が別物になり得る: au PAY(QR) と au PAY カード)
+        data.campaigns.forEach { c ->
+            assertTrue("${c.id}: payment_instruction が空", c.paymentInstruction.isNotBlank())
+        }
+    }
+
+    @Test
+    fun `実データ_notesとmemoの線引きが守られている`() {
+        // 線引き: 見落とすと損する言い切りは eligible/ineligible_notes(表示)、memo は非表示の補足のみ。
+        // 「反映済み」注記(事実の本体が別フィールドにある印)だけは memo に対象外文言を書いてよい
+        data.campaigns.forEach { c ->
+            (c.eligibleNotes + c.ineligibleNotes + c.memo).forEach { n ->
+                assertTrue("${c.id}: 空白の note がある", n.isNotBlank())
+            }
+            c.merchantRules.forEach { r ->
+                (r.eligibleNotes + r.ineligibleNotes).forEach { n ->
+                    assertTrue("${c.id}/${r.merchantId}: 空白の note がある", n.isNotBlank())
+                }
+            }
+            c.memo.forEach { m ->
+                if ("反映済み" in m) return@forEach
+                assertTrue(
+                    "${c.id}: memo に対象外/のみ対象の言い切りが残っている(表示フィールドへ移す): $m",
+                    "対象外" !in m && "のみ対象" !in m,
+                )
+            }
         }
     }
 
@@ -1532,9 +1573,10 @@ class JudgmentEngineRealDataTest {
  */
 class TestDataIntegrityTest {
 
+    private val campaignsRaw = File("../data-test/campaigns.json").readText()
     private val data = PoikatsuJson.parse(
         merchantsJson = File("../data-test/merchants.json").readText(),
-        campaignsJson = File("../data-test/campaigns.json").readText(),
+        campaignsJson = campaignsRaw,
         paymentMethodsJson = File("../data-test/payment_methods.json").readText(),
     )
 
@@ -1616,6 +1658,33 @@ class TestDataIntegrityTest {
             val overlap = c.eligibleWallets.intersect(c.ineligibleWallets.toSet())
             assertTrue("${c.id}: eligible/ineligible が重複 $overlap", overlap.isEmpty())
         }
+    }
+
+    @Test
+    fun `テストデータ_旧スキーマのキーが残っていない`() {
+        listOf("\"note\":", "\"exclusion_note\":", "\"conditions\":").forEach { key ->
+            assertTrue("旧スキーマのキー $key が残っている", key !in campaignsRaw)
+        }
+    }
+
+    @Test
+    fun `テストデータ_payment_instructionが空でない`() {
+        data.campaigns.forEach { c ->
+            assertTrue("${c.id}: payment_instruction が空", c.paymentInstruction.isNotBlank())
+        }
+    }
+
+    @Test
+    fun `テストデータ_両階層のnotes併用ショーケースを含む`() {
+        // campaign 直下(施策全体)と merchant_rules(店舗固有)の対象/対象外がレベル横断で連結される
+        // パターン(SMCC/MUFG 相当)を data-test でも検証できること
+        val both = data.campaigns.filter { c ->
+            (c.eligibleNotes.isNotEmpty() || c.ineligibleNotes.isNotEmpty()) &&
+                c.merchantRules.any { it.eligibleNotes.isNotEmpty() || it.ineligibleNotes.isNotEmpty() }
+        }
+        assertTrue("両階層併用のショーケース施策が存在する", both.isNotEmpty())
+        // memo(非表示)のショーケースも維持する
+        assertTrue("memo を持つショーケース施策が存在する", data.campaigns.any { it.memo.isNotEmpty() })
     }
 
     @Test

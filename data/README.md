@@ -26,7 +26,7 @@
 - `benefit_type` — 特典のタイミング(3 値)。省略時は `"rebate"`:
   - `"rebate"`: ポイント還元(後日ポイント付与)。PayPay の「クーポン」も実態は後日ポイント付与のため rebate に分類
   - `"discount"`: 即時割引。定率(`rate_base`)か定額(`discount_amount`)かはフィールドから導出
-  - `"lottery"`: 抽選型(PayPay スクラッチくじ等)。確定還元ではないため**「最良特典」比較には載せない**(判定詳細・期間限定タブに「抽選」として表示のみ)。当選確率・最大額は `conditions` の文章で持ち、`rate_base` / `discount_amount` はどちらも null にする
+  - `"lottery"`: 抽選型(PayPay スクラッチくじ等)。確定還元ではないため**「最良特典」比較には載せない**(判定詳細・期間限定タブに「抽選」として表示のみ)。当選確率・最大額は `memo` の文章で持ち(UI 非表示。表示の要否は #44)、`rate_base` / `discount_amount` はどちらも null にする
 - `store_scope` — 店舗データの有無:
   - `"managed"`: `merchant_rules` で管理。「お店」「地図」タブに表示
   - `"external"`: 外部参照のみ。期間限定タブにのみ表示
@@ -51,6 +51,11 @@
   - `ineligible_wallets` に `google_pay` → 判定詳細に「Google Pay での支払いは還元対象外」警告を表示(Android ユーザーが自然に Google Pay でタッチして還元を取り逃すのを防ぐ)。このとき `apple_pay` が eligible なら「(Apple Payは対象)」を付記する(MUFG のような非対称ケース)
   - どちらにも無い → 何も出さない(`payment_instruction` の文章が担う)
   - `apple_pay` エントリは起動リンクには使わず、上記の警告付記にのみ使う。sources と同じ「検証済み事実の記録」として断定できるものだけ書く(プラットフォーム非依存の施策側の事実。Android 固有の消費はコード側に閉じる)
+- `eligible_notes` / `ineligible_notes`(施策レベル) — 施策全体に一様に効く「対象/対象外」の言い切り(`[String]`)。判定詳細・期間限定タブ詳細で、店舗側(`merchant_rules[].eligible_notes`/`ineligible_notes`)と**レベル横断で連結**して「対象」(通常ロール)/「対象外」(warning 面 1 コンテナに箇条書き)の 2 セクションに表示する。線引きは**「見落とすとユーザーが損するか」**:
+  - `ineligible_notes` = 対象外の言い切り + **対象範囲の限定**。限定は対象外リスクが伝わる形で登録する(例: 「対象店舗はキャンペーンツール掲出店」→「キャンペーンツール掲出店以外は対象外」。ただし「一部店舗のみ対象」のように公式表現がそれ自体でリスクを伝えるならそのまま使い、冗長な言い換えをしない)。参加店舗限定の記載がある施策は `store_search_url` で店舗検索へ誘導する
+  - `eligible_notes` = 対象の**拡張・追加・明確化のみ**(「〜も含む」「県内在住・在勤を問わず対象」)。見落としても損しない安心情報。既定値どおりの事実(「事前エントリー不要」等)は書かない
+  - 店舗ごとに実態・呼び名が異なる情報は、似た文言でも `merchant_rules` 側に店舗別で持つ(集約しすぎない)。**単一チェーン promotion のチャネル限定は施策レベルに書く**(merchant 側だと期間限定タブ詳細で見えない)
+- `memo` — 収集時の内部メモ(`[String]`。**UI 非表示**)。付与時期・集計期間・還元通貨・操作のコツ等、表示フィールドに行き場の無い事実を残し、収集スキルの照合台帳を兼ねる(旧 `conditions`)。対象外/のみ対象の言い切りは置かない(整合性テストで検証。別フィールドに反映済みの総括文だけは「〜に反映済み」注記付きで可)。数値フィールドと重複する文章も書かない
 - `may_end_early` — 予算到達次第の早期終了があり得るか(省略時 false)。true なら判定詳細・期間限定タブに「早期終了の可能性」注記を出し、「残り○日」が断定に見えないようにする。**自治体系はほぼ全件 true にする**(標準条項のため)
 - `recurrence` — 繰り返し日付条件。`{ "days_of_week": ["FRI", "SAT"] }`(毎週金土)または `{ "days_of_month": [20, 30] }`(毎月20・30日)の**どちらか一方**(併用は実在確認できるまで未対応)。`period_start/end`(外枠の開催期間)と併用し、「お店」「地図」の判定は期間内かつ**今日が対象日**のときだけ出す。期間限定タブは期間内なら非対象日でも「開催中」に出し「次の対象日: ○/○」を案内する
 - `region` — 自治体施策用。`{ name, prefecture }`。名称は municipalities.json の自治体名と一致させる(期間限定タブの地域フィルタが (都道府県名, 自治体名) で突合するため。不一致でも施策は消えず全表示側に倒れる)。グループ所属はマスタ側(municipalities.json の groups)が持つので施策側には書かない
@@ -60,8 +65,8 @@
 - `store_search_url` — 対象店舗検索ページ URL(PayPay 等の公式)
 - `period_start` / `period_end` — 施策期間(ISO 8601 日付)。null = 常設
 - `merchant_rules[].rate_override` — その店だけ還元率が異なる場合の上書き値(%)。非 null ならその merchant では `rate_base` の代わりに使う(自治体系の「中小20%/大手10%」、Visa 系の「基礎+特定店で追加」等)。判定と一覧の「最良特典」計算に反映され、期間限定タブのサマリーは rate_base と rate_override の最大値を「最大○%」として出す。card_program ではユーザー設定の実効率が優先されるため事実上 promotion / QR 施策用。
-- `merchant_rules[].note` — その店でのみ成立する条件(例: スタバはモバイルオーダーのみ)。
-- `merchant_rules[].exclusion_note` — 対象外になるケースの説明文(人間向け)。「一部対象外店舗があります」程度の但し書きとして判定詳細に表示する。**公式が店舗単位で対象/対象外を言い切っていない情報(「例: ○○店」レベルの例示)はここに文章で書くにとどめ、`official_store_list` には入れない**。
+- `merchant_rules[].eligible_notes` — その店固有の「対象」の言い切り(`[String]`。例: 「ナチュラルローソン・ローソンストア100含む」)。施策レベルの `eligible_notes` と連結して表示される。
+- `merchant_rules[].ineligible_notes` — その店固有の「対象外・限定」の言い切り(`[String]`。例: 「スマホレジは対象外」)。「〜のみ対象」型の限定もこちらに言い換えて入れる(線引きは施策レベルと同じ)。**公式が店舗単位で対象/対象外を言い切っていない情報(「例: ○○店」レベルの例示)はここに文章で書くにとどめ、`official_store_list` には入れない**。
 - `merchant_rules[].store_list_url` — 「一部店舗のみ対象」のチェーン(サイゼリヤ・KFC等)で、公式の対象店舗一覧へのリンク。判定詳細から開ける。
 - `merchant_rules[].official_store_list` — **公式が対象/対象外を店舗名で言い切っているリストがある場合だけ**設定する。これがあるチェーンのみ「この店舗が対象か調べる」別画面に遷移でき、入力店舗名を判定する。判定は3状態:
   - `ineligible_stores` に一致 → **対象外**(⛔)。`eligible_stores` に一致 → **対象**(✅)。どちらにも無い → **要確認**(❓。公式リスト外。一部対象外店舗があるため断定しない)。対象外(ineligible)を優先判定する。
@@ -146,18 +151,18 @@
 
 | ID | 検証対象 | 安定性 |
 |----|---------|--------|
-| `test_card_program` | 常設 rebate+rate(7%)、Amex 除外(`test_super`)、`official_store_list` 3 状態、`store_list_url`、`location_hint`(`test_vending`)、`cap_note`、`eligible_wallets`(ウォレット起動リンク) | 常時安定 |
+| `test_card_program` | 常設 rebate+rate(7%)、Amex 除外(`test_super`)、`official_store_list` 3 状態、`store_list_url`、`location_hint`(`test_vending`)、`cap_note`、`eligible_wallets`(ウォレット起動リンク)、**両階層の対象/対象外**(campaign 直下+merchant_rules の `eligible_notes`/`ineligible_notes` 連結。SMCC/MUFG 相当)、`memo`(UI 非表示) | 常時安定 |
 | `test_promotion` | 期間限定 rebate+rate(10%)、`rate_override`(15%)、`may_end_early`、`ineligible_wallets`(Google Pay 対象外警告) | 常時安定 |
 | `test_brand_promotion` | `card_brand`(Visa)、即時定率 discount+rate(30% OFF)、`per_transaction_cap`、`ineligible_wallets` 両ウォレット対象外(付記なし警告) | 常時安定 |
 | `test_recurrence_weekly` | `recurrence` 曜日型(毎週金土) | 検証日依存 |
 | `test_recurrence_monthly` | `recurrence` 日付型(5・20・30 日) | 検証日依存 |
-| `test_lottery` | 抽選型(`lottery`)、`conditions`、`ineligible_wallets` Google Pay のみ対象外・Apple Pay 情報なし(付記なし警告) | 常時安定 |
+| `test_lottery` | 抽選型(`lottery`)、`memo`(当選確率。非表示)、`ineligible_wallets` Google Pay のみ対象外・Apple Pay 情報なし(付記なし警告) | 常時安定 |
 | `test_discount_fixed` | **即時定額** discount+`discount_amount`(300 円引き)、`min_purchase`(500 円)、`usage_limit`(1 回) | 常時安定 |
 | `test_rebate_fixed` | **後日定額** rebate+`discount_amount`(500 円還元)、`usage_limit`(3 回)、`usage_limit_note`、`period_total_cap` | 常時安定 |
 | `test_product_scope` | **対象商品限定**(`product_scope`。最良比較から分離・「対象商品」冠表示)、`min_purchase_scope: period_total`(期間累計の最低購入額表示)、`requires_entry`(要エントリー警告)、**多チェーン+`display_name`**(カードタイトルの手動略記。`display_name` の無い多チェーンの自動生成「{先頭} 他Nチェーン」は `test_promotion` で確認) | 常時安定 |
-| `test_upcoming` | **UPCOMING** 状態(常時未開始) | 常時安定 |
+| `test_upcoming` | **UPCOMING** 状態(常時未開始)、`requires_entry` | 常時安定 |
 | `test_ending_soon` | **残り 3 日警告**(検証日に `period_end` を手直し) | **要手直し** |
-| `test_municipal` | 自治体施策(`municipal`+`external`)、`region`(北海道札幌市=実在自治体。地域フィルタ・お知らせ表示の実機検証用)、`store_search_url`、`per_transaction_cap`+`period_total_cap`、`may_end_early` | 常時安定 |
+| `test_municipal` | 自治体施策(`municipal`+`external`)、`region`(北海道札幌市=実在自治体。地域フィルタ・お知らせ表示の実機検証用)、`store_search_url`、施策レベルの `eligible_notes`/`ineligible_notes`(対象/対象外セクション+店舗検索誘導)、`per_transaction_cap`+`period_total_cap`、`may_end_early` | 常時安定 |
 | `test_municipal_hiroshima_paypay` | 同一自治体・複数決済手段の 1 本目(広島県広島市 × テストPayPay 最大25%)。自治体グルーピング(1 カードにストライプ 2 色)と `rate_rules`(段階制。中小25%/大手10%→「最大」表示+内訳)の検証用 | 常時安定 |
 | `test_municipal_hiroshima_aupay` | 同一自治体・複数決済手段の 2 本目(広島県広島市 × テストauPAY 15%) | 常時安定 |
 

@@ -111,8 +111,13 @@ data class MerchantRule(
     @SerialName("merchant_id") val merchantId: String,
     /** この merchant だけ還元率が異なる場合の上書き値(%)。非 null なら rate_base の代わりに使う */
     @SerialName("rate_override") val rateOverride: Double? = null,
-    val note: String? = null,
-    @SerialName("exclusion_note") val exclusionNote: String? = null,
+    /** 対象の拡張・追加・明確化(「〜も含む」等)。見落としても損しない安心情報として通常ロールで表示 */
+    @SerialName("eligible_notes") val eligibleNotes: List<String> = emptyList(),
+    /**
+     * 対象外・限定の言い切り(「〜以外は対象外」形に言い換えて登録)。見落とすと損する情報として
+     * warning 面で表示。店舗ごとに実態・呼び名が異なるものはここに店舗別で持つ(campaign 直下に集約しない)
+     */
+    @SerialName("ineligible_notes") val ineligibleNotes: List<String> = emptyList(),
     @SerialName("amex_excluded") val amexExcluded: Boolean = false,
     @SerialName("store_list_url") val storeListUrl: String? = null,
     @SerialName("official_store_list") val officialStoreList: OfficialStoreList? = null,
@@ -191,7 +196,21 @@ data class Campaign(
     @SerialName("rate_rules") val rateRules: List<RateRule> = emptyList(),
     @SerialName("period_start") val periodStart: String? = null,
     @SerialName("period_end") val periodEnd: String? = null,
-    val conditions: List<String> = emptyList(),
+    /**
+     * 施策全体に一様に効く「対象」の言い切り(「〜も対象」「在住不問」等)。
+     * merchant_rules[].eligible_notes(店舗固有)とレベル横断で連結して「対象」セクションに表示する
+     */
+    @SerialName("eligible_notes") val eligibleNotes: List<String> = emptyList(),
+    /**
+     * 施策全体に一様に効く「対象外・限定」の言い切り(「〜以外は対象外」形)。
+     * 線引きは「見落とすとユーザーが損するか」: 損する情報はここ、雑多な補足は memo(非表示)
+     */
+    @SerialName("ineligible_notes") val ineligibleNotes: List<String> = emptyList(),
+    /**
+     * 収集時の内部メモ(UI 非表示)。公式との照合台帳・付与時期・集計期間・操作のコツ等、
+     * 表示フィールドに行き場の無い事実を残す(旧 conditions)
+     */
+    val memo: List<String> = emptyList(),
     @SerialName("merchant_rules") val merchantRules: List<MerchantRule> = emptyList(),
     @SerialName("verified_date") val verifiedDate: String = "",
     val type: String = "card_program",

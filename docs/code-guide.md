@@ -161,7 +161,9 @@ erDiagram
         string_list eligible_wallets "公式が還元対象と明記したウォレット(apple_pay/google_pay)"
         string_list ineligible_wallets "公式が還元対象外と明記したウォレット(未掲載=不明の3状態)"
         Recurrence recurrence "繰り返し日付条件(days_of_week/days_of_month)"
-        string_list conditions "条件リスト(除外条件含む)"
+        string_list eligible_notes "施策全体の対象の言い切り(拡張・明確化。通常ロール表示)"
+        string_list ineligible_notes "施策全体の対象外・限定の言い切り(warning面表示)"
+        string_list memo "収集時の内部メモ(UI非表示。照合台帳・付与時期等)"
         string payment_method_id "QR決済ID(カード施策はnull)"
         string detail_url "施策の詳細ページURL"
         string store_search_url "対象店舗検索URL"
@@ -174,8 +176,8 @@ erDiagram
     MERCHANT_RULE {
         string merchant_id FK
         double rate_override "店舗別還元率(非null時rate_baseを上書き)"
-        string note "店固有条件"
-        string exclusion_note "対象外の但し書き(人間向け)"
+        string_list eligible_notes "店固有の対象の言い切り(「〜も含む」等)"
+        string_list ineligible_notes "店固有の対象外・限定の言い切り(「〜以外は対象外」形)"
         bool amex_excluded
         string store_list_url "公式店舗一覧/検索リンク"
     }
@@ -402,8 +404,8 @@ data class CampaignJudgment(
     val effectiveRate: Double?,
     val discountAmount: Int?,
     val daysRemaining: Int?,
-    val storeNote: String?,          // rule.note（カード施策のみ）
-    val exclusionNote: String?,      // rule.exclusionNote（カード施策のみ）
+    val eligibleNotes: List<String>,   // campaign直下 + その店のrule をレベル横断で連結(「対象」セクション)
+    val ineligibleNotes: List<String>, // 同上(「対象外」セクション。warning面1コンテナに箇条書き)
     val warnings: List<String>,      // 残り3日以下等
     val minPurchase: Int?,
     val usageLimitText: String?,     // usageLimitNote ?: "お一人様N回まで"
@@ -411,7 +413,7 @@ data class CampaignJudgment(
     val appLabel: String?,           // 起動リンクのラベル（QR=「◯◯アプリ」、カード=「ウォレット(Google Pay)」。バッジと分離）
     val pointMultiplier: PointMultiplier?,  // ポイント倍率（バッジ・注記はデータ駆動）
     val welcatsuApplied: Boolean,
-    // ... perTransactionCap, periodTotalCap, capNote, conditions, storeSearchUrl, storeListUrl, detailUrl
+    // ... perTransactionCap, periodTotalCap, capNote, storeSearchUrl, storeListUrl, detailUrl
 )
 ```
 
@@ -465,7 +467,7 @@ stateDiagram-v2
 
 ### 6.2 判定カード表示
 
-`CampaignJudgmentCard` は施策ごとに 1 枚の統一カード。カード決済・QR 決済・キャンペーン詳細で共用し、各フィールドの null / 空チェックだけで表示を出し分ける。左端のストライプとバッジに `brand_color` を使い、ロゴ画像なしで発行体を識別する。表示要素は「特典表示（`formatBenefit()` で統一生成。抽選＝lottery は率を持たないため専用の「抽選」表示。段階制＝rate_rules は「最大」、対象商品限定＝product_scope は「対象商品」を数字に冠する）→ バッジ（badgeLabel。期間限定・**商品限定**（product_scope。warning 系）バッジ併記）→ 期間 → 対象日（recurrence 施策のみ。「今日は対象日」/「次の対象日: ○/○」）→ 支払い方法 → 店固有条件 → 警告 → 除外注記 → 対象商品限定注記（product_scope.label）→ 要エントリー警告（requires_entry）→ 早期終了注記（may_end_early）→ 抽選の但し書き → 公式店舗一覧リンク → 最低購入額（min_purchase_scope=period_total なら「期間中の購入合計○円以上」表示）→ 利用回数制限 → 上限 → 対象店舗確認 → 詳細リンク → アプリ起動 → ポイント倍率注記 → **情報確認日**」の順。**ポイント倍率**（`PointMultiplier`）を持つカードは、バッジの右に `badge_label`（例: 「ウエル活利用可」）を表示し、適用時は `applied_note`（例: 「還元率はウエル活利用時の実質還元率」）を末尾に注記する。文言は `PointMultiplier` のデータから取り、UI にハードコードしない。`verified_date` の表示は必須ルール（データが古くなるリスクへの対処）。
+`CampaignJudgmentCard` は施策ごとに 1 枚の統一カード。カード決済・QR 決済・キャンペーン詳細で共用し、各フィールドの null / 空チェックだけで表示を出し分ける。左端のストライプとバッジに `brand_color` を使い、ロゴ画像なしで発行体を識別する。表示要素は「特典表示（`formatBenefit()` で統一生成。抽選＝lottery は率を持たないため専用の「抽選」表示。段階制＝rate_rules は「最大」、対象商品限定＝product_scope は「対象商品」を数字に冠する）→ バッジ（badgeLabel。期間限定・**商品限定**（product_scope。warning 系）バッジ併記）→ 期間 → 対象日（recurrence 施策のみ。「今日は対象日」/「次の対象日: ○/○」）→ 支払い方法 → 対象（eligible_notes。campaign 直下+店固有をレベル横断で連結、通常ロール）→ 警告 → 対象外（ineligible_notes。同連結、warning 面 1 コンテナに箇条書き）→ 対象商品限定注記（product_scope.label）→ 要エントリー警告（requires_entry）→ 早期終了注記（may_end_early）→ 抽選の但し書き → 公式店舗一覧リンク → 最低購入額（min_purchase_scope=period_total なら「期間中の購入合計○円以上」表示）→ 利用回数制限 → 上限 → 対象店舗確認 → 詳細リンク → アプリ起動 → ポイント倍率注記 → **情報確認日**」の順。**ポイント倍率**（`PointMultiplier`）を持つカードは、バッジの右に `badge_label`（例: 「ウエル活利用可」）を表示し、適用時は `applied_note`（例: 「還元率はウエル活利用時の実質還元率」）を末尾に注記する。文言は `PointMultiplier` のデータから取り、UI にハードコードしない。`verified_date` の表示は必須ルール（データが古くなるリスクへの対処）。
 
 公式リストを持つチェーン（`canCheckStore` が true）では判定詳細に「この店舗が対象か調べる →」ボタンを出し、別画面 `StoreCheckScreen` へ遷移する。同画面は店舗名入力に対し `StoreVerdictCard` で 対象（`CheckCircle`）/ 対象外（`Close`）/ 要確認（`Info`）を Material アイコン＋**トーナル面のステータスピル**（`Surface` の container/content 対：対象＝`primaryContainer`、対象外＝`errorContainer`、要確認＝`warningContainerColor()`）で表示し、断定の鮮度（`date_is_official` に応じて「公式情報の更新日」or「確認日」）を併記する。色をカード地（`surfaceVariant`）に直接乗せず container 対で出すのは、コントラスト担保のため（6.4 警告色 参照）。公式リストの無いチェーンはボタンを出さない（判定画面を意識させない）。
 

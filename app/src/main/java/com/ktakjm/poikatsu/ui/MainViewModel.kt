@@ -1446,8 +1446,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 effectiveRate = campaign.rateBase.takeUnless { isLottery },
                 discountAmount = campaign.discountAmount.takeUnless { isLottery },
                 daysRemaining = e.daysRemaining(campaign, today),
-                storeNote = null,
-                exclusionNote = null,
+                // merchant 未特定のため店舗固有分は乗らず、campaign 直下(施策全体に一様に効く事実)だけが出る
+                eligibleNotes = campaign.eligibleNotes,
+                ineligibleNotes = campaign.ineligibleNotes,
                 storeListUrl = null,
                 warnings = buildList {
                     val days = e.daysRemaining(campaign, today)
@@ -1460,7 +1461,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 perTransactionCap = campaign.perTransactionCap,
                 periodTotalCap = campaign.periodTotalCap,
                 capNote = campaign.capNote,
-                conditions = campaign.conditions,
                 storeSearchUrl = if (campaign.storeScope == "external") campaign.storeSearchUrl else null,
                 detailUrl = campaign.detailUrl,
                 appLinks = qr?.appLinks.orEmpty().ifEmpty { listOfNotNull(campaign.walletAppLink) },

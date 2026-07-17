@@ -213,15 +213,11 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
         if (campaign.paymentInstruction.isNotBlank()) {
             Text("支払い方法：${campaign.paymentInstruction}", style = MaterialTheme.typography.bodyMedium)
         }
-        judgment.storeNote?.let {
-            Text("条件：$it", style = MaterialTheme.typography.bodyMedium)
-        }
+        EligibleNotesRows(judgment.eligibleNotes)
         judgment.warnings.forEach {
             NoticeRow(it, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
         }
-        judgment.exclusionNote?.let {
-            NoticeRow(it, warningContainerColor(), onWarningContainerColor())
-        }
+        NoticeList(judgment.ineligibleNotes, warningContainerColor(), onWarningContainerColor())
         // 対象商品限定(メーカー縛り)。全商品に効く率と誤認させない(最良比較からも分離済み。#43)
         judgment.campaign.productScope?.let {
             NoticeRow("対象商品限定：${it.label}", warningContainerColor(), onWarningContainerColor())
@@ -278,9 +274,28 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
     }
 }
 
+/**
+ * 「対象」セクション(通常ロール)。campaign 直下+店舗固有の eligible_notes をレベル横断で
+ * 連結したものを受け取る。対の「対象外」は warning 面(NoticeList)で出す。
+ */
+@Composable
+private fun EligibleNotesRows(notes: List<String>) {
+    if (notes.isEmpty()) return
+    if (notes.size == 1) {
+        Text("対象：${notes[0]}", style = MaterialTheme.typography.bodyMedium)
+        return
+    }
+    Column {
+        Text("対象：", style = MaterialTheme.typography.bodyMedium)
+        notes.forEach {
+            Text("・$it", style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
 @Composable
 private fun BenefitDisplay(judgment: CampaignJudgment) {
-    // 抽選は formatBenefit が null(比較対象外)のため専用表示。当選確率・最大額は conditions の文章で持つ
+    // 抽選は formatBenefit が null(比較対象外)のため専用表示。当選確率・最大額は memo の文章で持つ(非表示。表示の要否は #44)
     if (judgment.benefitType == BenefitType.LOTTERY) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(

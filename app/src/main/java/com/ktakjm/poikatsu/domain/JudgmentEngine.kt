@@ -25,8 +25,10 @@ data class CampaignJudgment(
     val effectiveRate: Double?,
     val discountAmount: Int?,
     val daysRemaining: Int?,
-    val storeNote: String?,
-    val exclusionNote: String?,
+    /** 「対象」セクション(campaign 直下+その店の merchant_rules をレベル横断で連結)。通常ロールで表示 */
+    val eligibleNotes: List<String>,
+    /** 「対象外」セクション(同上の連結)。warning 面 1 コンテナに箇条書きで表示 */
+    val ineligibleNotes: List<String>,
     val storeListUrl: String?,
     val warnings: List<String>,
     val minPurchase: Int?,
@@ -34,7 +36,6 @@ data class CampaignJudgment(
     val perTransactionCap: Int?,
     val periodTotalCap: Int?,
     val capNote: String?,
-    val conditions: List<String>,
     val storeSearchUrl: String?,
     val detailUrl: String?,
     /** 起動リンク(0〜N 件)。QR は決済アプリ(AEON Pay のように複数あり得る)、カードはウォレット(Google Pay) */
@@ -488,8 +489,9 @@ class JudgmentEngine(private val data: PoikatsuData) {
             effectiveRate = effectiveRate.takeUnless { isLottery },
             discountAmount = discountAmount.takeUnless { isLottery },
             daysRemaining = days,
-            storeNote = rule?.note,
-            exclusionNote = rule?.exclusionNote,
+            // 出どころ(施策全体か店舗固有か)は読者には関係ないため、レベル横断で連結して1セクションずつにする
+            eligibleNotes = campaign.eligibleNotes + rule?.eligibleNotes.orEmpty(),
+            ineligibleNotes = campaign.ineligibleNotes + rule?.ineligibleNotes.orEmpty(),
             storeListUrl = rule?.storeListUrl,
             warnings = buildList {
                 if (days != null && days <= 3) add("残り${days}日")
@@ -501,7 +503,6 @@ class JudgmentEngine(private val data: PoikatsuData) {
             perTransactionCap = campaign.perTransactionCap,
             periodTotalCap = campaign.periodTotalCap,
             capNote = campaign.capNote,
-            conditions = campaign.conditions,
             storeSearchUrl = if (campaign.storeScope == "external") campaign.storeSearchUrl else null,
             detailUrl = campaign.detailUrl,
             appLinks = appLinks,
