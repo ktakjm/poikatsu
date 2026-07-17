@@ -154,7 +154,8 @@
       "detail_url": "https://paypay.ne.jp/event/akita-yuzawa-city/",
       "store_search_url": null,
       "ineligible_notes": [
-        "タバコ・自動販売機/券売機・オンラインショップ・他社アプリ経由・PayPay商品券での支払いは対象外"
+        "インターネット販売・モバイルオーダー・公共料金/納税・タバコ・商品券/プリペイドカード・医療費自己負担分等は対象外",
+        "自動販売機/券売機・PayPay商品券での支払いは対象外"
       ],
       "merchant_rules": [],
       "verified_date": "2026-07-18"
@@ -181,6 +182,9 @@
       },
       "detail_url": "https://media.aupay.wallet.auone.jp/articles/5059",
       "store_search_url": null,
+      "ineligible_notes": [
+        "インターネット販売・モバイルオーダー・公共料金/納税・タバコ・商品券/プリペイドカード・医療費自己負担分等は対象外"
+      ],
       "memo": [
         "還元はau PAY残高(税抜相当額基準)"
       ],
@@ -210,7 +214,8 @@
       "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/yuzawa/",
       "store_search_url": null,
       "ineligible_notes": [
-        "自動販売機/券売機・タバコを含む購入は対象外"
+        "インターネット販売・モバイルオーダー・公共料金/納税・タバコ・商品券/プリペイドカード・医療費自己負担分等は対象外",
+        "自動販売機/券売機での支払いは対象外"
       ],
       "memo": [
         "還元はdポイント(期間・用途限定)"
@@ -241,7 +246,7 @@
       "detail_url": "https://yuzawa-cashless.jp/",
       "store_search_url": null,
       "ineligible_notes": [
-        "インターネット販売・モバイルオーダー・公共料金・タバコ・換金性の高い商品は対象外",
+        "インターネット販売・モバイルオーダー・公共料金/納税・タバコ・商品券/プリペイドカード・医療費自己負担分等は対象外",
         "請求書払い・楽天ポイントカード払いでの支払いは対象外"
       ],
       "merchant_rules": [],
@@ -300,7 +305,9 @@
       "detail_url": "https://paypay.ne.jp/event/shimane-oda-city-20260701/",
       "store_search_url": null,
       "ineligible_notes": [
-        "タバコ・自動販売機/券売機・オンラインショップ・他社アプリ経由・PayPay商品券での支払いは対象外"
+        "インターネット販売・公共料金/納税・商品券/切手/プリペイドカード等の換金性が高いものは対象外",
+        "コンビニ・病院・調剤薬局・保険代理店は対象外店舗",
+        "タバコ・自動販売機/券売機・PayPay商品券での支払いは対象外"
       ],
       "merchant_rules": [],
       "verified_date": "2026-07-18"
@@ -328,7 +335,9 @@
       "detail_url": "https://media.aupay.wallet.auone.jp/dominant/lp/202607_oda/",
       "store_search_url": null,
       "ineligible_notes": [
-        "金券・タバコ等の指定商品は対象外"
+        "インターネット販売・公共料金/納税・商品券/切手/プリペイドカード等の換金性が高いものは対象外",
+        "コンビニ・病院・調剤薬局・保険代理店は対象外店舗",
+        "タバコは対象外"
       ],
       "memo": [
         "還元はau PAY残高(不課税)"
@@ -359,7 +368,9 @@
       "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/oda_03/",
       "store_search_url": null,
       "ineligible_notes": [
-        "クーポン利用分・自動販売機/券売機・タバコを含む購入は対象外",
+        "インターネット販売・公共料金/納税・商品券/切手/プリペイドカード等の換金性が高いものは対象外",
+        "コンビニ・病院・調剤薬局・保険代理店は対象外店舗",
+        "タバコ・自動販売機/券売機・クーポン利用分は対象外",
         "一部店舗は8月1日以降のみ対象"
       ],
       "memo": [
@@ -390,6 +401,10 @@
       },
       "detail_url": "https://www.city.oda.lg.jp/update_info/10976",
       "store_search_url": null,
+      "ineligible_notes": [
+        "インターネット販売・公共料金/納税・商品券/切手/プリペイドカード等の換金性が高いものは対象外",
+        "コンビニ・病院・調剤薬局・保険代理店は対象外店舗"
+      ],
       "merchant_rules": [],
       "verified_date": "2026-07-18"
     },
@@ -415,6 +430,10 @@
       },
       "detail_url": "https://www.city.oda.lg.jp/update_info/10976",
       "store_search_url": null,
+      "ineligible_notes": [
+        "インターネット販売・公共料金/納税・商品券/切手/プリペイドカード等の換金性が高いものは対象外",
+        "コンビニ・病院・調剤薬局・保険代理店は対象外店舗"
+      ],
       "merchant_rules": [],
       "verified_date": "2026-07-18"
     },
@@ -500,7 +519,8 @@
       "store_search_url": null,
       "ineligible_notes": [
         "キャンペーンツール掲出店以外は対象外（PayPayアプリの「近くのおトク」で確認）",
-        "タバコ・オンライン決済・自動販売機・券売機・他社アプリ経由での支払いは対象外"
+        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外",
+        "コンビニ・行政機関・金融機関・医療機関/調剤薬局・タクシー・駐車場等は対象外店舗"
       ],
       "merchant_rules": [],
       "verified_date": "2026-07-18"
@@ -533,7 +553,7 @@
       "store_search_url": null,
       "ineligible_notes": [
         "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外",
-        "コンビニエンスストアは対象外"
+        "コンビニ・行政機関・金融機関・医療機関/調剤薬局・タクシー・駐車場等は対象外店舗"
       ],
       "memo": [
         "還元はau PAY残高(不課税)"
@@ -569,7 +589,8 @@
       "store_search_url": null,
       "ineligible_notes": [
         "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外",
-        "クーポン利用分は対象外"
+        "クーポン利用分は対象外",
+        "コンビニ・行政機関・金融機関・医療機関/調剤薬局・タクシー・駐車場等は対象外店舗"
       ],
       "memo": [
         "還元はdポイント(期間・用途限定)"
@@ -604,10 +625,14 @@
       "detail_url": "https://www.kanatokucpn.pref.kanagawa.jp/",
       "store_search_url": null,
       "ineligible_notes": [
-        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外"
+        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外",
+        "コンビニ・行政機関・金融機関・医療機関/調剤薬局・タクシー・駐車場等は対象外店舗"
+      ],
+      "memo": [
+        "還元は楽天ポイント(通常ポイント。2026年11月末日までに付与)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-18"
     },
     {
       "id": "kanagawa_kanatoku_aeon_pay_2026_06",
@@ -636,13 +661,14 @@
       "detail_url": "https://www.kanatokucpn.pref.kanagawa.jp/",
       "store_search_url": null,
       "ineligible_notes": [
-        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外"
+        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外",
+        "コンビニ・行政機関・金融機関・医療機関/調剤薬局・タクシー・駐車場等は対象外店舗"
       ],
       "memo": [
         "還元はAEON Pay残高(有効期限なし・キャンペーン終了後翌々月末までに付与)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-18"
     },
     {
       "id": "kanagawa_kanatoku_merpay_2026_06",
@@ -671,13 +697,14 @@
       "detail_url": "https://www.kanatokucpn.pref.kanagawa.jp/",
       "store_search_url": null,
       "ineligible_notes": [
-        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外"
+        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外",
+        "コンビニ・行政機関・金融機関・医療機関/調剤薬局・タクシー・駐車場等は対象外店舗"
       ],
       "memo": [
         "還元はメルカリポイント(有効期限180日・キャンペーン終了後翌月末までに付与)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-18"
     },
     {
       "id": "chiba_pref_paypay_2026_08",
