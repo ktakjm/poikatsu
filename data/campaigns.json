@@ -129,7 +129,7 @@
         { "merchant_id": "akachan_honpo", "eligible_notes": ["Online Shop含む"], "ineligible_notes": ["Amexは店頭決済のみ対象外(Online Shopは対象)"], "amex_excluded": true, "official_store_list": {"eligible_stores": ["シーナシーナ屯田", "新さっぽろアークシティ", "アリオ札幌", "シーナシーナ青森", "仙台泉", "ヨークパーク郡山", "トナリエつくば", "ニューポートひたちなか", "ベルモール", "高崎", "スマーク伊勢崎", "ステラタウン大宮", "アリオ川口", "エミテラス所沢", "アリオ深谷", "アリオ上尾", "ALCo越谷", "和光イトーヨーカドー", "アリオ鷲宮", "テラスモール松戸", "アリオ柏", "アリオ市原", "四街道イトーヨーカドー", "アリオ北砂", "ウィラ大井", "池袋東武", "セブンタウン小豆沢", "アリオ西新井", "アリオ亀有", "アリオ葛西", "セレオ八王子", "昭島イトーヨーカドー", "武蔵小金井イトーヨーカドー", "東久留米イトーヨーカドー", "横浜別所イトーヨーカドー", "港南台バーズ", "グランツリー武蔵小杉", "溝口", "古淵イトーヨーカドー", "アリオ橋本", "テラスモール湘南", "大和鶴間イトーヨーカドー", "新潟亀田アピタ", "リバーサイド千秋", "ファボーレ", "アピタタウン金沢ベイ", "アルプラザ小松", "福井", "甲府昭和イトーヨーカドー", "アリオ上田", "アイシティ２１", "カラフルタウン岐阜", "静岡イトーヨーカドー", "浜松プラザ", "アクロスプラザ春日井", "リーフウォーク稲沢", "プライムツリー赤池", "ビバシティ彦根", "エイスクエア草津", "洛北阪急スクエア", "MOMOテラス", "精華台", "あべのイトーヨーカドー", "京阪シティモール", "大阪本町", "高槻阪急スクエア", "くずはモール", "アリオ八尾", "ホームズ寝屋川", "スマイル御影クラッセ", "ブルメール舞多聞", "カナート西神戸", "ゆめタウン姫路", "MEGAドン・キホーテ姫路広畑", "つかしん", "明石イトーヨーカドー", "トナリエ大和高田", "イズミヤ和歌山", "ゆめタウン出雲", "ハピータウン岡南", "ブランチ北長瀬", "フジグラン緑井", "ゆめタウンみゆき", "ゆめタウン福山", "ゆめタウン廿日市", "イオンタウン防府", "ゆめタウン徳島", "瓦町FLAG", "エミフルMASAKI", "リバーウォーク北九州", "福岡マリナタウン", "ガーデンズ千早", "ゆめタウン飯塚", "ゆめタウン筑紫野", "ゆめタウン佐賀", "ゆめタウンはません", "ゆめタウン光の森", "パークプレイス大分", "ニトリモール宮崎", "オプシアミスミ", "浦添西海岸パルコシティ", "ハンビータウン", "西原シティ"], "ineligible_stores": ["ララガーデン長町", "ララガーデン川口", "ララガーデン春日部", "ららぽーと富士見", "ららぽーと新三郷", "幕張イトーヨーカドー", "ららぽーとTOKYO-BAY", "ららぽーと柏の葉", "アルカキット錦糸町", "ららぽーと豊洲", "ららぽーと立川立飛", "ららぽーと横浜", "立場イトーヨーカドー", "ラゾーナ川崎", "ららぽーと湘南平塚", "ららぽーと海老名", "ららぽーと沼津", "ららぽーと磐田", "ららぽーと名古屋みなとアクルス", "ららぽーと安城", "ららぽーと愛知東郷", "ららぽーと堺", "ららぽーとEXPOCITY", "ららぽーと和泉", "ららぽーと門真", "ららぽーと甲子園"], "updated_date": "2026-06-15", "date_is_official": false, "source_url": "https://www.akachan.jp/topics/mufgCPlist/"} },
         { "merchant_id": "curves", "eligible_notes": ["入会金・月会費が対象"], "amex_excluded": false }
       ],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-18"
     },
     {
       "id": "yuzawa_paypay_2026_07",
@@ -139,7 +139,7 @@
       "operator": "PayPay",
       "payment_method_id": "paypay",
       "name": "湯沢市キャッシュレスで買い物キャンペーン",
-      "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイントで支払う",
+      "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイント・PayPayデビットで支払う",
       "rate_base": 10.0,
       "period_start": "2026-07-01",
       "period_end": "2026-09-30",
@@ -153,8 +153,11 @@
       },
       "detail_url": "https://paypay.ne.jp/event/akita-yuzawa-city/",
       "store_search_url": null,
+      "ineligible_notes": [
+        "タバコ・自動販売機/券売機・オンラインショップ・他社アプリ経由・PayPay商品券での支払いは対象外"
+      ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-18"
     },
     {
       "id": "yuzawa_aupay_2026_07",
@@ -178,8 +181,11 @@
       },
       "detail_url": "https://media.aupay.wallet.auone.jp/articles/5059",
       "store_search_url": null,
+      "memo": [
+        "還元はau PAY残高(税抜相当額基準)"
+      ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-18"
     },
     {
       "id": "yuzawa_dpay_2026_07",
@@ -204,13 +210,13 @@
       "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/yuzawa/",
       "store_search_url": null,
       "ineligible_notes": [
-        "d払い(ネット)・d払いタッチ・自動販売機/券売機・タバコを含む購入は対象外"
+        "自動販売機/券売機・タバコを含む購入は対象外"
       ],
       "memo": [
         "還元はdポイント(期間・用途限定)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-18"
     },
     {
       "id": "yuzawa_rakuten_pay_2026_07",
@@ -220,7 +226,7 @@
       "operator": "楽天ペイ",
       "payment_method_id": "rakuten_pay",
       "name": "湯沢市キャッシュレスで買い物キャンペーン",
-      "payment_instruction": "楽天ペイのコード決済で支払う",
+      "payment_instruction": "楽天ペイのコード・QR・セルフ払いで支払う",
       "rate_base": 10.0,
       "period_start": "2026-07-01",
       "period_end": "2026-09-30",
@@ -235,10 +241,11 @@
       "detail_url": "https://yuzawa-cashless.jp/",
       "store_search_url": null,
       "ineligible_notes": [
-        "インターネット販売・モバイルオーダー・公共料金・タバコ・換金性の高い商品は対象外"
+        "インターネット販売・モバイルオーダー・公共料金・タバコ・換金性の高い商品は対象外",
+        "請求書払い・楽天ポイントカード払いでの支払いは対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-18"
     },
     {
       "id": "oshu_paypay_2026_07",
@@ -251,7 +258,7 @@
       "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイント・PayPayデビットで支払う",
       "rate_base": 20.0,
       "period_start": "2026-07-01",
-      "period_end": "2026-07-31",
+      "period_end": "2026-07-27",
       "per_transaction_cap": 5000,
       "period_total_cap": 10000,
       "may_end_early": true,
@@ -261,8 +268,14 @@
       },
       "detail_url": "https://paypay.ne.jp/event/iwate-oshu-city-20260701/",
       "store_search_url": null,
+      "ineligible_notes": [
+        "タバコ・自動販売機/券売機・オンラインショップ・他社アプリ経由・PayPay商品券での支払いは対象外"
+      ],
+      "memo": [
+        "予算到達見込みのため当初の7/31から7/27(23:59)へ早期終了(公式告知。period_endに反映済み)"
+      ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-18"
     },
     {
       "id": "oda_paypay_2026_07",
@@ -290,7 +303,7 @@
         "タバコ・自動販売機/券売機・オンラインショップ・他社アプリ経由・PayPay商品券での支払いは対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-18"
     },
     {
       "id": "oda_aupay_2026_07",
@@ -315,14 +328,13 @@
       "detail_url": "https://media.aupay.wallet.auone.jp/dominant/lp/202607_oda/",
       "store_search_url": null,
       "ineligible_notes": [
-        "au PAY カード・au PAY プリペイドカードの利用は対象外",
         "金券・タバコ等の指定商品は対象外"
       ],
       "memo": [
         "還元はau PAY残高(不課税)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-18"
     },
     {
       "id": "oda_dpay_2026_07",
@@ -347,13 +359,14 @@
       "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/oda_03/",
       "store_search_url": null,
       "ineligible_notes": [
-        "d払い(ネット)・d払いタッチ・クーポン利用分・自動販売機/券売機・タバコを含む購入は対象外"
+        "クーポン利用分・自動販売機/券売機・タバコを含む購入は対象外",
+        "一部店舗は8月1日以降のみ対象"
       ],
       "memo": [
-        "還元はdポイント(期間・用途限定)"
+        "還元はdポイント(期間・用途限定。発行から6か月有効)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-18"
     },
     {
       "id": "oda_rakuten_pay_2026_07",
@@ -378,7 +391,7 @@
       "detail_url": "https://www.city.oda.lg.jp/update_info/10976",
       "store_search_url": null,
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-18"
     },
     {
       "id": "oda_aeon_pay_2026_07",
@@ -403,7 +416,7 @@
       "detail_url": "https://www.city.oda.lg.jp/update_info/10976",
       "store_search_url": null,
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-18"
     },
     {
       "id": "rakuten_pay_matsuya_60th_2026_07",
@@ -487,10 +500,10 @@
       "store_search_url": null,
       "ineligible_notes": [
         "キャンペーンツール掲出店以外は対象外（PayPayアプリの「近くのおトク」で確認）",
-        "タバコ・オンライン決済・自動販売機・券売機での支払いは対象外"
+        "タバコ・オンライン決済・自動販売機・券売機・他社アプリ経由での支払いは対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-18"
     },
     {
       "id": "kanagawa_kanatoku_aupay_2026_06",
@@ -519,13 +532,14 @@
       "detail_url": "https://media.aupay.wallet.auone.jp/dominant/lp/202606_kanagawa/",
       "store_search_url": null,
       "ineligible_notes": [
-        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外"
+        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外",
+        "コンビニエンスストアは対象外"
       ],
       "memo": [
         "還元はau PAY残高(不課税)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-18"
     },
     {
       "id": "kanagawa_kanatoku_dpay_2026_06",
@@ -554,13 +568,14 @@
       "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/kanagawa/",
       "store_search_url": null,
       "ineligible_notes": [
-        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外"
+        "公共料金・タバコ・有価証券/金券類・自動販売機・インターネット販売・移動販売・無人店舗は対象外",
+        "クーポン利用分は対象外"
       ],
       "memo": [
         "還元はdポイント(期間・用途限定)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-18"
     },
     {
       "id": "kanagawa_kanatoku_rakuten_pay_2026_06",
