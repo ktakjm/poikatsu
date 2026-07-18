@@ -106,7 +106,7 @@ internal fun JudgmentDetail(
     if (selection.judgments.isEmpty()) {
         Card(modifier = Modifier.fillMaxWidth()) {
             Text(
-                "登録済みの高還元施策の対象外です。通常還元率のカード・QR決済を利用してください。",
+                "登録済みの高還元施策の対象外です。通常還元率のカード・コード決済を利用してください。",
                 modifier = Modifier.padding(16.dp),
             )
         }

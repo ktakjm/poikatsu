@@ -17,6 +17,7 @@ import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.YolpClient
 import com.ktakjm.poikatsu.data.YolpSearchConfig
 import com.ktakjm.poikatsu.data.AppSettings
+import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.MunicipalityMaster
 import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PointMultiplier
@@ -47,6 +48,7 @@ import com.ktakjm.poikatsu.util.GeoMath
 import java.io.File
 import java.time.LocalDate
 import java.util.Locale
+import java.util.UUID
 import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -284,6 +286,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val brandSettings: List<BrandSetting> = emptyList(),
         /** 設定画面の「QR 決済」用カタログ(payment_methods.json のカタログ + ユーザー差分) */
         val qrPaymentSettings: List<QrPaymentSetting> = emptyList(),
+        /** 設定画面「マイカード」に出すカスタムカード(カタログ外。DataStore 由来) */
+        val customCards: List<CustomCard> = emptyList(),
         /** 登録済みエリア(自治体単体・グループ) */
         val registeredAreas: List<RegisteredArea> = emptyList(),
         /** 自治体マスタ。設定画面のピッカーと期間限定タブの地域フィルタに使う(起動時に assets から読む) */
@@ -306,6 +310,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     data class BrandSetting(
         val brand: String,
         val owned: Boolean,
+        /** ブランドの識別色(#RRGGBB)。カタログ(card_brands)由来。防御的に追加した項目は null */
+        val color: String? = null,
     )
 
     /** 設定画面の QR 決済1件分の表示・編集状態 */
@@ -320,6 +326,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     data class CardSetting(
         val cardId: String,
         val cardName: String,
+        /** 発行体の識別色(#RRGGBB)。カード名の左のドット表示に使う */
+        val brandColor: String?,
         val owned: Boolean,
         /** 表示・編集する還元率(上書きがあれば上書き値、無ければ既定) */
         val rate: Double,
@@ -540,6 +548,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 welcatsuApplied = welcatsuOn,
             )
         }
+        // カスタムカード(カタログ外)は登録内容をそのまま PaymentCard に写してエンジンへ渡す。
+        // 判定はキャンペーン駆動なので、施策が参照しない限り判定結果には現れない。現状効くのは
+        // ブランド付き登録が card_brand 施策に一致する経路のみで、card_id 施策はカスタムキャンペーン
+        // (#7)が custom: id を参照し始めた時点で自然に効く。
+        val customCards = settings.customCards.map { c ->
+            PaymentCard(
+                id = c.id,
+                cardName = c.name,
+                brandColor = c.color ?: CustomCard.DEFAULT_COLOR,
+                brands = listOfNotNull(c.brand.takeIf { it.isNotBlank() }),
+                brand = c.brand,
+            )
+        }
         // ブランド単位の登録(カタログ外のカード)は仮想カードとしてエンジンに渡す。card_brand 施策の
         // resolveCard がブランド一致でマッチするだけで、card_id 施策には一致しない(id が衝突しないため)。
         // カタログのカードの後ろに置き、複数一致時の代表はカタログのカード(具体名)を優先する。
@@ -551,7 +572,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 brand = brand,
             )
         }
-        val engineData = loaded.data.copy(cards = mergedCards + brandCards)
+        val engineData = loaded.data.copy(cards = mergedCards + customCards + brandCards)
         val newEngine = JudgmentEngine(engineData)
         engine = newEngine
 
@@ -587,6 +608,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             CardSetting(
                 cardId = card.id,
                 cardName = card.cardName,
+                brandColor = card.brandColor,
                 owned = ov?.owned ?: true,
                 rate = ov?.rate ?: card.effectiveRateDefault ?: 0.0,
                 brand = ov?.brand ?: card.brands.singleOrNull().orEmpty(),
@@ -604,7 +626,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // カタログに無いブランドがあれば防御的に追加する(データ不整合時も登録手段を失わないように)
         val brandSettings = (loaded.data.cardBrands.map { it.name } + loaded.data.campaigns.mapNotNull { it.cardBrand })
             .distinct()
-            .map { brand -> BrandSetting(brand = brand, owned = brand in settings.ownedBrands) }
+            .map { brand ->
+                BrandSetting(
+                    brand = brand,
+                    owned = brand in settings.ownedBrands,
+                    color = loaded.data.cardBrands
+                        .firstOrNull { it.name.equals(brand, ignoreCase = true) }?.color,
+                )
+            }
 
         val qrPaymentSettings = loaded.data.qrPayments.map { qr ->
             QrPaymentSetting(
@@ -639,6 +668,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 cardSettings = cardSettings,
                 brandSettings = brandSettings,
                 qrPaymentSettings = qrPaymentSettings,
+                customCards = settings.customCards,
                 registeredAreas = settings.registeredAreas,
                 dataCommitRef = settings.dataCommitRef,
                 useTestData = settings.useTestData,
@@ -1525,6 +1555,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onSetBrandOwned(brand: String, owned: Boolean) =
         viewModelScope.launch { settingsRepo.setBrandOwned(brand, owned) }
+
+    fun onAddCustomCard(name: String, color: String?, brand: String) = viewModelScope.launch {
+        settingsRepo.addCustomCard(
+            CustomCard(
+                id = CustomCard.ID_PREFIX + UUID.randomUUID(),
+                name = name.trim(),
+                color = color,
+                brand = brand,
+            )
+        )
+    }
+
+    fun onUpdateCustomCard(card: CustomCard) =
+        viewModelScope.launch { settingsRepo.updateCustomCard(card.copy(name = card.name.trim())) }
+
+    fun onRemoveCustomCard(id: String) =
+        viewModelScope.launch { settingsRepo.removeCustomCard(id) }
 
     fun onAddRegisteredArea(area: RegisteredArea) =
         viewModelScope.launch { settingsRepo.addRegisteredArea(area) }

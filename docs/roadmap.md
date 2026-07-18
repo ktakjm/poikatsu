@@ -3,7 +3,7 @@
 開発の現在地と今後の計画をまとめるドキュメント。
 フェーズの定義と背景は [PLAN.md](../PLAN.md)、コードの構成は [code-guide.md](code-guide.md)、個別タスクは [GitHub Issues](https://github.com/ktakjm/poikatsu/issues)（[Project Board](https://github.com/users/ktakjm/projects/1)）を参照。
 
-最終更新: 2026-07-13
+最終更新: 2026-07-19
 
 ## 1. 現在地サマリ
 
@@ -57,6 +57,8 @@ flowchart LR
 - **多チェーン施策の表示改善と地図ブリッジ・チェーン絞り込みの複数選択化（[#45](https://github.com/ktakjm/poikatsu/issues/45)/[#46](https://github.com/ktakjm/poikatsu/issues/46)）**: #43 の多チェーン促販施策がカード一覧で先頭チェーン 1 枚に見える表示ギャップへの対処。campaigns.json に `display_name`（カード表示用の短いタイトル。任意・多チェーン promotion 専用。schema は互換維持）を追加し、タイトルのフォールバック連鎖（display_name → 単一チェーンは merchant 名 → 「{先頭チェーン} 他Nチェーン」→ name）を導入（登録規則は mapping.md）。地図タブのチェーン絞り込み（レンズ 2 段目）を `Set<Merchant>` に複数選択化（`ChainFilterDropdown` チェックボックス・チェーンごとの解除可能ピル・0 件文言の複数対応。純クライアントフィルタなので YOLP コスト増なし）。施策詳細（期間限定タブ）に地図ブリッジを追加: お店タブと同じ FilledTonalButton を本文上に置き（単一「近くのこのお店を探す」/複数「近くの対象店舗を探す」）、チェーン個別の絞り込みは地図側ピルに一本化（個別チップはアクションに読めず廃止）。開始前・recurrence 非対象日もブリッジ可（YOLP 検索対象へ絞り込み中 merchant を加え、判定 0 件でも場所確認用に表示。warning 色の注意面で案内）。お店/期間限定どちらのブリッジも閉じた詳細画面を保存し、地図タブの戻る操作でブリッジ元へ復帰（`selectionBridgeReturn`/`campaignBridgeReturn`）。カード一覧のバッジ消失（FlowRow と IntrinsicSize.Min の相性で折り返し行がクリップ）を weight(fill=false) の Row へ変更して修正。UI 文言の単独「店」を「お店」に統一（2026-07-16、実機検証済み）
 - **決済手段追加 AEON Pay・メルペイと決済アプリ複数対応（[#42](https://github.com/ktakjm/poikatsu/issues/42)）**: 規約確認を [coupon-collection-tos.md](coupon-collection-tos.md) に追記（AEON はグレーな一般条項+WAF の 403 を尊重してイオン系ドメイン不アクセス+半手動に、メルカリはガイドの禁止行為明記により楽天方式に。いずれも公開基準で保守側）。qr_payments カタログへ `aeon_pay` / `merpay` を追加（`enabled_default: false`。識別色はイオンマゼンタ/メルペイブルーの近似）し、collect-campaigns スキルに両社の収集経路（自治体クロスチェック+PR TIMES/加盟店側）を組み込み。既収録の自治体施策へ遡及（かなトク AEON Pay/メルペイ、千葉県・千葉市 AEON Pay。全て自治体側一次情報で確認）。AEON Pay が単独アプリ / iAEON の 2 本立てのため qr_payments を `app_packages`（サービス:アプリ = 1:N、schema_version 7）へ刷新し、判定詳細の起動リンクを候補全部のボタン表示に変更（`CampaignJudgment.appLinks` へ統合・Manifest `<queries>` も追随）（2026-07-16、実機検証済み）
 - **対象/対象外スコープの両階層統一と conditions 解体（[#41](https://github.com/ktakjm/poikatsu/issues/41)）**: UI 非表示のまま公式の言い切り（参加登録店舗制・コンビニ対象外・チャネル限定等）が埋没していた `conditions` を解体し、`eligible_notes` / `ineligible_notes`（`[String]`）を**施策レベルと merchant_rules の両階層に同名・同型で導入**（旧 `note`/`exclusion_note` を改名。schema_version 10）。線引きは「見落とすとユーザーが損するか」: 損する言い切り（対象外+「〜のみ対象」型の限定）は ineligible_notes（warning 面 1 コンテナに箇条書き）、対象の拡張・明確化は eligible_notes（通常ロール）、行き場の無い補足は `memo`（旧 conditions。非表示・収集スキルの照合台帳）。判定詳細はレベル横断で連結した「対象」「対象外」2 セクション表示（お店/期間限定タブ共有 Composable）で、単一チェーン promotion のチャネル限定を施策レベルへ移し期間限定タブでも見えるように（松屋。あわせて `requires_entry` 未設定バグ修正、MUFG も要エントリー化）。階層の使い分けは「一様な事実=施策直下・店舗ごとの呼び分けは merchant 側（集約しすぎない）」。文字量圧縮の運用規則（既定値どおりの事実は書かない・冗長な言い換えをしない・バリアント間で cap_note/notes を統一）と整合性テスト（旧キー残存の生テキスト検出・payment_instruction 非空・memo への言い切り混入禁止）を追加し、data/README.md・mapping.md・code-guide.md を同一コミットで更新（2026-07-18、実機検証済み）
+
+- **カスタムカード登録（[#2](https://github.com/ktakjm/poikatsu/issues/2)）**: 設定画面マイカードにカタログ外カードの追加・編集・削除 UI を追加。名前+識別色（12 色パレット+HEX カラーコード入力。未選択はグレー既定色）+国際ブランドを DataStore（`custom_cards`）に保持し、id は `custom:<UUID>` でカタログと衝突しない採番。エンジンへは PaymentCard に写して配管済みで、判定はキャンペーン駆動のため [#7](https://github.com/ktakjm/poikatsu/issues/7) カスタムキャンペーンが `custom:` id を参照した時点で判定に効く（ブランド付き登録は `card_brand` 施策に今から一致。`resolveCard` は firstOrNull なので `owned_brands` と重複しても判定は施策につき 1 件）。あわせて設定画面の決済手段（カード・ブランド・コード決済）全行に発行体の識別色ドット（24dp）を名前に併記し、カード行の「持っている/持っていない」補助文言を削除。UI 文言を「QR決済」→「コード決済」へ変更（商標配慮を保守側に。識別子・スキーマの `qr_payments` は維持）。副産物として、定額施策（`discount_amount`）に代表カードの常設率が `effectiveRate` へ混入し定額同士のソートが金額降順にならない問題を修正（`welcatsuApplied` も「カードの率を実際に表示したときのみ」に厳密化。回帰テスト追加）（2026-07-19、実機検証済み）
 
 ## 3. 今後
 

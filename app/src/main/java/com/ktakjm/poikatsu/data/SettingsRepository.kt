@@ -33,6 +33,30 @@ data class CardOverride(
     val welcatsu: Boolean = false,
 )
 
+/**
+ * ユーザーが登録するカタログ外カード(カスタムカード)。カタログ(payment_methods.json)未収録の
+ * カードを、カスタムキャンペーン(#7)の紐付け先エンティティとして持つ。カタログとは分離して
+ * DataStore に保存する(同梱データの JSON は汎用に保つ方針のため)。
+ * 後日そのカードがカタログに収録された場合は、カスタム側を手動削除して乗り換える運用。
+ */
+@Serializable
+data class CustomCard(
+    /** 「custom:<UUID>」形式。カタログの cards.id と衝突しない採番 */
+    val id: String,
+    val name: String,
+    /** 識別色(#RRGGBB)。ロゴは使わない方針のため色で識別する。null は未選択= [DEFAULT_COLOR] */
+    val color: String? = null,
+    /** 国際ブランド(例: "Visa")。空文字は未選択。イシュアー不問のブランド施策(card_brand)に一致する */
+    val brand: String = "",
+) {
+    companion object {
+        const val ID_PREFIX = "custom:"
+
+        /** 色未選択時のデフォルト色(ニュートラルグレー。どのカタログ発行体色とも紛れにくい) */
+        const val DEFAULT_COLOR = "#9E9E9E"
+    }
+}
+
 /** アプリ全体の設定スナップショット。DataStore から1本の Flow で配る。 */
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -64,6 +88,8 @@ data class AppSettings(
     val ownedBrands: Set<String> = emptySet(),
     /** 登録エリア(自治体単体 or グループ)。期間限定タブの地域フィルタに使う */
     val registeredAreas: List<RegisteredArea> = emptyList(),
+    /** カタログ外のカスタムカード(登録順) */
+    val customCards: List<CustomCard> = emptyList(),
 )
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore("settings")
@@ -91,6 +117,7 @@ class SettingsRepository(private val context: Context) {
         // 旧キー "municipalities"(RegisteredMunicipality のリスト)は公開前のスキーマ刷新で廃止。
         // 移行せず捨てる(登録し直してもらう)
         val REGISTERED_AREAS = stringPreferencesKey("registered_areas")
+        val CUSTOM_CARDS = stringPreferencesKey("custom_cards")
     }
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -108,6 +135,7 @@ class SettingsRepository(private val context: Context) {
             enabledQrPaymentIds = prefs.decodeQrEnabled(),
             ownedBrands = prefs.decodeOwnedBrands(),
             registeredAreas = prefs.decodeRegisteredAreas(),
+            customCards = prefs.decodeCustomCards(),
         )
     }
 
@@ -208,6 +236,26 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    suspend fun addCustomCard(card: CustomCard) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.CUSTOM_CARDS] = json.encodeToString(prefs.decodeCustomCards() + card)
+        }
+    }
+
+    suspend fun updateCustomCard(card: CustomCard) {
+        context.settingsDataStore.edit { prefs ->
+            val updated = prefs.decodeCustomCards().map { if (it.id == card.id) card else it }
+            prefs[Keys.CUSTOM_CARDS] = json.encodeToString(updated)
+        }
+    }
+
+    suspend fun removeCustomCard(id: String) {
+        context.settingsDataStore.edit { prefs ->
+            val updated = prefs.decodeCustomCards().filterNot { it.id == id }
+            prefs[Keys.CUSTOM_CARDS] = json.encodeToString(updated)
+        }
+    }
+
     private fun Preferences.decodeOverrides(): Map<String, CardOverride> =
         this[Keys.CARD_OVERRIDES]
             ?.let { runCatching { json.decodeFromString<Map<String, CardOverride>>(it) }.getOrNull() }
@@ -226,5 +274,10 @@ class SettingsRepository(private val context: Context) {
     private fun Preferences.decodeRegisteredAreas(): List<RegisteredArea> =
         this[Keys.REGISTERED_AREAS]
             ?.let { runCatching { json.decodeFromString<List<RegisteredArea>>(it) }.getOrNull() }
+            ?: emptyList()
+
+    private fun Preferences.decodeCustomCards(): List<CustomCard> =
+        this[Keys.CUSTOM_CARDS]
+            ?.let { runCatching { json.decodeFromString<List<CustomCard>>(it) }.getOrNull() }
             ?: emptyList()
 }
