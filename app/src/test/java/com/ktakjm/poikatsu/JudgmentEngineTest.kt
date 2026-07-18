@@ -7,6 +7,7 @@ import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.OfficialStoreList
 import com.ktakjm.poikatsu.data.PaymentCard
+import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.ProductScope
@@ -732,6 +733,45 @@ class JudgmentEngineTest {
         val result = engine.judgeAll(testMerchant, today, setOf("paypay"))
         assertEquals("PayPay", result.bestOption!!.method)
         assertEquals(20.0, result.bestOption!!.rate!!, 0.001)
+    }
+
+    @Test
+    fun `カードの定額施策に常設率が混ざらず_定額同士は金額降順`() {
+        // 常設率の高いカード(10%+ウエル活)の300円引きと、率の低いカード(1%)の500円引き。
+        // カードの常設率が effectiveRate に漏れるとソートが率比較で決まり300円引きが先に並ぶ
+        // (定額同士は金額降順が正)。ウエル活注記もカード率を表示しない定額施策では出さない
+        val discount300 = campaignWithPeriod(
+            type = CampaignType.PROMOTION,
+            benefitType = BenefitType.DISCOUNT,
+            rateBase = null,
+            discountAmount = 300,
+        ).copy(id = "d300")
+        val discount500 = campaignWithPeriod(
+            type = CampaignType.PROMOTION,
+            benefitType = BenefitType.DISCOUNT,
+            cardId = "low_rate_card",
+            rateBase = null,
+            discountAmount = 500,
+        ).copy(id = "d500")
+        val welcatsuCard = testCard.copy(
+            pointMultiplier = PointMultiplier(label = "ウエル活", factor = 1.5),
+            welcatsuApplied = true,
+        )
+        val engine = JudgmentEngine(
+            PoikatsuData(
+                merchants = listOf(testMerchant),
+                campaigns = listOf(discount300, discount500),
+                cards = listOf(
+                    welcatsuCard,
+                    PaymentCard(id = "low_rate_card", cardName = "低率カード", effectiveRateDefault = 1.0),
+                ),
+                updatedAt = "2026-06-01",
+            ),
+        )
+        val result = engine.judgeAll(testMerchant, today)
+        assertTrue(result.judgments.all { it.effectiveRate == null })
+        assertEquals(listOf("d500", "d300"), result.judgments.map { it.campaign.id })
+        assertTrue(result.judgments.none { it.welcatsuApplied })
     }
 
     // ---- BenefitType / CampaignType のテスト ----

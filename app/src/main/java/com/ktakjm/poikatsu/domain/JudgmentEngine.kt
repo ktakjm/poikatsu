@@ -559,10 +559,14 @@ class JudgmentEngine(private val data: PoikatsuData) {
                 val campaignRate = rule.rateOverride ?: campaign.rateBase
                 val usesCampaignRate =
                     campaign.campaignType == CampaignType.PROMOTION && campaignRate != null
-                val effectiveRate = if (usesCampaignRate) {
-                    campaignRate
-                } else {
-                    card.effectiveRateDefault ?: campaignRate ?: 0.0
+                // 定額施策(discount_amount 持ち)にはカードの常設率を使わない(特典は「○円引き」で
+                // 完結しており、率を残すと judgeAll のソートで定額同士の金額降順が率の比較に
+                // 崩される)。QR 側(judgeQr)は元々施策の率しか使わないため、これで挙動が揃う
+                val usesCardRate = !usesCampaignRate && campaign.discountAmount == null
+                val effectiveRate = when {
+                    usesCampaignRate -> campaignRate
+                    usesCardRate -> card.effectiveRateDefault ?: campaignRate ?: 0.0
+                    else -> null
                 }
                 // ブランド施策はどのカード会社のカードでも使えるため、バッジは特定カード名でなく
                 // ブランド名(Visa 等)を出す。ポイント倍率もカード固有の話なので出さない
@@ -574,9 +578,10 @@ class JudgmentEngine(private val data: PoikatsuData) {
                     effectiveRate = effectiveRate,
                     discountAmount = campaign.discountAmount,
                     pointMultiplier = card.pointMultiplier.takeUnless { isBrandCampaign },
-                    // ウエル活倍率はカードの実効率にだけ掛かっている。施策側の率を採用したときに
-                    // 「ウエル活利用時の実質還元率」の注記が出ると誤りなのでフラグを落とす
-                    welcatsuApplied = card.welcatsuApplied && !usesCampaignRate && !isBrandCampaign,
+                    // ウエル活倍率はカードの実効率にだけ掛かっている。施策側の率を採用したときや
+                    // カードの率を使わない定額施策で「ウエル活利用時の実質還元率」の注記が出ると
+                    // 誤りなのでフラグを落とす(=カードの率を実際に表示したときだけ true)
+                    welcatsuApplied = card.welcatsuApplied && usesCardRate && !isBrandCampaign,
                     // Google Pay が還元対象と公式が明記している施策だけウォレット起動リンクを出す
                     appLinks = listOfNotNull(campaign.walletAppLink),
                     today = today,
