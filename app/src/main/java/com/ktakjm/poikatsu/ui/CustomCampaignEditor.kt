@@ -181,6 +181,9 @@ internal fun CustomCampaignEditorScreen(
     val rateError = rateText.isNotBlank() && (rate == null || rate < 0)
     val discount = discountText.trim().toIntOrNull()
     val discountError = discountText.isNotBlank() && (discount == null || discount <= 0)
+    // 率と定額は排他(campaigns.json と同じ前提)。両方入れると定額だけが表示され率が黙って
+    // 無視されるため、保存前に弾く。「10%OFF・最大500円引き」型は率+還元上限で表す
+    val benefitConflict = rate != null && discount != null
     val isLottery = benefitType == "lottery"
     val daysOfMonth = parseDaysOfMonth(daysOfMonthText)
     val daysOfMonthError = recurrenceMode == RecurrenceMode.MONTHLY &&
@@ -204,7 +207,7 @@ internal fun CustomCampaignEditorScreen(
         !numberError(usageLimitText, usageLimit) &&
         !numberError(perCapText, perCap) && !numberError(totalCapText, totalCap)
     val canSave = name.isNotBlank() && selectedPaymentKeys.isNotEmpty() && hasStore &&
-        !rateError && !discountError && hasBenefit &&
+        !rateError && !discountError && !benefitConflict && hasBenefit &&
         recurrenceOk && !daysOfMonthError && !periodError && detailNumbersOk
 
     // 未確定の自由入力店名をチップ化して取り込む(「追加」押し忘れの入力を捨てない)
@@ -396,11 +399,14 @@ internal fun CustomCampaignEditorScreen(
                 label = { Text(if (benefitType == "discount") "割引率" else "還元率") },
                 suffix = { Text("%") },
                 singleLine = true,
-                isError = rateError,
+                isError = rateError || benefitConflict,
                 supportingText = {
                     Text(
-                        if (rateError) "0以上の数値を入力してください"
-                        else "率で表せない特典は空欄にして定額かメモへ"
+                        when {
+                            rateError -> "0以上の数値を入力してください"
+                            benefitConflict -> "率と定額はどちらか一方だけ入力してください"
+                            else -> "率で表せない特典は空欄にして定額かメモへ"
+                        }
                     )
                 },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -412,10 +418,15 @@ internal fun CustomCampaignEditorScreen(
                 label = { Text(if (benefitType == "discount") "定額割引" else "定額還元") },
                 suffix = { Text("円") },
                 singleLine = true,
-                isError = discountError,
+                isError = discountError || benefitConflict,
                 supportingText = {
-                    if (discountError) Text("1以上の整数を入力してください")
-                    else Text("「500円引き」のような定額特典。率とどちらか一方でよい")
+                    Text(
+                        when {
+                            discountError -> "1以上の整数を入力してください"
+                            benefitConflict -> "率と定額はどちらか一方だけ入力してください。「10%OFF・最大500円引き」型は率+詳細条件の還元上限で表せます"
+                            else -> "「500円引き」のような定額特典(率とどちらか一方)"
+                        }
+                    )
                 },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
@@ -530,7 +541,7 @@ internal fun CustomCampaignEditorScreen(
                 onValueChange = { ineligibleNote = it },
                 label = { Text("対象外・注意") },
                 placeholder = { Text("例: セール品は対象外") },
-                supportingText = { Text("1行につき1項目。見落とすと損する条件。判定カードに警告色で表示されます") },
+                supportingText = { Text("1行につき1項目。判定カードに警告色で表示されます") },
                 minLines = 2,
                 modifier = Modifier.fillMaxWidth(),
             )
