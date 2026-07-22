@@ -90,7 +90,7 @@ class JudgmentEngineTest {
                 merchantRules = listOf(
                     MerchantRule(merchantId = "seven_eleven"),
                     MerchantRule(merchantId = "sushiro"),
-                    MerchantRule(merchantId = "kurazushi", amexExcluded = true),
+                    MerchantRule(merchantId = "kurazushi", ineligibleBrands = listOf("Amex")),
                 ),
             ),
         ),
@@ -304,40 +304,59 @@ class JudgmentEngineTest {
     }
 
     @Test
-    fun `Amex は amex_excluded の店舗で MUFG が対象外になる`() {
-        val kurazushi = data.merchants.first { it.id == "kurazushi" } // amex_excluded = true
+    fun `除外ブランドは ineligible_brands の店舗で MUFG が対象外になる`() {
+        val kurazushi = data.merchants.first { it.id == "kurazushi" } // ineligible_brands = ["Amex"]
         val amexEngine = engineWithCards(cardsWithMufgBrand("Amex"))
         assertTrue(amexEngine.judgeCards(kurazushi, today).none { it.campaign.id == "mufg_point_up_program" })
-        // 非 Amex(既定カタログ=Mastercard)では従来どおり MUFG が出る
+        // リストに無いブランド(既定カタログ=Mastercard)では従来どおり MUFG が出る
         assertTrue(engine.judgeCards(kurazushi, today).any { it.campaign.id == "mufg_point_up_program" })
     }
 
     @Test
-    fun `Amex でも amex_excluded でない店舗では MUFG が残る`() {
-        val sevenEleven = data.merchants.first { it.id == "seven_eleven" } // amex_excluded = false
+    fun `除外ブランドでも ineligible_brands の無い店舗では MUFG が残る`() {
+        val sevenEleven = data.merchants.first { it.id == "seven_eleven" } // ineligible_brands なし
         val amexEngine = engineWithCards(cardsWithMufgBrand("Amex"))
         assertTrue(amexEngine.judgeCards(sevenEleven, today).any { it.campaign.id == "mufg_point_up_program" })
     }
 
     @Test
-    fun `ブランド未選択でAmexを取りうるカードはamex_excludedの店を除外する(不利側に倒す)`() {
+    fun `ineligible_brandsは複数ブランドを除外できる`() {
+        val kurazushi = data.merchants.first { it.id == "kurazushi" }
+        val multiBrandData = data.copy(
+            campaigns = data.campaigns.map { c ->
+                if (c.id != "mufg_point_up_program") c else c.copy(
+                    merchantRules = c.merchantRules.map { r ->
+                        if (r.merchantId == "kurazushi") r.copy(ineligibleBrands = listOf("Amex", "JCB")) else r
+                    },
+                )
+            },
+        )
+        val jcbEngine = JudgmentEngine(multiBrandData.copy(cards = cardsWithMufgBrand("JCB")))
+        assertTrue(jcbEngine.judgeCards(kurazushi, today).none { it.campaign.id == "mufg_point_up_program" })
+        // リストに無いブランドは従来どおり対象
+        val visaEngine = JudgmentEngine(multiBrandData.copy(cards = cardsWithMufgBrand("Visa")))
+        assertTrue(visaEngine.judgeCards(kurazushi, today).any { it.campaign.id == "mufg_point_up_program" })
+    }
+
+    @Test
+    fun `ブランド未選択で除外ブランドを取りうるカードはineligible_brandsの店を除外する(不利側に倒す)`() {
         val kurazushi = data.merchants.first { it.id == "kurazushi" }
         fun mufgWith(brands: List<String>) = data.cards.map {
             if (it.id == "mufg") it.copy(brand = "", brands = brands) else it
         }
-        // Amex を選択肢に含むカードが未選択 → 好条件を誤提示しないよう除外
+        // 除外ブランド(Amex)を選択肢に含むカードが未選択 → 好条件を誤提示しないよう除外
         val couldBeAmex = engineWithCards(mufgWith(listOf("Visa", "Mastercard", "JCB", "Amex")))
         assertTrue(couldBeAmex.judgeCards(kurazushi, today).none { it.campaign.id == "mufg_point_up_program" })
         // カタログに選択肢情報が無い(旧データ等)場合も保守的に除外
         val unknownBrands = engineWithCards(mufgWith(emptyList()))
         assertTrue(unknownBrands.judgeCards(kurazushi, today).none { it.campaign.id == "mufg_point_up_program" })
-        // amex_excluded でない店には未選択でも出る
+        // ineligible_brands の無い店には未選択でも出る
         val sevenEleven = data.merchants.first { it.id == "seven_eleven" }
         assertTrue(couldBeAmex.judgeCards(sevenEleven, today).any { it.campaign.id == "mufg_point_up_program" })
     }
 
     @Test
-    fun `ブランド未選択でもAmexを取り得ないカードはamex_excludedの店を除外しない`() {
+    fun `ブランド未選択でも除外ブランドを取り得ないカードはineligible_brandsの店を除外しない`() {
         val kurazushi = data.merchants.first { it.id == "kurazushi" }
         val visaOrMaster = engineWithCards(
             data.cards.map {
@@ -1559,6 +1578,18 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
+    fun `実データ_merchant_rulesのineligible_brandsがカタログのcard_brandsを参照している`() {
+        data.campaigns.forEach { c ->
+            c.merchantRules.flatMap { it.ineligibleBrands }.forEach { brand ->
+                assertTrue(
+                    "${c.id}: ineligible_brands '$brand' がカタログの card_brands に無い(typo だと除外が効かない)",
+                    data.cardBrands.any { it.name.equals(brand, ignoreCase = true) },
+                )
+            }
+        }
+    }
+
+    @Test
     fun `実データ_QR決済カタログが読み込めている`() {
         val qr = data.qrPayments
         assertTrue(qr.isNotEmpty())
@@ -1655,6 +1686,18 @@ class TestDataIntegrityTest {
                 )
             }
             c.paymentMethodId?.let { assertTrue("${c.id}: payment_method_id '$it' が qr_payments に無い", it in qrIds) }
+        }
+    }
+
+    @Test
+    fun `テストデータ_merchant_rulesのineligible_brandsがカタログのcard_brandsを参照している`() {
+        data.campaigns.forEach { c ->
+            c.merchantRules.flatMap { it.ineligibleBrands }.forEach { brand ->
+                assertTrue(
+                    "${c.id}: ineligible_brands '$brand' がカタログの card_brands に無い(typo だと除外が効かない)",
+                    data.cardBrands.any { it.name.equals(brand, ignoreCase = true) },
+                )
+            }
         }
     }
 

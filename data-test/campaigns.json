@@ -1,6 +1,6 @@
 {
-  "schema_version": 10,
-  "updated_at": "2026-07-18",
+  "schema_version": 11,
+  "updated_at": "2026-07-23",
   "campaigns": [
     {
       "id": "test_card_program",
@@ -27,7 +27,7 @@
       "merchant_rules": [
         { "merchant_id": "test_combini" },
         { "merchant_id": "test_fastfood", "ineligible_notes": ["一部店舗のみ対象。公式の対象店舗検索で要確認"], "store_list_url": "https://example.com/store-list" },
-        { "merchant_id": "test_super", "amex_excluded": true, "eligible_notes": ["テストマート含む"], "ineligible_notes": ["商業施設内の一部店舗は対象外"], "official_store_list": {
+        { "merchant_id": "test_super", "ineligible_brands": ["Amex"], "eligible_notes": ["テストマート含む"], "ineligible_notes": ["商業施設内の一部店舗は対象外"], "official_store_list": {
           "eligible_stores": ["テスト駅前", "テストモール", "テスト中央"],
           "ineligible_stores": ["テスト商業施設内", "テスト空港"],
           "updated_date": "2026-07-01",

@@ -529,15 +529,17 @@ class JudgmentEngine(private val data: PoikatsuData) {
 
     /**
      * ブランド条件によりこの店を判定から除外するか。方針は「不確かな情報で実際より好条件を
-     * 提示しない」: 実ブランドが Amex のときに加え、**未選択でもこのカードが Amex を取りうる**
-     * (brands に Amex を含む、またはカタログに選択肢情報が無い)なら除外側に倒す。
-     * ブランド未選択で好条件側に倒すと、実際は Amex のユーザーに対象外店を対象と誤提示してしまう。
+     * 提示しない」: 実ブランドが除外リスト(ineligible_brands)に一致するときに加え、
+     * **未選択でもこのカードが除外ブランドを取りうる**(brands に除外ブランドを含む、または
+     * カタログに選択肢情報が無い)なら除外側に倒す。ブランド未選択で好条件側に倒すと、
+     * 実際は除外ブランドのユーザーに対象外店を対象と誤提示してしまう。
      * card_brand 施策側は未選択だとマッチしない(resolveCard)ので、こちらも一貫して保守的。
      */
     private fun excludedByBrand(rule: MerchantRule, card: PaymentCard): Boolean {
-        if (!rule.amexExcluded) return false
-        if (card.brand.isNotBlank()) return card.brand.equals("Amex", ignoreCase = true)
-        return card.brands.isEmpty() || card.brands.any { it.equals("Amex", ignoreCase = true) }
+        if (rule.ineligibleBrands.isEmpty()) return false
+        fun excluded(brand: String) = rule.ineligibleBrands.any { it.equals(brand, ignoreCase = true) }
+        if (card.brand.isNotBlank()) return excluded(card.brand)
+        return card.brands.isEmpty() || card.brands.any(::excluded)
     }
 
     /**

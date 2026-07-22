@@ -118,7 +118,12 @@ data class MerchantRule(
      * warning 面で表示。店舗ごとに実態・呼び名が異なるものはここに店舗別で持つ(campaign 直下に集約しない)
      */
     @SerialName("ineligible_notes") val ineligibleNotes: List<String> = emptyList(),
-    @SerialName("amex_excluded") val amexExcluded: Boolean = false,
+    /**
+     * この店で優遇対象外になるカードブランド名のリスト(payment_methods.json の card_brands の
+     * name を参照。整合性テストで強制)。実ブランドが一致(未選択でも取りうる場合を含む)すると
+     * この店は判定・検索・地図から除外される。「Visa/MC のみ対象」も残りブランドの除外で表現する
+     */
+    @SerialName("ineligible_brands") val ineligibleBrands: List<String> = emptyList(),
     @SerialName("store_list_url") val storeListUrl: String? = null,
     @SerialName("official_store_list") val officialStoreList: OfficialStoreList? = null,
 )

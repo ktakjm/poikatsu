@@ -178,7 +178,7 @@ erDiagram
         double rate_override "店舗別還元率(非null時rate_baseを上書き)"
         string_list eligible_notes "店固有の対象の言い切り(「〜も含む」等)"
         string_list ineligible_notes "店固有の対象外・限定の言い切り(「〜以外は対象外」形)"
-        bool amex_excluded
+        string_list ineligible_brands "優遇対象外のブランド(card_brands 参照)"
         string store_list_url "公式店舗一覧/検索リンク"
     }
     OFFICIAL_STORE_LIST {
@@ -365,9 +365,9 @@ flowchart LR
     RULE -- "なし" --> DROP
     RULE -- "あり" --> CARD{"保有カードあり?"}
     CARD -- "なし" --> DROP
-    CARD -- "あり" --> AMEX{"Amex かつ<br/>amex_excluded?"}
-    AMEX -- "はい" --> DROP
-    AMEX -- "いいえ" --> RATE["effectiveRate 決定<br/>+ 残日数警告"]
+    CARD -- "あり" --> BRAND{"実ブランドが<br/>ineligible_brands に一致?<br/>(未選択は取りうるなら一致扱い)"}
+    BRAND -- "はい" --> DROP
+    BRAND -- "いいえ" --> RATE["effectiveRate 決定<br/>+ 残日数警告"]
     RATE --> OUT["CampaignJudgment 返却<br/>（ソートは judgeAll で一括）"]
 
     style IN fill:#1565C0,stroke:#0D47A1,color:#fff
@@ -381,7 +381,7 @@ flowchart LR
 - **期間フィルタ**: `campaignStatus(campaign, today)` が ACTIVE の施策のみ。期限切れ・未来開始はスキップ。
 - **store_scope フィルタ**: `store_scope == "managed"` のみ。`external` の施策は「お店」「地図」に出さない。
 - **カード vs QR の分離**: `paymentMethodId == null` のカード施策のみ `judgeCards` が返す。QR 決済施策は `judgeQr` が担当（`enabledQrIds` でユーザーの利用 QR をフィルタ）。どちらも統一型 `CampaignJudgment` を返す。
-- **Amex の対象外**: カードブランドが Amex で店舗 rule が `amex_excluded` のとき、その店ではこの施策を除外する（警告ではなく非表示。検索・判定詳細・地図ピン/件数すべてに波及）。非 Amex（Mastercard/Visa/JCB）は従来どおり。
+- **ブランドの対象外**: カードの実ブランドが店舗 rule の `ineligible_brands` に含まれるとき、その店ではこの施策を除外する（警告ではなく非表示。検索・判定詳細・地図ピン/件数すべてに波及）。リストに無いブランドは従来どおり。ブランド未選択でも除外ブランドを取りうるカードは除外側に倒す（`JudgmentEngine.excludedByBrand`）。
 - **設定値の反映はマージ層**: 還元率の手入力・MUFG ブランド・ウエル活 ×1.5（`PaymentCard.point_multiplier` の係数）は `MainViewModel` が DataStore の差分（`CardOverride`）をカタログのカード一覧に重ねてからエンジンへ渡す。`JudgmentEngine` は純 Kotlin・実データテストのまま保つ（4 章「設定の永続化」／6.1 参照）。
 - **reward の無いチェーンは一覧に出さない**: 判定が空（所有カードで対象になる施策が無い）チェーンは検索結果・近隣リストから除外する（`MainViewModel.searchRewarded` と `loadNearbyAround` で `judgeAll` 非空のものだけ残す）。
 - **エントリー要否は持たない**: 還元率はユーザーが公式アプリの実効値（エントリー込み）を手入力する前提のため、`entry_done` フラグと未エントリー警告は廃止した。`CampaignJudgment.warnings` は期限切れ間近（残り 3 日以下）の警告に使われる。

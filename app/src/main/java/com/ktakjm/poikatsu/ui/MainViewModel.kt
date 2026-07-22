@@ -350,8 +350,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val brand: String,
         /** この製品で選べるブランドの選択肢(カタログ) */
         val brands: List<String>,
-        /** ブランド選択 UI を出すか。ブランドが判定に効き(Amex除外/ブランド施策)かつ選択肢が複数のカードのみ true */
+        /** ブランド選択 UI を出すか。ブランドが判定に効き(ブランド除外/ブランド施策)かつ選択肢が複数のカードのみ true */
         val showBrandPicker: Boolean,
+        /** このカードの施策で優遇対象外になり得るブランド(ineligible_brands の全ルール集約)。設定画面の警告文に使う */
+        val ineligibleBrands: List<String>,
         /** ウエル活チェックの定義(null ならチェックを出さない) */
         val pointMultiplier: PointMultiplier?,
         val welcatsu: Boolean,
@@ -557,8 +559,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
         // エンジン用: 所有カードのみ、上書きを反映したカード一覧。
         // 実ブランドはユーザー設定(CardOverride.brand)が唯一の情報源で、カタログが単一ブランド製品の
-        // ときだけ自動確定する。複数ブランド製品で未選択なら空文字=どのブランドとも断定しない
-        // (Amex 除外は発動せず、card_brand 施策にも一致しない)。
+        // ときだけ自動確定する。複数ブランド製品で未選択なら空文字=どのブランドとも断定せず
+        // 好条件側に倒さない(ineligible_brands は除外ブランドを取りうる限り発動し、
+        // card_brand 施策には一致しない。JudgmentEngine.excludedByBrand 参照)。
         val mergedCards = baseCards.mapNotNull { card ->
             val ov = settings.cardOverrides[card.id]
             if (ov?.owned == false) return@mapNotNull null
@@ -657,10 +660,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val hasBrandCampaign = loaded.data.campaigns.any { it.cardBrand != null }
         val cardSettings = baseCards.map { card ->
             val ov = settings.cardOverrides[card.id]
-            // 1カード:N施策なので、紐づくどれかの施策に amex_excluded ルールがあればブランド選択を出す
+            // 1カード:N施策なので、紐づくどれかの施策に ineligible_brands ルールがあればブランド選択を出す
             val cardCampaigns = loaded.data.campaigns.filter { it.cardId == card.id }
-            val brandAffectsJudgment =
-                cardCampaigns.any { c -> c.merchantRules.any { it.amexExcluded } } || hasBrandCampaign
+            val ineligibleBrands = cardCampaigns
+                .flatMap { c -> c.merchantRules.flatMap { it.ineligibleBrands } }
+                .distinct()
+            val brandAffectsJudgment = ineligibleBrands.isNotEmpty() || hasBrandCampaign
             CardSetting(
                 cardId = card.id,
                 cardName = card.cardName,
@@ -669,9 +674,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 rate = ov?.rate ?: card.effectiveRateDefault ?: 0.0,
                 brand = ov?.brand ?: card.brands.singleOrNull().orEmpty(),
                 brands = card.brands,
-                // ブランドが判定に効き(Amex除外 or ブランド施策あり)、かつ製品として選択肢が複数
+                // ブランドが判定に効き(ブランド除外 or ブランド施策あり)、かつ製品として選択肢が複数
                 // あるカードだけ選択 UI を出す(単一ブランド製品は固定なので出さない)
                 showBrandPicker = brandAffectsJudgment && card.brands.size > 1,
+                ineligibleBrands = ineligibleBrands,
                 pointMultiplier = card.pointMultiplier,
                 welcatsu = ov?.welcatsu ?: false,
             )

@@ -622,8 +622,8 @@ private fun CardSettingItem(
 ) {
     var showRateDialog by remember { mutableStateOf(false) }
     var showBrandRequiredDialog by remember { mutableStateOf(false) }
-    // ブランドが判定に効くカード(showBrandPicker)は、未選択のまま有効化すると Amex 除外等が
-    // 発動せず過剰表示になり得るため、有効化時にブランド選択を必須にする(選択せず閉じたら有効化しない)
+    // ブランドが判定に効くカード(showBrandPicker)は、未選択のままだと除外側に倒れて
+    // 過少表示になり得るため、有効化時にブランド選択を必須にする(選択せず閉じたら有効化しない)
     val requestOwnedChange: (Boolean) -> Unit = { owned ->
         if (owned && card.showBrandPicker && card.brand.isBlank()) {
             showBrandRequiredDialog = true
@@ -648,16 +648,23 @@ private fun CardSettingItem(
                 modifier = Modifier.padding(start = 24.dp),
             )
             if (card.brand.isBlank()) {
+                // 除外され得るブランドはデータ駆動(ineligible_brands の集約)。除外ルールが無く
+                // ブランド施策だけで選択 UI が出ているカードには、未一致の説明にとどめる
+                val unselectedNote = if (card.ineligibleBrands.isNotEmpty()) {
+                    "ブランド未選択のため、${card.ineligibleBrands.joinToString("/")} で優遇対象外になり得る店舗は対象外として扱われます。お持ちのブランドを選ぶと正確に判定されます"
+                } else {
+                    "ブランド未選択のため、ブランド限定の施策は判定に出ません。お持ちのブランドを選ぶと正確に判定されます"
+                }
                 Text(
-                    "ブランド未選択のため、Amex で優遇対象外になり得る店舗は対象外として扱われます。お持ちのブランドを選ぶと正確に判定されます",
+                    unselectedNote,
                     style = MaterialTheme.typography.bodySmall,
                     color = warningColor(),
                     modifier = Modifier.padding(start = 24.dp, end = 16.dp, bottom = 8.dp),
                 )
             }
-            if (card.brand.equals("Amex", ignoreCase = true)) {
+            if (card.ineligibleBrands.any { it.equals(card.brand, ignoreCase = true) }) {
                 Text(
-                    "Amex は一部店舗が優遇対象外になります",
+                    "${card.brand} は一部店舗が優遇対象外になります",
                     style = MaterialTheme.typography.bodySmall,
                     color = warningColor(),
                     modifier = Modifier.padding(start = 24.dp, end = 16.dp, bottom = 8.dp),
