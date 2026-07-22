@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
@@ -27,6 +29,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,7 +43,9 @@ import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.domain.CampaignType
 import com.ktakjm.poikatsu.domain.campaignType
+import com.ktakjm.poikatsu.domain.customCampaignBaseId
 import com.ktakjm.poikatsu.domain.formatBenefit
+import com.ktakjm.poikatsu.domain.isCustom
 import com.ktakjm.poikatsu.domain.isTargetDay
 import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.nextTargetDay
@@ -59,6 +64,8 @@ import java.time.temporal.ChronoUnit
 internal fun CampaignPane(
     activeCampaigns: List<Campaign>,
     upcomingCampaigns: List<Campaign>,
+    /** 終了日を過ぎたカスタムキャンペーン。編集・削除の入口を残すため専用セクションに出す */
+    expiredCustomCampaigns: List<Campaign>,
     merchantNames: Map<String, String>,
     campaignColors: Map<String, String>,
     filter: CampaignFilter,
@@ -71,8 +78,11 @@ internal fun CampaignPane(
     onSelectGroup: (List<Campaign>) -> Unit,
 ) {
     // 地域絞り込みで 0 件のときは全画面の空表示にせず、チップ行と件数メッセージを出す
-    // (「すべて」へ切り替える導線を残すため)
-    if (activeCampaigns.isEmpty() && upcomingCampaigns.isEmpty() && !(showRegionChip && regionFilterOn)) {
+    // (「すべて」へ切り替える導線を残すため)。終了済みカスタムがあるときも一覧側に出す。
+    // カスタムキャンペーンの登録導線はこの画面には無い(PoikatsuApp の FAB。空状態でも出ている)
+    if (activeCampaigns.isEmpty() && upcomingCampaigns.isEmpty() && expiredCustomCampaigns.isEmpty() &&
+        !(showRegionChip && regionFilterOn)
+    ) {
         Centered {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -88,7 +98,7 @@ internal fun CampaignPane(
                 Text("期間限定キャンペーンはありません", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "カード会社の期間限定キャンペーンや自治体のキャッシュレス還元施策が登録されると、ここに表示されます。",
+                    "カード会社の期間限定キャンペーンや自治体のキャッシュレス還元施策が登録されると、ここに表示されます。右下の＋からは会員ポータル限定クーポンなどを自分で登録できます。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.outline,
                 )
@@ -117,7 +127,8 @@ internal fun CampaignPane(
 
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(bottom = 16.dp),
+        // 末尾は FAB(56dp+マージン)に隠れない高さまで空ける
+        contentPadding = PaddingValues(bottom = 88.dp),
     ) {
         item {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -189,6 +200,30 @@ internal fun CampaignPane(
                 )
             }
         }
+        // 終了済みの自作キャンペーン。判定・上の一覧からは消えているが、編集(期間延長)・削除の
+        // 入口としてここに残す。フィルタ(自治体/以外)は掛けない(自作は常に自治体以外のため)
+        val expiredGroups = expiredCustomCampaigns
+            .groupBy { customCampaignBaseId(it.id) }
+            .values.toList()
+        if (expiredGroups.isNotEmpty() && filter != CampaignFilter.MUNICIPAL) {
+            item {
+                Text(
+                    "終了(自作)",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+            }
+            items(expiredGroups, key = { "expired_${it.first().id}" }) { group ->
+                CampaignSummaryCard(
+                    group,
+                    CampaignStatus.EXPIRED,
+                    merchantNames,
+                    campaignColors,
+                    onClick = { onSelectGroup(group) },
+                )
+            }
+        }
     }
 }
 
@@ -248,6 +283,9 @@ private fun CampaignSummaryCard(
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.weight(1f, fill = false),
                         )
+                        if (campaigns.any { it.isCustom }) {
+                            CustomCampaignBadge()
+                        }
                         if (hasTimeLimited) {
                             TimeLimitedBadge()
                         }
@@ -312,6 +350,10 @@ internal fun CampaignDetail(
     onBack: () -> Unit,
     /** 対象チェーンの地図ブリッジ(merchant_id 群を渡す。チップは1件、まとめては全件) */
     onFindChains: (List<String>) -> Unit,
+    /** カスタムキャンペーンの編集(非 null のときだけ編集・削除の行を出す) */
+    onEditCustom: (() -> Unit)? = null,
+    /** カスタムキャンペーンの削除(確認ダイアログは呼び出し側が出す) */
+    onDeleteCustom: (() -> Unit)? = null,
 ) {
     BackHandler(onBack = onBack)
 
@@ -326,6 +368,27 @@ internal fun CampaignDetail(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(bottom = 16.dp),
     ) {
+        // カスタムキャンペーンだけ編集・削除の操作行を出す(登録内容の管理はこの詳細に集約)
+        if (onEditCustom != null || onDeleteCustom != null) {
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    onEditCustom?.let {
+                        OutlinedButton(onClick = it, modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("編集")
+                        }
+                    }
+                    onDeleteCustom?.let {
+                        OutlinedButton(onClick = it, modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("削除")
+                        }
+                    }
+                }
+            }
+        }
         // ブリッジは判定詳細(お店タブ)と同じく本文の上に置き、見た目・文言も揃える
         if (chainIds.isNotEmpty()) {
             item {
@@ -432,10 +495,14 @@ private fun campaignGroupMaxBenefit(campaigns: List<Campaign>): String? {
     return if (maxRate != null && ratesVary) "最大$label" else label
 }
 
-private fun buildPeriodLabel(earliestStart: LocalDate?, latestEnd: LocalDate?): String = buildString {
-    if (earliestStart != null) append(formatPeriodDate(earliestStart))
-    append("〜")
-    if (latestEnd != null) append(formatPeriodDate(latestEnd))
+/** 一覧カードの期間ラベル。開始・終了とも無ければ「終了日未定」(「〜」だけの表示にしない) */
+private fun buildPeriodLabel(earliestStart: LocalDate?, latestEnd: LocalDate?): String {
+    if (earliestStart == null && latestEnd == null) return "終了日未定"
+    return buildString {
+        if (earliestStart != null) append(formatPeriodDate(earliestStart))
+        append("〜")
+        if (latestEnd != null) append(formatPeriodDate(latestEnd))
+    }
 }
 
 /**
@@ -477,7 +544,11 @@ private fun groupCampaignsForDisplay(campaigns: List<Campaign>): List<List<Campa
     val municipalGroups = municipal
         .groupBy { it.region?.name ?: it.id }
         .values.toList()
-    val otherGroups = others.map { listOf(it) }
+    // カスタムは登録単位でまとめる(複数決済の登録は決済ごとの Campaign に展開されているため)。
+    // 同梱施策は id がユニークなので実質1件グループのまま
+    val otherGroups = others
+        .groupBy { if (it.isCustom) customCampaignBaseId(it.id) else it.id }
+        .values.toList()
     return municipalGroups + otherGroups
 }
 

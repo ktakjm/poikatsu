@@ -561,8 +561,11 @@ class JudgmentEngine(private val data: PoikatsuData) {
                     campaign.campaignType == CampaignType.PROMOTION && campaignRate != null
                 // 定額施策(discount_amount 持ち)にはカードの常設率を使わない(特典は「○円引き」で
                 // 完結しており、率を残すと judgeAll のソートで定額同士の金額降順が率の比較に
-                // 崩される)。QR 側(judgeQr)は元々施策の率しか使わないため、これで挙動が揃う
-                val usesCardRate = !usesCampaignRate && campaign.discountAmount == null
+                // 崩される)。QR 側(judgeQr)は元々施策の率しか使わないため、これで挙動が揃う。
+                // promotion で率も定額も無い施策(カスタムキャンペーンのメモのみ特典等)にも
+                // カードの常設率で代替しない(施策自体の特典でない率を表示し最良比較に載せてしまう)
+                val usesCardRate = !usesCampaignRate && campaign.discountAmount == null &&
+                    campaign.campaignType != CampaignType.PROMOTION
                 val effectiveRate = when {
                     usesCampaignRate -> campaignRate
                     usesCardRate -> card.effectiveRateDefault ?: campaignRate ?: 0.0

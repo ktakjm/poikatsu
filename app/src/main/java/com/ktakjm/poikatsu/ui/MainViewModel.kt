@@ -17,10 +17,13 @@ import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.YolpClient
 import com.ktakjm.poikatsu.data.YolpSearchConfig
 import com.ktakjm.poikatsu.data.AppSettings
+import com.ktakjm.poikatsu.data.CustomCampaign
+import com.ktakjm.poikatsu.data.CustomPayment
 import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.MunicipalityMaster
 import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PointMultiplier
+import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.QrPayment
 import com.ktakjm.poikatsu.data.RegisteredArea
@@ -29,8 +32,11 @@ import com.ktakjm.poikatsu.data.ThemeMode
 import com.ktakjm.poikatsu.domain.BenefitLabel
 import com.ktakjm.poikatsu.domain.BestPaymentOption
 import com.ktakjm.poikatsu.domain.CampaignJudgment
+import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.domain.CampaignType
 import com.ktakjm.poikatsu.domain.JudgmentEngine
+import com.ktakjm.poikatsu.domain.buildCustomMerchants
+import com.ktakjm.poikatsu.domain.toCampaigns
 import com.ktakjm.poikatsu.domain.StoreVerdict
 import com.ktakjm.poikatsu.domain.appLinks
 import com.ktakjm.poikatsu.domain.bestBenefitLabel
@@ -288,6 +294,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val qrPaymentSettings: List<QrPaymentSetting> = emptyList(),
         /** 設定画面「マイカード」に出すカスタムカード(カタログ外。DataStore 由来) */
         val customCards: List<CustomCard> = emptyList(),
+        /** カスタムキャンペーンの登録内容(DataStore 由来)。期間限定タブの編集ダイアログが参照する */
+        val customCampaigns: List<CustomCampaign> = emptyList(),
+        /**
+         * 終了日を過ぎたカスタムキャンペーン(Campaign 変換済み)。期限切れの同梱施策は一覧から
+         * 消えるだけでよいが、カスタムは消えると編集・削除の入口を失うため専用セクションに出す。
+         */
+        val expiredCustomCampaigns: List<Campaign> = emptyList(),
+        /** カタログのチェーン一覧(カスタムキャンペーン編集ダイアログの対象店舗ピッカー用) */
+        val catalogMerchants: List<Merchant> = emptyList(),
         /** 登録済みエリア(自治体単体・グループ) */
         val registeredAreas: List<RegisteredArea> = emptyList(),
         /** 自治体マスタ。設定画面のピッカーと期間限定タブの地域フィルタに使う(起動時に assets から読む) */
@@ -368,6 +383,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     @Volatile
     private var lastSettings: AppSettings = AppSettings()
+
+    /**
+     * 表示・変換用の統合データ(rebuild で構築)。同梱データにカスタムキャンペーン由来の
+     * Campaign / 合成 Merchant と、カスタムカードを加えたもの。エンジン用(engineData)との違いは
+     * カードが「所有のみ」でなく全カタログな点(未所有カード施策の色解決等、表示は全候補が要る)。
+     */
+    @Volatile
+    private var displayData: PoikatsuData? = null
 
     private var lastFetchSucceededAt = 0L
 
@@ -572,9 +595,37 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 brand = brand,
             )
         }
-        val engineData = loaded.data.copy(cards = mergedCards + customCards + brandCards)
+        // カスタムキャンペーン(#7): 登録内容を Campaign(決済手段ごとに展開) / 合成 Merchant に
+        // 変換して同梱データへ合流させる。以降は同梱施策と同じ経路で判定・表示される
+        // (お店/地図/期間限定)。operator には紐付け先決済手段の表示名を入れる
+        // (期間限定タブ詳細のバッジに使われる。ブランド指定はブランド名がバッジになるため未使用)
+        val paymentNames = (
+            baseCards.map { it.id to it.cardName } +
+                settings.customCards.map { it.id to it.name } +
+                loaded.data.qrPayments.map { it.id to it.name }
+            ).toMap()
+        val operatorFor = { p: CustomPayment ->
+            p.cardBrand ?: paymentNames[p.cardId ?: p.qrPaymentId] ?: "カスタム"
+        }
+        val customMerchants = buildCustomMerchants(settings.customCampaigns)
+        val customCampaigns = settings.customCampaigns.flatMap { it.toCampaigns(operatorFor) }
+        val mergedMerchants = loaded.data.merchants + customMerchants
+        val mergedCampaigns = loaded.data.campaigns + customCampaigns
+
+        val engineData = loaded.data.copy(
+            cards = mergedCards + customCards + brandCards,
+            merchants = mergedMerchants,
+            campaigns = mergedCampaigns,
+        )
         val newEngine = JudgmentEngine(engineData)
         engine = newEngine
+        // 表示用(色解決・名前引き・地図の検索設定)は所有に関わらず全カタログのカードで組む
+        val newDisplayData = loaded.data.copy(
+            cards = loaded.data.cards + customCards,
+            merchants = mergedMerchants,
+            campaigns = mergedCampaigns,
+        )
+        displayData = newDisplayData
 
         val today = LocalDate.now()
         // 期間限定タブの一覧。登録エリアがあれば既定で絞り込む(「すべて表示」トグルで解除可)
@@ -588,6 +639,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val timeLimitedUpcoming = applyAreaFilter(
             newEngine.upcomingCampaigns(today).filter { it.campaignType != CampaignType.CARD_PROGRAM }
         )
+        // 終了日を過ぎたカスタムキャンペーンは判定・一覧から消えるが、編集・削除の入口を残すため
+        // 期間限定タブの専用セクション用に別で持つ(同梱施策の期限切れは単に出さない)
+        val expiredCustomCampaigns = customCampaigns.filter {
+            newEngine.campaignStatus(it, today) == CampaignStatus.EXPIRED
+        }
 
         // お店タブ初期画面のお知らせバナー: 登録地域で開催中の自治体施策がある自治体名。
         // フィルタと違い厳密一致(未登録・マスタ未ロードなら出さない)
@@ -654,11 +710,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 categories = newEngine.categories,
                 results = newEngine.searchRewarded(it.query, it.selectedCategories),
                 selection = it.selection?.let { sel ->
-                    loaded.data.merchants.firstOrNull { m -> m.id == sel.merchant.id }
+                    newDisplayData.merchants.firstOrNull { m -> m.id == sel.merchant.id }
                         ?.let { m -> newEngine.selectionFor(m, sel.storeNameHint, sel.displayName) }
                 },
                 storeCheck = it.storeCheck?.let { sc ->
-                    loaded.data.merchants.firstOrNull { m -> m.id == sc.merchant.id }
+                    newDisplayData.merchants.firstOrNull { m -> m.id == sc.merchant.id }
                         ?.takeIf { m -> newEngine.canCheckStore(m) }
                         ?.let { m -> StoreCheckState(m, sc.input, newEngine.checkStore(m, sc.input)) }
                 },
@@ -669,6 +725,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 brandSettings = brandSettings,
                 qrPaymentSettings = qrPaymentSettings,
                 customCards = settings.customCards,
+                customCampaigns = settings.customCampaigns,
+                expiredCustomCampaigns = expiredCustomCampaigns,
+                catalogMerchants = loaded.data.merchants,
                 registeredAreas = settings.registeredAreas,
                 dataCommitRef = settings.dataCommitRef,
                 useTestData = settings.useTestData,
@@ -677,9 +736,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 timeLimitedActive = timeLimitedActive,
                 timeLimitedUpcoming = timeLimitedUpcoming,
                 searchMunicipalAreaNames = searchMunicipalAreaNames,
-                merchantNames = loaded.data.merchants.associate { it.id to it.name },
-                campaignBrandColors = loaded.data.campaigns
-                    .mapNotNull { c -> loaded.data.brandColorOf(c)?.let { c.id to it } }
+                // 名前・色の解決はカスタム分(合成 Merchant・カスタムカードの色)も含む統合データから引く
+                merchantNames = newDisplayData.merchants.associate { it.id to it.name },
+                campaignBrandColors = newDisplayData.campaigns
+                    .mapNotNull { c -> newDisplayData.brandColorOf(c)?.let { c.id to it } }
                     .toMap(),
             )
         }
@@ -870,7 +930,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         adaptZoom: Boolean = false,
     ) {
         val engine = engine ?: return
-        val data = lastLoaded?.data
+        // 合成 Merchant(カスタムキャンペーンの自由入力店名)も YOLP 検索対象に含めるため統合データを使う
+        val data = displayData
         // チェーン絞り込み中の merchant は、非対象日・開始前でも YOLP 検索対象に加える
         // (施策詳細からのブリッジで「場所の下見」ができるように。判定が無い店は還元率ラベルなしで出す)
         val filterIds = _state.value.nearbyMerchantFilters.map { it.id }.toSet()
@@ -1223,7 +1284,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun onFindNearbyByIds(merchantIds: Collection<String>) {
         val idSet = merchantIds.toSet()
-        val merchants = lastLoaded?.data?.merchants.orEmpty()
+        // 合成 Merchant(カスタムキャンペーンの自由入力店名)からもブリッジできるよう統合データで引く
+        val merchants = displayData?.merchants.orEmpty()
             .filter { it.id in idSet && it.locationHint == null }
             .toSet()
         if (merchants.isEmpty()) return
@@ -1459,7 +1521,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onSelectCampaignGroup(group: List<Campaign>) {
         val e = engine ?: return
         val today = LocalDate.now()
-        val catalog = lastLoaded?.data
+        // カスタムカードの識別色も引けるよう統合データ(displayData)から解決する
+        val catalog = displayData
         val qrMap = catalog?.qrPayments?.associateBy { it.id }.orEmpty()
         val judgments = group.map { campaign ->
             val qr = campaign.paymentMethodId?.let { qrMap[it] }
@@ -1572,6 +1635,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onRemoveCustomCard(id: String) =
         viewModelScope.launch { settingsRepo.removeCustomCard(id) }
+
+    /** カスタムキャンペーンの追加。id はここで採番する(UI からは id 空で渡す) */
+    fun onAddCustomCampaign(campaign: CustomCampaign) = viewModelScope.launch {
+        settingsRepo.addCustomCampaign(campaign.copy(id = CustomCampaign.ID_PREFIX + UUID.randomUUID()))
+        enableLinkedQr(campaign)
+    }
+
+    fun onUpdateCustomCampaign(campaign: CustomCampaign) = viewModelScope.launch {
+        settingsRepo.updateCustomCampaign(campaign)
+        enableLinkedQr(campaign)
+    }
+
+    fun onRemoveCustomCampaign(id: String) =
+        viewModelScope.launch { settingsRepo.removeCustomCampaign(id) }
+
+    /**
+     * 紐付け先 QR を「利用中」に自動登録する。QR 施策の判定は利用中の QR に限られる
+     * (judgeQr の enabledQrIds フィルタ)ため、未登録のままだと登録したキャンペーンが
+     * お店・地図タブに出ない。QR に紐付けた事実を「その QR を使っている」とみなす。
+     */
+    private suspend fun enableLinkedQr(campaign: CustomCampaign) {
+        campaign.payments.mapNotNull { it.qrPaymentId }.forEach { settingsRepo.setQrEnabled(it, true) }
+    }
 
     fun onAddRegisteredArea(area: RegisteredArea) =
         viewModelScope.launch { settingsRepo.addRegisteredArea(area) }

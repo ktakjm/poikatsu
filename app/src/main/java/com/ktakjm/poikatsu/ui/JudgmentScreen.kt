@@ -51,6 +51,7 @@ import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.StoreEligibility
 import com.ktakjm.poikatsu.domain.StoreVerdict
 import com.ktakjm.poikatsu.domain.formatBenefit
+import com.ktakjm.poikatsu.domain.isCustom
 import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.recurrenceLabel
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
@@ -192,6 +193,9 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
                     if (pm != null && pm.badgeLabel.isNotBlank()) {
                         val pmColor = parseBrandColor(pm.color) ?: MaterialTheme.colorScheme.tertiary
                         BrandBadge(pm.badgeLabel, pmColor)
+                    }
+                    if (campaign.isCustom) {
+                        CustomCampaignBadge()
                     }
                     if (campaign.isTimeLimited) {
                         TimeLimitedBadge()

@@ -57,6 +57,95 @@ data class CustomCard(
     }
 }
 
+/**
+ * カスタムキャンペーンの紐付け先決済手段1件。cardId / qrPaymentId / cardBrand のいずれか
+ * 1つだけが入る(campaigns.json の card_id / payment_method_id / card_brand の排他と同じ)。
+ */
+@Serializable
+data class CustomPayment(
+    /** カード(カタログ cards.id または CustomCard.id) */
+    val cardId: String? = null,
+    /** QR 決済(カタログ qr_payments.id) */
+    val qrPaymentId: String? = null,
+    /** ブランド指定(カード会社不問。card_brands の name。Amex 会員限定施策等) */
+    val cardBrand: String? = null,
+)
+
+/**
+ * ユーザーが登録するカスタムキャンペーン(#7)。会員ポータル限定クーポン等、同梱データ
+ * (campaigns.json)で配信できない施策を本人が登録し、同梱施策と同様に判定・表示する。
+ * 判定エンジンへは domain の変換(toCampaigns / buildCustomMerchants)で Campaign / Merchant に
+ * 写して渡すため、エンジン側にカスタム専用の分岐は無い。複数決済手段は変換時に決済ごとの
+ * Campaign へ展開される(1登録=1「率・条件」。決済ごとに率が異なる施策は別登録する)。
+ */
+@Serializable
+data class CustomCampaign(
+    /** 「custom:<UUID>」形式。同梱 campaigns.json の id と衝突しない採番 */
+    val id: String,
+    /** キャンペーン名(期間限定タブ・判定カードのタイトル) */
+    val name: String,
+    /** 旧スキーマ(単一決済)の残置。読み込み時に [normalized] で [payments] へ折り畳む */
+    val cardId: String? = null,
+    /** 旧スキーマ(単一決済)の残置。読み込み時に [normalized] で [payments] へ折り畳む */
+    val qrPaymentId: String? = null,
+    /** 紐付け先の決済手段(1件以上)。決済ごとに Campaign へ展開される */
+    val payments: List<CustomPayment> = emptyList(),
+    /** 対象チェーン(merchants.json の id)。[storeNames] と併用可 */
+    val merchantIds: List<String> = emptyList(),
+    /** カタログに無い店の自由入力店名。店名の部分一致でお店・地図タブにマッチさせる */
+    val storeNames: List<String> = emptyList(),
+    /** 特典の型: "rebate"(後日還元) | "discount"(即時割引) | "lottery"(抽選) */
+    val benefitType: String = "rebate",
+    /** 還元率(%)。率で表せない特典は null にして [note] に書く */
+    val rate: Double? = null,
+    /** 定額特典(円)。「500円引き」等 */
+    val discountAmount: Int? = null,
+    /** 対象商品限定のラベル(例: "対象の化粧品のみ")。非空なら最良比較から分離+商品限定バッジ */
+    val productScope: String? = null,
+    /** 対象・特典のメモ(判定カードの「対象」に表示)。改行区切りで複数項目 */
+    val note: String = "",
+    /** 対象外・注意のメモ(warning 面で表示)。改行区切りで複数項目 */
+    val ineligibleNote: String = "",
+    /** 開始日(YYYY-MM-DD)。null は開始済み扱い */
+    val startDate: String? = null,
+    /** 終了日(YYYY-MM-DD)。null は期限なし(期限バッジを出さない) */
+    val endDate: String? = null,
+    /** 対象曜日("MON"〜"SUN")。[daysOfMonth] と排他(campaigns.json の recurrence と同じ) */
+    val daysOfWeek: List<String> = emptyList(),
+    /** 対象日(1〜31) */
+    val daysOfMonth: List<Int> = emptyList(),
+    /** 最低購入額(円) */
+    val minPurchase: Int? = null,
+    /** 最低購入額の集計単位: "transaction"(1決済ごと) | "period_total"(期間合計) */
+    val minPurchaseScope: String = MIN_PURCHASE_SCOPE_TRANSACTION,
+    /** 利用回数上限(「お一人様N回まで」表示) */
+    val usageLimit: Int? = null,
+    /** 還元上限: 1決済あたり(円) */
+    val perTransactionCap: Int? = null,
+    /** 還元上限: 期間合計(円) */
+    val periodTotalCap: Int? = null,
+    /** 上限の補足メモ */
+    val capNote: String? = null,
+    /** 詳細ページ URL(会員ポータル等。判定カードの「詳細を見る」ボタン) */
+    val detailUrl: String? = null,
+) {
+    /**
+     * 旧スキーマ(単一の cardId / qrPaymentId)を payments へ折り畳む。読み込み時に必ず通し、
+     * 以降のコードは payments だけを見ればよい状態にする。
+     */
+    fun normalized(): CustomCampaign =
+        if (payments.isNotEmpty() || (cardId == null && qrPaymentId == null)) this
+        else copy(
+            payments = listOf(CustomPayment(cardId = cardId, qrPaymentId = qrPaymentId)),
+            cardId = null,
+            qrPaymentId = null,
+        )
+
+    companion object {
+        const val ID_PREFIX = "custom:"
+    }
+}
+
 /** アプリ全体の設定スナップショット。DataStore から1本の Flow で配る。 */
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -90,6 +179,8 @@ data class AppSettings(
     val registeredAreas: List<RegisteredArea> = emptyList(),
     /** カタログ外のカスタムカード(登録順) */
     val customCards: List<CustomCard> = emptyList(),
+    /** ユーザー登録のカスタムキャンペーン(登録順) */
+    val customCampaigns: List<CustomCampaign> = emptyList(),
 )
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore("settings")
@@ -118,6 +209,7 @@ class SettingsRepository(private val context: Context) {
         // 移行せず捨てる(登録し直してもらう)
         val REGISTERED_AREAS = stringPreferencesKey("registered_areas")
         val CUSTOM_CARDS = stringPreferencesKey("custom_cards")
+        val CUSTOM_CAMPAIGNS = stringPreferencesKey("custom_campaigns")
     }
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -136,6 +228,7 @@ class SettingsRepository(private val context: Context) {
             ownedBrands = prefs.decodeOwnedBrands(),
             registeredAreas = prefs.decodeRegisteredAreas(),
             customCards = prefs.decodeCustomCards(),
+            customCampaigns = prefs.decodeCustomCampaigns(),
         )
     }
 
@@ -256,6 +349,26 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    suspend fun addCustomCampaign(campaign: CustomCampaign) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.CUSTOM_CAMPAIGNS] = json.encodeToString(prefs.decodeCustomCampaigns() + campaign)
+        }
+    }
+
+    suspend fun updateCustomCampaign(campaign: CustomCampaign) {
+        context.settingsDataStore.edit { prefs ->
+            val updated = prefs.decodeCustomCampaigns().map { if (it.id == campaign.id) campaign else it }
+            prefs[Keys.CUSTOM_CAMPAIGNS] = json.encodeToString(updated)
+        }
+    }
+
+    suspend fun removeCustomCampaign(id: String) {
+        context.settingsDataStore.edit { prefs ->
+            val updated = prefs.decodeCustomCampaigns().filterNot { it.id == id }
+            prefs[Keys.CUSTOM_CAMPAIGNS] = json.encodeToString(updated)
+        }
+    }
+
     private fun Preferences.decodeOverrides(): Map<String, CardOverride> =
         this[Keys.CARD_OVERRIDES]
             ?.let { runCatching { json.decodeFromString<Map<String, CardOverride>>(it) }.getOrNull() }
@@ -279,5 +392,11 @@ class SettingsRepository(private val context: Context) {
     private fun Preferences.decodeCustomCards(): List<CustomCard> =
         this[Keys.CUSTOM_CARDS]
             ?.let { runCatching { json.decodeFromString<List<CustomCard>>(it) }.getOrNull() }
+            ?: emptyList()
+
+    private fun Preferences.decodeCustomCampaigns(): List<CustomCampaign> =
+        this[Keys.CUSTOM_CAMPAIGNS]
+            ?.let { runCatching { json.decodeFromString<List<CustomCampaign>>(it) }.getOrNull() }
+            ?.map { it.normalized() }
             ?: emptyList()
 }

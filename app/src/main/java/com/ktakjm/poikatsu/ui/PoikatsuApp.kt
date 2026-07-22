@@ -37,6 +37,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
@@ -53,6 +54,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
@@ -92,8 +94,14 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import com.ktakjm.poikatsu.data.Campaign
+import com.ktakjm.poikatsu.data.CustomCampaign
+import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.Merchant
+import com.ktakjm.poikatsu.domain.customCampaignBaseId
+import com.ktakjm.poikatsu.domain.isCustom
 import com.ktakjm.poikatsu.ui.theme.AppIcons
 import com.ktakjm.poikatsu.util.GeoMath
 
@@ -149,6 +157,11 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
 
     val selectedTab = state.selectedTab
 
+    // カスタムキャンペーンの追加/編集ダイアログ。NEW_CUSTOM_CAMPAIGN(id 空)なら新規、null なら非表示。
+    // 期間限定タブの一覧(追加行)と施策詳細(編集・削除)のどちらからも開くためここに置く
+    var editingCustomCampaign by remember { mutableStateOf<CustomCampaign?>(null) }
+    var deletingCustomCampaign by remember { mutableStateOf<CustomCampaign?>(null) }
+
     // 「地図」タブ表示中だけ現在地を継続購読して青ドットを追従させる(カメラ移動・YOLP 再検索はしない)。
     // タブ離脱で composition から外れ、バックグラウンドでは repeatOnLifecycle(STARTED) が止めるので
     // 購読は自動解除される。key の searchStamp は検索完了のたびに購読をやり直すためのもので、
@@ -162,16 +175,32 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
         }
     }
 
-    // 下位画面(詳細/店舗判定/キャンペーン詳細/開発者向け設定)やロード・エラーに重なっていないベースのタブ表示状態。下部ナビの表示条件。
+    // 下位画面(詳細/店舗判定/キャンペーン詳細/カスタムキャンペーン編集/開発者向け設定)や
+    // ロード・エラーに重なっていないベースのタブ表示状態。下部ナビ・FAB の表示条件。
     val baseTabsVisible = !state.loading && state.error == null &&
         state.selection == null && state.storeCheck == null &&
-        state.selectedCampaignGroup == null && !state.developerSettingsOpen
+        state.selectedCampaignGroup == null && !state.developerSettingsOpen &&
+        editingCustomCampaign == null
 
     Scaffold(
         topBar = {
             when {
                 state.loading -> Unit
                 state.error != null -> Unit
+                // カスタムキャンペーン編集は最前面のオーバーレイ(施策詳細の上からも開くため先頭で分岐)
+                editingCustomCampaign != null -> TopAppBar(
+                    title = {
+                        Text(
+                            if (editingCustomCampaign!!.id.isEmpty()) "キャンペーンを追加"
+                            else "キャンペーンを編集"
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { editingCustomCampaign = null }) {
+                            Icon(Icons.Default.Close, contentDescription = "閉じる")
+                        }
+                    },
+                )
                 state.storeCheck != null -> TopAppBar(
                     title = { Text("${state.storeCheck!!.merchant.name} 店舗判定") },
                     navigationIcon = {
@@ -216,6 +245,15 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        // カスタムキャンペーンの登録はスクロール位置に依らず届くよう FAB に置く
+        // (一覧+新規作成の M3 定石。ベースのタブ表示時のみ=詳細・ダイアログ表示中は出さない)
+        floatingActionButton = {
+            if (baseTabsVisible && selectedTab == AppTab.CAMPAIGNS) {
+                FloatingActionButton(onClick = { editingCustomCampaign = NEW_CUSTOM_CAMPAIGN }) {
+                    Icon(Icons.Default.Add, contentDescription = "キャンペーンを自分で登録")
+                }
+            }
+        },
         bottomBar = {
             if (baseTabsVisible) {
                 val barInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -267,6 +305,37 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
             when {
                 state.loading -> Centered { CircularProgressIndicator() }
                 state.error != null -> Centered { Text(state.error!!, color = MaterialTheme.colorScheme.error) }
+                // カスタムキャンペーン編集(最前面のオーバーレイ)。topBar の分岐順と一致させること
+                editingCustomCampaign != null -> PaddedColumn {
+                    val editing = editingCustomCampaign!!
+                    // 紐付け先候補: 所有カタログカード + カスタムカード + コード決済 + ブランド指定。
+                    // 未利用のコード決済も出す(保存時に VM が「利用中」へ自動登録するため迷子にならない)
+                    val paymentOptions = state.cardSettings.filter { it.owned }.map {
+                        PaymentOptionUi(cardId = it.cardId, label = it.cardName, color = it.brandColor)
+                    } + state.customCards.map {
+                        PaymentOptionUi(cardId = it.id, label = it.name, color = it.color ?: CustomCard.DEFAULT_COLOR)
+                    } + state.qrPaymentSettings.map {
+                        PaymentOptionUi(qrPaymentId = it.id, label = it.name, color = it.brandColor)
+                    } + state.brandSettings.map {
+                        PaymentOptionUi(cardBrand = it.brand, label = "${it.brand}(ブランド指定)", color = it.color)
+                    }
+                    CustomCampaignEditorScreen(
+                        initial = editing.takeUnless { it.id.isEmpty() },
+                        paymentOptions = paymentOptions,
+                        chains = state.catalogMerchants,
+                        onSave = { campaign ->
+                            if (editing.id.isEmpty()) {
+                                viewModel.onAddCustomCampaign(campaign)
+                            } else {
+                                viewModel.onUpdateCustomCampaign(campaign)
+                                // 開いている施策詳細は編集前の内容のままなので閉じる(一覧は rebuild で更新される)
+                                viewModel.onCloseCampaignDetail()
+                            }
+                            editingCustomCampaign = null
+                        },
+                        onClose = { editingCustomCampaign = null },
+                    )
+                }
                 state.storeCheck != null -> PaddedColumn {
                     StoreCheckScreen(
                         storeCheck = state.storeCheck!!,
@@ -289,6 +358,11 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                 }
                 // キャンペーン詳細(タブ非依存のオーバーレイ)。topBar の分岐順と一致させること
                 state.selectedCampaignGroup != null -> PaddedColumn {
+                    // カスタムキャンペーンなら詳細に編集・削除の入口を出す(登録内容は customCampaigns から引く。
+                    // 複数決済の展開 id は決済サフィックスを剥がした登録単位の id で逆引きする)
+                    val customSource = state.selectedCampaignGroup!!.firstOrNull()?.campaign
+                        ?.takeIf { it.isCustom }
+                        ?.let { c -> state.customCampaigns.firstOrNull { it.id == customCampaignBaseId(c.id) } }
                     CampaignDetail(
                         judgments = state.selectedCampaignGroup!!,
                         merchantNames = state.merchantNames,
@@ -297,6 +371,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             viewModel.onFindNearbyByIds(ids)
                             onNearbyClick()
                         },
+                        onEditCustom = customSource?.let { { editingCustomCampaign = it } },
+                        onDeleteCustom = customSource?.let { { deletingCustomCampaign = it } },
                     )
                 }
                 state.developerSettingsOpen -> DeveloperSettingsScreen(
@@ -345,6 +421,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     CampaignPane(
                         activeCampaigns = state.timeLimitedActive,
                         upcomingCampaigns = state.timeLimitedUpcoming,
+                        expiredCustomCampaigns = state.expiredCustomCampaigns,
                         merchantNames = state.merchantNames,
                         campaignColors = state.campaignBrandColors,
                         filter = state.campaignFilter,
@@ -422,7 +499,30 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
             }
         }
     }
+
+    deletingCustomCampaign?.let { campaign ->
+        AlertDialog(
+            onDismissRequest = { deletingCustomCampaign = null },
+            title = { Text("キャンペーンを削除しますか？") },
+            text = {
+                Text("「${campaign.name}」を削除します。", style = MaterialTheme.typography.bodyMedium)
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.onRemoveCustomCampaign(campaign.id)
+                    viewModel.onCloseCampaignDetail()
+                    deletingCustomCampaign = null
+                }) { Text("削除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingCustomCampaign = null }) { Text("キャンセル") }
+            },
+        )
+    }
 }
+
+/** カスタムキャンペーン追加ダイアログを新規モードで開くためのセンチネル(id 空)。 */
+private val NEW_CUSTOM_CAMPAIGN = CustomCampaign(id = "", name = "")
 
 // ---- 探す(検索)タブ ----
 

@@ -189,9 +189,12 @@ internal fun benefitText(campaign: Campaign): String =
 internal fun formatPeriodDate(date: LocalDate): String =
     date.format(java.time.format.DateTimeFormatter.ofPattern("yyyy/MM/dd"))
 
-/** 期間テキスト("2026/07/01〜2026/07/31")。常設(period null)なら null を返す */
-internal fun formatPeriod(campaign: Campaign): String? {
-    if (campaign.periodStart == null && campaign.periodEnd == null) return null
+/**
+ * 期間テキスト("2026/07/01〜2026/07/31")。開始日・終了日とも無い施策は「終了日未定」
+ * (常設や期限未発表の施策。空欄・「〜」だけの表示にしない)。
+ */
+internal fun formatPeriod(campaign: Campaign): String {
+    if (campaign.periodStart == null && campaign.periodEnd == null) return "終了日未定"
     return buildString {
         campaign.periodStart?.let { append(formatPeriodDate(LocalDate.parse(it))) }
         append("〜")
@@ -213,6 +216,26 @@ internal fun TimeLimitedBadge(modifier: Modifier = Modifier) {
     ) {
         Text(
             "期間限定",
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+    }
+}
+
+/**
+ * カスタムキャンペーン(ユーザー自作)バッジ。同梱データの施策(当方で条件を照合済み)と
+ * 本人登録の情報を見分けられるように出す。注意の意味ではないので secondary 系。
+ */
+@Composable
+internal fun CustomCampaignBadge(modifier: Modifier = Modifier) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        shape = RoundedCornerShape(4.dp),
+        modifier = modifier,
+    ) {
+        Text(
+            "自作",
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
         )
@@ -297,8 +320,7 @@ internal fun BrandBadge(label: String, brandColor: Color) {
 
 @Composable
 internal fun PeriodRow(campaign: Campaign) {
-    val period = formatPeriod(campaign) ?: return
-    PeriodRow(period)
+    PeriodRow(formatPeriod(campaign))
 }
 
 @Composable
