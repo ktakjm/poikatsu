@@ -15,6 +15,8 @@ playServicesMaps = "19.2.0"
 playServicesLocation = "21.3.0"
 datastore = "1.1.1"
 timber = "5.0.1"
+# 15.x は Kotlin 2.4 / compileSdk 37 要求のため、Compose 1.10 / AGP 9 対応の 14 系に留める
+aboutLibraries = "14.2.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -41,9 +43,12 @@ androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-te
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
 timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }
+aboutlibraries-compose-m3 = { group = "com.mikepenz", name = "aboutlibraries-compose-m3", version.ref = "aboutLibraries" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+# .android 版は Android ビルドに自動フックし R.raw.aboutlibraries を毎ビルド生成する(依存の増減に自動追従)
+aboutlibraries-android = { id = "com.mikepenz.aboutlibraries.plugin.android", version.ref = "aboutLibraries" }
 

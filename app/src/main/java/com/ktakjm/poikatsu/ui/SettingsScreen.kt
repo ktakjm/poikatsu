@@ -27,10 +27,14 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
+import com.mikepenz.aboutlibraries.ui.compose.android.produceLibraries
+import com.mikepenz.aboutlibraries.ui.compose.m3.LibrariesContainer
 import com.ktakjm.poikatsu.BuildConfig
+import com.ktakjm.poikatsu.R
 import com.ktakjm.poikatsu.data.ThemeMode
 
 /**
@@ -181,9 +185,9 @@ internal fun DataSettingsPage(
 
 // ---- サブページ: このアプリ ----
 
-/** このアプリサブページ。バージョン・ソースコードリンク(OSS ライセンス表示 #48 もここに載せる予定) */
+/** このアプリサブページ。バージョン・ソースコードリンク・OSS ライセンス表示(#48)への導線 */
 @Composable
-internal fun AboutSettingsPage(onBack: () -> Unit) {
+internal fun AboutSettingsPage(onBack: () -> Unit, onOpenLicenses: () -> Unit) {
     BackHandler(onBack = onBack)
     val uriHandler = LocalUriHandler.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -198,7 +202,27 @@ internal fun AboutSettingsPage(onBack: () -> Unit) {
             },
             modifier = Modifier.clickable { uriHandler.openUri("https://github.com/ktakjm/poikatsu") },
         )
+        ListItem(
+            headlineContent = { Text("オープンソースライセンス") },
+            trailingContent = {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+            },
+            modifier = Modifier.clickable(onClick = onOpenLicenses),
+        )
     }
+}
+
+/**
+ * オープンソースライセンス一覧(#48)。「このアプリ」配下の 2 階層目サブページ。
+ * 一覧はビルド時に AboutLibraries プラグインが Gradle 依存から自動生成した
+ * R.raw.aboutlibraries を表示する(依存の増減に自動追従)。Gradle 依存でない同梱コード
+ * (AppIcons.kt の material-design-icons)は app/config/libraries/ のカスタム定義で載せる。
+ */
+@Composable
+internal fun LicensesPage(onBack: () -> Unit) {
+    BackHandler(onBack = onBack)
+    val libraries by produceLibraries(R.raw.aboutlibraries)
+    LibrariesContainer(libraries, Modifier.fillMaxSize())
 }
 
 /** サブページ内のセクション見出し(お支払い方法サブページの マイカード/国際ブランド/コード決済 等) */

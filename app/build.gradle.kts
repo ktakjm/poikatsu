@@ -4,6 +4,16 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.aboutlibraries.android)
+}
+
+// OSS ライセンス表示(#48)。ビルド時に Gradle 依存からメタデータ(R.raw.aboutlibraries)を自動生成する。
+// Gradle 依存でない同梱コード(AppIcons.kt の material-design-icons 等)は config/libraries/ の
+// カスタム定義で追加する(依存を増減してもこの設定は触らなくてよい)
+aboutLibraries {
+    collect {
+        configPath = file("config")
+    }
 }
 
 // APIキー/アプリIDは公開リポジトリにコミットしないため local.properties から読む(無ければ空)。
@@ -78,6 +88,7 @@ tasks.named("preBuild") { dependsOn(bundleDataAssets) }
 
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.aboutlibraries.compose.m3)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.core)

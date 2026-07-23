@@ -1,0 +1,14 @@
+{
+  "uniqueId": "com.google.material-design-icons",
+  "developers": [
+    {
+      "name": "Google"
+    }
+  ],
+  "description": "material-icons-core に無いアイコン(Storefront / Map / LocalOffer)のパスデータを ui/theme/AppIcons.kt に個別コピーして同梱(依存としては未追加)。",
+  "name": "Material Design Icons",
+  "website": "https://github.com/google/material-design-icons",
+  "licenses": [
+    "Apache-2.0"
+  ]
+}

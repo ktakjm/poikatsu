@@ -435,6 +435,11 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     )
                     SettingsSubpage.ABOUT -> AboutSettingsPage(
                         onBack = viewModel::onCloseSettingsSubpage,
+                        onOpenLicenses = { viewModel.onOpenSettingsSubpage(SettingsSubpage.LICENSES) },
+                    )
+                    // onCloseSettingsSubpage が ABOUT へ戻す(2 階層目)
+                    SettingsSubpage.LICENSES -> LicensesPage(
+                        onBack = viewModel::onCloseSettingsSubpage,
                     )
                 }
                 selectedTab == AppTab.NEARBY -> {

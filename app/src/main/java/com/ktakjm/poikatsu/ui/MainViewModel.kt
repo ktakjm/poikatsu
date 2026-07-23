@@ -109,6 +109,9 @@ enum class SettingsSubpage(val title: String) {
     DATA("キャンペーンデータ"),
     DEVELOPER("開発者向け"),
     ABOUT("このアプリ"),
+
+    /** このアプリ配下の 2 階層目(#48)。戻る操作は [MainViewModel.onCloseSettingsSubpage] が ABOUT へ戻す */
+    LICENSES("オープンソースライセンス"),
 }
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -1618,8 +1621,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(settingsSubpage = page) }
     }
 
+    // ライセンス一覧だけ「このアプリ」配下の 2 階層目なので、戻る操作は親サブページへ戻す
     fun onCloseSettingsSubpage() {
-        _state.update { it.copy(settingsSubpage = null) }
+        _state.update {
+            val parent = if (it.settingsSubpage == SettingsSubpage.LICENSES) SettingsSubpage.ABOUT else null
+            it.copy(settingsSubpage = parent)
+        }
     }
 
     fun onSetCardOwned(cardId: String, owned: Boolean) =
