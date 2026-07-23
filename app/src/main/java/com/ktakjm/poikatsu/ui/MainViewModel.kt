@@ -96,6 +96,21 @@ private val FALLBACK_PLACE = MainViewModel.GeocodedPlace(
 enum class AppTab { SEARCH, NEARBY, CAMPAIGNS, SETTINGS }
 enum class CampaignFilter { ALL, MUNICIPAL, NON_MUNICIPAL }
 
+/**
+ * 設定タブのサブページ(#47)。トップはカテゴリ行のみで、詳細は各サブページ
+ * (設定タブ上のオーバーレイ+戻る)に置く。title は topBar のタイトル表示に使う。
+ */
+enum class SettingsSubpage(val title: String) {
+    DISPLAY("表示"),
+    PAYMENT_METHODS("支払い方法"),
+    // 「自治体」だと登録する動機が伝わらないため、「受け取りたくて登録している地域」の
+    // ニュアンスでマイエリアと呼ぶ(マイカードと命名を揃える)
+    MUNICIPALITIES("マイエリア"),
+    DATA("キャンペーンデータ"),
+    DEVELOPER("開発者向け"),
+    ABOUT("このアプリ"),
+}
+
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     data class SearchResult(
@@ -313,8 +328,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val useTestData: Boolean = false,
         val useBundledData: Boolean = false,
         val developerMode: Boolean = false,
-        /** 開発者向け設定画面(設定タブ上のオーバーレイ)を表示中か */
-        val developerSettingsOpen: Boolean = false,
+        /** 表示中の設定サブページ(設定タブ上のオーバーレイ)。null ならトップページ */
+        val settingsSubpage: SettingsSubpage? = null,
     )
 
     /**
@@ -1599,12 +1614,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (enabled) settingsRepo.setDeveloperMode(true) else settingsRepo.resetDeveloperSettings()
     }
 
-    fun onOpenDeveloperSettings() {
-        _state.update { it.copy(developerSettingsOpen = true) }
+    fun onOpenSettingsSubpage(page: SettingsSubpage) {
+        _state.update { it.copy(settingsSubpage = page) }
     }
 
-    fun onCloseDeveloperSettings() {
-        _state.update { it.copy(developerSettingsOpen = false) }
+    fun onCloseSettingsSubpage() {
+        _state.update { it.copy(settingsSubpage = null) }
     }
 
     fun onSetCardOwned(cardId: String, owned: Boolean) =

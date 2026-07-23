@@ -2,6 +2,7 @@ package com.ktakjm.poikatsu.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -175,11 +176,11 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
         }
     }
 
-    // 下位画面(詳細/店舗判定/キャンペーン詳細/カスタムキャンペーン編集/開発者向け設定)や
+    // 下位画面(詳細/店舗判定/キャンペーン詳細/カスタムキャンペーン編集/設定サブページ)や
     // ロード・エラーに重なっていないベースのタブ表示状態。下部ナビ・FAB の表示条件。
     val baseTabsVisible = !state.loading && state.error == null &&
         state.selection == null && state.storeCheck == null &&
-        state.selectedCampaignGroup == null && !state.developerSettingsOpen &&
+        state.selectedCampaignGroup == null && state.settingsSubpage == null &&
         editingCustomCampaign == null
 
     Scaffold(
@@ -230,10 +231,10 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         },
                     )
                 }
-                state.developerSettingsOpen -> TopAppBar(
-                    title = { Text("開発者向け設定") },
+                state.settingsSubpage != null -> TopAppBar(
+                    title = { Text(state.settingsSubpage!!.title) },
                     navigationIcon = {
-                        IconButton(onClick = viewModel::onCloseDeveloperSettings) {
+                        IconButton(onClick = viewModel::onCloseSettingsSubpage) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
                         }
                     },
@@ -375,16 +376,67 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         onDeleteCustom = customSource?.let { { deletingCustomCampaign = it } },
                     )
                 }
-                state.developerSettingsOpen -> DeveloperSettingsScreen(
-                    dataCommitRef = state.dataCommitRef,
-                    dataCommitSha = state.dataCommitSha,
-                    useTestData = state.useTestData,
-                    useBundledData = state.useBundledData,
-                    onBack = viewModel::onCloseDeveloperSettings,
-                    onDataCommitRefChange = viewModel::onSetDataCommitRef,
-                    onUseTestDataChange = viewModel::onSetUseTestData,
-                    onUseBundledDataChange = viewModel::onSetUseBundledData,
-                )
+                state.settingsSubpage != null -> when (state.settingsSubpage!!) {
+                    SettingsSubpage.DISPLAY -> DisplaySettingsPage(
+                        themeMode = state.themeMode,
+                        dynamicColor = state.dynamicColor,
+                        onBack = viewModel::onCloseSettingsSubpage,
+                        onThemeModeChange = viewModel::onSetThemeMode,
+                        onDynamicColorChange = viewModel::onSetDynamicColor,
+                    )
+                    SettingsSubpage.PAYMENT_METHODS -> PaymentMethodsSettingsPage(
+                        cards = state.cardSettings,
+                        customCards = state.customCards,
+                        brands = state.brandSettings,
+                        qrPayments = state.qrPaymentSettings,
+                        onBack = viewModel::onCloseSettingsSubpage,
+                        onCardOwnedChange = viewModel::onSetCardOwned,
+                        onCardRateChange = viewModel::onSetCardRate,
+                        onCardBrandChange = viewModel::onSetCardBrand,
+                        onCardWelcatsuChange = viewModel::onSetCardWelcatsu,
+                        onAddCustomCard = viewModel::onAddCustomCard,
+                        onUpdateCustomCard = viewModel::onUpdateCustomCard,
+                        onRemoveCustomCard = viewModel::onRemoveCustomCard,
+                        onBrandOwnedChange = viewModel::onSetBrandOwned,
+                        onQrEnabledChange = viewModel::onSetQrEnabled,
+                    )
+                    SettingsSubpage.MUNICIPALITIES -> MunicipalitySettingsPage(
+                        registeredAreas = state.registeredAreas,
+                        municipalityMaster = state.municipalityMaster,
+                        onBack = viewModel::onCloseSettingsSubpage,
+                        onAdd = viewModel::onAddRegisteredArea,
+                        onRemove = viewModel::onRemoveRegisteredArea,
+                    )
+                    SettingsSubpage.DATA -> DataSettingsPage(
+                        dataStatus = dataStatusLabel(
+                            state.dataUpdatedAt,
+                            state.dataSource,
+                            state.useTestData,
+                            state.useBundledData,
+                        ),
+                        autoRefresh = state.autoRefresh,
+                        refreshing = state.refreshing,
+                        useBundledData = state.useBundledData,
+                        onBack = viewModel::onCloseSettingsSubpage,
+                        onAutoRefreshChange = viewModel::onSetAutoRefresh,
+                        onRefresh = viewModel::onManualRefresh,
+                    )
+                    SettingsSubpage.DEVELOPER -> DeveloperSettingsPage(
+                        developerMode = state.developerMode,
+                        dataCommitRef = state.dataCommitRef,
+                        dataCommitSha = state.dataCommitSha,
+                        useTestData = state.useTestData,
+                        useBundledData = state.useBundledData,
+                        onBack = viewModel::onCloseSettingsSubpage,
+                        onDeveloperModeChange = viewModel::onSetDeveloperMode,
+                        onDataCommitRefChange = viewModel::onSetDataCommitRef,
+                        onUseTestDataChange = viewModel::onSetUseTestData,
+                        onUseBundledDataChange = viewModel::onSetUseBundledData,
+                    )
+                    SettingsSubpage.ABOUT -> AboutSettingsPage(
+                        onBack = viewModel::onCloseSettingsSubpage,
+                    )
+                }
                 selectedTab == AppTab.NEARBY -> {
                     val nearby = state.nearby
                     if (nearby != null) {
@@ -434,46 +486,30 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     )
                 }
                 selectedTab == AppTab.SETTINGS -> SettingsScreen(
-                    themeMode = state.themeMode,
-                    dynamicColor = state.dynamicColor,
-                    autoRefresh = state.autoRefresh,
-                    cards = state.cardSettings,
-                    customCards = state.customCards,
-                    brands = state.brandSettings,
-                    qrPayments = state.qrPaymentSettings,
-                    registeredAreas = state.registeredAreas,
-                    municipalityMaster = state.municipalityMaster,
-                    dataStatus = dataStatusLabel(
+                    displaySummary = displaySettingsSummary(
+                        state.themeMode,
+                        state.dynamicColor,
+                        dynamicSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
+                    ),
+                    paymentSummary = paymentMethodsSummary(
+                        cardCount = state.cardSettings.count { it.owned } + state.customCards.size,
+                        brandCount = state.brandSettings.count { it.owned },
+                        qrCount = state.qrPaymentSettings.count { it.enabled },
+                    ),
+                    municipalitySummary = municipalitySummary(state.registeredAreas),
+                    dataSummary = dataRowSummary(
                         state.dataUpdatedAt,
                         state.dataSource,
                         state.useTestData,
                         state.useBundledData,
                     ),
-                    refreshing = state.refreshing,
-                    useBundledData = state.useBundledData,
-                    developerMode = state.developerMode,
-                    developerSummary = developerSettingsSummary(
+                    developerSummary = developerRowSummary(
+                        state.developerMode,
                         state.dataCommitRef,
                         state.useTestData,
                         state.useBundledData,
                     ),
-                    onThemeModeChange = viewModel::onSetThemeMode,
-                    onDynamicColorChange = viewModel::onSetDynamicColor,
-                    onAutoRefreshChange = viewModel::onSetAutoRefresh,
-                    onCardOwnedChange = viewModel::onSetCardOwned,
-                    onCardRateChange = viewModel::onSetCardRate,
-                    onCardBrandChange = viewModel::onSetCardBrand,
-                    onCardWelcatsuChange = viewModel::onSetCardWelcatsu,
-                    onAddCustomCard = viewModel::onAddCustomCard,
-                    onUpdateCustomCard = viewModel::onUpdateCustomCard,
-                    onRemoveCustomCard = viewModel::onRemoveCustomCard,
-                    onBrandOwnedChange = viewModel::onSetBrandOwned,
-                    onQrEnabledChange = viewModel::onSetQrEnabled,
-                    onAddRegisteredArea = viewModel::onAddRegisteredArea,
-                    onRemoveRegisteredArea = viewModel::onRemoveRegisteredArea,
-                    onRefresh = viewModel::onManualRefresh,
-                    onDeveloperModeChange = viewModel::onSetDeveloperMode,
-                    onOpenDeveloperSettings = viewModel::onOpenDeveloperSettings,
+                    onOpenSubpage = viewModel::onOpenSettingsSubpage,
                 )
                 else -> PaddedColumn {
                     SearchPane(

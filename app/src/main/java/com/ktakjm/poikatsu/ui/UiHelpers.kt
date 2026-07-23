@@ -30,6 +30,8 @@ import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.DataSource
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_PERIOD_TOTAL
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_TRANSACTION
+import com.ktakjm.poikatsu.data.RegisteredArea
+import com.ktakjm.poikatsu.data.ThemeMode
 import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.CampaignType
 import com.ktakjm.poikatsu.domain.campaignType
@@ -56,17 +58,33 @@ internal fun dataStatusLabel(
     useTestData: Boolean = false,
     useBundledData: Boolean = false,
 ): String {
-    // BUNDLED はトグルによる意図的な同梱表示と、キャッシュなしフォールバックの両方で立つため、
-    // 実データとの取り違え防止にトグル ON 中は開発者設定によるものだと明示する
-    val sourceLabel = when {
-        source == DataSource.BUNDLED && useBundledData -> "同梱データ表示中(開発者設定)"
-        source == DataSource.REMOTE -> "最新データ取得済み"
-        source == DataSource.CACHE -> "前回取得データ(オフライン？)"
-        source == DataSource.BUNDLED -> "同梱データ(オフライン？)"
-        else -> ""
-    }
     val testLabel = if (useTestData) " [テストデータ]" else ""
-    return "データ更新日：$updatedAt $sourceLabel$testLabel"
+    return "データ更新日：$updatedAt ${dataSourceLabel(source, useBundledData)}$testLabel"
+}
+
+/**
+ * 設定トップ「キャンペーンデータ」行のサマリ。行タイトルと重複する「データ更新日：」の
+ * 接頭辞を省いた短縮形(お店タブ・データサブページ内の表示は [dataStatusLabel] のまま)。
+ */
+internal fun dataRowSummary(
+    updatedAt: String,
+    source: DataSource?,
+    useTestData: Boolean = false,
+    useBundledData: Boolean = false,
+): String {
+    val testLabel = if (useTestData) " [テストデータ]" else ""
+    val parts = listOf(updatedAt, dataSourceLabel(source, useBundledData)).filter { it.isNotBlank() }
+    return parts.joinToString("・") + testLabel
+}
+
+// BUNDLED はトグルによる意図的な同梱表示と、キャッシュなしフォールバックの両方で立つため、
+// 実データとの取り違え防止にトグル ON 中は開発者設定によるものだと明示する
+private fun dataSourceLabel(source: DataSource?, useBundledData: Boolean): String = when {
+    source == DataSource.BUNDLED && useBundledData -> "同梱データ表示中(開発者設定)"
+    source == DataSource.REMOTE -> "最新データ取得済み"
+    source == DataSource.CACHE -> "前回取得データ(オフライン？)"
+    source == DataSource.BUNDLED -> "同梱データ(オフライン？)"
+    else -> ""
 }
 
 /**
@@ -84,6 +102,66 @@ internal fun developerSettingsSummary(
         if (dataCommitRef.isNotBlank()) add("ref=$dataCommitRef")
     }
     return if (active.isEmpty()) "すべて既定値" else active.joinToString("・")
+}
+
+// ---- 設定トップのカテゴリ行サマリ(#47)。畳んだ情報をトップで一望するための純関数群 ----
+
+/** ThemeMode の表示ラベル(表示サブページのセグメントボタンと「表示」行サマリで共用) */
+internal fun themeModeLabel(mode: ThemeMode): String = when (mode) {
+    ThemeMode.SYSTEM -> "システム"
+    ThemeMode.LIGHT -> "ライト"
+    ThemeMode.DARK -> "ダーク"
+}
+
+/** 「表示」行のサマリ。dynamic color 非対応端末(Android 11 以下)では壁紙の色の項を出さない */
+internal fun displaySettingsSummary(
+    themeMode: ThemeMode,
+    dynamicColor: Boolean,
+    dynamicSupported: Boolean,
+): String = buildList {
+    add("テーマ: ${themeModeLabel(themeMode)}")
+    if (dynamicSupported) add(if (dynamicColor) "壁紙の色 ON" else "壁紙の色 OFF")
+}.joinToString("・")
+
+/**
+ * 「支払い方法」行のサマリ。登録のある種別だけ列挙し(カード=カタログ所有+カスタム)、
+ * すべて未登録なら「未登録」。
+ */
+internal fun paymentMethodsSummary(cardCount: Int, brandCount: Int, qrCount: Int): String {
+    val parts = buildList {
+        if (cardCount > 0) add("カード${cardCount}枚")
+        if (brandCount > 0) add("ブランド${brandCount}件")
+        if (qrCount > 0) add("コード決済${qrCount}件")
+    }
+    return if (parts.isEmpty()) "未登録" else parts.joinToString("・")
+}
+
+/**
+ * 登録地域の表示名「都道府県 名前」(#47)。「南部」だけではどこの南部か分からないため、
+ * 登録済みリスト・サマリとも都道府県を冠する。
+ */
+internal fun areaDisplayName(area: RegisteredArea): String = "${area.prefecture} ${area.name}"
+
+/**
+ * 「マイエリア」行のサマリ。先頭の登録地域+「ほかN件」。
+ * 未登録時は「未登録」だけだと登録する動機が伝わらないため、効果を一言添える。
+ */
+internal fun municipalitySummary(areas: List<RegisteredArea>): String = when {
+    areas.isEmpty() -> "未登録(登録すると地域のキャンペーンが届きます)"
+    areas.size == 1 -> areaDisplayName(areas.first())
+    else -> "${areaDisplayName(areas.first())} ほか${areas.size - 1}件"
+}
+
+/** 「開発者向け」行のサマリ。ON 中は非既定値([developerSettingsSummary])まで出し戻し忘れに気づけるように */
+internal fun developerRowSummary(
+    developerMode: Boolean,
+    dataCommitRef: String,
+    useTestData: Boolean,
+    useBundledData: Boolean,
+): String = if (!developerMode) {
+    "開発者モード オフ"
+} else {
+    "開発者モード オン・${developerSettingsSummary(dataCommitRef, useTestData, useBundledData)}"
 }
 
 /**
