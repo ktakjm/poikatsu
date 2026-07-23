@@ -51,7 +51,7 @@ import com.ktakjm.poikatsu.domain.trimRate
 import com.ktakjm.poikatsu.ui.theme.warningColor
 
 /**
- * 支払い方法サブページ(#47)。マイカード / カードブランド / コード決済の 3 セクションを統合する
+ * お支払い方法サブページ(#47)。マイカード / 国際ブランド / コード決済の 3 セクションを統合する
  * (いずれも「何を持っているか」の登録で意味的に同族)。値は DataStore 由来(MainViewModel 経由)で、
  * 変更は即 ViewModel の setter へ流す。
  */
@@ -81,6 +81,12 @@ internal fun PaymentMethodsSettingsPage(
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         // --- マイカード ---
         SettingsSectionHeader("マイカード")
+        Text(
+            "持っているカードにチェックを入れてください。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
         cards.forEach { card ->
             CardSettingItem(
                 card = card,
@@ -111,7 +117,6 @@ internal fun PaymentMethodsSettingsPage(
         }
         ListItem(
             headlineContent = { Text("カードを追加") },
-            supportingContent = { Text("アプリ未対応のカードを登録できます") },
             leadingContent = {
                 Icon(
                     Icons.Default.Add,
@@ -122,11 +127,11 @@ internal fun PaymentMethodsSettingsPage(
             modifier = Modifier.clickable { editingCustomCard = NEW_CUSTOM_CARD },
         )
 
-        // --- カードブランド(イシュアー不問のブランド施策向け。事前登録できるよう常時出す) ---
+        // --- 国際ブランド(イシュアー不問のブランド施策向け。事前登録できるよう常時出す) ---
         if (brands.isNotEmpty()) {
-            SettingsSectionHeader("カードブランド")
+            SettingsSectionHeader("国際ブランド")
             Text(
-                "上のカード以外で持っているブランドにチェックを入れてください。カード会社を問わないブランド対象キャンペーン(Visa割など)が始まると、開始と同時に判定へ表示されます。",
+                "マイカード以外で持っているカードの国際ブランドにチェックを入れてください。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -156,7 +161,7 @@ internal fun PaymentMethodsSettingsPage(
             )
         } else {
             Text(
-                "利用中のコード決済(PayPay・楽天ペイなど)にチェックを入れると、キャンペーン情報が判定に表示されます。",
+                "利用中のコード決済にチェックを入れてください。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -280,7 +285,7 @@ private fun CustomCardEditDialog(
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(
-                    "アプリ未対応のカードを登録できます。ブランドを選ぶと、カード会社を問わないブランド対象キャンペーン(Visa割など)の判定にも使われます。",
+                    "アプリ未対応のカードを登録できます。国際ブランドを選ぶと、カード会社を問わないブランド対象キャンペーン(Visa割など)の判定にも使われます。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
@@ -296,7 +301,7 @@ private fun CustomCardEditDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 ) {
-                    Text("ブランド", style = MaterialTheme.typography.bodyLarge)
+                    Text("国際ブランド", style = MaterialTheme.typography.bodyLarge)
                     Spacer(Modifier.weight(1f))
                     OptionalBrandDropdown(brand = brand, options = brandOptions, onChange = { brand = it })
                 }
@@ -431,7 +436,7 @@ private fun CardSettingItem(
     if (card.owned) {
         if (card.showBrandPicker) {
             ListItem(
-                headlineContent = { Text("ブランド") },
+                headlineContent = { Text("国際ブランド") },
                 trailingContent = {
                     BrandDropdown(brand = card.brand, options = card.brands, onChange = onBrandChange)
                 },
@@ -441,7 +446,7 @@ private fun CardSettingItem(
                 // 除外され得るブランドはデータ駆動(ineligible_brands の集約)。除外ルールが無く
                 // ブランド施策だけで選択 UI が出ているカードには、未一致の説明にとどめる
                 val unselectedNote = if (card.ineligibleBrands.isNotEmpty()) {
-                    "ブランド未選択のため、${card.ineligibleBrands.joinToString("/")} で優遇対象外になり得る店舗は対象外として扱われます。お持ちのブランドを選ぶと正確に判定されます"
+                    "ブランド未選択のため、${card.ineligibleBrands.joinToString("/")} で優遇対象外になり得るお店は対象外として扱われます。お持ちのブランドを選ぶと正確に判定されます"
                 } else {
                     "ブランド未選択のため、ブランド限定の施策は判定に出ません。お持ちのブランドを選ぶと正確に判定されます"
                 }
@@ -454,7 +459,7 @@ private fun CardSettingItem(
             }
             if (card.ineligibleBrands.any { it.equals(card.brand, ignoreCase = true) }) {
                 Text(
-                    "${card.brand} は一部店舗が優遇対象外になります",
+                    "${card.brand} は一部のお店が優遇対象外になります",
                     style = MaterialTheme.typography.bodySmall,
                     color = warningColor(),
                     modifier = Modifier.padding(start = 24.dp, end = 16.dp, bottom = 8.dp),
@@ -462,7 +467,8 @@ private fun CardSettingItem(
             }
         }
         ListItem(
-            headlineContent = { Text("還元率（公式アプリの表示値）") },
+            headlineContent = { Text("還元率") },
+            supportingContent = { Text("公式アプリに表示される還元率を入力") },
             trailingContent = {
                 Text("${trimRate(card.rate)}%", style = MaterialTheme.typography.titleMedium)
             },
@@ -539,11 +545,11 @@ private fun BrandRequiredDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("ブランドを選択") },
+        title = { Text("国際ブランドを選択") },
         text = {
             Column {
                 Text(
-                    "${cardName}はブランドによって判定が変わります。お持ちのカードのブランドを選んでください。",
+                    "${cardName}は国際ブランドによって判定が変わります。お持ちのカードのブランドを選んでください。",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(Modifier.height(8.dp))
@@ -570,7 +576,7 @@ private fun RateEditDialog(initial: Double, onDismiss: () -> Unit, onConfirm: (D
         text = {
             Column {
                 Text(
-                    "公式アプリに表示される実効還元率(%)を入力してください。",
+                    "公式アプリに表示される還元率(%)を入力してください。",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(Modifier.height(8.dp))

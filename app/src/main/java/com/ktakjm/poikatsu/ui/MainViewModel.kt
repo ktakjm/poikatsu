@@ -102,7 +102,7 @@ enum class CampaignFilter { ALL, MUNICIPAL, NON_MUNICIPAL }
  */
 enum class SettingsSubpage(val title: String) {
     DISPLAY("表示"),
-    PAYMENT_METHODS("支払い方法"),
+    PAYMENT_METHODS("お支払い方法"),
     // 「自治体」だと登録する動機が伝わらないため、「受け取りたくて登録している地域」の
     // ニュアンスでマイエリアと呼ぶ(マイカードと命名を揃える)
     MUNICIPALITIES("マイエリア"),
@@ -303,7 +303,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val autoRefresh: Boolean = true,
         /** 設定画面の「マイカード」用カタログ(未所有カードも含む全候補) */
         val cardSettings: List<CardSetting> = emptyList(),
-        /** 設定画面の「カードブランド」用(カタログの card_brands 由来。常時表示) */
+        /** 設定画面の「国際ブランド」用(カタログの card_brands 由来。常時表示) */
         val brandSettings: List<BrandSetting> = emptyList(),
         /** 設定画面の「QR 決済」用カタログ(payment_methods.json のカタログ + ユーザー差分) */
         val qrPaymentSettings: List<QrPaymentSetting> = emptyList(),
@@ -333,7 +333,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     )
 
     /**
-     * 設定画面の「カードブランド」1件分。カタログのカードとは別に、イシュアー不問のブランド施策
+     * 設定画面の「国際ブランド」1件分。カタログのカードとは別に、イシュアー不問のブランド施策
      * (card_brand)向けに「このブランドのカードを持っている」を登録する。選択肢はカタログ
      * (payment_methods.json の card_brands)から常時出し、事前登録→施策開始と同時に判定へ反映する。
      */
@@ -698,7 +698,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
 
-        // 設定画面「カードブランド」: カタログ(card_brands)の選択肢を常時出す。事前に登録しておけば
+        // 設定画面「国際ブランド」: カタログ(card_brands)の選択肢を常時出す。事前に登録しておけば
         // ブランド施策の開始と同時に(設定画面を見なくても)判定に現れる。施策側が参照しているのに
         // カタログに無いブランドがあれば防御的に追加する(データ不整合時も登録手段を失わないように)
         val brandSettings = (loaded.data.cardBrands.map { it.name } + loaded.data.campaigns.mapNotNull { it.cardBrand })
@@ -967,7 +967,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (pois == null) {
             failNearby(
                 gen,
-                "周辺店舗を取得できませんでした。地図サーバが混雑しているか、通信が不安定な可能性があります。少し時間をおいて再度お試しください。",
+                "周辺のお店を取得できませんでした。地図サーバが混雑しているか、通信が不安定な可能性があります。少し時間をおいて再度お試しください。",
             )
             return
         }

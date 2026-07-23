@@ -30,8 +30,8 @@ class SettingsSummaryTest {
     @Test
     fun `支払い方法-登録のある種別だけ列挙する`() {
         assertEquals("カード3枚・コード決済2件", paymentMethodsSummary(cardCount = 3, brandCount = 0, qrCount = 2))
-        assertEquals("カード1枚・ブランド2件・コード決済1件", paymentMethodsSummary(1, 2, 1))
-        assertEquals("ブランド1件", paymentMethodsSummary(0, 1, 0))
+        assertEquals("カード1枚・国際ブランド2件・コード決済1件", paymentMethodsSummary(1, 2, 1))
+        assertEquals("国際ブランド1件", paymentMethodsSummary(0, 1, 0))
     }
 
     @Test
@@ -64,7 +64,7 @@ class SettingsSummaryTest {
 
     @Test
     fun `自治体-未登録なら効果説明を添える`() {
-        assertEquals("未登録(登録すると地域のキャンペーンが届きます)", municipalitySummary(emptyList()))
+        assertEquals("未登録(登録すると期間限定タブを地域のキャンペーンに絞れます)", municipalitySummary(emptyList()))
     }
 
     // ---- キャンペーンデータ ----

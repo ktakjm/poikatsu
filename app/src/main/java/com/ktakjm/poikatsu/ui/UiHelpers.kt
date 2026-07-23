@@ -124,13 +124,13 @@ internal fun displaySettingsSummary(
 }.joinToString("・")
 
 /**
- * 「支払い方法」行のサマリ。登録のある種別だけ列挙し(カード=カタログ所有+カスタム)、
+ * 「お支払い方法」行のサマリ。登録のある種別だけ列挙し(カード=カタログ所有+カスタム)、
  * すべて未登録なら「未登録」。
  */
 internal fun paymentMethodsSummary(cardCount: Int, brandCount: Int, qrCount: Int): String {
     val parts = buildList {
         if (cardCount > 0) add("カード${cardCount}枚")
-        if (brandCount > 0) add("ブランド${brandCount}件")
+        if (brandCount > 0) add("国際ブランド${brandCount}件")
         if (qrCount > 0) add("コード決済${qrCount}件")
     }
     return if (parts.isEmpty()) "未登録" else parts.joinToString("・")
@@ -147,7 +147,7 @@ internal fun areaDisplayName(area: RegisteredArea): String = "${area.prefecture}
  * 未登録時は「未登録」だけだと登録する動機が伝わらないため、効果を一言添える。
  */
 internal fun municipalitySummary(areas: List<RegisteredArea>): String = when {
-    areas.isEmpty() -> "未登録(登録すると地域のキャンペーンが届きます)"
+    areas.isEmpty() -> "未登録(登録すると期間限定タブを地域のキャンペーンに絞れます)"
     areas.size == 1 -> areaDisplayName(areas.first())
     else -> "${areaDisplayName(areas.first())} ほか${areas.size - 1}件"
 }

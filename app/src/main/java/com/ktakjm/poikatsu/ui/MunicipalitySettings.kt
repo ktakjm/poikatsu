@@ -65,7 +65,7 @@ internal fun MunicipalitySettingsPage(
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Text(
-            "居住地・行動圏の自治体を登録すると、期間限定タブが登録地域の施策に絞られます。",
+            "自治体を登録すると、期間限定タブをその地域のキャンペーンに絞れます。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),

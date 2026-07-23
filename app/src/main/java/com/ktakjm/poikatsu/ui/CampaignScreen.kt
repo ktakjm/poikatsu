@@ -433,7 +433,7 @@ private fun TargetChainSection(
         ) {
             Icon(Icons.Default.Place, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text(if (chainIds.size == 1) "近くのこのお店を探す" else "近くの対象店舗を探す")
+            Text(if (chainIds.size == 1) "近くのこのお店を探す" else "近くの対象のお店を探す")
         }
         if (chainIds.size >= 2) {
             val names = chainIds.mapNotNull { merchantNames[it] }
@@ -445,11 +445,11 @@ private fun TargetChainSection(
         }
         if (!isTarget) {
             val note = if (!started) {
-                "開始前です。地図では店舗の場所のみ確認できます"
+                "開始前です。地図ではお店の場所のみ確認できます"
             } else {
                 val next = nextTargetDay(campaign, today)
                     ?.let { "（次の対象日: ${it.monthValue}/${it.dayOfMonth}）" }.orEmpty()
-                "本日は対象日ではありません$next。地図では店舗の場所のみ確認できます"
+                "本日は対象日ではありません$next。地図ではお店の場所のみ確認できます"
             }
             Surface(
                 color = warningContainerColor(),

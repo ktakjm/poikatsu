@@ -119,7 +119,7 @@ data class MerchantRule(
      */
     @SerialName("ineligible_notes") val ineligibleNotes: List<String> = emptyList(),
     /**
-     * この店で優遇対象外になるカードブランド名のリスト(payment_methods.json の card_brands の
+     * この店で優遇対象外になる国際ブランド名のリスト(payment_methods.json の card_brands の
      * name を参照。整合性テストで強制)。実ブランドが一致(未選択でも取りうる場合を含む)すると
      * この店は判定・検索・地図から除外される。「Visa/MC のみ対象」も残りブランドの除外で表現する
      */
@@ -340,7 +340,7 @@ data class PaymentMethodsFile(
     @SerialName("updated_at") val updatedAt: String = "",
     val cards: List<PaymentCard> = emptyList(),
     /**
-     * 登録できるカードブランドの選択肢(国際ブランドのマスタ)。設定画面「カードブランド」に常時出し、
+     * 登録できる国際ブランドの選択肢(マスタ)。設定画面「国際ブランド」に常時出し、
      * カタログに無いカードの保有ブランドを登録しておくと、ブランド施策(card_brand)の開始と同時に
      * 判定へ表示される。campaigns.json の card_brand はこのリストの name を使う
      */

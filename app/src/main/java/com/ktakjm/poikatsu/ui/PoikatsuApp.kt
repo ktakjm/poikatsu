@@ -203,7 +203,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     },
                 )
                 state.storeCheck != null -> TopAppBar(
-                    title = { Text("${state.storeCheck!!.merchant.name} 店舗判定") },
+                    title = { Text("${state.storeCheck!!.merchant.name} 対象判定") },
                     navigationIcon = {
                         IconButton(onClick = viewModel::onCloseStoreCheck) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
@@ -318,7 +318,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     } + state.qrPaymentSettings.map {
                         PaymentOptionUi(qrPaymentId = it.id, label = it.name, color = it.brandColor)
                     } + state.brandSettings.map {
-                        PaymentOptionUi(cardBrand = it.brand, label = "${it.brand}(ブランド指定)", color = it.color)
+                        PaymentOptionUi(cardBrand = it.brand, label = "${it.brand}(国際ブランド指定)", color = it.color)
                     }
                     CustomCampaignEditorScreen(
                         initial = editing.takeUnless { it.id.isEmpty() },
@@ -583,7 +583,7 @@ private fun SearchPane(
         onValueChange = onQueryChange,
         modifier = Modifier.fillMaxWidth(),
         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-        placeholder = { Text("店名を入力(例: マック、サイゼ)") },
+        placeholder = { Text("お店の名前(例: マック、サイゼ)") },
         singleLine = true,
     )
     FlowRow(
@@ -627,7 +627,7 @@ private fun SearchPane(
         // 初期画面(検索前)。自治体施策のお知らせは検索・判定と混ざらないようここだけに出す
         query.isBlank() && selectedCategories.isEmpty() -> {
             Text(
-                "チェーン名を入力するか、カテゴリを選択すると、どのカードで払うのが得かを表示します。",
+                "お店の名前を入力するか、カテゴリを選択すると、おトクな支払い方法を表示します。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.outline,
             )
@@ -640,8 +640,8 @@ private fun SearchPane(
             }
         }
         results.isEmpty() -> Text(
-            if (query.isBlank()) "選択中のカテゴリに店舗がありません。"
-            else "「$query」に一致する店舗が見つかりませんでした。登録済みの高還元施策の対象外の可能性があります。",
+            if (query.isBlank()) "選択中のカテゴリにお店がありません。"
+            else "「$query」に一致するお店が見つかりませんでした。登録済みの高還元施策の対象外の可能性があります。",
             style = MaterialTheme.typography.bodyMedium,
         )
         else -> LazyColumn(
@@ -1086,8 +1086,8 @@ private fun NearbyPane(
                                         merchantFilters.joinToString("") { "「${it.name}」" } +
                                             "はこの範囲にありません。地図を動かすか、絞り込みを解除してください。"
                                     nearby.places.isEmpty() ->
-                                        "この範囲に対象施策のある店舗が見つかりませんでした。地図を動かして探してください。"
-                                    else -> "選択中のジャンルに該当する周辺店舗がありません。"
+                                        "この範囲に対象施策のあるお店が見つかりませんでした。地図を動かして探してください。"
+                                    else -> "選択中のジャンルに該当する周辺のお店がありません。"
                                 },
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -1325,7 +1325,7 @@ private fun ChainFilterDropdown(
     Box {
         AssistChip(
             onClick = { expanded = true },
-            label = { Text("チェーンで絞る") },
+            label = { Text("お店で絞る") },
             trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -1351,7 +1351,7 @@ private fun ChainFilterDropdown(
  */
 private fun nearbyLoadingText(phase: MainViewModel.NearbyLoadPhase): String = when (phase) {
     MainViewModel.NearbyLoadPhase.LOCATING -> "現在地を確認しています…"
-    MainViewModel.NearbyLoadPhase.SEARCHING -> "周辺の店舗を探しています…"
+    MainViewModel.NearbyLoadPhase.SEARCHING -> "周辺のお店を探しています…"
 }
 
 /**

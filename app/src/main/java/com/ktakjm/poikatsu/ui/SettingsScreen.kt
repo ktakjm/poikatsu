@@ -34,7 +34,7 @@ import com.ktakjm.poikatsu.BuildConfig
 import com.ktakjm.poikatsu.data.ThemeMode
 
 /**
- * 設定画面(4 番目のタブ)のトップページ。カテゴリ行(表示/支払い方法/マイエリア/
+ * 設定画面(4 番目のタブ)のトップページ。カテゴリ行(表示/お支払い方法/マイエリア/
  * キャンペーンデータ/開発者向け/このアプリ)のみを置き、項目本体は各サブページ
  * ([SettingsSubpage]。設定タブ上のオーバーレイ+戻る)へ移す(#47)。各行には畳んだ現在値のサマリ(UiHelpers の純関数で生成)を出し、
  * 遷移せずに状態を一望できるようにする。
@@ -201,7 +201,7 @@ internal fun AboutSettingsPage(onBack: () -> Unit) {
     }
 }
 
-/** サブページ内のセクション見出し(支払い方法サブページの マイカード/カードブランド/コード決済 等) */
+/** サブページ内のセクション見出し(お支払い方法サブページの マイカード/国際ブランド/コード決済 等) */
 @Composable
 internal fun SettingsSectionHeader(text: String) {
     Text(

@@ -278,9 +278,9 @@ internal fun CustomCampaignEditorScreen(
         )
 
         // --- 紐付け先の決済手段(複数可) ---
-        EditorSectionHeader("決済手段")
+        EditorSectionHeader("お支払い方法")
         Text(
-            "複数選ぶと、同じ内容の施策が決済手段ごとに登録されます(率・条件は共通。決済ごとに率が異なる場合は別々に登録してください)。",
+            "複数選ぶと、同じ内容の施策が支払い方法ごとに登録されます(率・条件は共通。率が異なる場合は別々に登録してください)。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline,
         )
@@ -314,7 +314,7 @@ internal fun CustomCampaignEditorScreen(
         }
 
         // --- 対象店舗 ---
-        EditorSectionHeader("対象店舗")
+        EditorSectionHeader("対象のお店")
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -358,16 +358,16 @@ internal fun CustomCampaignEditorScreen(
         OutlinedTextField(
             value = storeNameInput,
             onValueChange = { storeNameInput = it },
-            label = { Text("一覧に無い店名を入力") },
+            label = { Text("一覧に無いお店の名前を入力") },
             placeholder = { Text("例: ○○ベーカリー") },
             singleLine = true,
-            supportingText = { Text("店名の部分一致でお店・地図タブにマッチします") },
+            supportingText = { Text("入力した名前の部分一致でお店・地図タブにマッチします") },
             trailingIcon = {
                 IconButton(
                     onClick = { commitStoreNameInput() },
                     enabled = storeNameInput.isNotBlank(),
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "店名を追加")
+                    Icon(Icons.Default.Add, contentDescription = "お店の名前を追加")
                 }
             },
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
@@ -551,7 +551,7 @@ internal fun CustomCampaignEditorScreen(
                 label = { Text("対象商品限定") },
                 placeholder = { Text("例: 対象の化粧品のみ") },
                 singleLine = true,
-                supportingText = { Text("店の全商品に効かない特典。「商品限定」バッジが付き、最大おトク率の比較から外れます") },
+                supportingText = { Text("お店の全商品に効かない特典。「商品限定」バッジが付き、最大おトク率の比較から外れます") },
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
@@ -719,7 +719,7 @@ private fun PaymentPickerDropdown(
     Box {
         AssistChip(
             onClick = { expanded = true },
-            label = { Text("決済手段を選択") },
+            label = { Text("お支払い方法を選択") },
             trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
         )
         DropdownMenu(
@@ -775,7 +775,7 @@ private fun ChainPickerDropdown(
     Box {
         AssistChip(
             onClick = { expanded = true },
-            label = { Text("チェーンを選択") },
+            label = { Text("お店を選択") },
             trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
         )
         DropdownMenu(

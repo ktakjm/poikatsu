@@ -27,7 +27,7 @@ data class CardOverride(
     val owned: Boolean? = null,
     /** 公式アプリ表示の実効還元率。null ならカタログの既定値。 */
     val rate: Double? = null,
-    /** カードブランド(MUFG の Amex/Mastercard/Visa/JCB 等)。null ならカタログの既定値。 */
+    /** 国際ブランド(MUFG の Amex/Mastercard/Visa/JCB 等)。null ならカタログの既定値。 */
     val brand: String? = null,
     /** ウエル活(ポイント価値 ×倍率)で表示するか。 */
     val welcatsu: Boolean = false,
@@ -170,7 +170,7 @@ data class AppSettings(
     /** 利用中の QR 決済 ID。payment_methods.json の qr_payments カタログからユーザーが選択 */
     val enabledQrPaymentIds: Set<String> = emptySet(),
     /**
-     * カタログのカード以外で保有しているカードブランド(例: "Visa")。イシュアー不問の
+     * カタログのカード以外で保有している国際ブランド(例: "Visa")。イシュアー不問の
      * ブランド施策(campaigns.json の card_brand)の判定にだけ使う。選択肢は施策データ側の
      * card_brand 値から出すため、カタログ(payment_methods.json)にスキーマ追加は不要。
      */

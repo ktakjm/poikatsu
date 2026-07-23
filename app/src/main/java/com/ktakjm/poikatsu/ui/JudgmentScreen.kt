@@ -92,7 +92,7 @@ internal fun JudgmentDetail(
     if (selection.canCheckStore) {
         Button(onClick = onOpenStoreCheck, modifier = Modifier.fillMaxWidth()) {
             val storeCheckLabel =
-                if (selection.displayName != null) "この店舗が対象か調べる" else "対象店舗を調べる"
+                if (selection.displayName != null) "このお店が対象か調べる" else "対象のお店を調べる"
             Text(storeCheckLabel)
             Spacer(Modifier.width(4.dp))
             Icon(
@@ -215,7 +215,7 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
         PeriodRow(campaign)
         RecurrenceRow(judgment)
         if (campaign.paymentInstruction.isNotBlank()) {
-            Text("支払い方法：${campaign.paymentInstruction}", style = MaterialTheme.typography.bodyMedium)
+            Text("お支払い方法：${campaign.paymentInstruction}", style = MaterialTheme.typography.bodyMedium)
         }
         EligibleNotesRows(judgment.eligibleNotes)
         judgment.warnings.forEach {
@@ -246,10 +246,10 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
         CapRow(judgment.perTransactionCap, judgment.periodTotalCap, judgment.capNote)
         Column {
             judgment.storeSearchUrl?.let { url ->
-                ExternalLinkButton("対象店舗を確認") { uriHandler.openUri(url) }
+                ExternalLinkButton("対象のお店を確認") { uriHandler.openUri(url) }
             }
             judgment.storeListUrl?.let { url ->
-                ExternalLinkButton("公式の対象店舗一覧") { uriHandler.openUri(url) }
+                ExternalLinkButton("対象のお店一覧(公式)") { uriHandler.openUri(url) }
             }
             judgment.detailUrl?.let { url ->
                 ExternalLinkButton("詳細を見る") { uriHandler.openUri(url) }
@@ -441,7 +441,7 @@ internal fun StoreCheckScreen(
         value = storeCheck.input,
         onValueChange = onStoreNameChange,
         modifier = Modifier.fillMaxWidth(),
-        label = { Text("店舗名を入力") },
+        label = { Text("お店の名前を入力") },
         placeholder = { Text("例: ○○駅前店") },
         singleLine = true,
     )
@@ -450,7 +450,7 @@ internal fun StoreCheckScreen(
     if (storeCheck.verdicts.isEmpty()) {
         Card(modifier = Modifier.fillMaxWidth()) {
             Text(
-                "対象か調べたい店舗名を入力してください。公式が対象/対象外を公表している店舗のみ判定します。",
+                "対象か調べたいお店の名前を入力してください。公式が対象/対象外を公表しているお店のみ判定します。",
                 modifier = Modifier.padding(16.dp),
             )
         }
@@ -488,10 +488,10 @@ private fun StoreVerdictCard(verdict: StoreVerdict) {
         }
     }
     val reason = when (verdict.eligibility) {
-        StoreEligibility.ELIGIBLE -> "「${verdict.matched}」は公式の対象店舗です"
-        StoreEligibility.INELIGIBLE -> "「${verdict.matched}」は公式の対象外店舗です"
+        StoreEligibility.ELIGIBLE -> "「${verdict.matched}」は公式の対象のお店です"
+        StoreEligibility.INELIGIBLE -> "「${verdict.matched}」は公式の対象外のお店です"
         StoreEligibility.UNKNOWN ->
-            "公式の対象/対象外リストに掲載がない店舗です。一部対象外店舗があるため、店頭・公式サイトでご確認ください"
+            "公式の対象/対象外リストに掲載がないお店です。一部対象外のお店があるため、店頭・公式サイトでご確認ください"
     }
     Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -521,7 +521,7 @@ private fun StoreVerdictCard(verdict: StoreVerdict) {
             }
             verdict.sourceUrl?.let { url ->
                 val uriHandler = LocalUriHandler.current
-                ExternalLinkButton("公式の店舗情報を開く") { uriHandler.openUri(url) }
+                ExternalLinkButton("公式のお店情報を開く") { uriHandler.openUri(url) }
             }
         }
     }
