@@ -152,6 +152,17 @@ internal fun municipalitySummary(areas: List<RegisteredArea>): String = when {
     else -> "${areaDisplayName(areas.first())} ほか${areas.size - 1}件"
 }
 
+/**
+ * 通知時刻(0時からの分)の表示ラベル。「8:00頃」のように「頃」を付け、
+ * WorkManager の省電力制約で厳密な時刻にならないことを示す。
+ */
+internal fun notifyTimeLabel(minutesOfDay: Int): String =
+    "%d:%02d頃".format(minutesOfDay / 60, minutesOfDay % 60)
+
+/** 「通知」行のサマリ(#6)。ON のときは通知の目安時刻まで出す */
+internal fun notificationSummary(enabled: Boolean, notifyTimeMinutes: Int): String =
+    if (enabled) "キャンペーン通知 オン(毎朝${notifyTimeLabel(notifyTimeMinutes)})" else "キャンペーン通知 オフ"
+
 /** 「開発者向け」行のサマリ。ON 中は非既定値([developerSettingsSummary])まで出し戻し忘れに気づけるように */
 internal fun developerRowSummary(
     developerMode: Boolean,

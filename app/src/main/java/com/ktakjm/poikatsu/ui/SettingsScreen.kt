@@ -1,9 +1,16 @@
 package com.ktakjm.poikatsu.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,8 +21,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -26,16 +37,29 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.mikepenz.aboutlibraries.ui.compose.android.produceLibraries
 import com.mikepenz.aboutlibraries.ui.compose.m3.LibrariesContainer
 import com.ktakjm.poikatsu.BuildConfig
 import com.ktakjm.poikatsu.R
 import com.ktakjm.poikatsu.data.ThemeMode
+import com.ktakjm.poikatsu.domain.ENDS_SOON_DAYS
+import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
+import com.ktakjm.poikatsu.ui.theme.warningContainerColor
+
+/** 通知時刻の設定刻み(分)。保存形式は分単位で、刻みは UI 側の制約として持つ */
+private const val NOTIFY_TIME_STEP_MINUTES = 15
 
 /**
  * 設定画面(4 番目のタブ)のトップページ。カテゴリ行(表示/お支払い方法/マイエリア/
@@ -48,6 +72,7 @@ internal fun SettingsScreen(
     displaySummary: String,
     paymentSummary: String,
     municipalitySummary: String,
+    notificationSummary: String,
     dataSummary: String,
     developerSummary: String,
     onOpenSubpage: (SettingsSubpage) -> Unit,
@@ -56,6 +81,7 @@ internal fun SettingsScreen(
         SettingsCategoryRow(SettingsSubpage.DISPLAY, displaySummary, onOpenSubpage)
         SettingsCategoryRow(SettingsSubpage.PAYMENT_METHODS, paymentSummary, onOpenSubpage)
         SettingsCategoryRow(SettingsSubpage.MUNICIPALITIES, municipalitySummary, onOpenSubpage)
+        SettingsCategoryRow(SettingsSubpage.NOTIFICATIONS, notificationSummary, onOpenSubpage)
         SettingsCategoryRow(SettingsSubpage.DATA, dataSummary, onOpenSubpage)
         SettingsCategoryRow(SettingsSubpage.DEVELOPER, developerSummary, onOpenSubpage)
         SettingsCategoryRow(
@@ -128,6 +154,178 @@ private fun ThemeModeRow(themeMode: ThemeMode, onChange: (ThemeMode) -> Unit) {
                     onClick = { onChange(mode) },
                     shape = SegmentedButtonDefaults.itemShape(index, options.size),
                 ) { Text(themeModeLabel(mode)) }
+            }
+        }
+    }
+}
+
+// ---- サブページ: 通知 ----
+
+/**
+ * 通知サブページ(#6)。キャンペーン通知のトグル・通知時刻(15分刻み)と、何がいつ通知されるかの説明。
+ * ON 操作時、Android 13+ は通知パーミッションを要求し、許可されたときだけ有効化する
+ * (拒否のまま ON にすると「有効なのに何も来ない」状態になるため)。12 以下は要求不要でそのまま ON。
+ */
+@Composable
+internal fun NotificationSettingsPage(
+    enabled: Boolean,
+    notifyTimeMinutes: Int,
+    onBack: () -> Unit,
+    onEnabledChange: (Boolean) -> Unit,
+    onTimeChange: (Int) -> Unit,
+) {
+    BackHandler(onBack = onBack)
+    val context = LocalContext.current
+    var permissionDenied by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            permissionDenied = false
+            onEnabledChange(true)
+        } else {
+            permissionDenied = true
+        }
+    }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        ListItem(
+            headlineContent = { Text("キャンペーン通知") },
+            supportingContent = {
+                Text("毎朝${notifyTimeLabel(notifyTimeMinutes)}、その日のお知らせがあるときだけまとめて通知します")
+            },
+            trailingContent = {
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = { on ->
+                        when {
+                            !on -> onEnabledChange(false)
+                            Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(
+                                context, Manifest.permission.POST_NOTIFICATIONS,
+                            ) == PackageManager.PERMISSION_GRANTED -> onEnabledChange(true)
+                            else -> permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    },
+                )
+            },
+        )
+        ListItem(
+            headlineContent = { Text("通知時刻") },
+            // 「頃」の理由をここで説明する(WorkManager の省電力制約で厳密な時刻にならない)
+            supportingContent = { Text("省電力の状況により数分ずれることがあります") },
+            trailingContent = { Text(notifyTimeLabel(notifyTimeMinutes), style = MaterialTheme.typography.bodyLarge) },
+            modifier = Modifier.clickable { showTimePicker = true },
+        )
+        if (permissionDenied && !enabled) {
+            // 拒否直後の案内。2回拒否済みだと要求ダイアログ自体が出なくなるため、端末設定への導線を文言で示す
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                NoticeRow(
+                    "通知が許可されていません。端末の設定でこのアプリの通知を許可してください",
+                    containerColor = warningContainerColor(),
+                    contentColor = onWarningContainerColor(),
+                )
+            }
+        }
+        // 通知内容の説明。選べる項目ではないので ListItem(=操作できる行の見た目)にせず、
+        // トグル下の説明段落として出す(Android のシステム設定の footer 説明と同じ扱い)
+        SettingsSectionHeader("通知の内容")
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                "次のキャンペーンについて、開始日と終了間近(終了${ENDS_SOON_DAYS}日前から)をお知らせします。\n" +
+                    "・マイエリアの自治体キャンペーン\n" +
+                    "・お支払い方法に登録したカード・国際ブランド・コード決済の期間限定キャンペーン\n" +
+                    "・自分で登録したキャンペーン",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "予算到達しだい早く終わる施策は、終了日が確定していないため終了間近をお知らせできないことがあります。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+        }
+    }
+    if (showTimePicker) {
+        NotifyTimePickerDialog(
+            initialMinutes = notifyTimeMinutes,
+            onConfirm = { minutes ->
+                onTimeChange(minutes)
+                showTimePicker = false
+            },
+            onDismiss = { showTimePicker = false },
+        )
+    }
+}
+
+/**
+ * 通知時刻のピッカー(時 0〜23・分 15刻み)。M3 の TimePicker は分の刻みを指定できないため、
+ * 時・分それぞれのドロップダウンで択一にする(「頃」の精度に分単位の入力は過剰)。
+ */
+@Composable
+private fun NotifyTimePickerDialog(
+    initialMinutes: Int,
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var hour by remember { mutableStateOf(initialMinutes / 60) }
+    // 既存値が15分刻みでない場合(将来の保存形式変更等)も選択肢に丸めて表示する
+    var minute by remember { mutableStateOf(initialMinutes % 60 / NOTIFY_TIME_STEP_MINUTES * NOTIFY_TIME_STEP_MINUTES) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("通知時刻") },
+        text = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TimePartPicker(
+                    value = hour,
+                    options = (0..23).toList(),
+                    format = { it.toString() },
+                    onSelect = { hour = it },
+                )
+                Text(":", style = MaterialTheme.typography.titleLarge)
+                TimePartPicker(
+                    value = minute,
+                    options = (0 until 60 step NOTIFY_TIME_STEP_MINUTES).toList(),
+                    format = { "%02d".format(it) },
+                    onSelect = { minute = it },
+                )
+                Text("頃", style = MaterialTheme.typography.bodyLarge)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(hour * 60 + minute) }) { Text("OK") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("キャンセル") }
+        },
+    )
+}
+
+/** 時刻の一部(時または分)のドロップダウン択一 */
+@Composable
+private fun TimePartPicker(
+    value: Int,
+    options: List<Int>,
+    format: (Int) -> String,
+    onSelect: (Int) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { expanded = true }) {
+            Text(format(value), style = MaterialTheme.typography.titleLarge)
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(format(option)) },
+                    onClick = {
+                        onSelect(option)
+                        expanded = false
+                    },
+                )
             }
         }
     }

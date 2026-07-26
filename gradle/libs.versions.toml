@@ -15,6 +15,7 @@ playServicesMaps = "19.2.0"
 playServicesLocation = "21.3.0"
 datastore = "1.1.1"
 timber = "5.0.1"
+workManager = "2.10.1"
 # 15.x は Kotlin 2.4 / compileSdk 37 要求のため、Compose 1.10 / AGP 9 対応の 14 系に留める
 aboutLibraries = "14.2.1"
 
@@ -32,6 +33,7 @@ maps-compose-utils = { group = "com.google.maps.android", name = "maps-compose-u
 play-services-maps = { group = "com.google.android.gms", name = "play-services-maps", version.ref = "playServicesMaps" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }

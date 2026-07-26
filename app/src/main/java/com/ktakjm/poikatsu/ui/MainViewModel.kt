@@ -18,10 +18,8 @@ import com.ktakjm.poikatsu.data.YolpClient
 import com.ktakjm.poikatsu.data.YolpSearchConfig
 import com.ktakjm.poikatsu.data.AppSettings
 import com.ktakjm.poikatsu.data.CustomCampaign
-import com.ktakjm.poikatsu.data.CustomPayment
 import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.MunicipalityMaster
-import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
@@ -35,21 +33,22 @@ import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.domain.CampaignType
 import com.ktakjm.poikatsu.domain.JudgmentEngine
-import com.ktakjm.poikatsu.domain.buildCustomMerchants
-import com.ktakjm.poikatsu.domain.toCampaigns
 import com.ktakjm.poikatsu.domain.StoreVerdict
 import com.ktakjm.poikatsu.domain.appLinks
 import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.filterCampaignsByArea
 import com.ktakjm.poikatsu.domain.googlePayIneligibleWarning
+import com.ktakjm.poikatsu.domain.mergeUserData
 import com.ktakjm.poikatsu.domain.municipalCampaignsForAreas
 import com.ktakjm.poikatsu.domain.municipalCampaignsForLocation
+import com.ktakjm.poikatsu.domain.isCustom
 import com.ktakjm.poikatsu.domain.isPrefectureWide
 import com.ktakjm.poikatsu.domain.isTargetDay
 import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.nextTargetDay
 import com.ktakjm.poikatsu.domain.walletAppLink
+import com.ktakjm.poikatsu.notification.CampaignNotifications
 import com.ktakjm.poikatsu.util.GeoMath
 import java.io.File
 import java.time.LocalDate
@@ -106,6 +105,7 @@ enum class SettingsSubpage(val title: String) {
     // 「自治体」だと登録する動機が伝わらないため、「受け取りたくて登録している地域」の
     // ニュアンスでマイエリアと呼ぶ(マイカードと命名を揃える)
     MUNICIPALITIES("マイエリア"),
+    NOTIFICATIONS("通知"),
     DATA("キャンペーンデータ"),
     DEVELOPER("開発者向け"),
     ABOUT("このアプリ"),
@@ -304,6 +304,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val themeMode: ThemeMode = ThemeMode.SYSTEM,
         val dynamicColor: Boolean = true,
         val autoRefresh: Boolean = true,
+        /** キャンペーン通知(#6)の ON/OFF */
+        val notificationsEnabled: Boolean = false,
+        /** キャンペーン通知の時刻(0時からの分。既定 8:00)。UI は15分刻みで編集する */
+        val notificationTimeMinutes: Int = 8 * 60,
         /** 設定画面の「マイカード」用カタログ(未所有カードも含む全候補) */
         val cardSettings: List<CardSetting> = emptyList(),
         /** 設定画面の「国際ブランド」用(カタログの card_brands 由来。常時表示) */
@@ -575,77 +579,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val settings = lastSettings
         val baseCards = loaded.data.cards
 
-        // エンジン用: 所有カードのみ、上書きを反映したカード一覧。
-        // 実ブランドはユーザー設定(CardOverride.brand)が唯一の情報源で、カタログが単一ブランド製品の
-        // ときだけ自動確定する。複数ブランド製品で未選択なら空文字=どのブランドとも断定せず
-        // 好条件側に倒さない(ineligible_brands は除外ブランドを取りうる限り発動し、
-        // card_brand 施策には一致しない。JudgmentEngine.excludedByBrand 参照)。
-        val mergedCards = baseCards.mapNotNull { card ->
-            val ov = settings.cardOverrides[card.id]
-            if (ov?.owned == false) return@mapNotNull null
-            val rawRate = ov?.rate ?: card.effectiveRateDefault
-            val welcatsuOn = ov?.welcatsu == true && card.pointMultiplier != null
-            val factor = if (welcatsuOn) card.pointMultiplier?.factor ?: 1.0 else 1.0
-            card.copy(
-                brand = ov?.brand ?: card.brands.singleOrNull().orEmpty(),
-                effectiveRateDefault = rawRate?.let { it * factor },
-                welcatsuApplied = welcatsuOn,
-            )
-        }
-        // カスタムカード(カタログ外)は登録内容をそのまま PaymentCard に写してエンジンへ渡す。
-        // 判定はキャンペーン駆動なので、施策が参照しない限り判定結果には現れない。現状効くのは
-        // ブランド付き登録が card_brand 施策に一致する経路のみで、card_id 施策はカスタムキャンペーン
-        // (#7)が custom: id を参照し始めた時点で自然に効く。
-        val customCards = settings.customCards.map { c ->
-            PaymentCard(
-                id = c.id,
-                cardName = c.name,
-                brandColor = c.color ?: CustomCard.DEFAULT_COLOR,
-                brands = listOfNotNull(c.brand.takeIf { it.isNotBlank() }),
-                brand = c.brand,
-            )
-        }
-        // ブランド単位の登録(カタログ外のカード)は仮想カードとしてエンジンに渡す。card_brand 施策の
-        // resolveCard がブランド一致でマッチするだけで、card_id 施策には一致しない(id が衝突しないため)。
-        // カタログのカードの後ろに置き、複数一致時の代表はカタログのカード(具体名)を優先する。
-        val brandCards = settings.ownedBrands.sorted().map { brand ->
-            PaymentCard(
-                id = "owned_brand_${brand.lowercase()}",
-                cardName = "${brand}カード",
-                brands = listOf(brand),
-                brand = brand,
-            )
-        }
-        // カスタムキャンペーン(#7): 登録内容を Campaign(決済手段ごとに展開) / 合成 Merchant に
-        // 変換して同梱データへ合流させる。以降は同梱施策と同じ経路で判定・表示される
-        // (お店/地図/期間限定)。operator には紐付け先決済手段の表示名を入れる
-        // (期間限定タブ詳細のバッジに使われる。ブランド指定はブランド名がバッジになるため未使用)
-        val paymentNames = (
-            baseCards.map { it.id to it.cardName } +
-                settings.customCards.map { it.id to it.name } +
-                loaded.data.qrPayments.map { it.id to it.name }
-            ).toMap()
-        val operatorFor = { p: CustomPayment ->
-            p.cardBrand ?: paymentNames[p.cardId ?: p.qrPaymentId] ?: "カスタム"
-        }
-        val customMerchants = buildCustomMerchants(settings.customCampaigns)
-        val customCampaigns = settings.customCampaigns.flatMap { it.toCampaigns(operatorFor) }
-        val mergedMerchants = loaded.data.merchants + customMerchants
-        val mergedCampaigns = loaded.data.campaigns + customCampaigns
-
-        val engineData = loaded.data.copy(
-            cards = mergedCards + customCards + brandCards,
-            merchants = mergedMerchants,
-            campaigns = mergedCampaigns,
+        // カタログ+ユーザー設定のマージは通知ジョブ(CampaignNotificationWorker)と共通の
+        // 純関数に委譲する(アプリの表示と通知の判定基準を揃える。詳細は domain/UserDataMerge.kt)
+        val merged = mergeUserData(
+            base = loaded.data,
+            cardOverrides = settings.cardOverrides,
+            ownedBrands = settings.ownedBrands,
+            customCards = settings.customCards,
+            customCampaigns = settings.customCampaigns,
         )
-        val newEngine = JudgmentEngine(engineData)
+        val newEngine = JudgmentEngine(merged.engineData)
         engine = newEngine
-        // 表示用(色解決・名前引き・地図の検索設定)は所有に関わらず全カタログのカードで組む
-        val newDisplayData = loaded.data.copy(
-            cards = loaded.data.cards + customCards,
-            merchants = mergedMerchants,
-            campaigns = mergedCampaigns,
-        )
+        val newDisplayData = merged.displayData
         displayData = newDisplayData
 
         val today = LocalDate.now()
@@ -662,8 +607,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
         // 終了日を過ぎたカスタムキャンペーンは判定・一覧から消えるが、編集・削除の入口を残すため
         // 期間限定タブの専用セクション用に別で持つ(同梱施策の期限切れは単に出さない)
-        val expiredCustomCampaigns = customCampaigns.filter {
-            newEngine.campaignStatus(it, today) == CampaignStatus.EXPIRED
+        val expiredCustomCampaigns = merged.engineData.campaigns.filter {
+            it.isCustom && newEngine.campaignStatus(it, today) == CampaignStatus.EXPIRED
         }
 
         // お店タブ初期画面のお知らせバナー: 登録地域で開催中の自治体施策がある自治体名。
@@ -745,6 +690,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 themeMode = settings.themeMode,
                 dynamicColor = settings.dynamicColor,
                 autoRefresh = settings.autoRefresh,
+                notificationsEnabled = settings.notificationsEnabled,
+                notificationTimeMinutes = settings.notificationTimeMinutes,
                 cardSettings = cardSettings,
                 brandSettings = brandSettings,
                 qrPaymentSettings = qrPaymentSettings,
@@ -1601,6 +1548,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onSetDynamicColor(enabled: Boolean) = viewModelScope.launch { settingsRepo.setDynamicColor(enabled) }
 
     fun onSetAutoRefresh(enabled: Boolean) = viewModelScope.launch { settingsRepo.setAutoRefresh(enabled) }
+
+    /**
+     * キャンペーン通知(#6)の ON/OFF。設定の保存に加えて日次ジョブの登録/解除も行う。
+     * 登録済みジョブは WorkManager が再起動をまたいで維持するため、起動時の再登録は不要。
+     * パーミッション(Android 13+)は UI 側(NotificationSettingsPage)が確認してから呼ぶ。
+     */
+    fun onSetNotificationsEnabled(enabled: Boolean) = viewModelScope.launch {
+        settingsRepo.setNotificationsEnabled(enabled)
+        val app = getApplication<Application>()
+        if (enabled) {
+            CampaignNotifications.schedule(app, lastSettings.notificationTimeMinutes)
+        } else {
+            CampaignNotifications.cancel(app)
+        }
+    }
+
+    /** 通知時刻の変更。通知 ON のときはその場で次回ジョブを新しい時刻に予約し直す */
+    fun onSetNotificationTime(minutesOfDay: Int) = viewModelScope.launch {
+        settingsRepo.setNotificationTime(minutesOfDay)
+        if (lastSettings.notificationsEnabled) {
+            CampaignNotifications.schedule(getApplication(), minutesOfDay)
+        }
+    }
 
     fun onSetDataCommitRef(ref: String) = viewModelScope.launch { settingsRepo.setDataCommitRef(ref) }
 

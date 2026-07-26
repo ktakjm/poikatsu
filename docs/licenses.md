@@ -25,6 +25,7 @@
 | com.google.android.gms:play-services-maps(+ 推移的な play-services-* / Google Maps SDK) | 地図描画 SDK 本体(maps-compose の依存) | **プロプライエタリ**(Google APIs Terms of Service。OSS ではない) |
 | com.google.android.gms:play-services-location | 現在地取得(Fused Location Provider。2026-07-08 追加) | **プロプライエタリ**(play-services-maps と同じ Google APIs ToS 枠。API キー・課金は不要) |
 | androidx.datastore:datastore-preferences | 設定(テーマ・マイカード)の永続化(2026-06-19 追加) | Apache-2.0 |
+| androidx.work:work-runtime-ktx | キャンペーン開始/終了通知の日次バックグラウンドジョブ(2026-07-26 追加、#6) | Apache-2.0 |
 | com.jakewharton.timber:timber | ログ出力ラッパー(debug ビルドのみ Logcat 出力、release は無出力。2026-06-27 追加) | Apache-2.0 |
 | com.mikepenz:aboutlibraries-compose-m3(+ 推移的な aboutlibraries-core / aboutlibraries-compose-core) | OSS ライセンス表示画面(設定→このアプリ。ビルド時に Gradle 依存からメタデータを自動生成して一覧表示。2026-07-24 追加、#48) | Apache-2.0 |
 

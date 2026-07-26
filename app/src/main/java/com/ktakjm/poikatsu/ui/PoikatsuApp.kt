@@ -408,6 +408,13 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         onAdd = viewModel::onAddRegisteredArea,
                         onRemove = viewModel::onRemoveRegisteredArea,
                     )
+                    SettingsSubpage.NOTIFICATIONS -> NotificationSettingsPage(
+                        enabled = state.notificationsEnabled,
+                        notifyTimeMinutes = state.notificationTimeMinutes,
+                        onBack = viewModel::onCloseSettingsSubpage,
+                        onEnabledChange = viewModel::onSetNotificationsEnabled,
+                        onTimeChange = viewModel::onSetNotificationTime,
+                    )
                     SettingsSubpage.DATA -> DataSettingsPage(
                         dataStatus = dataStatusLabel(
                             state.dataUpdatedAt,
@@ -503,6 +510,10 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         qrCount = state.qrPaymentSettings.count { it.enabled },
                     ),
                     municipalitySummary = municipalitySummary(state.registeredAreas),
+                    notificationSummary = notificationSummary(
+                        state.notificationsEnabled,
+                        state.notificationTimeMinutes,
+                    ),
                     dataSummary = dataRowSummary(
                         state.dataUpdatedAt,
                         state.dataSource,

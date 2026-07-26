@@ -8,6 +8,8 @@
     <!-- 地図タイル取得のネットワーク状態判定用 -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- キャンペーン通知(#6)。Android 13+ は実行時パーミッションで、設定→通知の ON 操作時に要求する -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Android 11+ のパッケージ可視性制限対応。QR決済・ウォレットアプリ起動(JudgmentScreen)で
          getLaunchIntentForPackage() が正しく検出できるよう、対象アプリを明示する。

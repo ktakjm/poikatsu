@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 通知のスモールアイコン(ステータスバーは単色シルエットで描かれる)。
+     アプリアイコンのテーマアイコン用シルエット(ic_launcher_monochrome の %)と同じパスを、
+     108dp キャンバス(コンテンツはセーフゾーン中央の約42dp四方)から通知アイコンの規格
+     (24dp・少しの余白)へ group で縮小・センタリングして写す。
+     元アイコンを変えるときはこちらも追従させること。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- 中心(54,54)を(12,12)へ: translate = 12 - 54 * scale -->
+    <group
+        android:scaleX="0.48"
+        android:scaleY="0.48"
+        android:translateX="-13.92"
+        android:translateY="-13.92">
+        <path
+            android:fillColor="#FFFFFF"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="8"
+            android:strokeLineCap="round"
+            android:pathData="M40,68 L68,40" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="6"
+            android:pathData="M38,46 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0 Z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="6"
+            android:pathData="M58,62 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0 Z" />
+    </group>
+</vector>

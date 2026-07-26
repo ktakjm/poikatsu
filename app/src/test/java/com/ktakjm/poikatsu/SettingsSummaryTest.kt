@@ -9,6 +9,7 @@ import com.ktakjm.poikatsu.ui.dataRowSummary
 import com.ktakjm.poikatsu.ui.developerRowSummary
 import com.ktakjm.poikatsu.ui.displaySettingsSummary
 import com.ktakjm.poikatsu.ui.municipalitySummary
+import com.ktakjm.poikatsu.ui.notificationSummary
 import com.ktakjm.poikatsu.ui.paymentMethodsSummary
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -37,6 +38,15 @@ class SettingsSummaryTest {
     @Test
     fun `支払い方法-すべて未登録なら未登録`() {
         assertEquals("未登録", paymentMethodsSummary(0, 0, 0))
+    }
+
+    // ---- 通知 ----
+
+    @Test
+    fun `通知-ONは設定時刻を頃つきで出しOFFは状態のみ`() {
+        assertEquals("キャンペーン通知 オン(毎朝8:00頃)", notificationSummary(enabled = true, notifyTimeMinutes = 8 * 60))
+        assertEquals("キャンペーン通知 オン(毎朝19:45頃)", notificationSummary(enabled = true, notifyTimeMinutes = 19 * 60 + 45))
+        assertEquals("キャンペーン通知 オフ", notificationSummary(enabled = false, notifyTimeMinutes = 8 * 60))
     }
 
     // ---- 自治体 ----

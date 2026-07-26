@@ -5,9 +5,11 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -151,6 +153,10 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val dynamicColor: Boolean = true,
     val autoRefresh: Boolean = true,
+    /** キャンペーン通知(#6)。ON の間、日次の通知ジョブ(CampaignNotificationWorker)を登録する */
+    val notificationsEnabled: Boolean = false,
+    /** 通知時刻(0時からの分。既定 8:00)。15分刻みは設定 UI 側の制約で、保存値は分単位で持つ */
+    val notificationTimeMinutes: Int = 8 * 60,
     val cardOverrides: Map<String, CardOverride> = emptyMap(),
     /** データ取得先の Git ref(short commit hash 等)。空文字列は main を使う */
     val dataCommitRef: String = "",
@@ -198,6 +204,11 @@ class SettingsRepository(private val context: Context) {
         val THEME = stringPreferencesKey("theme_mode")
         val DYNAMIC = booleanPreferencesKey("dynamic_color")
         val AUTO_REFRESH = booleanPreferencesKey("auto_refresh")
+        val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
+        val NOTIFICATION_TIME = intPreferencesKey("notification_time_minutes")
+
+        /** 通知済みキー(CampaignNotification.dedupKey)のリスト。AppSettings には載せない(設定値ではないため) */
+        val NOTIFIED_CAMPAIGNS = stringPreferencesKey("notified_campaigns")
         val CARD_OVERRIDES = stringPreferencesKey("card_overrides")
         val DATA_COMMIT_REF = stringPreferencesKey("data_commit_ref")
         val USE_TEST_DATA = booleanPreferencesKey("use_test_data")
@@ -219,6 +230,8 @@ class SettingsRepository(private val context: Context) {
                 ?: ThemeMode.SYSTEM,
             dynamicColor = prefs[Keys.DYNAMIC] ?: true,
             autoRefresh = prefs[Keys.AUTO_REFRESH] ?: true,
+            notificationsEnabled = prefs[Keys.NOTIFICATIONS_ENABLED] ?: false,
+            notificationTimeMinutes = prefs[Keys.NOTIFICATION_TIME] ?: 8 * 60,
             cardOverrides = prefs.decodeOverrides(),
             dataCommitRef = prefs[Keys.DATA_COMMIT_REF] ?: "",
             useTestData = prefs[Keys.USE_TEST_DATA] ?: false,
@@ -242,6 +255,32 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setAutoRefresh(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.AUTO_REFRESH] = enabled }
+    }
+
+    suspend fun setNotificationsEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.NOTIFICATIONS_ENABLED] = enabled }
+    }
+
+    suspend fun setNotificationTime(minutesOfDay: Int) {
+        context.settingsDataStore.edit {
+            it[Keys.NOTIFICATION_TIME] = minutesOfDay.coerceIn(0, 24 * 60 - 1)
+        }
+    }
+
+    /** 通知済みキーの読み出し。通知ジョブの再通知抑止に使う */
+    suspend fun notifiedCampaignKeys(): Set<String> =
+        context.settingsDataStore.data.first().decodeNotifiedKeys().toSet()
+
+    /**
+     * 通知済みキーを追記する。施策の入れ替わりで増え続けないよう直近 [NOTIFIED_KEYS_MAX] 件に
+     * 丸める(古いキーの施策はとうに通知ウィンドウ外で、消しても再通知は起きない)。
+     */
+    suspend fun addNotifiedCampaignKeys(keys: Collection<String>) {
+        if (keys.isEmpty()) return
+        context.settingsDataStore.edit { prefs ->
+            val updated = (prefs.decodeNotifiedKeys() + keys).distinct().takeLast(NOTIFIED_KEYS_MAX)
+            prefs[Keys.NOTIFIED_CAMPAIGNS] = json.encodeToString(updated)
+        }
     }
 
     suspend fun setDataCommitRef(ref: String) {
@@ -399,4 +438,13 @@ class SettingsRepository(private val context: Context) {
             ?.let { runCatching { json.decodeFromString<List<CustomCampaign>>(it) }.getOrNull() }
             ?.map { it.normalized() }
             ?: emptyList()
+
+    private fun Preferences.decodeNotifiedKeys(): List<String> =
+        this[Keys.NOTIFIED_CAMPAIGNS]
+            ?.let { runCatching { json.decodeFromString<List<String>>(it) }.getOrNull() }
+            ?: emptyList()
+
+    private companion object {
+        const val NOTIFIED_KEYS_MAX = 200
+    }
 }
