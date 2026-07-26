@@ -104,8 +104,13 @@ fun planCampaignNotifications(targets: List<Campaign>, today: LocalDate): List<C
 fun notificationLine(notification: CampaignNotification): String {
     val title = notification.campaign.displayName ?: notification.campaign.name
     return when (notification.kind) {
-        NotificationKind.STARTED ->
-            if (notification.days == 0) "「$title」が今日から開始" else "「$title」が開始しました"
+        NotificationKind.STARTED -> {
+            // 終了日を併記する。開始と終了間近が同日に重なる短期施策は開始通知しか出ない
+            // (1施策1行で開始優先)ため、これが無いと終了時期が通知から読めない。
+            // 年は formatPeriodDate と同じく省略しない(年跨ぎ期間が読めなくなるため)
+            val until = notification.campaign.periodEnd?.let { "(〜${it.replace('-', '/')})" } ?: ""
+            if (notification.days == 0) "「$title」が今日から開始$until" else "「$title」が開始しました$until"
+        }
         NotificationKind.ENDS_SOON ->
             if (notification.days == 0) "「$title」は今日で終了" else "「$title」は残り${notification.days}日"
     }

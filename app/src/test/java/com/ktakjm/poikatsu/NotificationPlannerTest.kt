@@ -206,13 +206,20 @@ class NotificationPlannerTest {
     @Test
     fun `文言-1行分はdisplay_name優先で状況別`() {
         val c = promotion("p", displayName = "サイゼ10%", start = "2026-07-26", end = "2026-07-31")
+        // 開始通知には終了日を併記する(開始と終了間近が重なる短期施策で終了時期が読めるように)
         assertEquals(
-            "「サイゼ10%」が今日から開始",
+            "「サイゼ10%」が今日から開始(〜2026/07/31)",
             notificationLine(CampaignNotification(c, NotificationKind.STARTED, 0)),
         )
         assertEquals(
-            "「サイゼ10%」が開始しました",
+            "「サイゼ10%」が開始しました(〜2026/07/31)",
             notificationLine(CampaignNotification(c, NotificationKind.STARTED, 1)),
+        )
+        // 終了日の無い施策は併記なし
+        val noEnd = promotion("q", displayName = "サイゼ10%", start = "2026-07-26")
+        assertEquals(
+            "「サイゼ10%」が今日から開始",
+            notificationLine(CampaignNotification(noEnd, NotificationKind.STARTED, 0)),
         )
         assertEquals(
             "「サイゼ10%」は残り2日",
