@@ -403,6 +403,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     SettingsSubpage.MUNICIPALITIES -> MunicipalitySettingsPage(
                         registeredAreas = state.registeredAreas,
                         municipalityMaster = state.municipalityMaster,
+                        snackbarHostState = snackbarHostState,
                         onBack = viewModel::onCloseSettingsSubpage,
                         onAdd = viewModel::onAddRegisteredArea,
                         onRemove = viewModel::onRemoveRegisteredArea,

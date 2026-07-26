@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -29,6 +30,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -36,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,22 +52,42 @@ import com.ktakjm.poikatsu.data.MunicipalityMaster
 import com.ktakjm.poikatsu.data.Prefecture
 import com.ktakjm.poikatsu.data.RegisteredArea
 import com.ktakjm.poikatsu.data.RegisteredAreaType
+import kotlinx.coroutines.launch
 
 /**
  * 自治体サブページ(#47)。登録済みリストと追加ピッカーへの導線を置く。
  * 登録済みの表示名は「都道府県 名前」([areaDisplayName])——「南部」だけではどこの南部か
  * 分からないため。フィルタロジック(RegionFilter)は name/code 照合なので表示だけの変更。
+ *
+ * 登録済みリストの ✕ は確認ダイアログを挟まず即削除し、Snackbar「元に戻す」で取り消せる(#49)。
+ * undo 経路はアプリ共通の snackbarHost を使う。ピッカー内のトグル解除には出さない
+ * (チェックし直せばその場で戻せるし、ダイアログの背面に Snackbar が出ても押せないため)。
  */
 @Composable
 internal fun MunicipalitySettingsPage(
     registeredAreas: List<RegisteredArea>,
     municipalityMaster: MunicipalityMaster,
+    snackbarHostState: SnackbarHostState,
     onBack: () -> Unit,
     onAdd: (RegisteredArea) -> Unit,
     onRemove: (RegisteredArea) -> Unit,
 ) {
     BackHandler(onBack = onBack)
     var showMunicipalityPicker by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    // 「元に戻す」は再追加で実現する(リスト末尾に付き直るが、並びは登録順で意味を持たないため許容)
+    fun removeWithUndo(area: RegisteredArea) {
+        onRemove(area)
+        scope.launch {
+            val result = snackbarHostState.showSnackbar(
+                message = "「${areaDisplayName(area)}」を削除しました",
+                actionLabel = "元に戻す",
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) onAdd(area)
+        }
+    }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Text(
@@ -82,7 +108,7 @@ internal fun MunicipalitySettingsPage(
                 headlineContent = { Text(areaDisplayName(area)) },
                 supportingContent = supporting?.let { { Text(it) } },
                 trailingContent = {
-                    IconButton(onClick = { onRemove(area) }) {
+                    IconButton(onClick = { removeWithUndo(area) }) {
                         Icon(Icons.Default.Close, contentDescription = "削除")
                     }
                 },
@@ -126,6 +152,10 @@ private fun groupMemberCount(master: MunicipalityMaster, groupId: String): Int? 
  * 行はチェックボックスのトグルで登録/解除が即時反映される(他の設定項目と同じ即時適用。
  * 「登録済み=操作不能」にしないのは、押し間違いをその場で取り消せるようにするため)。
  * グループ行は ▼ で構成自治体名を展開できる(「23区西部」がどこまでか行タップなしで確認できる)。
+ *
+ * 都道府県選択の階には検索フィールドを置き、自治体名・グループ名の部分一致で
+ * 都道府県横断の候補を出す(#49。名前が分かっているとき 2 段を辿らずに済む近道。
+ * 既存の都道府県から辿る導線はそのまま残す)。
  */
 @Composable
 private fun MunicipalityPickerDialog(
@@ -137,6 +167,7 @@ private fun MunicipalityPickerDialog(
 ) {
     var selectedPrefecture by remember { mutableStateOf<Prefecture?>(null) }
     var expandedGroupIds by remember { mutableStateOf(emptySet<String>()) }
+    var searchQuery by remember { mutableStateOf("") }
     val registeredKeys = remember(registered) {
         registered.map { "${it.type}:${it.code}" }.toSet()
     }
@@ -155,7 +186,7 @@ private fun MunicipalityPickerDialog(
                         Icon(Icons.Default.Close, contentDescription = "戻る")
                     }
                 }
-                Text(selectedPrefecture?.name ?: "都道府県を選択")
+                Text(selectedPrefecture?.name ?: "自治体を追加")
             }
         },
         text = {
@@ -168,13 +199,70 @@ private fun MunicipalityPickerDialog(
                     CircularProgressIndicator()
                 }
             } else if (prefecture == null) {
-                LazyColumn(Modifier.fillMaxWidth().height(400.dp)) {
-                    items(master.prefectures) { pref ->
-                        ListItem(
-                            headlineContent = { Text(pref.name) },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                            modifier = Modifier.clickable { selectedPrefecture = pref },
-                        )
+                Column {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("自治体名で検索") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        trailingIcon = if (searchQuery.isNotEmpty()) {
+                            {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = "検索をクリア")
+                                }
+                            }
+                        } else {
+                            null
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (searchQuery.isBlank()) {
+                        LazyColumn(Modifier.fillMaxWidth().height(400.dp)) {
+                            items(master.prefectures) { pref ->
+                                ListItem(
+                                    headlineContent = { Text(pref.name) },
+                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                    modifier = Modifier.clickable { selectedPrefecture = pref },
+                                )
+                            }
+                        }
+                    } else {
+                        val results = remember(master, searchQuery) { searchAreas(master, searchQuery) }
+                        if (results.isEmpty()) {
+                            Box(
+                                Modifier.fillMaxWidth().height(400.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    "「${searchQuery.trim()}」に一致する自治体はありません",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        } else {
+                            LazyColumn(Modifier.fillMaxWidth().height(400.dp)) {
+                                items(results, key = { "${it.type}:${it.code}" }) { area ->
+                                    // どの県の候補か分かるよう supporting に都道府県を出す(グループは構成数も)
+                                    val supporting = if (area.type == RegisteredAreaType.GROUP) {
+                                        val memberCount = groupMemberCount(master, area.code)
+                                        if (memberCount != null) {
+                                            "${area.prefecture}・グループ(${memberCount}市区町村)"
+                                        } else {
+                                            "${area.prefecture}・グループ"
+                                        }
+                                    } else {
+                                        area.prefecture
+                                    }
+                                    AreaPickerRow(
+                                        area = area,
+                                        supporting = supporting,
+                                        checked = isRegistered(area),
+                                        onToggle = ::toggle,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             } else {
@@ -252,6 +340,23 @@ private fun MunicipalityPickerDialog(
             TextButton(onClick = onDismiss) { Text("閉じる") }
         },
     )
+}
+
+/**
+ * 自治体名・グループ名の部分一致検索(#49)。都道府県横断で、並びはマスタのまま
+ * (都道府県順・各県内はグループ→市区町村)返す。前後の空白は無視し、空クエリは空リスト。
+ * マスタに読みがなが無いため表記(漢字)の部分一致のみ。
+ */
+internal fun searchAreas(master: MunicipalityMaster, query: String): List<RegisteredArea> {
+    val q = query.trim()
+    if (q.isEmpty()) return emptyList()
+    return master.prefectures.flatMap { pref ->
+        pref.groups.filter { q in it.name }.map { group ->
+            RegisteredArea(RegisteredAreaType.GROUP, group.id, group.name, pref.name)
+        } + pref.municipalities.filter { q in it.name }.map { m ->
+            RegisteredArea(RegisteredAreaType.MUNICIPALITY, m.code, m.name, pref.name)
+        }
+    }
 }
 
 @Composable
