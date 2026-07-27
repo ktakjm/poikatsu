@@ -4,9 +4,11 @@ import android.app.Application
 import android.location.Address
 import android.location.Geocoder
 import android.location.Location
+import android.net.Uri
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ktakjm.poikatsu.BuildConfig
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.DataRepository
 import com.ktakjm.poikatsu.data.DataSource
@@ -25,8 +27,14 @@ import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.QrPayment
 import com.ktakjm.poikatsu.data.RegisteredArea
+import com.ktakjm.poikatsu.data.SETTINGS_BACKUP_SCHEMA_VERSION
+import com.ktakjm.poikatsu.data.SettingsBackup
 import com.ktakjm.poikatsu.data.SettingsRepository
 import com.ktakjm.poikatsu.data.ThemeMode
+import com.ktakjm.poikatsu.data.decodeSettingsBackup
+import com.ktakjm.poikatsu.data.encodeSettingsBackup
+import com.ktakjm.poikatsu.data.toBackup
+import com.ktakjm.poikatsu.data.toSettings
 import com.ktakjm.poikatsu.domain.BenefitLabel
 import com.ktakjm.poikatsu.domain.BestPaymentOption
 import com.ktakjm.poikatsu.domain.CampaignJudgment
@@ -52,6 +60,8 @@ import com.ktakjm.poikatsu.notification.CampaignNotifications
 import com.ktakjm.poikatsu.util.GeoMath
 import java.io.File
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
 import kotlin.coroutines.resume
@@ -65,6 +75,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 /** 「地図」初回・「現在地で検索」時の既定半径(m)。以降の「このエリアを検索」は地図の可視範囲から算出する */
@@ -83,6 +94,12 @@ private const val NEARBY_WIDE_ZOOM = 15.0
  * ずれていたら検索し直す。未満なら青ドットだけ直す(検索半径2kmに対し誤差として許容できる範囲)
  */
 private const val LOCATION_CORRECTION_M = 100
+
+/**
+ * インポートで読むファイルサイズの上限(#50)。設定 JSON は大きくても数十 KB なので、
+ * 誤って動画等を選ばれたときに全部メモリへ載せないための歯止め
+ */
+private const val BACKUP_MAX_BYTES = 1024 * 1024
 
 /** 位置情報を取得できないときのフォールバック地点(新宿駅) */
 private val FALLBACK_PLACE = MainViewModel.GeocodedPlace(
@@ -107,6 +124,7 @@ enum class SettingsSubpage(val title: String) {
     MUNICIPALITIES("マイエリア"),
     NOTIFICATIONS("通知"),
     DATA("キャンペーンデータ"),
+    BACKUP("バックアップ"),
     DEVELOPER("開発者向け"),
     ABOUT("このアプリ"),
 
@@ -337,6 +355,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val developerMode: Boolean = false,
         /** 表示中の設定サブページ(設定タブ上のオーバーレイ)。null ならトップページ */
         val settingsSubpage: SettingsSubpage? = null,
+        /**
+         * 読み込み済みで、まだ適用していないバックアップ(#50)。非 null の間だけ復元の確認
+         * ダイアログを出す。中身の要約を確認してから上書きさせるため、選択と適用を分ける。
+         */
+        val pendingSettingsImport: SettingsBackup? = null,
+        /** エクスポート/インポートの結果通知(Snackbar)。表示後に消費する */
+        val settingsBackupMessage: String? = null,
     )
 
     /**
@@ -418,6 +443,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private var lastFetchSucceededAt = 0L
 
+    /** 起動後の通知ジョブ突き合わせ([CampaignNotifications.ensureScheduled])を 1 回だけにするフラグ */
+    private var notificationJobChecked = false
+
     /**
      * 近隣取得の世代。タブ移動(onCloseNearby)や再取得のたびに進め、進行中の取得が
      * 完了しても古い世代なら結果を捨てる。読込中に「地図」タブを離れたのに、取得完了の
@@ -465,6 +493,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val bundledChanged = lastSettings.useBundledData != new.useBundledData
             lastSettings = new
             rebuild()
+            // 通知ジョブは WorkManager の DB(no_backup 配下)にあり Auto Backup で復元されない。
+            // 設定だけ復元された端末で「オンなのに来ない」状態になるため、起動後の初回 emission で
+            // 設定と突き合わせて埋める(既に登録済みなら何もしない)
+            if (!notificationJobChecked) {
+                notificationJobChecked = true
+                if (new.notificationsEnabled) {
+                    CampaignNotifications.ensureScheduled(app, new.notificationTimeMinutes)
+                }
+            }
             if (testDataChanged) loadMunicipalityMaster() // マスタも data/⇔data-test/ を読み分ける
             when {
                 // 同梱モード中はリモートを見ない。ON 直後と ON 中の data/⇔data-test/ 切替は assets 再読
@@ -1586,6 +1623,106 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onSetDeveloperMode(enabled: Boolean) = viewModelScope.launch {
         if (enabled) settingsRepo.setDeveloperMode(true) else settingsRepo.resetDeveloperSettings()
     }
+
+    // --- 設定のエクスポート/インポート(#50) ---
+
+    /**
+     * 設定を SAF で選ばれた URI へ書き出す。上書き保存(既存ファイルを選び直した場合)で
+     * 前の内容が末尾に残らないよう、切り詰めモード("wt")で開く。
+     */
+    fun onExportSettings(uri: Uri) = viewModelScope.launch {
+        val backup = settingsRepo.current().toBackup(
+            exportedAt = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+            appVersion = BuildConfig.VERSION_NAME,
+        )
+        val message = withContext(Dispatchers.IO) {
+            runCatching {
+                val resolver = getApplication<Application>().contentResolver
+                val stream = resolver.openOutputStream(uri, "wt")
+                    ?: error("書き出し先を開けませんでした: $uri")
+                stream.use { it.write(encodeSettingsBackup(backup).toByteArray()) }
+            }.fold(
+                onSuccess = { "設定を書き出しました" },
+                onFailure = {
+                    Timber.w(it, "設定の書き出しに失敗")
+                    "書き出しに失敗しました。保存先を変えて再度お試しください。"
+                },
+            )
+        }
+        _state.update { it.copy(settingsBackupMessage = message) }
+    }
+
+    /**
+     * SAF で選ばれたファイルを読み、確認ダイアログ待ちの状態にする。ここでは DataStore を
+     * 書き換えない(適用は [onConfirmSettingsImport])。
+     */
+    fun onPickSettingsImport(uri: Uri) = viewModelScope.launch {
+        val text = withContext(Dispatchers.IO) { readTextLimited(uri) }
+        val backup = text?.let { decodeSettingsBackup(it) }
+        val message = when {
+            backup == null ->
+                "ファイルを読み込めませんでした。このアプリで書き出した JSON か確認してください。"
+            // 新しいアプリのファイルは知らないキーを黙って捨ててしまうので、読まずに断る
+            backup.schemaVersion > SETTINGS_BACKUP_SCHEMA_VERSION ->
+                "新しいバージョンのアプリで書き出したファイルです。アプリを更新してからお試しください。"
+            else -> null
+        }
+        _state.update {
+            it.copy(pendingSettingsImport = if (message == null) backup else null, settingsBackupMessage = message)
+        }
+    }
+
+    /**
+     * 確認済みのバックアップを適用する。設定の書き戻し自体は settings Flow 経由で rebuild
+     * されるが、通知ジョブ(WorkManager)は DataStore と別管理なので復元値に合わせ直す。
+     *
+     * @param notificationsAllowed 通知を出せる状態か(UI が復元前にパーミッションを確認・要求した結果)。
+     *   実行時パーミッションはバックアップに入れられないため、通知 ON のファイルを未許可の端末へ
+     *   復元すると「設定は ON なのに通知が来ない」状態になる。許可されなかったときは通知だけ OFF に
+     *   落として復元し、その旨を Snackbar で伝える(通知サブページの ON 操作と同じ「許可を取ってから
+     *   ON にする」方針。ユーザーはあとから通知サブページで ON にし直せる)。
+     */
+    fun onConfirmSettingsImport(notificationsAllowed: Boolean) = viewModelScope.launch {
+        val backup = _state.value.pendingSettingsImport ?: return@launch
+        val restored = backup.toSettings()
+        val notificationsDropped = restored.notificationsEnabled && !notificationsAllowed
+        val imported =
+            if (notificationsDropped) restored.copy(notificationsEnabled = false) else restored
+        settingsRepo.importSettings(imported)
+        val app = getApplication<Application>()
+        if (imported.notificationsEnabled) {
+            CampaignNotifications.schedule(app, imported.notificationTimeMinutes)
+        } else {
+            CampaignNotifications.cancel(app)
+        }
+        val message = if (notificationsDropped) {
+            "設定を復元しました。通知が許可されなかったため、キャンペーン通知はオフです"
+        } else {
+            "設定を復元しました"
+        }
+        _state.update { it.copy(pendingSettingsImport = null, settingsBackupMessage = message) }
+    }
+
+    fun onCancelSettingsImport() = _state.update { it.copy(pendingSettingsImport = null) }
+
+    fun onSettingsBackupMessageShown() = _state.update { it.copy(settingsBackupMessage = null) }
+
+    /**
+     * SAF で選ばれたファイルをテキストで読む。誤って巨大なファイル(動画等)を選ばれても
+     * 落ちないよう [BACKUP_MAX_BYTES] で打ち切り、超えたら失敗(null)にする。
+     */
+    private fun readTextLimited(uri: Uri): String? = runCatching {
+        getApplication<Application>().contentResolver.openInputStream(uri)?.use { stream ->
+            val buffer = ByteArray(BACKUP_MAX_BYTES + 1)
+            var size = 0
+            while (size < buffer.size) {
+                val read = stream.read(buffer, size, buffer.size - size)
+                if (read < 0) break
+                size += read
+            }
+            if (size > BACKUP_MAX_BYTES) null else String(buffer, 0, size, Charsets.UTF_8)
+        }
+    }.onFailure { Timber.w(it, "バックアップファイルの読み込みに失敗") }.getOrNull()
 
     fun onOpenSettingsSubpage(page: SettingsSubpage) {
         _state.update { it.copy(settingsSubpage = page) }

@@ -9,6 +9,7 @@ import androidx.work.WorkManager
 import com.ktakjm.poikatsu.domain.delayUntilNextNotifyTime
 import java.time.Duration
 import java.time.LocalDateTime
+import kotlinx.coroutines.flow.first
 
 /**
  * キャンペーン通知(#6)の日次ジョブ管理と通知チャンネル。
@@ -34,7 +35,8 @@ object CampaignNotifications {
      * ズレを毎日リセットする(残るのは当日の WorkManager の起動遅延のみ。通常は数分以内)。
      * override は次の1回にだけ効き、再アンカーが何かの理由で漏れても 24 時間周期のジョブ
      * として発火し続ける(次に Worker が走った時点で補正される)。
-     * 登録は WorkManager が永続化するため、再起動後の再登録は不要(Application では何もしない)。
+     * 登録は WorkManager が永続化するため、端末再起動後の再登録は不要。ただし**再インストール+
+     * データ復元では復元されない**(下記 [ensureScheduled] 参照)。
      * ジョブ実行中の呼び出しにも安全: UPDATE ポリシーは実行中の Worker をキャンセルせず、
      * 新しい指定は次回実行から効く。
      */
@@ -45,6 +47,25 @@ object CampaignNotifications {
             .build()
         WorkManager.getInstance(context)
             .enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, request)
+    }
+
+    /**
+     * 設定が ON なのにジョブが無ければ登録する(起動時の埋め合わせ)。
+     *
+     * WorkManager のジョブは自前の Room DB(`androidx.work.workdb`)に載っていて、その置き場所は
+     * **`no_backup` ディレクトリ**(`WorkDatabasePathHelper` が `getNoBackupFilesDir()` 配下に置く)。
+     * つまり Auto Backup の対象外で、機種変更・再インストールでは復元されない。一方 DataStore の
+     * 設定(`notificationsEnabled`)は復元されるため、放っておくと**設定はオンなのにジョブが無い
+     * =通知が来ない**状態になる(2026-07-27 の復元テストで実際に発生)。起動時にここで突き合わせる。
+     *
+     * 既に登録済みなら何もしない。無条件に [schedule] を呼ぶと、通知時刻を過ぎて実行待ちのジョブが
+     * あるときに翌日へ再アンカーされ、その日の通知を取りこぼすため。
+     */
+    suspend fun ensureScheduled(context: Context, notifyTimeMinutes: Int) {
+        val existing = WorkManager.getInstance(context)
+            .getWorkInfosForUniqueWorkFlow(WORK_NAME)
+            .first()
+        if (existing.none { !it.state.isFinished }) schedule(context, notifyTimeMinutes)
     }
 
     /** 日次ジョブを解除する(通知設定 OFF 時) */

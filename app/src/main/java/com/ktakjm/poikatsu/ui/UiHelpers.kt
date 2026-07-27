@@ -1,5 +1,15 @@
 package com.ktakjm.poikatsu.ui
 
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -11,8 +21,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,11 +39,13 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Path
+import androidx.core.content.ContextCompat
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.DataSource
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_PERIOD_TOTAL
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_TRANSACTION
 import com.ktakjm.poikatsu.data.RegisteredArea
+import com.ktakjm.poikatsu.data.SettingsBackup
 import com.ktakjm.poikatsu.data.ThemeMode
 import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.CampaignType
@@ -40,6 +55,7 @@ import com.ktakjm.poikatsu.domain.trimRate
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningContainerColor
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 /** "#RRGGBB" を Color に変換。形式が不正なら null */
 internal fun parseBrandColor(hex: String?): Color? {
@@ -163,6 +179,42 @@ internal fun notifyTimeLabel(minutesOfDay: Int): String =
 internal fun notificationSummary(enabled: Boolean, notifyTimeMinutes: Int): String =
     if (enabled) "キャンペーン通知 オン(毎朝${notifyTimeLabel(notifyTimeMinutes)})" else "キャンペーン通知 オフ"
 
+/**
+ * 通知を出せる状態か(Android 13+ の POST_NOTIFICATIONS が許可済みか)。12 以下は実行時権限が
+ * 無いため常に true。「許可を取ってから通知設定を ON にする」判断を、通知サブページの ON 操作(#6)と
+ * 通知 ON のバックアップの復元(#50)で共有するために切り出している。
+ */
+internal fun notificationPermissionGranted(context: Context): Boolean =
+    Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.POST_NOTIFICATIONS,
+    ) == PackageManager.PERMISSION_GRANTED
+
+/**
+ * エクスポートの既定ファイル名(#50)。日付入りにして、複数世代を同じフォルダに残しても
+ * 上書き確認にならず、どの時点のものか見分けられるようにする。
+ */
+internal fun backupFileName(today: LocalDate): String =
+    "poikatsu-settings-${today.format(DateTimeFormatter.BASIC_ISO_DATE)}.json"
+
+/**
+ * インポート確認ダイアログに出す、選んだファイルの中身の要約(#50)。上書きしてよいファイルかを
+ * 件数で確かめられるようにする。件数 0 の種別は並べない(空の項目で埋めても判断材料にならない)。
+ */
+internal fun backupContentSummary(backup: SettingsBackup): String {
+    val parts = buildList {
+        if (backup.cardOverrides.isNotEmpty()) add("マイカードの設定${backup.cardOverrides.size}件")
+        if (backup.customCards.isNotEmpty()) add("カスタムカード${backup.customCards.size}枚")
+        if (backup.ownedBrands.isNotEmpty()) add("国際ブランド${backup.ownedBrands.size}件")
+        if (backup.enabledQrPaymentIds.isNotEmpty()) add("コード決済${backup.enabledQrPaymentIds.size}件")
+        if (backup.registeredAreas.isNotEmpty()) add("マイエリア${backup.registeredAreas.size}件")
+        if (backup.customCampaigns.isNotEmpty()) {
+            add("自分で登録したキャンペーン${backup.customCampaigns.size}件")
+        }
+    }
+    return if (parts.isEmpty()) "登録内容なし(表示・通知の設定のみ)" else parts.joinToString("・")
+}
+
 /** 「開発者向け」行のサマリ。ON 中は非既定値([developerSettingsSummary])まで出し戻し忘れに気づけるように */
 internal fun developerRowSummary(
     developerMode: Boolean,
@@ -179,28 +231,89 @@ internal fun developerRowSummary(
  * 警告・注意のトーナル面表示(アイコン + 文)。container/content の対で error(致命) / warning(注意) を出し分ける。
  * グレーのカード地に色文字を直接乗せるとコントラストが不足するため、専用の淡い面の上に濃い文字で出す。
  * アイコン/文字の色は Surface の contentColor から自動で引き継ぐ。
+ *
+ * 解決手段がある注意([actionLabel] + [onAction])は面の下に右寄せのボタンで出す(M3 の banner の型)。
+ * 面全体をタップ領域にはしない——注意文の面はタップできるように見えず、押しても何が起きるか読めないため。
  */
 @Composable
-internal fun NoticeRow(text: String, containerColor: Color, contentColor: Color) {
+internal fun NoticeRow(
+    text: String,
+    containerColor: Color,
+    contentColor: Color,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
+    val hasAction = actionLabel != null && onAction != null
     Surface(
         color = containerColor,
         contentColor = contentColor,
         shape = RoundedCornerShape(10.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.Top,
-        ) {
-            Icon(
-                Icons.Default.Warning,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp).padding(top = 2.dp),
+        // ボタンは自前に余白を持つので、ある場合だけ面の下余白を詰める
+        Column(
+            Modifier.padding(
+                start = 12.dp,
+                end = 12.dp,
+                top = 8.dp,
+                bottom = if (hasAction) 4.dp else 8.dp,
             )
-            Text(text, style = MaterialTheme.typography.bodyMedium)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp).padding(top = 2.dp),
+                )
+                Text(text, style = MaterialTheme.typography.bodyMedium)
+            }
+            if (hasAction) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    // 枠線つき(中強調)。テキストボタンだと注意面に埋もれて操作と気づけない。
+                    // 線・文字はどちらも面の content 色に合わせる(既定の primary はブランド色なので、
+                    // 警告面の上では意味が混ざりコントラストも崩れる)
+                    OutlinedButton(
+                        onClick = onAction!!,
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = LocalContentColor.current,
+                        ),
+                        border = BorderStroke(1.dp, LocalContentColor.current),
+                    ) { Text(actionLabel!!) }
+                }
+            }
         }
     }
+}
+
+/**
+ * 端末のこのアプリの通知設定画面を開く。実行時パーミッションのダイアログを出せない状態
+ * (2 回拒否済み等、システムが要求を無視する)ときの逃げ道。通知設定画面が無い端末では
+ * アプリ情報画面にフォールバックする。
+ */
+internal fun openAppNotificationSettings(context: Context) {
+    val notificationSettings = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+    runCatching { context.startActivity(notificationSettings) }.onFailure {
+        val appDetails = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", context.packageName, null),
+        )
+        runCatching { context.startActivity(appDetails) }
+    }
+}
+
+/**
+ * この Composable を載せている Activity。`shouldShowRequestPermissionRationale`(Activity 必須)の
+ * ために辿る。LocalContext は端末・構成によって ContextWrapper で包まれることがあるため素の
+ * キャストにしない(activity-compose 1.10 の LocalActivity が使えるまでの代替)。
+ */
+internal tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 /**

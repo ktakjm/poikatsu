@@ -245,6 +245,31 @@ class SettingsRepository(private val context: Context) {
         )
     }
 
+    /** 現在の設定を1回だけ読む(バックアップの書き出し用) */
+    suspend fun current(): AppSettings = settings.first()
+
+    /**
+     * バックアップから設定を復元する(#50)。方針は全上書き: バックアップが持つキーは
+     * 既定値であっても書き込み、書き出し元の状態をそのまま再現する(マージはしない)。
+     * バックアップに含まれない開発者向け設定・通知済みキーは触らない。
+     * 1回の edit にまとめるので settings Flow の emission は1度で済み、rebuild も1回。
+     */
+    suspend fun importSettings(settings: AppSettings) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.THEME] = settings.themeMode.name
+            prefs[Keys.DYNAMIC] = settings.dynamicColor
+            prefs[Keys.AUTO_REFRESH] = settings.autoRefresh
+            prefs[Keys.NOTIFICATIONS_ENABLED] = settings.notificationsEnabled
+            prefs[Keys.NOTIFICATION_TIME] = settings.notificationTimeMinutes
+            prefs[Keys.CARD_OVERRIDES] = json.encodeToString(settings.cardOverrides)
+            prefs[Keys.QR_ENABLED] = json.encodeToString(settings.enabledQrPaymentIds)
+            prefs[Keys.OWNED_BRANDS] = json.encodeToString(settings.ownedBrands)
+            prefs[Keys.REGISTERED_AREAS] = json.encodeToString(settings.registeredAreas)
+            prefs[Keys.CUSTOM_CARDS] = json.encodeToString(settings.customCards)
+            prefs[Keys.CUSTOM_CAMPAIGNS] = json.encodeToString(settings.customCampaigns)
+        }
+    }
+
     suspend fun setThemeMode(mode: ThemeMode) {
         context.settingsDataStore.edit { it[Keys.THEME] = mode.name }
     }

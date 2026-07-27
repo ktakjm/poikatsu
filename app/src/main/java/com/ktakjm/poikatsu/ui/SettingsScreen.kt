@@ -1,7 +1,6 @@
 package com.ktakjm.poikatsu.ui
 
 import android.Manifest
-import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -39,6 +38,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,7 +48,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
+import androidx.core.app.ActivityCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.mikepenz.aboutlibraries.ui.compose.android.produceLibraries
 import com.mikepenz.aboutlibraries.ui.compose.m3.LibrariesContainer
 import com.ktakjm.poikatsu.BuildConfig
@@ -83,6 +86,12 @@ internal fun SettingsScreen(
         SettingsCategoryRow(SettingsSubpage.MUNICIPALITIES, municipalitySummary, onOpenSubpage)
         SettingsCategoryRow(SettingsSubpage.NOTIFICATIONS, notificationSummary, onOpenSubpage)
         SettingsCategoryRow(SettingsSubpage.DATA, dataSummary, onOpenSubpage)
+        // バックアップは状態を持たない操作の入口なので、サマリは現在値でなく用途を出す
+        SettingsCategoryRow(
+            SettingsSubpage.BACKUP,
+            "機種変更・再インストールに備えて設定をファイルに保存",
+            onOpenSubpage,
+        )
         SettingsCategoryRow(SettingsSubpage.DEVELOPER, developerSummary, onOpenSubpage)
         SettingsCategoryRow(
             SettingsSubpage.ABOUT,
@@ -165,6 +174,10 @@ private fun ThemeModeRow(themeMode: ThemeMode, onChange: (ThemeMode) -> Unit) {
  * 通知サブページ(#6)。キャンペーン通知のトグル・通知時刻(15分刻み)と、何がいつ通知されるかの説明。
  * ON 操作時、Android 13+ は通知パーミッションを要求し、許可されたときだけ有効化する
  * (拒否のまま ON にすると「有効なのに何も来ない」状態になるため)。12 以下は要求不要でそのまま ON。
+ * すでに ON で権限だけ失われている状態(端末設定での取り消し・Auto Backup での復元)も検出して
+ * 警告を出す。権限は画面外で変わるため ON_RESUME のたびに読み直す。警告面には「許可する」ボタンを
+ * 置いてその場で権限要求まで完結させ(要求ダイアログを出せない状態なら端末の通知設定へ送る)、
+ * 文言だけの案内で終わらせない。
  */
 @Composable
 internal fun NotificationSettingsPage(
@@ -178,14 +191,36 @@ internal fun NotificationSettingsPage(
     val context = LocalContext.current
     var permissionDenied by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+    // 権限はこの画面の外でも変わる(端末設定での取り消し、Auto Backup での復元後に未許可のまま等)ので、
+    // 復帰のたびに読み直して「設定は ON なのに通知が来ない」状態を検出できるようにする
+    var permissionGranted by remember { mutableStateOf(notificationPermissionGranted(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                permissionGranted = notificationPermissionGranted(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) {
-            permissionDenied = false
-            onEnabledChange(true)
-        } else {
-            permissionDenied = true
+        permissionGranted = granted
+        permissionDenied = !granted
+        when {
+            // ON にしようとして拒否 → 許可された時点で ON にする。すでに ON(復元・権限取消)の
+            // ときは設定を書き直さない(通知ジョブが翌日へ再アンカーされるのを避ける)
+            granted && !enabled -> onEnabledChange(true)
+            // 拒否。2回拒否済みだとシステムがダイアログを出さず即 false が返る(rationale も false)
+            // ので、その場合だけ端末の通知設定へ送る。1回目の拒否は本人の意思なので何もしない
+            !granted && context.findActivity()?.let {
+                ActivityCompat.shouldShowRequestPermissionRationale(
+                    it,
+                    Manifest.permission.POST_NOTIFICATIONS,
+                )
+            } != true -> openAppNotificationSettings(context)
         }
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -200,9 +235,7 @@ internal fun NotificationSettingsPage(
                     onCheckedChange = { on ->
                         when {
                             !on -> onEnabledChange(false)
-                            Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(
-                                context, Manifest.permission.POST_NOTIFICATIONS,
-                            ) == PackageManager.PERMISSION_GRANTED -> onEnabledChange(true)
+                            notificationPermissionGranted(context) -> onEnabledChange(true)
                             else -> permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         }
                     },
@@ -216,13 +249,27 @@ internal fun NotificationSettingsPage(
             trailingContent = { Text(notifyTimeLabel(notifyTimeMinutes), style = MaterialTheme.typography.bodyLarge) },
             modifier = Modifier.clickable { showTimePicker = true },
         )
-        if (permissionDenied && !enabled) {
-            // 拒否直後の案内。2回拒否済みだと要求ダイアログ自体が出なくなるため、端末設定への導線を文言で示す
+        // 通知が届かない状態の 2 パターン。どちらも「許可する」ボタンでその場から権限要求まで
+        // 完結させる(要求ダイアログを出せない状態なら端末の通知設定へ送る)。
+        // (1) ON にしようとして拒否した直後(設定は OFF のまま)
+        // (2) 設定は ON なのに権限が無い: 端末設定での取り消しや、Auto Backup での復元(権限付与は
+        //     アプリデータと別枠で OS が扱うため揃うとは限らない)で起こる。放置すると「オンなのに来ない」
+        //     ことに気づけない。JSON 復元(#50)は復元時に権限を要求するのでこの状態を作らない
+        val permissionNotice = when {
+            enabled && !permissionGranted ->
+                "通知はオンですが、通知が許可されていません。許可するまで通知は届きません"
+            permissionDenied && !enabled ->
+                "通知が許可されていません。許可すると通知を受け取れます"
+            else -> null
+        }
+        if (permissionNotice != null) {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 NoticeRow(
-                    "通知が許可されていません。端末の設定でこのアプリの通知を許可してください",
+                    permissionNotice,
                     containerColor = warningContainerColor(),
                     contentColor = onWarningContainerColor(),
+                    actionLabel = "許可する",
+                    onAction = { permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
                 )
             }
         }

@@ -156,6 +156,14 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
         }
     }
 
+    // 設定のエクスポート/インポート(#50)の結果通知。成功・失敗とも一時的な通知なので Snackbar
+    LaunchedEffect(state.settingsBackupMessage) {
+        state.settingsBackupMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.onSettingsBackupMessageShown()
+        }
+    }
+
     val selectedTab = state.selectedTab
 
     // カスタムキャンペーンの追加/編集ダイアログ。NEW_CUSTOM_CAMPAIGN(id 空)なら新規、null なら非表示。
@@ -428,6 +436,14 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         onBack = viewModel::onCloseSettingsSubpage,
                         onAutoRefreshChange = viewModel::onSetAutoRefresh,
                         onRefresh = viewModel::onManualRefresh,
+                    )
+                    SettingsSubpage.BACKUP -> BackupSettingsPage(
+                        pendingImport = state.pendingSettingsImport,
+                        onBack = viewModel::onCloseSettingsSubpage,
+                        onExport = viewModel::onExportSettings,
+                        onPickImport = viewModel::onPickSettingsImport,
+                        onConfirmImport = viewModel::onConfirmSettingsImport,
+                        onCancelImport = viewModel::onCancelSettingsImport,
                     )
                     SettingsSubpage.DEVELOPER -> DeveloperSettingsPage(
                         developerMode = state.developerMode,
