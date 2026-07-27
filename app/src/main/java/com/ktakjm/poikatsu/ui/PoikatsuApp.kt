@@ -164,6 +164,14 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
         }
     }
 
+    // 開発者向け操作(テスト通知・通知済み履歴の消去)の結果通知
+    LaunchedEffect(state.developerMessage) {
+        state.developerMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.onDeveloperMessageShown()
+        }
+    }
+
     val selectedTab = state.selectedTab
 
     // カスタムキャンペーンの追加/編集ダイアログ。NEW_CUSTOM_CAMPAIGN(id 空)なら新規、null なら非表示。
@@ -456,6 +464,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         onDataCommitRefChange = viewModel::onSetDataCommitRef,
                         onUseTestDataChange = viewModel::onSetUseTestData,
                         onUseBundledDataChange = viewModel::onSetUseBundledData,
+                        onTestNotification = viewModel::onTestNotification,
+                        onClearNotifiedCampaigns = viewModel::onClearNotifiedCampaigns,
                     )
                     SettingsSubpage.ABOUT -> AboutSettingsPage(
                         onBack = viewModel::onCloseSettingsSubpage,

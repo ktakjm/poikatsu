@@ -61,7 +61,10 @@ import com.ktakjm.poikatsu.domain.ENDS_SOON_DAYS
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningContainerColor
 
-/** 通知時刻の設定刻み(分)。保存形式は分単位で、刻みは UI 側の制約として持つ */
+/**
+ * 通知時刻の設定刻み(分)。保存形式は分単位で、刻みは UI 側の制約として持つ。
+ * 実機検証で発火を待つのに細かい刻みは要らない(開発者向けの「テスト通知」で即時に確認する)。
+ */
 private const val NOTIFY_TIME_STEP_MINUTES = 15
 
 /**
@@ -227,7 +230,7 @@ internal fun NotificationSettingsPage(
         ListItem(
             headlineContent = { Text("キャンペーン通知") },
             supportingContent = {
-                Text("毎朝${notifyTimeLabel(notifyTimeMinutes)}、その日のお知らせがあるときだけまとめて通知します")
+                Text("毎日${notifyTimeLabel(notifyTimeMinutes)}、その日のお知らせがあるときだけまとめて通知します")
             },
             trailingContent = {
                 Switch(
@@ -318,7 +321,7 @@ private fun NotifyTimePickerDialog(
     onDismiss: () -> Unit,
 ) {
     var hour by remember { mutableStateOf(initialMinutes / 60) }
-    // 既存値が15分刻みでない場合(将来の保存形式変更等)も選択肢に丸めて表示する
+    // 既存値が刻みに乗っていない場合(刻みの変更・バックアップ復元等)も選択肢に丸めて表示する
     var minute by remember { mutableStateOf(initialMinutes % 60 / NOTIFY_TIME_STEP_MINUTES * NOTIFY_TIME_STEP_MINUTES) }
     AlertDialog(
         onDismissRequest = onDismiss,

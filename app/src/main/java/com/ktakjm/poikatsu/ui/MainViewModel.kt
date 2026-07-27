@@ -362,6 +362,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val pendingSettingsImport: SettingsBackup? = null,
         /** エクスポート/インポートの結果通知(Snackbar)。表示後に消費する */
         val settingsBackupMessage: String? = null,
+        /** 開発者向け操作(テスト通知等)の結果通知(Snackbar)。表示後に消費する */
+        val developerMessage: String? = null,
     )
 
     /**
@@ -1608,6 +1610,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             CampaignNotifications.schedule(getApplication(), minutesOfDay)
         }
     }
+
+    /**
+     * 通知ジョブのテスト実行(開発者向け)。日次ジョブの発火を待たずに本番と同じ判定・通知を試す。
+     * 遅延ありは画面を消してから鳴らす検証用。実際に通知が出るかは対象施策の有無・通知済み履歴・
+     * 端末の通知許可しだいなので、ここでは「実行した」ことだけを知らせる。
+     */
+    fun onTestNotification(delaySeconds: Long) {
+        CampaignNotifications.runTest(getApplication(), delaySeconds)
+        val message = if (delaySeconds > 0) {
+            "${delaySeconds}秒後にテスト通知します。画面を消してお待ちください"
+        } else {
+            "テスト通知を実行しました(対象がなければ通知は出ません)"
+        }
+        _state.update { it.copy(developerMessage = message) }
+    }
+
+    /** 通知済み履歴の消去(開発者向け)。同じキャンペーンをもう一度通知させたいときに使う */
+    fun onClearNotifiedCampaigns() = viewModelScope.launch {
+        settingsRepo.clearNotifiedCampaignKeys()
+        _state.update { it.copy(developerMessage = "通知済み履歴を消しました") }
+    }
+
+    fun onDeveloperMessageShown() = _state.update { it.copy(developerMessage = null) }
 
     fun onSetDataCommitRef(ref: String) = viewModelScope.launch { settingsRepo.setDataCommitRef(ref) }
 

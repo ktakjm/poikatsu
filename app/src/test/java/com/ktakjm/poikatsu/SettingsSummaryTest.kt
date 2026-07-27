@@ -44,8 +44,8 @@ class SettingsSummaryTest {
 
     @Test
     fun `通知-ONは設定時刻を頃つきで出しOFFは状態のみ`() {
-        assertEquals("キャンペーン通知 オン(毎朝8:00頃)", notificationSummary(enabled = true, notifyTimeMinutes = 8 * 60))
-        assertEquals("キャンペーン通知 オン(毎朝19:45頃)", notificationSummary(enabled = true, notifyTimeMinutes = 19 * 60 + 45))
+        assertEquals("キャンペーン通知 オン(毎日8:00頃)", notificationSummary(enabled = true, notifyTimeMinutes = 8 * 60))
+        assertEquals("キャンペーン通知 オン(毎日19:45頃)", notificationSummary(enabled = true, notifyTimeMinutes = 19 * 60 + 45))
         assertEquals("キャンペーン通知 オフ", notificationSummary(enabled = false, notifyTimeMinutes = 8 * 60))
     }
 

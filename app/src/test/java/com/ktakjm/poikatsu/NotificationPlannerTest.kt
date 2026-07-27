@@ -258,7 +258,7 @@ class NotificationPlannerTest {
             Duration.ofHours(22).plusMinutes(30),
             delayUntilNextNotifyTime(LocalDateTime.of(2026, 7, 26, 9, 30), notifyTimeMinutes = 8 * 60),
         )
-        // 15分刻みの設定値(7:45)もそのまま扱える
+        // 分単位の設定値(7:45)もそのまま扱える
         assertEquals(
             Duration.ofMinutes(15),
             delayUntilNextNotifyTime(LocalDateTime.of(2026, 7, 26, 7, 30), notifyTimeMinutes = 7 * 60 + 45),

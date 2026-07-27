@@ -1,6 +1,7 @@
 package com.ktakjm.poikatsu.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,6 +24,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
+/** 遅延テスト通知の待ち時間(秒)。押してから画面を消すのに要る程度の短さ */
+private const val TEST_NOTIFICATION_DELAY_SECONDS = 10L
+
 /**
  * 開発者向けサブページ(#47 で設定トップの階層化に合わせてサブページ化)。「開発者モード」トグルと、
  * ON 中のみ現れる開発者向け設定項目を 1 ページにまとめる(トグルだけトップに残すと二重ネストに
@@ -42,6 +46,8 @@ internal fun DeveloperSettingsPage(
     onDataCommitRefChange: (String) -> Unit,
     onUseTestDataChange: (Boolean) -> Unit,
     onUseBundledDataChange: (Boolean) -> Unit,
+    onTestNotification: (Long) -> Unit,
+    onClearNotifiedCampaigns: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
 
@@ -108,6 +114,24 @@ internal fun DeveloperSettingsPage(
                 } else {
                     ListItemDefaults.colors()
                 },
+            )
+
+            // 通知(#6)のテスト。日次ジョブの発火時刻を待たずに本番と同じ判定・通知経路を通す
+            SettingsSectionHeader("通知のテスト")
+            ListItem(
+                headlineContent = { Text("今すぐテスト通知") },
+                supportingContent = { Text("その日の対象を判定して通知します(端末の通知許可が必要)") },
+                modifier = Modifier.clickable { onTestNotification(0) },
+            )
+            ListItem(
+                headlineContent = { Text("${TEST_NOTIFICATION_DELAY_SECONDS}秒後にテスト通知") },
+                supportingContent = { Text("押したあと画面を消して、消灯中の鳴り方を確認する用") },
+                modifier = Modifier.clickable { onTestNotification(TEST_NOTIFICATION_DELAY_SECONDS) },
+            )
+            ListItem(
+                headlineContent = { Text("通知済み履歴を消す") },
+                supportingContent = { Text("同じキャンペーンをもう一度通知させたいときに使います") },
+                modifier = Modifier.clickable(onClick = onClearNotifiedCampaigns),
             )
         }
     }

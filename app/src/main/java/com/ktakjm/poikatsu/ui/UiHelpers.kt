@@ -177,7 +177,7 @@ internal fun notifyTimeLabel(minutesOfDay: Int): String =
 
 /** 「通知」行のサマリ(#6)。ON のときは通知の目安時刻まで出す */
 internal fun notificationSummary(enabled: Boolean, notifyTimeMinutes: Int): String =
-    if (enabled) "キャンペーン通知 オン(毎朝${notifyTimeLabel(notifyTimeMinutes)})" else "キャンペーン通知 オフ"
+    if (enabled) "キャンペーン通知 オン(毎日${notifyTimeLabel(notifyTimeMinutes)})" else "キャンペーン通知 オフ"
 
 /**
  * 通知を出せる状態か(Android 13+ の POST_NOTIFICATIONS が許可済みか)。12 以下は実行時権限が

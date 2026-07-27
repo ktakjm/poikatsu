@@ -297,6 +297,14 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.data.first().decodeNotifiedKeys().toSet()
 
     /**
+     * 通知済みキーを空にする(開発者向け)。同じキャンペーンで通知を繰り返し検証するための操作で、
+     * 消しても失われるのは「二度通知しない」記録だけ(設定値ではない)。
+     */
+    suspend fun clearNotifiedCampaignKeys() {
+        context.settingsDataStore.edit { it.remove(Keys.NOTIFIED_CAMPAIGNS) }
+    }
+
+    /**
      * 通知済みキーを追記する。施策の入れ替わりで増え続けないよう直近 [NOTIFIED_KEYS_MAX] 件に
      * 丸める(古いキーの施策はとうに通知ウィンドウ外で、消しても再通知は起きない)。
      */

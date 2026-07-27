@@ -44,11 +44,14 @@ class CampaignNotificationWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val app = applicationContext
+        // 開発者向けのテスト実行(CampaignNotifications.runTest)。通知設定 OFF でも実行し、
+        // 日次ジョブのスケジュールには触れない。判定・通知そのものは本番と同じ経路を通す
+        val isTestRun = inputData.getBoolean(KEY_TEST_RUN, false)
         val settingsRepo = SettingsRepository(app)
         val settings = settingsRepo.settings.first()
         // トグル OFF はジョブごと解除される(CampaignNotifications.cancel)ため通常ここは通らないが、
         // 解除と実行が競合したときの保険として黙って終える
-        if (!settings.notificationsEnabled) return@withContext Result.success()
+        if (!isTestRun && !settings.notificationsEnabled) return@withContext Result.success()
 
         // データ取得は MainViewModel と同じ設定(テストデータ・同梱・ref)に追従する
         val dataDir = if (settings.useTestData) "data-test" else "data"
@@ -69,7 +72,8 @@ class CampaignNotificationWorker(
             }
         }.getOrElse { e ->
             Timber.w(e, "通知ジョブ: 施策データの読み込みに失敗")
-            return@withContext Result.retry()
+            // テスト実行は「押した1回」で完結させる(バックオフ後に忘れた頃鳴るのを避ける)
+            return@withContext if (isTestRun) Result.failure() else Result.retry()
         }
         // 自治体マスタが読めないときは空のまま=自治体施策は通知されない(誤配より出さない側に倒す)
         val master = runCatching {
@@ -98,19 +102,28 @@ class CampaignNotificationWorker(
         val items = planCampaignNotifications(targets, LocalDate.now())
             .filter { it.dedupKey !in notified }
             .sortedWith(compareBy({ it.kind }, { it.days }))
-        if (items.isNotEmpty()) {
+        if (items.isEmpty()) {
+            Timber.d("通知ジョブ: 対象なし(通知済み %d 件を除外後)", notified.size)
+        } else {
             // 通知が許可されていなければ通知済みにせず終える(後から許可されたとき、
             // まだ通知ウィンドウ内の施策は翌日のジョブで改めて通知される)
             if (postNotification(app, items)) {
                 settingsRepo.addNotifiedCampaignKeys(items.map { it.dedupKey })
                 Timber.d("通知ジョブ: %d件を通知", items.size)
+            } else {
+                Timber.w("通知ジョブ: 通知が許可されていないため見送り(%d件)", items.size)
             }
         }
         // 実行のたびに次回を「翌日の通知時刻」へ再アンカーし、周期実行の後ろズレをリセットする
         // (詳細は CampaignNotifications.schedule)。retry で終える経路では再アンカーしない
-        // (バックオフ後の再実行が成功した時点で行う)
-        CampaignNotifications.schedule(app, settings.notificationTimeMinutes)
+        // (バックオフ後の再実行が成功した時点で行う)。テスト実行は日次ジョブに影響させない
+        if (!isTestRun) CampaignNotifications.schedule(app, settings.notificationTimeMinutes)
         Result.success()
+    }
+
+    companion object {
+        /** テスト実行フラグ(入力データ)。true なら通知設定 OFF でも実行し、再アンカーもしない */
+        const val KEY_TEST_RUN = "test_run"
     }
 
     /** まとめ通知を1件出す。許可が無く出せなかったときは false */
