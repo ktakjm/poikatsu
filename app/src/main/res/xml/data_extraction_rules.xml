@@ -1,19 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+   Auto Backup の対象ルール(Android 12 / API 31 以上。30 以下は backup_rules.xml)。
+   https://developer.android.com/about/versions/12/backup-restore#xml-changes
+
+   方針: cloud-backup(Google ドライブへのバックアップ)・device-transfer(端末間コピー)とも
+   **除外なし = アプリデータを全部バックアップする**。これはテンプレートの書き忘れではなく意図的な選択(#51)。
+
+   理由:
+   - バックアップ対象は DataStore(ユーザー設定。マイカード・マイエリア・カスタムカード/キャンペーン)と
+     filesDir/remote_data(GitHub raw から取得した data/*.json のキャッシュ)だけ
+   - 認証情報・端末固有で復元されると壊れるデータは持たない(位置情報は保存せず、API キーは APK 側)
+   - サイズは Auto Backup の 25MB 枠に対して桁違いに小さい
+   - キャッシュの復元も、初回起動時にオフラインでも表示できるフォールバックとして無害〜ややプラス
+
+   今後 DataStore に「復元されると困るキー」(端末固有の識別子・ペアリング情報等)を足すときは、
+   ここに <exclude domain="file" path="datastore/..."/> のような除外を追加すること。
 -->
 <data-extraction-rules>
-    <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
-    </cloud-backup>
-    <!--
-    <device-transfer>
-        <include .../>
-        <exclude .../>
-    </device-transfer>
-    -->
+    <!-- クラウドバックアップ: 除外なし(全部) -->
+    <cloud-backup />
+    <!-- 端末間の直接コピー: 除外なし(全部)。cloud-backup と同じ判断 -->
+    <device-transfer />
 </data-extraction-rules>

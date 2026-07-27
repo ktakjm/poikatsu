@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+   Auto Backup の対象ルール(Android 11 / API 30 以下。31 以上は data_extraction_rules.xml)。
+   https://developer.android.com/guide/topics/data/autobackup
+
+   方針は data_extraction_rules.xml と同じで、**除外なし = アプリデータを全部バックアップする**
+   (テンプレートの書き忘れではなく意図的な選択。理由は data_extraction_rules.xml のコメント参照。#51)。
+   <include> を1つも書かない場合は「除外を除く全ファイル」が対象になるため、要素は空のままでよい。
+
+   実機は Android 10 / 12 / 16 の3台なので、このファイルが効くのは Android 10 の1台。
+   除外を足すときは data_extraction_rules.xml と両方に入れること(どちらか片方だと OS 版で挙動がずれる)。
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
 </full-backup-content>
