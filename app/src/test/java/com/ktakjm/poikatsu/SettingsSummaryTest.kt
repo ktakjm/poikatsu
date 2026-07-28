@@ -74,7 +74,7 @@ class SettingsSummaryTest {
 
     @Test
     fun `自治体-未登録なら効果説明を添える`() {
-        assertEquals("未登録(登録すると期間限定タブを地域のキャンペーンに絞れます)", municipalitySummary(emptyList()))
+        assertEquals("未登録(登録するとおトクタブを地域のキャンペーンに絞れます)", municipalitySummary(emptyList()))
     }
 
     // ---- キャンペーンデータ ----

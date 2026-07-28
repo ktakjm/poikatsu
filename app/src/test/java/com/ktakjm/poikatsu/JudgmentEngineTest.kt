@@ -29,6 +29,7 @@ import com.ktakjm.poikatsu.domain.formatBenefit
 import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.nextTargetDay
 import com.ktakjm.poikatsu.domain.recurrenceLabel
+import com.ktakjm.poikatsu.domain.resolveCardCampaignRate
 import com.ktakjm.poikatsu.util.JapaneseText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -1187,9 +1188,9 @@ class JudgmentEngineTest {
     }
 
     @Test
-    fun `recurrence施策は期間内なら非対象日でも期間限定タブ用のactiveに残る`() {
+    fun `recurrence施策は期間内なら非対象日でもおトクタブ用のactiveに残る`() {
         val engine = periodTestEngine(weeklyCampaign)
-        // 日曜: campaignStatus は期間の外枠だけで判定(期間限定タブは「次の対象日」を案内する)
+        // 日曜: campaignStatus は期間の外枠だけで判定(おトクタブは「次の対象日」を案内する)
         assertEquals(CampaignStatus.ACTIVE, engine.campaignStatus(weeklyCampaign, today))
         assertTrue(engine.activeCampaigns(today).isNotEmpty())
         // 一方、YOLP 検索対象(判定に出る店)からは外れる
@@ -1521,14 +1522,28 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
-    fun `実データ_promotionは期間とmerchant_rulesを持つ`() {
+    fun `実データ_promotionはscopeに応じて期間とmerchant_rulesを持つ`() {
+        // managed: 特定チェーン対象(お店/地図タブの判定に出す)。merchant_rules 書き忘れで
+        // 「判定に一切出ない死にデータ」になるのを防ぐため、期間と merchant_rules を強制する。
+        // external: 全加盟店対象(抽選型等。チェーンを列挙できない)。おトクタブ専用で判定エンジンの
+        // 対象外なので merchant_rules は持たせず(持っていても判定に出ず誤解のもと)、期間も任意
+        // (常設の抽選会等は period 無し)。#44
         val promotions = data.campaigns.filter { it.campaignType == CampaignType.PROMOTION }
         assertTrue("promotion が1件以上存在する", promotions.isNotEmpty())
         promotions.forEach { c ->
-            assertTrue("${c.id}: promotion should be managed", c.storeScope == "managed")
-            assertNotNull("${c.id}: promotion should have period_start", c.periodStart)
-            assertNotNull("${c.id}: promotion should have period_end", c.periodEnd)
-            assertTrue("${c.id}: promotion should have merchant_rules", c.merchantRules.isNotEmpty())
+            when (c.storeScope) {
+                "managed" -> {
+                    assertNotNull("${c.id}: managed promotion should have period_start", c.periodStart)
+                    assertNotNull("${c.id}: managed promotion should have period_end", c.periodEnd)
+                    assertTrue("${c.id}: managed promotion should have merchant_rules", c.merchantRules.isNotEmpty())
+                }
+                "external" -> {
+                    assertTrue(
+                        "${c.id}: external promotion should not have merchant_rules",
+                        c.merchantRules.isEmpty(),
+                    )
+                }
+            }
         }
     }
 
@@ -1544,7 +1559,7 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
-    fun `実データ_期間限定タブ用_6月30日にactiveとupcomingが存在する`() {
+    fun `実データ_おトクタブ用_6月30日にactiveとupcomingが存在する`() {
         val june30 = LocalDate.of(2026, 6, 30)
         val active = engine.activeCampaigns(june30).filter { it.campaignType != CampaignType.CARD_PROGRAM }
         val upcoming = engine.upcomingCampaigns(june30).filter { it.campaignType != CampaignType.CARD_PROGRAM }
@@ -1552,7 +1567,7 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
-    fun `実データ_期間限定タブ用_7月1日にactive campaignsが存在する`() {
+    fun `実データ_おトクタブ用_7月1日にactive campaignsが存在する`() {
         val july1 = LocalDate.of(2026, 7, 1)
         val timeLimited = engine.activeCampaigns(july1).filter { it.campaignType != CampaignType.CARD_PROGRAM }
         assertTrue("time-limited active not empty on 7/1: ${timeLimited.map { it.id }}", timeLimited.isNotEmpty())
@@ -1851,6 +1866,69 @@ class CampaignFlagsTest {
         assertFalse("終了日なし・早期終了なし(常設)は期間限定でない", base.isTimeLimited)
         assertTrue(base.copy(periodEnd = "2026-12-31").isTimeLimited)
         assertTrue("終了日未定でも予算到達で終わり得るなら期間限定", base.copy(mayEndEarly = true).isTimeLimited)
+    }
+}
+
+/**
+ * カード施策の表示レート解決(resolveCardCampaignRate)。judgeCards とおトクタブが共有する
+ * 率の優先基準: promotion=施策の率 / card_program=カードの実効率(未所有は施策側へフォールバック)。
+ */
+class ResolveCardCampaignRateTest {
+
+    private fun campaign(type: CampaignType, rateBase: Double? = null, discountAmount: Int? = null) =
+        Campaign(
+            id = "x",
+            operator = "テスト",
+            cardId = "c1",
+            name = "施策",
+            type = type.jsonValue,
+            rateBase = rateBase,
+            discountAmount = discountAmount,
+        )
+
+    // ウエル活 ON のマージ後を模す: 実効率にはマージ時点で倍率が掛かっている(UserDataMerge)
+    private val card = PaymentCard(
+        id = "c1",
+        cardName = "テストカード",
+        effectiveRateDefault = 1.5,
+        welcatsuApplied = true,
+    )
+
+    @Test
+    fun `card_programはカードの実効率を優先する(ウエル活込みの値がそのまま出る)`() {
+        val r = resolveCardCampaignRate(campaign(CampaignType.CARD_PROGRAM, rateBase = 7.0), card)
+        assertEquals(1.5, r.effectiveRate!!, 0.0)
+        assertTrue("ウエル活注記の条件になるためカード率使用フラグが立つ", r.usesCardRate)
+    }
+
+    @Test
+    fun `card_programでも未所有(card=null)は施策側のrate_baseへフォールバック`() {
+        val r = resolveCardCampaignRate(campaign(CampaignType.CARD_PROGRAM, rateBase = 7.0), card = null)
+        assertEquals(7.0, r.effectiveRate!!, 0.0)
+        assertFalse("フォールバック時はカードの率でないのでウエル活注記を出さない", r.usesCardRate)
+    }
+
+    @Test
+    fun `promotionは施策の率がカードの実効率より優先される`() {
+        val r = resolveCardCampaignRate(campaign(CampaignType.PROMOTION, rateBase = 10.0), card)
+        assertEquals(10.0, r.effectiveRate!!, 0.0)
+        assertFalse(r.usesCardRate)
+    }
+
+    @Test
+    fun `店舗別rate_overrideは施策の率よりさらに優先される`() {
+        val r = resolveCardCampaignRate(campaign(CampaignType.PROMOTION, rateBase = 10.0), card, rateOverride = 15.0)
+        assertEquals(15.0, r.effectiveRate!!, 0.0)
+    }
+
+    @Test
+    fun `定額施策と率なしpromotionには率を出さない`() {
+        // 定額: 率を残すと定額同士の金額降順ソートが崩れる
+        val discount = resolveCardCampaignRate(campaign(CampaignType.PROMOTION, discountAmount = 500), card)
+        assertNull(discount.effectiveRate)
+        // 率も定額も無い promotion(メモのみのカスタム等): カードの常設率で代替しない(率の捏造防止)
+        val memoOnly = resolveCardCampaignRate(campaign(CampaignType.PROMOTION), card)
+        assertNull(memoOnly.effectiveRate)
     }
 }
 

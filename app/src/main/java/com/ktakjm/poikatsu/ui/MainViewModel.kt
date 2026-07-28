@@ -22,6 +22,7 @@ import com.ktakjm.poikatsu.data.AppSettings
 import com.ktakjm.poikatsu.data.CustomCampaign
 import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.MunicipalityMaster
+import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
@@ -55,6 +56,7 @@ import com.ktakjm.poikatsu.domain.isPrefectureWide
 import com.ktakjm.poikatsu.domain.isTargetDay
 import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.nextTargetDay
+import com.ktakjm.poikatsu.domain.resolveCardCampaignRate
 import com.ktakjm.poikatsu.domain.walletAppLink
 import com.ktakjm.poikatsu.notification.CampaignNotifications
 import com.ktakjm.poikatsu.util.GeoMath
@@ -280,7 +282,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val nearbySelectedCategories: Set<String> = emptySet(),
         /**
          * 「地図」のチェーン絞り込み(レンズ2段目)。非空なら ジャンル絞り込みより優先し、地図/一覧を
-         * これらのチェーンだけに絞る。在チェーン選択((2))とブリッジ(探す→近く・期間限定の施策詳細,(3))の
+         * これらのチェーンだけに絞る。在チェーン選択((2))とブリッジ(探す→近く・おトクの施策詳細,(3))の
          * 着地状態を共有する(単一チェーンのブリッジは要素1個の Set)。空セットで未絞り込み。
          * 表示名にのみ使うので Merchant をそのまま保持(フィルタは id 比較)。
          */
@@ -297,19 +299,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val selectedTab: AppTab = AppTab.SEARCH,
         /**
          * 登録地域で開催中の自治体施策がある自治体名(お店タブ初期画面のお知らせバナー用)。
-         * 施策の詳細は出さず「あること」だけ知らせ、タップで期間限定タブへ送る。
+         * 施策の詳細は出さず「あること」だけ知らせ、タップでおトクタブへ送る。
          */
         val searchMunicipalAreaNames: List<String> = emptyList(),
         val campaignFilter: CampaignFilter = CampaignFilter.ALL,
-        val timeLimitedActive: List<Campaign> = emptyList(),
-        val timeLimitedUpcoming: List<Campaign> = emptyList(),
+        /** おトクタブの開催中一覧(常設 card_program 含む。セクション分けは CampaignScreen 側) */
+        val campaignsActive: List<Campaign> = emptyList(),
+        val campaignsUpcoming: List<Campaign> = emptyList(),
+        /**
+         * おトクタブ一覧の表示レート上書き(施策 id → ユーザー実効率)。所有カードの card_program のみ
+         * 載る(お店タブと同じ基準=resolveCardCampaignRate。ウエル活 ON なら倍率適用済みの値)。
+         * 載っていない施策は施策側の率(rate_base 等)で表示する
+         */
+        val campaignPersonalRates: Map<String, Double> = emptyMap(),
         val merchantNames: Map<String, String> = emptyMap(),
         /** 施策 id → 発行体の識別色(#RRGGBB)。色は施策でなく発行体カタログ側に持つため、ここで解決して配る */
         val campaignBrandColors: Map<String, String> = emptyMap(),
         val selectedCampaignGroup: List<CampaignJudgment>? = null,
         /**
          * 施策詳細→地図ブリッジの復元先。ブリッジ時に閉じた施策詳細(selectedCampaignGroup)を保持し、
-         * 地図タブで戻る操作をしたときに期間限定タブ+施策詳細へ復帰する。下部ナビでの手動タブ切替は
+         * 地図タブで戻る操作をしたときにおトクタブ+施策詳細へ復帰する。下部ナビでの手動タブ切替は
          * 通常のタブ移動なので破棄する(onSelectTab)。
          */
         val campaignBridgeReturn: List<CampaignJudgment>? = null,
@@ -334,7 +343,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val qrPaymentSettings: List<QrPaymentSetting> = emptyList(),
         /** 設定画面「マイカード」に出すカスタムカード(カタログ外。DataStore 由来) */
         val customCards: List<CustomCard> = emptyList(),
-        /** カスタムキャンペーンの登録内容(DataStore 由来)。期間限定タブの編集ダイアログが参照する */
+        /** カスタムキャンペーンの登録内容(DataStore 由来)。おトクタブの編集ダイアログが参照する */
         val customCampaigns: List<CustomCampaign> = emptyList(),
         /**
          * 終了日を過ぎたカスタムキャンペーン(Campaign 変換済み)。期限切れの同梱施策は一覧から
@@ -345,9 +354,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val catalogMerchants: List<Merchant> = emptyList(),
         /** 登録済みエリア(自治体単体・グループ) */
         val registeredAreas: List<RegisteredArea> = emptyList(),
-        /** 自治体マスタ。設定画面のピッカーと期間限定タブの地域フィルタに使う(起動時に assets から読む) */
+        /** 自治体マスタ。設定画面のピッカーとおトクタブの地域フィルタに使う(起動時に assets から読む) */
         val municipalityMaster: MunicipalityMaster = MunicipalityMaster(),
-        /** 期間限定タブで「登録地域のみ」を解除して全件表示中か(セッション内のみ。永続化しない) */
+        /** おトクタブで「登録地域のみ」を解除して全件表示中か(セッション内のみ。永続化しない) */
         val showAllCampaigns: Boolean = false,
         val dataCommitRef: String = "",
         val useTestData: Boolean = false,
@@ -443,6 +452,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     @Volatile
     private var displayData: PoikatsuData? = null
 
+    /**
+     * 所有カードの id → マージ済みカード(rebuild で構築)。ユーザー設定の実効率
+     * (ウエル活 ON なら倍率適用済み)を持ち、おトクタブの card_program 表示レート解決
+     * (resolveCardCampaignRate)に使う。未所有カードは含まない(施策側の率へフォールバック)。
+     */
+    @Volatile
+    private var ownedCardsById: Map<String, PaymentCard> = emptyMap()
+
     private var lastFetchSucceededAt = 0L
 
     /** 起動後の通知ジョブ突き合わせ([CampaignNotifications.ensureScheduled])を 1 回だけにするフラグ */
@@ -467,7 +484,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // 自治体マスタ(assets 同梱)は起動時に読む。設定画面のピッカーに加え、期間限定タブの
+    // 自治体マスタ(assets 同梱)は起動時に読む。設定画面のピッカーに加え、おトクタブの
     // 地域フィルタ(rebuild)がグループ展開に使うため遅延ロードにしない。読めなければ空のまま
     // =フィルタ無効(全表示)に倒す。リモート取得の対象外だが data/⇔data-test/ の切替には追従する
     private val masterLoad: Job = loadMunicipalityMaster()
@@ -631,21 +648,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         engine = newEngine
         val newDisplayData = merged.displayData
         displayData = newDisplayData
+        val newOwnedCardsById = merged.engineData.cards.associateBy { it.id }
+        ownedCardsById = newOwnedCardsById
 
         val today = LocalDate.now()
-        // 期間限定タブの一覧。登録エリアがあれば既定で絞り込む(「すべて表示」トグルで解除可)
+        // おトクタブの一覧。登録エリアがあれば既定で絞り込む(「すべて表示」トグルで解除可)
         val applyAreaFilter: (List<Campaign>) -> List<Campaign> = { campaigns ->
             if (_state.value.showAllCampaigns) campaigns
             else filterCampaignsByArea(campaigns, settings.registeredAreas, _state.value.municipalityMaster)
         }
-        val timeLimitedActive = applyAreaFilter(
-            newEngine.activeCampaigns(today).filter { it.campaignType != CampaignType.CARD_PROGRAM }
-        )
-        val timeLimitedUpcoming = applyAreaFilter(
-            newEngine.upcomingCampaigns(today).filter { it.campaignType != CampaignType.CARD_PROGRAM }
-        )
+        // card_program(常設)も含めて全部出す(常設セクションへの振り分けは CampaignScreen 側で
+        // isTimeLimited を見て行う)。通知対象は従来どおり NotificationPlanner 側で card_program を除外
+        val campaignsActive = applyAreaFilter(newEngine.activeCampaigns(today))
+        val campaignsUpcoming = applyAreaFilter(newEngine.upcomingCampaigns(today))
+        // おトクタブ一覧の表示レートをお店タブと同じ基準(resolveCardCampaignRate)にする:
+        // 所有カードの card_program はユーザー実効率(ウエル活込み)で出す。載らない施策
+        // (promotion・未所有カード・QR/自治体)は従来どおり施策側の率のまま
+        val campaignPersonalRates = (campaignsActive + campaignsUpcoming)
+            .filter { it.cardId != null }
+            .mapNotNull { c ->
+                val resolved = resolveCardCampaignRate(c, newOwnedCardsById[c.cardId])
+                if (resolved.usesCardRate) c.id to (resolved.effectiveRate ?: 0.0) else null
+            }
+            .toMap()
         // 終了日を過ぎたカスタムキャンペーンは判定・一覧から消えるが、編集・削除の入口を残すため
-        // 期間限定タブの専用セクション用に別で持つ(同梱施策の期限切れは単に出さない)
+        // おトクタブの専用セクション用に別で持つ(同梱施策の期限切れは単に出さない)
         val expiredCustomCampaigns = merged.engineData.campaigns.filter {
             it.isCustom && newEngine.campaignStatus(it, today) == CampaignStatus.EXPIRED
         }
@@ -743,8 +770,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 useTestData = settings.useTestData,
                 useBundledData = settings.useBundledData,
                 developerMode = settings.developerMode,
-                timeLimitedActive = timeLimitedActive,
-                timeLimitedUpcoming = timeLimitedUpcoming,
+                campaignsActive = campaignsActive,
+                campaignsUpcoming = campaignsUpcoming,
+                campaignPersonalRates = campaignPersonalRates,
                 searchMunicipalAreaNames = searchMunicipalAreaNames,
                 // 名前・色の解決はカスタム分(合成 Merchant・カスタムカードの色)も含む統合データから引く
                 merchantNames = newDisplayData.merchants.associate { it.id to it.name },
@@ -1275,7 +1303,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * ブリッジ: 判定詳細(探す由来)の「近くのこのお店を探す」は単一チェーン、期間限定タブの施策詳細
+     * ブリッジ: 判定詳細(探す由来)の「近くのこのお店を探す」は単一チェーン、おトクタブの施策詳細
      * (「近くの対象店舗を探す」)は 1〜N チェーン。そのチェーン群に絞った状態を作り、
      * タブを NEARBY に切り替えて元の画面を閉じる。実際の「地図」突入(位置情報パーミッション→fetchNearby)は
      * UI 側が続けて行う。ジャンル絞り込みはクリアしてチェーンに集中する(ピル解除で全件に戻る)。
@@ -1520,7 +1548,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * お店タブのお知らせバナーから: 期間限定タブへ移動し、自治体フィルタを効かせて着地させる
+     * お店タブのお知らせバナーから: おトクタブへ移動し、自治体フィルタを効かせて着地させる
      * (「登録地域のみ」は既定 ON なので、そのまま登録地域の自治体施策一覧になる)
      */
     fun onOpenMunicipalCampaigns() {
@@ -1539,14 +1567,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val benefitType = com.ktakjm.poikatsu.domain.BenefitType.fromString(campaign.benefitType)
             val isLottery = benefitType == com.ktakjm.poikatsu.domain.BenefitType.LOTTERY
             val todayIsTarget = isTargetDay(campaign, today)
+            // カード施策の率はお店タブと同じ基準(resolveCardCampaignRate)で解決する:
+            // 所有カードの card_program はユーザー実効率(ウエル活込み)、未所有は施策側の率へ
+            // フォールバック。QR・自治体・ブランド施策(cardId 無し)は従来どおり施策側の率
+            val ownedCard = campaign.cardId?.let { ownedCardsById[it] }
+            val resolved = if (campaign.cardId != null) resolveCardCampaignRate(campaign, ownedCard) else null
+            val effectiveRate = if (resolved != null) resolved.effectiveRate else campaign.rateBase
             CampaignJudgment(
                 campaign = campaign,
                 // ブランド施策はイシュアー不問なので、バッジは運営者でなくブランド名を出す
                 badgeLabel = qr?.name ?: campaign.cardBrand ?: campaign.operator,
-                // 未所有カードの施策も期間限定タブには出るため、色は全カタログから引く
+                // 未所有カードの施策もおトクタブには出るため、色は全カタログから引く
                 brandColor = catalog?.brandColorOf(campaign),
                 benefitType = benefitType,
-                effectiveRate = campaign.rateBase.takeUnless { isLottery },
+                effectiveRate = effectiveRate.takeUnless { isLottery },
                 discountAmount = campaign.discountAmount.takeUnless { isLottery },
                 daysRemaining = e.daysRemaining(campaign, today),
                 // merchant 未特定のため店舗固有分は乗らず、campaign 直下(施策全体に一様に効く事実)だけが出る
@@ -1567,8 +1601,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 storeSearchUrl = if (campaign.storeScope == "external") campaign.storeSearchUrl else null,
                 detailUrl = campaign.detailUrl,
                 appLinks = qr?.appLinks.orEmpty().ifEmpty { listOfNotNull(campaign.walletAppLink) },
-                pointMultiplier = null,
-                welcatsuApplied = false,
+                // judgeCards と同じ条件: 倍率バッジは所有カードなら出す(ブランド施策は cardId が
+                // 無いため自然に出ない)。「実質還元率」注記はカードの実効率を実際に表示したときだけ
+                pointMultiplier = ownedCard?.pointMultiplier,
+                welcatsuApplied = ownedCard?.welcatsuApplied == true && resolved?.usesCardRate == true,
                 mayEndEarly = campaign.mayEndEarly,
                 todayIsTarget = todayIsTarget,
                 nextTargetDate = if (todayIsTarget) null else nextTargetDay(campaign, today),
@@ -1825,7 +1861,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onRemoveRegisteredArea(area: RegisteredArea) =
         viewModelScope.launch { settingsRepo.removeRegisteredArea(area) }
 
-    /** 期間限定タブの「登録地域のみ / すべて」切替。設定でなく閲覧モードなので永続化しない */
+    /** おトクタブの「登録地域のみ / すべて」切替。設定でなく閲覧モードなので永続化しない */
     fun onToggleShowAllCampaigns() {
         _state.update { it.copy(showAllCampaigns = !it.showAllCampaigns) }
         rebuild()

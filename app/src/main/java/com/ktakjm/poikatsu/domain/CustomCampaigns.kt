@@ -19,7 +19,7 @@ val Campaign.isCustom: Boolean get() = id.startsWith(CustomCampaign.ID_PREFIX)
 /**
  * 変換後の Campaign id から登録単位の CustomCampaign id を引く。複数決済の登録は
  * 「custom:<UUID>:p<N>」に展開されるため、決済サフィックスを剥がす(単一決済はそのまま)。
- * 期間限定タブのグルーピング(1登録=1カード)と編集・削除の逆引きに使う。
+ * おトクタブのグルーピング(1登録=1カード)と編集・削除の逆引きに使う。
  */
 fun customCampaignBaseId(campaignId: String): String =
     campaignId.replace(Regex(":p\\d+$"), "")
@@ -43,6 +43,7 @@ fun customStoreMerchantId(storeName: String): String =
  */
 fun buildCustomMerchants(customCampaigns: List<CustomCampaign>): List<Merchant> =
     customCampaigns
+        .filterNot { it.allStores } // 全店舗対象は店を持たない(残っていても合成 Merchant を作らない)
         .flatMap { it.storeNames }
         .filter { it.isNotBlank() }
         .distinctBy { JapaneseText.normalize(it) }
@@ -61,20 +62,25 @@ private fun splitNotes(s: String): List<String> =
 
 /**
  * 判定エンジンに渡す Campaign へ変換する(決済手段ごとに1件へ展開)。type=promotion にする理由:
- * - 期間限定タブは card_program 以外を一覧に出す(常設のカード施策と区別)
+ * - おトクタブは card_program 以外を一覧に出す(常設のカード施策と区別)
  * - judgeCards は promotion のとき施策の率をカードの常設実効率より優先する
  * 率も定額も無い特典(メモのみ)は promotion の率なし扱いになり、率を表示せず名前とメモだけ出る。
  *
  * 複数決済の展開 id は「<id>:p<N>」(単一決済はそのまま)。1登録の全展開が率・条件を共有する
  * (決済ごとに率が異なる施策は別登録)。逆引きは [customCampaignBaseId]。
  *
- * @param operatorFor 決済手段ごとの表示名の解決。期間限定タブ詳細のバッジ(判定を経ない表示)に使う
+ * @param operatorFor 決済手段ごとの表示名の解決。おトクタブ詳細のバッジ(判定を経ない表示)に使う
  */
 fun CustomCampaign.toCampaigns(operatorFor: (CustomPayment) -> String): List<Campaign> {
-    val merchantRules =
+    // 全店舗対象(allStores)は同梱の external promotion と同じ形(merchant_rules 空)に写す。
+    // お店・地図タブの判定は managed のみ対象なので、おトクタブ専用の施策になる
+    val merchantRules = if (allStores) {
+        emptyList()
+    } else {
         (merchantIds + storeNames.filter { it.isNotBlank() }.map { customStoreMerchantId(it) })
             .distinct()
             .map { MerchantRule(merchantId = it) }
+    }
     val recurrence = Recurrence(daysOfWeek = daysOfWeek, daysOfMonth = daysOfMonth)
         .takeIf { daysOfWeek.isNotEmpty() || daysOfMonth.isNotEmpty() }
     return payments.mapIndexed { index, payment ->
@@ -92,6 +98,7 @@ fun CustomCampaign.toCampaigns(operatorFor: (CustomPayment) -> String): List<Cam
             productScope = productScope?.trim()?.takeIf { it.isNotEmpty() }?.let { ProductScope(it) },
             periodStart = startDate,
             periodEnd = endDate,
+            mayEndEarly = mayEndEarly,
             recurrence = recurrence,
             eligibleNotes = splitNotes(note),
             ineligibleNotes = splitNotes(ineligibleNote),
@@ -104,6 +111,7 @@ fun CustomCampaign.toCampaigns(operatorFor: (CustomPayment) -> String): List<Cam
             detailUrl = detailUrl?.trim()?.takeIf { it.isNotEmpty() },
             merchantRules = merchantRules,
             type = "promotion",
+            storeScope = if (allStores) "external" else "managed",
         )
     }
 }

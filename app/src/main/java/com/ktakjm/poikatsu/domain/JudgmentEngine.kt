@@ -108,9 +108,43 @@ val Campaign.campaignType: CampaignType get() = CampaignType.fromString(type)
 /**
  * 期間限定バッジの対象か。「終了日が決まっている」だけでなく「終了日未定でも予算到達で
  * 早期終了があり得る」(かなトク等の may_end_early)も期間限定として扱う。
- * false になるのは実質、終了予定の無い常設施策(card_program)のみ。
+ * false は終了予定の無い常設施策(card_program、常設 promotion、終了日なしのカスタム)。
+ * おトクタブの「常設」セクションへの振り分けにもこの値を使う。
  */
 val Campaign.isTimeLimited: Boolean get() = periodEnd != null || mayEndEarly
+
+/** [resolveCardCampaignRate] の結果。usesCardRate はウエル活注記の表示条件(カードの率を実際に出したか)に使う */
+data class ResolvedCardRate(
+    val effectiveRate: Double?,
+    /** カードの実効率を表示したか(施策の率でも定額でもなく)。card=null のフォールバック時は false */
+    val usesCardRate: Boolean,
+)
+
+/**
+ * カード施策(card_id 持ち)の表示レート解決。judgeCards(お店/地図)とおトクタブの一覧・詳細
+ * (MainViewModel)で共有し、率の優先基準がずれないようにする(店舗非依存。店舗別の
+ * rate_override は呼び出し側が [rateOverride] で渡す):
+ * - promotion で施策に率がある → 施策の率(逆にするとカードの常設7%が期間限定10%を上書きする)
+ * - card_program 等 → カードの実効率(ユーザー設定。ウエル活 ON ならマージ時に倍率適用済み)。
+ *   card が null(未所有カードの施策をおトクタブで見る場合)は施策側の率へフォールバック
+ * - 定額施策と「率も定額も無い」promotion には率を出さない(率の捏造・ソート崩れ防止)
+ */
+fun resolveCardCampaignRate(
+    campaign: Campaign,
+    card: PaymentCard?,
+    rateOverride: Double? = null,
+): ResolvedCardRate {
+    val campaignRate = rateOverride ?: campaign.rateBase
+    val usesCampaignRate = campaign.campaignType == CampaignType.PROMOTION && campaignRate != null
+    val usesCardRate = !usesCampaignRate && campaign.discountAmount == null &&
+        campaign.campaignType != CampaignType.PROMOTION
+    val effectiveRate = when {
+        usesCampaignRate -> campaignRate
+        usesCardRate -> card?.effectiveRateDefault ?: campaignRate ?: 0.0
+        else -> null
+    }
+    return ResolvedCardRate(effectiveRate, usesCardRate && card != null)
+}
 
 // ---- ウォレット(スマホのタッチ決済)対応 ----
 // eligible_wallets / ineligible_wallets は「公式がウォレット単位で対象/対象外を言い切っている」
@@ -174,7 +208,7 @@ fun trimRate(rate: Double): String =
 
 // ---- recurrence(繰り返し日付条件) ----
 // campaignStatus(期間の外枠)とは独立に「その日が対象日か」を判定する。「お店」「地図」の判定は
-// 期間内かつ対象日のみ、期間限定タブは期間内なら非対象日でも出して「次の対象日」を案内する。
+// 期間内かつ対象日のみ、おトクタブは期間内なら非対象日でも出して「次の対象日」を案内する。
 
 /** recurrence 条件に date が一致するか。recurrence の無い施策は常に true(全日対象) */
 fun isTargetDay(campaign: Campaign, date: LocalDate): Boolean =
@@ -413,7 +447,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
     }
 
     // ---- 期間フィルタ ----
-    // recurrence(対象日)は含まない期間の外枠だけの判定。期間限定タブは期間内なら
+    // recurrence(対象日)は含まない期間の外枠だけの判定。おトクタブは期間内なら
     // 非対象日でも「開催中」に出す(次の対象日を案内する)ため、対象日は isTargetDay で別判定する。
 
     fun campaignStatus(campaign: Campaign, today: LocalDate): CampaignStatus {
@@ -555,24 +589,9 @@ class JudgmentEngine(private val data: PoikatsuData) {
                 val rule = campaign.ruleFor(merchant) ?: return@mapNotNull null
                 val card = resolveCard(campaign) ?: return@mapNotNull null
                 if (excludedByBrand(rule, card)) return@mapNotNull null
-                // 施策側の率(店舗別の上書きがあればそちら)。promotion では施策の率がカードの常設
-                // 実効率より優先(逆にすると常設7%が期間限定10%を上書きしてしまう)。card_program は
-                // 従来どおりユーザー設定の実効率を優先し、施策の率は既定値扱い。
-                val campaignRate = rule.rateOverride ?: campaign.rateBase
-                val usesCampaignRate =
-                    campaign.campaignType == CampaignType.PROMOTION && campaignRate != null
-                // 定額施策(discount_amount 持ち)にはカードの常設率を使わない(特典は「○円引き」で
-                // 完結しており、率を残すと judgeAll のソートで定額同士の金額降順が率の比較に
-                // 崩される)。QR 側(judgeQr)は元々施策の率しか使わないため、これで挙動が揃う。
-                // promotion で率も定額も無い施策(カスタムキャンペーンのメモのみ特典等)にも
-                // カードの常設率で代替しない(施策自体の特典でない率を表示し最良比較に載せてしまう)
-                val usesCardRate = !usesCampaignRate && campaign.discountAmount == null &&
-                    campaign.campaignType != CampaignType.PROMOTION
-                val effectiveRate = when {
-                    usesCampaignRate -> campaignRate
-                    usesCardRate -> card.effectiveRateDefault ?: campaignRate ?: 0.0
-                    else -> null
-                }
+                // 率の優先基準(promotion=施策の率 / card_program=カードの実効率、定額・率なし
+                // promotion は率を出さない)は resolveCardCampaignRate に集約(おトクタブと共有)
+                val resolved = resolveCardCampaignRate(campaign, card, rule.rateOverride)
                 // ブランド施策はどのカード会社のカードでも使えるため、バッジは特定カード名でなく
                 // ブランド名(Visa 等)を出す。ポイント倍率もカード固有の話なので出さない
                 val isBrandCampaign = campaign.cardBrand != null
@@ -580,13 +599,13 @@ class JudgmentEngine(private val data: PoikatsuData) {
                     campaign = campaign,
                     rule = rule,
                     badgeLabel = campaign.cardBrand ?: card.cardName,
-                    effectiveRate = effectiveRate,
+                    effectiveRate = resolved.effectiveRate,
                     discountAmount = campaign.discountAmount,
                     pointMultiplier = card.pointMultiplier.takeUnless { isBrandCampaign },
                     // ウエル活倍率はカードの実効率にだけ掛かっている。施策側の率を採用したときや
                     // カードの率を使わない定額施策で「ウエル活利用時の実質還元率」の注記が出ると
                     // 誤りなのでフラグを落とす(=カードの率を実際に表示したときだけ true)
-                    welcatsuApplied = card.welcatsuApplied && usesCardRate && !isBrandCampaign,
+                    welcatsuApplied = card.welcatsuApplied && resolved.usesCardRate && !isBrandCampaign,
                     // Google Pay が還元対象と公式が明記している施策だけウォレット起動リンクを出す
                     appLinks = listOfNotNull(campaign.walletAppLink),
                     today = today,

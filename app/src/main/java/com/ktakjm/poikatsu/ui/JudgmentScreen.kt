@@ -230,7 +230,15 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
             NoticeRow("事前エントリーが必要です(詳細ページから)", warningContainerColor(), onWarningContainerColor())
         }
         if (judgment.mayEndEarly) {
-            NoticeRow("予算上限あり。期限より早く終了する可能性があります", warningContainerColor(), onWarningContainerColor())
+            // 終了日なし: 「早期」の比較対象が無いため「予告なく終了」の言い回しにする。
+            // 終了日あり: 同梱側の該当は自治体施策(標準条項=予算型)なので予算に言及、
+            // カスタムは理由が分からないため予算と断定しない
+            val note = when {
+                judgment.campaign.periodEnd == null -> "終了日は未定です。予告なく終了する場合があります"
+                judgment.campaign.isCustom -> "期限より早く終了する可能性があります"
+                else -> "予算上限あり。期限より早く終了する可能性があります"
+            }
+            NoticeRow(note, warningContainerColor(), onWarningContainerColor())
         }
         if (judgment.benefitType == BenefitType.LOTTERY) {
             Text(
@@ -366,7 +374,7 @@ private fun RateRulesRows(judgment: CampaignJudgment) {
 
 /**
  * recurrence(繰り返し日付条件)の表示。対象日パターンと「今日は対象日」/「次の対象日」を出す。
- * 「お店」「地図」の判定は対象日のみ出るため通常は「今日は対象日」、期間限定タブ詳細では
+ * 「お店」「地図」の判定は対象日のみ出るため通常は「今日は対象日」、おトクタブ詳細では
  * 非対象日にも表示され「次の対象日」の案内になる。
  */
 @Composable

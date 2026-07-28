@@ -84,7 +84,7 @@ data class CustomPayment(
 data class CustomCampaign(
     /** 「custom:<UUID>」形式。同梱 campaigns.json の id と衝突しない採番 */
     val id: String,
-    /** キャンペーン名(期間限定タブ・判定カードのタイトル) */
+    /** キャンペーン名(おトクタブ・判定カードのタイトル) */
     val name: String,
     /** 旧スキーマ(単一決済)の残置。読み込み時に [normalized] で [payments] へ折り畳む */
     val cardId: String? = null,
@@ -96,6 +96,12 @@ data class CustomCampaign(
     val merchantIds: List<String> = emptyList(),
     /** カタログに無い店の自由入力店名。店名の部分一致でお店・地図タブにマッチさせる */
     val storeNames: List<String> = emptyList(),
+    /**
+     * 全店舗対象(#44)。決済手段が使える全加盟店対象の施策(抽選会等)で、お店を列挙できないもの。
+     * true のとき [merchantIds] / [storeNames] は持たせず、変換時に store_scope=external の
+     * 「おトクタブ専用施策」になる(お店・地図タブの判定には出ない)
+     */
+    val allStores: Boolean = false,
     /** 特典の型: "rebate"(後日還元) | "discount"(即時割引) | "lottery"(抽選) */
     val benefitType: String = "rebate",
     /** 還元率(%)。率で表せない特典は null にして [note] に書く */
@@ -110,8 +116,14 @@ data class CustomCampaign(
     val ineligibleNote: String = "",
     /** 開始日(YYYY-MM-DD)。null は開始済み扱い */
     val startDate: String? = null,
-    /** 終了日(YYYY-MM-DD)。null は期限なし(期限バッジを出さない) */
+    /** 終了日(YYYY-MM-DD)。null は [mayEndEarly] が無ければ常設(おトクタブの常設セクション) */
     val endDate: String? = null,
+    /**
+     * 早期終了があり得るか(campaigns.json の may_end_early と同じ意味)。終了日の有無と直交:
+     * [endDate] あり+true=期限より早く終わり得る注記、[endDate] なし+true=「終了日未定」の
+     * 期間限定扱い(予告なく終了の注記)、[endDate] なし+false=常設扱い
+     */
+    val mayEndEarly: Boolean = false,
     /** 対象曜日("MON"〜"SUN")。[daysOfMonth] と排他(campaigns.json の recurrence と同じ) */
     val daysOfWeek: List<String> = emptyList(),
     /** 対象日(1〜31) */
@@ -181,7 +193,7 @@ data class AppSettings(
      * card_brand 値から出すため、カタログ(payment_methods.json)にスキーマ追加は不要。
      */
     val ownedBrands: Set<String> = emptySet(),
-    /** 登録エリア(自治体単体 or グループ)。期間限定タブの地域フィルタに使う */
+    /** 登録エリア(自治体単体 or グループ)。おトクタブの地域フィルタに使う */
     val registeredAreas: List<RegisteredArea> = emptyList(),
     /** カタログ外のカスタムカード(登録順) */
     val customCards: List<CustomCard> = emptyList(),

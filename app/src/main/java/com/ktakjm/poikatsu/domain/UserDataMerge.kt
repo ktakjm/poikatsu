@@ -77,8 +77,8 @@ fun mergeUserData(
     }
     // カスタムキャンペーン(#7): 登録内容を Campaign(決済手段ごとに展開) / 合成 Merchant に
     // 変換して同梱データへ合流させる。以降は同梱施策と同じ経路で判定・表示される
-    // (お店/地図/期間限定)。operator には紐付け先決済手段の表示名を入れる
-    // (期間限定タブ詳細のバッジに使われる。ブランド指定はブランド名がバッジになるため未使用)
+    // (お店/地図/おトク)。operator には紐付け先決済手段の表示名を入れる
+    // (おトクタブ詳細のバッジに使われる。ブランド指定はブランド名がバッジになるため未使用)
     val paymentNames = (
         baseCards.map { it.id to it.cardName } +
             customCards.map { it.id to it.name } +

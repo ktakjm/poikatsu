@@ -63,6 +63,20 @@ class CampaignDisplayTitleTest {
     }
 
     @Test
+    fun `card_programは多チェーンでも他Nチェーンにせずcampaign名`() {
+        // 常設プログラムは固有名で呼ぶ(チェーン列挙のタイトルにすると施策の正体が分からない)
+        val c = promotion(merchantIds = listOf("welcia", "sugi", "tsuruha")).copy(type = "card_program")
+        assertEquals("公式表記のキャンペーン名(第2弾・最大20%)", campaignGroupDisplayTitle(c, merchantNames))
+    }
+
+    @Test
+    fun `card_programもdisplay_nameがあれば最優先`() {
+        val c = promotion(displayName = "○○カード ポイントアップ", merchantIds = listOf("welcia"))
+            .copy(type = "card_program")
+        assertEquals("○○カード ポイントアップ", campaignGroupDisplayTitle(c, merchantNames))
+    }
+
+    @Test
     fun `自治体はregionタイトルでdisplay_nameを参照しない`() {
         val c = Campaign(
             id = "m1",

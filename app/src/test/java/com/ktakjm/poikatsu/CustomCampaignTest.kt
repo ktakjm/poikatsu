@@ -20,6 +20,7 @@ import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.customCampaignBaseId
 import com.ktakjm.poikatsu.domain.customStoreMerchantId
 import com.ktakjm.poikatsu.domain.isCustom
+import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.toCampaigns
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -139,6 +140,30 @@ class CustomCampaignTest {
         assertEquals(listOf("百貨店カード", "テストペイ", "Amex"), campaigns.map { it.operator })
         // 率・条件は全決済で共通
         assertTrue(campaigns.all { it.rateBase == 10.0 })
+    }
+
+    @Test
+    fun `全店舗対象はexternalでmerchant_rulesを持たずおトクタブ専用になる`() {
+        // 店の残骸(トグル前の選択)が残っていても変換で無視される(保存経路でも捨てるが二重に防ぐ)
+        val allStores = custom(
+            merchantIds = listOf("mcdonalds"),
+            storeNames = listOf("駅前ベーカリー"),
+        ).copy(allStores = true)
+        val campaign = allStores.toCampaigns(::operatorFor).single()
+
+        assertEquals("external", campaign.storeScope)
+        assertTrue(campaign.merchantRules.isEmpty())
+        // 自由入力店名の合成 Merchant も作らない(地図の YOLP 検索対象に入れない)
+        assertTrue(buildCustomMerchants(listOf(allStores)).isEmpty())
+        // お店/地図タブの判定対象(managed)にも入らない
+        val engine = engineWith(listOf(allStores))
+        assertTrue(engine.activeManagedMerchantIds(LocalDate.of(2026, 7, 10)).isEmpty())
+    }
+
+    @Test
+    fun `お店指定ありは従来どおりmanaged`() {
+        val campaign = custom(merchantIds = listOf("mcdonalds")).toCampaigns(::operatorFor).single()
+        assertEquals("managed", campaign.storeScope)
     }
 
     @Test
@@ -334,6 +359,27 @@ class CustomCampaignTest {
         val judgment = engine.judgeAll(merchant, today).judgments.single()
         assertNull(judgment.daysRemaining)
         assertFalse(judgment.campaign.periodEnd != null)
+    }
+
+    @Test
+    fun `終了日の有無とmayEndEarlyの4パターンが同梱施策と同じ意味に写る`() {
+        fun convert(endDate: String?, mayEndEarly: Boolean) =
+            custom(merchantIds = listOf("mcdonalds"), endDate = endDate)
+                .copy(mayEndEarly = mayEndEarly)
+                .toCampaigns(::operatorFor).single()
+
+        // ①終了日あり: 通常の期間限定
+        assertTrue(convert("2026-08-31", false).isTimeLimited)
+        // ②終了日あり+早期終了: 期限より早く終わり得る注記(かなトク型の期限あり版)
+        val early = convert("2026-08-31", true)
+        assertTrue(early.isTimeLimited)
+        assertTrue(early.mayEndEarly)
+        // ③終了日なし: 常設(おトクタブの常設セクション行き)
+        assertFalse(convert(null, false).isTimeLimited)
+        // ④終了日なし+早期終了: 「終了日未定」の期間限定扱い(予告なく終了の注記)
+        val undecided = convert(null, true)
+        assertTrue(undecided.isTimeLimited)
+        assertTrue(undecided.mayEndEarly)
     }
 
     @Test

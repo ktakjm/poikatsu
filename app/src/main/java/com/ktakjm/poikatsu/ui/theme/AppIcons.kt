@@ -29,7 +29,7 @@ object AppIcons {
         )
     }
 
-    /** LocalOffer(値札)。下部ナビ「期間限定」タブと、キャンペーンを表す装飾用 */
+    /** LocalOffer(値札)。下部ナビ「おトク」タブと、キャンペーンを表す装飾用 */
     val LocalOffer: ImageVector by lazy {
         materialIconFromPath(
             "LocalOffer",

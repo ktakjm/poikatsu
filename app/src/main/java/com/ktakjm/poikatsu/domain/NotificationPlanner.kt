@@ -43,7 +43,7 @@ data class CampaignNotification(
 }
 
 /**
- * 通知対象の施策を「自分に関係するもの」へ絞る。期間限定タブ(全件表示あり)より狭く、
+ * 通知対象の施策を「自分に関係するもの」へ絞る。おトクタブ(全件表示あり)より狭く、
  * 能動的に知らせる通知なので誤配を避けて「出さない」側に倒す:
  * - 自治体施策: 登録エリアに厳密一致するもののみ([municipalCampaignsForAreas] と同じ基準)
  * - promotion: カスタムキャンペーン(本人登録)と、所有カード/ブランド/利用中コード決済に紐づくもの
@@ -100,7 +100,7 @@ fun planCampaignNotifications(targets: List<Campaign>, today: LocalDate): List<C
         }
     }
 
-/** 通知本文の1行分。タイトルは期間限定タブと同じ略記優先(display_name → name) */
+/** 通知本文の1行分。タイトルはおトクタブと同じ略記優先(display_name → name) */
 fun notificationLine(notification: CampaignNotification): String {
     val title = notification.campaign.displayName ?: notification.campaign.name
     return when (notification.kind) {

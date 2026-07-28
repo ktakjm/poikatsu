@@ -175,7 +175,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
     val selectedTab = state.selectedTab
 
     // カスタムキャンペーンの追加/編集ダイアログ。NEW_CUSTOM_CAMPAIGN(id 空)なら新規、null なら非表示。
-    // 期間限定タブの一覧(追加行)と施策詳細(編集・削除)のどちらからも開くためここに置く
+    // おトクタブの一覧(追加行)と施策詳細(編集・削除)のどちらからも開くためここに置く
     var editingCustomCampaign by remember { mutableStateOf<CustomCampaign?>(null) }
     var deletingCustomCampaign by remember { mutableStateOf<CustomCampaign?>(null) }
 
@@ -257,7 +257,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                 )
                 selectedTab == AppTab.NEARBY -> Unit
                 selectedTab == AppTab.SEARCH -> TopAppBar(title = { Text("ポイ活ナビ") })
-                selectedTab == AppTab.CAMPAIGNS -> TopAppBar(title = { Text("期間限定キャンペーン") })
+                selectedTab == AppTab.CAMPAIGNS -> TopAppBar(title = { Text("おトク") })
                 selectedTab == AppTab.SETTINGS -> TopAppBar(title = { Text("設定") })
             }
         },
@@ -296,7 +296,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         selected = selectedTab == AppTab.CAMPAIGNS,
                         onClick = { if (selectedTab != AppTab.CAMPAIGNS) viewModel.onSelectTab(AppTab.CAMPAIGNS) },
                         icon = { Icon(AppIcons.LocalOffer, contentDescription = null) },
-                        label = { Text("期間限定") },
+                        label = { Text("おトク") },
                     )
                     NavigationBarItem(
                         selected = selectedTab == AppTab.SETTINGS,
@@ -510,11 +510,12 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                 }
                 selectedTab == AppTab.CAMPAIGNS -> PaddedColumn {
                     CampaignPane(
-                        activeCampaigns = state.timeLimitedActive,
-                        upcomingCampaigns = state.timeLimitedUpcoming,
+                        activeCampaigns = state.campaignsActive,
+                        upcomingCampaigns = state.campaignsUpcoming,
                         expiredCustomCampaigns = state.expiredCustomCampaigns,
                         merchantNames = state.merchantNames,
                         campaignColors = state.campaignBrandColors,
+                        personalRates = state.campaignPersonalRates,
                         filter = state.campaignFilter,
                         onFilterChange = viewModel::onSetCampaignFilter,
                         showRegionChip = state.registeredAreas.isNotEmpty() &&
@@ -699,7 +700,7 @@ private fun SearchPane(
 
 /**
  * お店タブ初期画面の自治体施策お知らせバナー。施策の中身は出さず「あること」だけ知らせ、
- * タップで期間限定タブ(自治体フィルタ)へ送る。判定詳細(店舗カードタップ後)には出さない
+ * タップでおトクタブ(自治体フィルタ)へ送る。判定詳細(店舗カードタップ後)には出さない
  * (チェーン店は自治体施策の対象外が多く、店舗単位の断定はできないため)。
  */
 @Composable
@@ -734,7 +735,7 @@ private fun MunicipalCampaignBanner(areaNames: List<String>, onClick: () -> Unit
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
-                    "期間限定タブで詳細を確認できます",
+                    "おトクタブで詳細を確認できます",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

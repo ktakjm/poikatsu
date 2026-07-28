@@ -18,9 +18,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
@@ -33,7 +36,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -68,6 +74,8 @@ internal fun CampaignPane(
     expiredCustomCampaigns: List<Campaign>,
     merchantNames: Map<String, String>,
     campaignColors: Map<String, String>,
+    /** 施策 id → ユーザー実効率(所有カードの card_program のみ。お店タブと同じ基準の表示レート上書き) */
+    personalRates: Map<String, Double>,
     filter: CampaignFilter,
     onFilterChange: (CampaignFilter) -> Unit,
     /** 登録エリアによる絞り込みチップを出すか(自治体登録あり かつ マスタ読込済みのとき) */
@@ -95,10 +103,10 @@ internal fun CampaignPane(
                     tint = MaterialTheme.colorScheme.outline,
                 )
                 Spacer(Modifier.height(16.dp))
-                Text("期間限定キャンペーンはありません", style = MaterialTheme.typography.titleMedium)
+                Text("おトクな施策はありません", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "カード会社の期間限定キャンペーンや自治体のキャッシュレス還元施策が登録されると、ここに表示されます。右下の＋からは会員ポータル限定クーポンなどを自分で登録できます。",
+                    "カード会社のキャンペーンや自治体のキャッシュレス還元施策、常設のポイントアップ施策が登録されると、ここに表示されます。右下の＋からは会員ポータル限定クーポンなどを自分で登録できます。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.outline,
                 )
@@ -118,10 +126,19 @@ internal fun CampaignPane(
     val upcomingGroups = remember(upcomingCampaigns, filter) {
         groupCampaignsForDisplay(upcomingCampaigns.filter(filterFn))
     }
-    // recurrence 施策で今日が対象日でないグループは「開催中」と混ぜず別セクションに出す
-    // (期間内=開催中だが今日は使えないため。カード内で「次の対象日」を案内する)
+    // 常設(isTimeLimited=false。card_program・常設 promotion・終了日なしカスタム)は
+    // 期間限定の「開催中」と混ぜず専用セクションに出す
     val today = LocalDate.now()
-    val (activeGroups, offDayGroups) = allActiveGroups.partition { group ->
+    val (allPermanentGroups, timeLimitedActiveGroups) = allActiveGroups.partition { group ->
+        group.none { it.isTimeLimited }
+    }
+    // recurrence 施策で今日が対象日でないグループは「開催中」「常設」と混ぜず別セクションに出す
+    // (期間内=開催中だが今日は使えないため。カード内で「次の対象日」を案内する)。
+    // 常設側もたぬきの抽選会(毎月5/8/15/25日)のような recurrence 持ちがあるため同じ振り分けをする
+    val (activeGroups, offDayGroups) = timeLimitedActiveGroups.partition { group ->
+        group.any { isTargetDay(it, today) }
+    }
+    val (permanentGroups, permanentOffDayGroups) = allPermanentGroups.partition { group ->
         group.any { isTargetDay(it, today) }
     }
 
@@ -158,7 +175,20 @@ internal fun CampaignPane(
                 )
             }
             items(activeGroups, key = { it.first().id }) { group ->
-                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, onClick = { onSelectGroup(group) })
+                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, personalRates, onClick = { onSelectGroup(group) })
+            }
+        }
+        if (permanentGroups.isNotEmpty()) {
+            item {
+                Text(
+                    "常設",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+            }
+            items(permanentGroups, key = { "permanent_${it.first().id}" }) { group ->
+                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, personalRates, onClick = { onSelectGroup(group) })
             }
         }
         if (offDayGroups.isNotEmpty()) {
@@ -171,7 +201,20 @@ internal fun CampaignPane(
                 )
             }
             items(offDayGroups, key = { "offday_${it.first().id}" }) { group ->
-                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, onClick = { onSelectGroup(group) })
+                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, personalRates, onClick = { onSelectGroup(group) })
+            }
+        }
+        if (permanentOffDayGroups.isNotEmpty()) {
+            item {
+                Text(
+                    "常設（本日対象外）",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+            }
+            items(permanentOffDayGroups, key = { "permanent_offday_${it.first().id}" }) { group ->
+                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, personalRates, onClick = { onSelectGroup(group) })
             }
         }
         if (upcomingGroups.isNotEmpty()) {
@@ -184,7 +227,7 @@ internal fun CampaignPane(
                 )
             }
             items(upcomingGroups, key = { "upcoming_${it.first().id}" }) { group ->
-                CampaignSummaryCard(group, CampaignStatus.UPCOMING, merchantNames, campaignColors, onClick = { onSelectGroup(group) })
+                CampaignSummaryCard(group, CampaignStatus.UPCOMING, merchantNames, campaignColors, personalRates, onClick = { onSelectGroup(group) })
             }
         }
         if (allActiveGroups.isEmpty() && upcomingGroups.isEmpty()) {
@@ -220,6 +263,7 @@ internal fun CampaignPane(
                     CampaignStatus.EXPIRED,
                     merchantNames,
                     campaignColors,
+                    personalRates,
                     onClick = { onSelectGroup(group) },
                 )
             }
@@ -239,19 +283,23 @@ private fun CampaignSummaryCard(
     status: CampaignStatus,
     merchantNames: Map<String, String>,
     campaignColors: Map<String, String>,
+    personalRates: Map<String, Double>,
     onClick: () -> Unit,
 ) {
     val today = LocalDate.now()
     val first = campaigns.first()
     val title = campaignGroupDisplayTitle(first, merchantNames)
     val hasTimeLimited = campaigns.any { it.isTimeLimited }
-    val maxBenefit = campaignGroupMaxBenefit(campaigns)
+    val maxBenefit = campaignGroupMaxBenefit(campaigns, personalRates)
 
     val allEnds = campaigns.mapNotNull { c -> c.periodEnd?.let { LocalDate.parse(it) } }
     val allStarts = campaigns.mapNotNull { c -> c.periodStart?.let { LocalDate.parse(it) } }
     val earliestStart = allStarts.minOrNull()
     val latestEnd = allEnds.maxOrNull()
+    // 常設(期間限定でない)グループは「常設」セクションの見出しが期間の説明を兼ねるため、
+    // 日付が一切無ければ期間行を出さない(「終了日未定」は may_end_early=期間限定側の表現)
     val periodLabel = buildPeriodLabel(earliestStart, latestEnd)
+        .takeUnless { !hasTimeLimited && earliestStart == null && latestEnd == null }
     val daysInfo = daysInfo(status, today, earliestStart, latestEnd)
 
     val fallback = MaterialTheme.colorScheme.primary
@@ -293,20 +341,26 @@ private fun CampaignSummaryCard(
                             ProductScopeBadge()
                         }
                     }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(periodLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        daysInfo?.let { (label, urgent) ->
-                            Text(
-                                label,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (urgent) warningColor() else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                    if (periodLabel != null || daysInfo != null) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            periodLabel?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            daysInfo?.let { (label, urgent) ->
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (urgent) warningColor() else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
-                    // 早期終了があり得る施策では「残り○日」が断定に見えないよう注記を添える
+                    // 早期終了があり得る施策では「残り○日」が断定に見えないよう注記を添える。
+                    // 終了日が無い施策では比較対象の期限が無く「早期」がズレるため、
+                    // 「予告なく終了」の言い回しに変える(期間ラベル「終了日未定」の補完)
                     if (campaigns.any { it.mayEndEarly }) {
                         Surface(
                             color = warningContainerColor(),
@@ -314,7 +368,7 @@ private fun CampaignSummaryCard(
                             shape = RoundedCornerShape(4.dp),
                         ) {
                             Text(
-                                "※早期終了の可能性あり",
+                                if (latestEnd == null) "※予告なく終了する場合があります" else "※早期終了の可能性あり",
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                                 style = MaterialTheme.typography.labelSmall,
                             )
@@ -406,11 +460,18 @@ internal fun CampaignDetail(
     }
 }
 
+/** 対象チェーン列挙をこの件数以下ならそのまま全部出す(超えたら折りたたむ) */
+private const val TARGET_CHAINS_COLLAPSE_THRESHOLD = 6
+
+/** 折りたたみ時に見せる先頭チェーン数(残りは「他N」に畳む) */
+private const val TARGET_CHAINS_COLLAPSED_COUNT = 4
+
 /**
  * 対象チェーンの地図ブリッジ。主動線はお店タブと同じ FilledTonalButton(全チェーンで地図へ)。
  * チェーン個別の絞り込みは地図タブ側のフィルタピル(各✕で解除)に一本化し、ここではやらない
  * (チップだと「単独チェーンで地図表示」のアクションに読めないため廃止。2026-07)。
- * 複数チェーンのときは対象チェーン名の一覧を情報表示として添える。
+ * 複数チェーンのときは対象チェーン名の一覧を情報表示として添える(多数のときは先頭数件+
+ * 「他N」に畳み、タップで全展開。常設 card_program の 30 チェーン級で詳細が埋まらないように)。
  * 開始前・recurrence 非対象日でも遷移は許可する(店舗の場所の下見用途。ブリッジ中の
  * チェーンは YOLP 検索対象に加わるが、判定が無いため還元率ラベルは出ない)。
  * その旨とタイミング(開始日/次の対象日)は warning 色の注意面(container 対)で目立たせる。
@@ -437,11 +498,50 @@ private fun TargetChainSection(
         }
         if (chainIds.size >= 2) {
             val names = chainIds.mapNotNull { merchantNames[it] }
-            Text(
-                "対象: ${names.joinToString("・")}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (names.size <= TARGET_CHAINS_COLLAPSE_THRESHOLD) {
+                Text(
+                    "対象: ${names.joinToString("・")}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                // 多チェーン施策(SMCC/MUFG の常設プログラム等)は全列挙が長大になるため先頭だけ
+                // 見せて畳む。展開できることが伝わるよう行全体をタップ可能な面(chevron 付き)にする
+                var expanded by remember(chainIds) { mutableStateOf(false) }
+                val label = if (expanded) {
+                    "対象: ${names.joinToString("・")}"
+                } else {
+                    "対象: ${names.take(TARGET_CHAINS_COLLAPSED_COUNT).joinToString("・")} " +
+                        "他${names.size - TARGET_CHAINS_COLLAPSED_COUNT}"
+                }
+                Surface(
+                    onClick = { expanded = !expanded },
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                    ) {
+                        Text(
+                            label,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Icon(
+                            if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = if (expanded) "対象のお店を折りたたむ" else "対象のお店をすべて表示",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            }
         }
         if (!isTarget) {
             val note = if (!started) {
@@ -477,15 +577,20 @@ private fun TargetChainSection(
  * 表示する数字が「変動する率の最大値」のとき(店舗別 rate_override・条件別 rate_rules・
  * グループ内で率の異なる複数施策)と、対象商品限定(product_scope。全商品には効かない)のときは
  * 「最大」を冠し、一律の率と誤認されないようにする。
+ * [personalRates] に載っている施策(所有カードの card_program)は rate_base の代わりに
+ * ユーザー実効率(ウエル活込み)で出す(お店タブの判定と同じ値になる)。
  */
-private fun campaignGroupMaxBenefit(campaigns: List<Campaign>): String? {
+private fun campaignGroupMaxBenefit(
+    campaigns: List<Campaign>,
+    personalRates: Map<String, Double> = emptyMap(),
+): String? {
     val comparable = campaigns.filter { BenefitType.fromString(it.benefitType) != BenefitType.LOTTERY }
     if (comparable.isEmpty()) return "抽選"
     val type = BenefitType.fromString(comparable.first().benefitType)
     val allRates = comparable.flatMap { c ->
         c.merchantRules.mapNotNull { it.rateOverride } +
             c.rateRules.map { it.rate } +
-            listOfNotNull(c.rateBase)
+            listOfNotNull(personalRates[c.id] ?: c.rateBase)
     }
     val maxRate = allRates.maxOrNull()
     val maxDiscount = comparable.mapNotNull { it.discountAmount }.maxOrNull()

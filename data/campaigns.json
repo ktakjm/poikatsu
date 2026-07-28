@@ -1,6 +1,6 @@
 {
   "schema_version": 11,
-  "updated_at": "2026-07-23",
+  "updated_at": "2026-07-29",
   "campaigns": [
     {
       "id": "smcc_combini_restaurant",
@@ -10,6 +10,7 @@
       "operator": "三井住友カード",
       "card_id": "smcc",
       "name": "対象のコンビニ・飲食店で最大8%還元",
+      "display_name": "三井住友カード コンビニ・飲食店のタッチ決済",
       "payment_instruction": "スマホのVisaタッチ決済 / Mastercardタッチ決済、または対象チェーンのモバイルオーダーで支払う",
       "eligible_wallets": ["apple_pay", "google_pay"],
       "rate_base": 7.0,
@@ -79,6 +80,7 @@
       "operator": "三菱UFJカード",
       "card_id": "mufg",
       "name": "ポイントアッププログラム(最大20%還元)",
+      "display_name": "三菱UFJカード ポイントアッププログラム",
       "payment_instruction": "クレジットカード払い・カードのタッチ決済・Apple Pay(QUICPay)で支払う ※スマホのタッチ決済は対象外",
       "eligible_wallets": ["apple_pay"],
       "ineligible_wallets": ["google_pay"],
@@ -463,6 +465,31 @@
       ],
       "detail_url": "https://www.matsuyafoods.co.jp/matsuya/whatsnew/campaign/160563.html",
       "verified_date": "2026-07-13"
+    },
+    {
+      "id": "aupay_tanuki_lottery",
+      "type": "promotion",
+      "benefit_type": "lottery",
+      "store_scope": "external",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "たぬきの吉日 たぬきの抽選会",
+      "payment_instruction": "au PAY(コード支払い・ネット支払い・請求書支払い・auかんたん決済)で1回200円(税込)以上支払う",
+      "period_start": null,
+      "period_end": null,
+      "recurrence": { "days_of_month": [5, 8, 15, 25] },
+      "min_purchase": 200,
+      "eligible_notes": [
+        "エントリー不要",
+        "Pontaポイントが必ず当たる(最大3,000ポイント)"
+      ],
+      "memo": [
+        "全加盟店対象の常設抽選(store_scope=external。毎月5・15・25日=5のつく日と8日に開催)",
+        "当選ポイント数は抽選(当選確率の公表なし)",
+        "au/UQ mobileユーザー向けの上乗せ特典(要エントリー)は2026-06-30で終了済み"
+      ],
+      "detail_url": "https://aupay.auone.jp/contents/lp/tanukichi/index.html",
+      "verified_date": "2026-07-29"
     },
     {
       "id": "suginami_paypay_2026_06",

@@ -163,7 +163,7 @@ internal fun areaDisplayName(area: RegisteredArea): String = "${area.prefecture}
  * 未登録時は「未登録」だけだと登録する動機が伝わらないため、効果を一言添える。
  */
 internal fun municipalitySummary(areas: List<RegisteredArea>): String = when {
-    areas.isEmpty() -> "未登録(登録すると期間限定タブを地域のキャンペーンに絞れます)"
+    areas.isEmpty() -> "未登録(登録するとおトクタブを地域のキャンペーンに絞れます)"
     areas.size == 1 -> areaDisplayName(areas.first())
     else -> "${areaDisplayName(areas.first())} ほか${areas.size - 1}件"
 }
@@ -392,11 +392,14 @@ internal fun formatPeriodDate(date: LocalDate): String =
     date.format(java.time.format.DateTimeFormatter.ofPattern("yyyy/MM/dd"))
 
 /**
- * 期間テキスト("2026/07/01〜2026/07/31")。開始日・終了日とも無い施策は「終了日未定」
- * (常設や期限未発表の施策。空欄・「〜」だけの表示にしない)。
+ * 期間テキスト("2026/07/01〜2026/07/31")。開始日・終了日とも無い施策は、早期終了があり得る
+ * (may_end_early。期限未発表)なら「終了日未定」、そうでなければ「常設」
+ * (空欄・「〜」だけの表示にしない)。
  */
 internal fun formatPeriod(campaign: Campaign): String {
-    if (campaign.periodStart == null && campaign.periodEnd == null) return "終了日未定"
+    if (campaign.periodStart == null && campaign.periodEnd == null) {
+        return if (campaign.mayEndEarly) "終了日未定" else "常設"
+    }
     return buildString {
         campaign.periodStart?.let { append(formatPeriodDate(LocalDate.parse(it))) }
         append("〜")
@@ -566,6 +569,8 @@ internal fun MinPurchaseRow(minPurchase: Int?, scope: String = MIN_PURCHASE_SCOP
 /**
  * キャンペーングループの表示タイトル。
  * 自治体: "都道府県名 自治体名"(県全域施策は県名のみ。「神奈川県 神奈川県」にしない)、
+ * card_program: display_name → campaign.name(常設プログラムは固有名で呼ぶ。多チェーンでも
+ * 「{先頭チェーン} 他Nチェーン」にしない)、
  * それ以外はフォールバック連鎖: display_name → 単一チェーンは merchant 名 →
  * 複数チェーンは「{先頭チェーン} 他Nチェーン」(→ merchant_rules が無ければ campaign.name)。
  * 多チェーン施策が先頭 merchant 名だけで「1チェーンの施策」に見えないようにする。
@@ -575,6 +580,8 @@ internal fun campaignGroupDisplayTitle(first: Campaign, merchantNames: Map<Strin
         val prefecture = first.region?.prefecture ?: ""
         val name = first.region?.name ?: first.name
         if (prefecture.isNotBlank() && name != prefecture) "$prefecture $name" else name
+    } else if (first.campaignType == CampaignType.CARD_PROGRAM) {
+        first.displayName ?: first.name
     } else {
         first.displayName ?: run {
             val chainIds = first.merchantRules.map { it.merchantId }.distinct()

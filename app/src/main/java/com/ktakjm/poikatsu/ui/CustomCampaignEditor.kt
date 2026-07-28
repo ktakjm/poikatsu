@@ -44,6 +44,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -132,12 +133,14 @@ internal fun CustomCampaignEditorScreen(
     var merchantIds by remember { mutableStateOf(initial?.merchantIds.orEmpty().toSet()) }
     var storeNames by remember { mutableStateOf(initial?.storeNames.orEmpty()) }
     var storeNameInput by remember { mutableStateOf("") }
+    var allStores by remember { mutableStateOf(initial?.allStores == true) }
     var benefitType by remember { mutableStateOf(initial?.benefitType ?: "rebate") }
     var rateText by remember { mutableStateOf(initial?.rate?.let { trimRate(it) }.orEmpty()) }
     var discountText by remember { mutableStateOf(initial?.discountAmount?.toString().orEmpty()) }
     var note by remember { mutableStateOf(initial?.note.orEmpty()) }
     var startDate by remember { mutableStateOf(initial?.startDate?.let { LocalDate.parse(it) }) }
     var endDate by remember { mutableStateOf(initial?.endDate?.let { LocalDate.parse(it) }) }
+    var mayEndEarly by remember { mutableStateOf(initial?.mayEndEarly == true) }
     var showStartPicker by remember { mutableStateOf(false) }
     var showEndPicker by remember { mutableStateOf(false) }
     var recurrenceMode by remember {
@@ -194,8 +197,10 @@ internal fun CustomCampaignEditorScreen(
         RecurrenceMode.MONTHLY -> !daysOfMonth.isNullOrEmpty()
     }
     val periodError = startDate != null && endDate != null && startDate!! > endDate!!
-    // 自由入力欄に書きかけ(未チップ化)の店名も保存時に取り込むため、店舗ありとみなす
-    val hasStore = merchantIds.isNotEmpty() || storeNames.isNotEmpty() || storeNameInput.isNotBlank()
+    // 自由入力欄に書きかけ(未チップ化)の店名も保存時に取り込むため、店舗ありとみなす。
+    // 全店舗対象トグル ON はお店の指定が不要(選び忘れの誤登録と区別するため明示トグルにしている)
+    val hasStore = allStores ||
+        merchantIds.isNotEmpty() || storeNames.isNotEmpty() || storeNameInput.isNotBlank()
     // 抽選は率・額を持たない(「抽選」表示)。それ以外は率・定額・メモのどれかが必要
     val hasBenefit = isLottery || rate != null || discount != null || note.isNotBlank()
     val minPurchase = minPurchaseText.trim().toIntOrNull()
@@ -225,8 +230,10 @@ internal fun CustomCampaignEditorScreen(
             id = initial?.id.orEmpty(),
             name = name.trim(),
             payments = selectedPaymentKeys.mapNotNull { optionsByKey[it]?.toPayment() },
-            merchantIds = merchantIds.toList(),
-            storeNames = storeNames,
+            // 全店舗対象はお店を持たせない(トグル前に選んだ内容は保存時に捨てる)
+            merchantIds = if (allStores) emptyList() else merchantIds.toList(),
+            storeNames = if (allStores) emptyList() else storeNames,
+            allStores = allStores,
             benefitType = benefitType,
             // 抽選は率・額を持たせない(型を切り替える前の入力値を残さない)
             rate = rate.takeUnless { isLottery },
@@ -236,6 +243,7 @@ internal fun CustomCampaignEditorScreen(
             ineligibleNote = ineligibleNote.trim(),
             startDate = startDate?.toString(),
             endDate = endDate?.toString(),
+            mayEndEarly = mayEndEarly,
             daysOfWeek = if (recurrenceMode == RecurrenceMode.WEEKLY) {
                 WEEK_DAYS.map { it.first }.filter { it in daysOfWeek }
             } else {
@@ -263,7 +271,7 @@ internal fun CustomCampaignEditorScreen(
             .padding(bottom = 24.dp),
     ) {
         Text(
-            "会員ポータル限定クーポンなど、アプリに未登録のキャンペーンを自分で登録できます。登録するとお店・地図・期間限定タブに表示されます。",
+            "会員ポータル限定クーポンなど、アプリに未登録のキャンペーンを自分で登録できます。登録するとお店・地図・おトクタブに表示されます。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline,
         )
@@ -315,63 +323,87 @@ internal fun CustomCampaignEditorScreen(
 
         // --- 対象店舗 ---
         EditorSectionHeader("対象のお店")
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+        // 全店舗対象(#44): 抽選会など「その支払い方法が使える全てのお店」が対象でお店を列挙
+        // できない施策。選び忘れの誤登録と区別するため、暗黙(店なし=全店舗)でなく明示トグル
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { allStores = !allStores },
         ) {
-            ChainPickerDropdown(
-                chains = chains,
-                selectedIds = merchantIds,
-                onToggle = { id ->
-                    merchantIds = if (id in merchantIds) merchantIds - id else merchantIds + id
-                },
-            )
-            chains.filter { it.id in merchantIds }.forEach { m ->
-                InputChip(
-                    selected = true,
-                    onClick = { merchantIds = merchantIds - m.id },
-                    label = { Text(m.name) },
-                    trailingIcon = {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = "${m.name}を外す",
-                            modifier = Modifier.size(18.dp),
-                        )
+            Column(Modifier.weight(1f)) {
+                Text("お店を指定しない(全店舗対象)", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    if (allStores) {
+                        "支払い方法が使える全てのお店が対象の施策として、おトクタブにのみ表示されます(お店・地図タブの判定には出ません)。"
+                    } else {
+                        "抽選会など、その支払い方法の全加盟店が対象のキャンペーン向け。"
                     },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
                 )
             }
-            storeNames.forEach { storeName ->
-                InputChip(
-                    selected = true,
-                    onClick = { storeNames = storeNames - storeName },
-                    label = { Text(storeName) },
-                    trailingIcon = {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = "${storeName}を外す",
-                            modifier = Modifier.size(18.dp),
-                        )
-                    },
-                )
-            }
+            Switch(checked = allStores, onCheckedChange = { allStores = it })
         }
-        OutlinedTextField(
-            value = storeNameInput,
-            onValueChange = { storeNameInput = it },
-            label = { Text("一覧に無いお店の名前を入力") },
-            placeholder = { Text("例: ○○ベーカリー") },
-            singleLine = true,
-            supportingText = { Text("入力した名前の部分一致でお店・地図タブにマッチします") },
-            trailingIcon = {
-                IconButton(
-                    onClick = { commitStoreNameInput() },
-                    enabled = storeNameInput.isNotBlank(),
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "お店の名前を追加")
+        if (!allStores) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                ChainPickerDropdown(
+                    chains = chains,
+                    selectedIds = merchantIds,
+                    onToggle = { id ->
+                        merchantIds = if (id in merchantIds) merchantIds - id else merchantIds + id
+                    },
+                )
+                chains.filter { it.id in merchantIds }.forEach { m ->
+                    InputChip(
+                        selected = true,
+                        onClick = { merchantIds = merchantIds - m.id },
+                        label = { Text(m.name) },
+                        trailingIcon = {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "${m.name}を外す",
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                    )
                 }
-            },
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-        )
+                storeNames.forEach { storeName ->
+                    InputChip(
+                        selected = true,
+                        onClick = { storeNames = storeNames - storeName },
+                        label = { Text(storeName) },
+                        trailingIcon = {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "${storeName}を外す",
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                    )
+                }
+            }
+            OutlinedTextField(
+                value = storeNameInput,
+                onValueChange = { storeNameInput = it },
+                label = { Text("一覧に無いお店の名前を入力") },
+                placeholder = { Text("例: ○○ベーカリー") },
+                singleLine = true,
+                supportingText = { Text("入力した名前の部分一致でお店・地図タブにマッチします") },
+                trailingIcon = {
+                    IconButton(
+                        onClick = { commitStoreNameInput() },
+                        enabled = storeNameInput.isNotBlank(),
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "お店の名前を追加")
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            )
+        }
 
         // --- 還元内容 ---
         EditorSectionHeader("還元内容")
@@ -458,6 +490,34 @@ internal fun CustomCampaignEditorScreen(
             onPick = { showEndPicker = true },
             onClear = { endDate = null },
         )
+        // 早期終了フラグ(campaigns.json の may_end_early と同じ意味)。終了日の有無と直交する
+        // 4 パターンに対応: 終了日あり+ON=期限より早く終わり得る注記、終了日なし+ON=「終了日未定」
+        // (予告なく終了の注記)、終了日なし+OFF=常設(おトクタブの常設セクション)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { mayEndEarly = !mayEndEarly },
+        ) {
+            Checkbox(checked = mayEndEarly, onCheckedChange = { mayEndEarly = it })
+            Column {
+                Text("早期終了の可能性あり", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    when {
+                        mayEndEarly && endDate != null ->
+                            "期限より早く終了する可能性がある旨の注記付きで表示されます。"
+                        mayEndEarly ->
+                            "「終了日未定」のキャンペーンとして、予告なく終了する場合がある旨の注記付きで表示されます。"
+                        endDate == null ->
+                            "チェックしない場合は常設の施策として「常設」セクションに表示されます。"
+                        else ->
+                            "予算到達などで期限より早く終わり得る場合にチェックします。"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
+        }
         if (periodError) {
             Text(
                 "開始日が終了日より後になっています",

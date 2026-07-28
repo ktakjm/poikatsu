@@ -188,7 +188,7 @@ data class Campaign(
     @SerialName("card_brand") val cardBrand: String? = null,
     val name: String,
     /**
-     * 期間限定タブのカード表示用の短いタイトル(任意)。実質、多チェーン promotion 専用
+     * おトクタブのカード表示用の短いタイトル(任意)。実質、多チェーン promotion 専用
      * (単一チェーンは merchant 名、自治体系は region タイトルで足りる)。name は公式表記の写し
      * (照合キー+判定詳細の説明文)の役割を持つため、略記の編集判断はこちらに分離する。
      * 未指定時のフォールバック: 単一チェーンは merchant 名 → 複数チェーンは「{先頭チェーン} 他Nチェーン」。
@@ -238,7 +238,7 @@ data class Campaign(
     @SerialName("requires_entry") val requiresEntry: Boolean = false,
     @SerialName("usage_limit") val usageLimit: Int? = null,
     @SerialName("usage_limit_note") val usageLimitNote: String? = null,
-    /** 予算到達次第の早期終了があり得るか(自治体系はほぼ全件 true)。判定詳細・期間限定タブに注記を出す */
+    /** 予算到達次第の早期終了があり得るか(自治体系はほぼ全件 true)。判定詳細・おトクタブに注記を出す */
     @SerialName("may_end_early") val mayEndEarly: Boolean = false,
     /**
      * 公式が「還元対象」と明記しているウォレット("apple_pay" / "google_pay")。
@@ -352,7 +352,7 @@ data class PaymentMethodsFile(
 
 /**
  * 自治体マスタ。scripts/generate_municipalities.py が気象庁の予報区データから生成する
- * (スキーマの詳細は data/README.md)。設定画面のピッカーと、期間限定タブの
+ * (スキーマの詳細は data/README.md)。設定画面のピッカーと、おトクタブの
  * 地域フィルタ(グループ→自治体コードの展開)に使う。
  */
 @Serializable
