@@ -194,6 +194,11 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
     // おトクタブの一覧(追加行)と施策詳細(編集・削除)のどちらからも開くためここに置く
     var editingCustomCampaign by remember { mutableStateOf<CustomCampaign?>(null) }
     var deletingCustomCampaign by remember { mutableStateOf<CustomCampaign?>(null) }
+    // 編集エディタを閉じようとしたとき(戻る・✕)は、入力内容の破棄確認を挟む。閉じる導線
+    // (topBar の✕・BackHandler)は直接 null にせずこの関数を通し、確認ダイアログを出す。
+    // 保存(onSave)は別経路なので確認を挟まない
+    var confirmCloseEditor by remember { mutableStateOf(false) }
+    val requestCloseEditor = { confirmCloseEditor = true }
 
     // 「地図」タブ表示中だけ現在地を継続購読して青ドットを追従させる(カメラ移動・YOLP 再検索はしない)。
     // タブ離脱で composition から外れ、バックグラウンドでは repeatOnLifecycle(STARTED) が止めるので
@@ -289,7 +294,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             )
                         },
                         navigationIcon = {
-                            IconButton(onClick = { editingCustomCampaign = null }) {
+                            IconButton(onClick = requestCloseEditor) {
                                 Icon(Icons.Default.Close, contentDescription = "閉じる")
                             }
                         },
@@ -431,7 +436,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                                 }
                                 editingCustomCampaign = null
                             },
-                            onClose = { editingCustomCampaign = null },
+                            onClose = requestCloseEditor,
                         )
                     }
                     // 店舗判定・判定詳細の全画面オーバーレイ(overlay* は二ペイン時 null=詳細ペイン内表示)。
@@ -731,6 +736,29 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                 }
             }
         }
+    }
+
+    // エディタを閉じる前の破棄確認(戻る・✕ から要求される)。入力途中の内容が消えるため確認する
+    if (confirmCloseEditor && editingCustomCampaign != null) {
+        val isNew = editingCustomCampaign!!.id.isEmpty()
+        AlertDialog(
+            onDismissRequest = { confirmCloseEditor = false },
+            title = { Text(if (isNew) "入力を破棄しますか？" else "編集を破棄しますか？") },
+            text = {
+                Text("入力した内容は保存されません。", style = MaterialTheme.typography.bodyMedium)
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    editingCustomCampaign = null
+                    confirmCloseEditor = false
+                }) { Text("閉じる") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmCloseEditor = false }) {
+                    Text(if (isNew) "入力を続ける" else "編集を続ける")
+                }
+            },
+        )
     }
 
     deletingCustomCampaign?.let { campaign ->
