@@ -116,6 +116,7 @@ import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.CustomCampaign
 import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.Merchant
+import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.customCampaignBaseId
 import com.ktakjm.poikatsu.domain.isCustom
 import com.ktakjm.poikatsu.ui.theme.AppIcons
@@ -213,17 +214,24 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
     // 一ペインの窓では従来どおり全画面オーバーレイ(縦画面と同じ見え方)になる。
     val paneDirective = calculatePaneScaffoldDirective(currentWindowAdaptiveInfo())
     val searchTwoPane = selectedTab == AppTab.SEARCH && paneDirective.maxHorizontalPartitions > 1
+    // おトクタブも同じ基準で一覧+施策詳細の二ペインにする(#55)。施策詳細はタブ非依存の
+    // オーバーレイ(お店タブのバナー・地図タブのお知らせピルからも開く)のため、
+    // 「おトクタブ表示中に開いたときだけ」右ペインに出す(selectedTab で出し分け。
+    // 地図タブから開いたときは従来どおり全画面オーバーレイが自然)
+    val campaignsTwoPane = selectedTab == AppTab.CAMPAIGNS && paneDirective.maxHorizontalPartitions > 1
 
-    // 全画面オーバーレイとして扱う店舗判定・判定詳細。二ペイン時は詳細ペイン内の表示なので null になり、
-    // topBar・本文のオーバーレイ分岐と baseTabsVisible を素通りして SearchListDetail が受ける
+    // 全画面オーバーレイとして扱う店舗判定・判定詳細・施策詳細。二ペイン時は詳細ペイン内の表示なので
+    // null になり、topBar・本文のオーバーレイ分岐と baseTabsVisible を素通りして
+    // SearchListDetail / CampaignsListDetail が受ける
     val overlayStoreCheck = state.storeCheck?.takeUnless { searchTwoPane }
     val overlaySelection = state.selection?.takeUnless { searchTwoPane }
+    val overlayCampaignGroup = state.selectedCampaignGroup?.takeUnless { campaignsTwoPane }
 
     // 下位画面(詳細/店舗判定/キャンペーン詳細/カスタムキャンペーン編集/設定サブページ)や
     // ロード・エラーに重なっていないベースのタブ表示状態。下部ナビ・FAB の表示条件。
     val baseTabsVisible = !state.loading && state.error == null &&
         overlaySelection == null && overlayStoreCheck == null &&
-        state.selectedCampaignGroup == null && state.settingsSubpage == null &&
+        overlayCampaignGroup == null && state.settingsSubpage == null &&
         editingCustomCampaign == null
 
     // 下部ナビ/NavigationRail 共通のタブ定義とタブ切替。地図タブは選択時に位置権限の確認・取得も走らせる
@@ -302,9 +310,10 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             }
                         },
                     )
-                    // キャンペーン詳細はタブ非依存のオーバーレイ(探すバナー・地図ピルからも開くため)
-                    state.selectedCampaignGroup != null -> {
-                        val group = state.selectedCampaignGroup!!
+                    // キャンペーン詳細はタブ非依存のオーバーレイ(探すバナー・地図ピルからも開くため)。
+                    // おトクタブの二ペイン時は overlayCampaignGroup が null になりここを素通りする(#55)
+                    overlayCampaignGroup != null -> {
+                        val group = overlayCampaignGroup
                         val title = campaignGroupDisplayTitle(group.first().campaign, state.merchantNames)
                         TopAppBar(
                             title = { Text(title) },
@@ -328,6 +337,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     // 定石)。タイトル行+全幅検索窓の2行ヘッダは一覧ペイン先頭に置き、
                     // 詳細ペインは上端まで全高にして詳細カードの表示域を確保する(#54)
                     searchTwoPane -> Unit
+                    // おトクタブの二ペインも同様(タイトル行は一覧ペイン先頭の PaneHeader が担う。#55)
+                    campaignsTwoPane -> Unit
                     // 横画面(1ペイン)は検索窓+再取得をタイトル直後に左詰めで同居させ、本文側の検索窓の
                     // 行(約64dp)を節約する(#54)。actions(右寄せ)に置くと直下のカテゴリチップ行と分断
                     // されるため title スロットに Row で置く
@@ -446,14 +457,10 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         )
                     }
                     // キャンペーン詳細(タブ非依存のオーバーレイ)。topBar の分岐順と一致させること
-                    state.selectedCampaignGroup != null -> PaddedColumn {
-                        // カスタムキャンペーンなら詳細に編集・削除の入口を出す(登録内容は customCampaigns から引く。
-                        // 複数決済の展開 id は決済サフィックスを剥がした登録単位の id で逆引きする)
-                        val customSource = state.selectedCampaignGroup!!.firstOrNull()?.campaign
-                            ?.takeIf { it.isCustom }
-                            ?.let { c -> state.customCampaigns.firstOrNull { it.id == customCampaignBaseId(c.id) } }
+                    overlayCampaignGroup != null -> PaddedColumn {
+                        val customSource = customCampaignSource(overlayCampaignGroup, state.customCampaigns)
                         CampaignDetail(
-                            judgments = state.selectedCampaignGroup!!,
+                            judgments = overlayCampaignGroup,
                             merchantNames = state.merchantNames,
                             onBack = viewModel::onCloseCampaignDetail,
                             onFindChains = { ids ->
@@ -580,22 +587,53 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             Centered { CircularProgressIndicator() }
                         }
                     }
-                    selectedTab == AppTab.CAMPAIGNS -> PaddedColumn {
-                        CampaignPane(
-                            activeCampaigns = state.campaignsActive,
-                            upcomingCampaigns = state.campaignsUpcoming,
-                            expiredCustomCampaigns = state.expiredCustomCampaigns,
-                            merchantNames = state.merchantNames,
-                            campaignColors = state.campaignBrandColors,
-                            personalRates = state.campaignPersonalRates,
-                            filter = state.campaignFilter,
-                            onFilterChange = viewModel::onSetCampaignFilter,
-                            showRegionChip = state.registeredAreas.isNotEmpty() &&
-                                !state.municipalityMaster.isEmpty(),
-                            regionFilterOn = !state.showAllCampaigns,
-                            onToggleRegionFilter = viewModel::onToggleShowAllCampaigns,
-                            onSelectGroup = viewModel::onSelectCampaignGroup,
-                        )
+                    selectedTab == AppTab.CAMPAIGNS -> {
+                        // おトクタブ。二ペイン相当の窓なら一覧(左)+施策詳細(右)の list-detail(#55)、
+                        // 一ペインなら従来どおり一覧のみ(詳細は上の全画面オーバーレイ分岐が受ける)
+                        val campaignPane: @Composable () -> Unit = {
+                            CampaignPane(
+                                activeCampaigns = state.campaignsActive,
+                                upcomingCampaigns = state.campaignsUpcoming,
+                                expiredCustomCampaigns = state.expiredCustomCampaigns,
+                                merchantNames = state.merchantNames,
+                                campaignColors = state.campaignBrandColors,
+                                personalRates = state.campaignPersonalRates,
+                                filter = state.campaignFilter,
+                                onFilterChange = viewModel::onSetCampaignFilter,
+                                showRegionChip = state.registeredAreas.isNotEmpty() &&
+                                    !state.municipalityMaster.isEmpty(),
+                                regionFilterOn = !state.showAllCampaigns,
+                                onToggleRegionFilter = viewModel::onToggleShowAllCampaigns,
+                                selectedGroupId = state.selectedCampaignGroup
+                                    ?.firstOrNull()?.campaign?.id
+                                    ?.takeIf { campaignsTwoPane },
+                                onSelectGroup = viewModel::onSelectCampaignGroup,
+                            )
+                        }
+                        if (campaignsTwoPane) {
+                            val customSource = state.selectedCampaignGroup
+                                ?.let { customCampaignSource(it, state.customCampaigns) }
+                            CampaignsListDetail(
+                                selectedGroup = state.selectedCampaignGroup,
+                                merchantNames = state.merchantNames,
+                                directive = paneDirective,
+                                listPane = {
+                                    // 二ペインはグローバル TopAppBar を持たない(詳細ペイン全高のため)ので、
+                                    // タイトル行を一覧ペイン先頭に置く(お店タブと同じ様式。#55)
+                                    PaneHeader(title = "おトク")
+                                    campaignPane()
+                                },
+                                onBack = viewModel::onCloseCampaignDetail,
+                                onFindChains = { ids ->
+                                    viewModel.onFindNearbyByIds(ids)
+                                    onNearbyClick()
+                                },
+                                onEditCustom = customSource?.let { { editingCustomCampaign = it } },
+                                onDeleteCustom = customSource?.let { { deletingCustomCampaign = it } },
+                            )
+                        } else {
+                            PaddedColumn { campaignPane() }
+                        }
                     }
                     selectedTab == AppTab.SETTINGS -> SettingsScreen(
                         displaySummary = displaySettingsSummary(
@@ -1004,6 +1042,90 @@ private fun SearchListDetail(
         },
     )
 }
+
+/**
+ * おトクタブの一覧+施策詳細二ペイン(M3 canonical layout の list-detail。#55)。
+ * 骨格・分割判断は お店タブの [SearchListDetail] と同じで、右の詳細ペインに施策詳細
+ * (CampaignDetail)を出す。施策詳細はタブ非依存のオーバーレイでもあるため、この Composable が
+ * 受けるのは「おトクタブ表示中に開いた」ものだけ(他タブ発は従来どおり全画面オーバーレイ)。
+ * カスタムキャンペーンの編集(CustomCampaignEditorScreen)は verticalScroll 付き全画面フォームで
+ * 横画面でも成立しているため、二ペイン化せず従来どおり全画面オーバーレイのまま(#55 の追記)。
+ */
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
+@Composable
+private fun CampaignsListDetail(
+    selectedGroup: List<CampaignJudgment>?,
+    merchantNames: Map<String, String>,
+    directive: PaneScaffoldDirective,
+    listPane: @Composable () -> Unit,
+    onBack: () -> Unit,
+    onFindChains: (List<String>) -> Unit,
+    onEditCustom: (() -> Unit)?,
+    onDeleteCustom: (() -> Unit)?,
+) {
+    ListDetailPaneScaffold(
+        directive = directive,
+        value = calculateThreePaneScaffoldValue(
+            maxHorizontalPartitions = directive.maxHorizontalPartitions,
+            adaptStrategies = ListDetailPaneScaffoldDefaults.adaptStrategies(),
+            // 二ペイン時にしか呼ばれず List/Detail とも常時 Expanded になるため destination は固定
+            // でよい(SearchListDetail と同じ理由)
+            currentDestination = ThreePaneScaffoldDestinationItem<Nothing>(ListDetailPaneScaffoldRole.Detail),
+        ),
+        listPane = {
+            AnimatedPane {
+                PaddedColumn(PaddingValues(start = 16.dp)) { listPane() }
+            }
+        },
+        detailPane = {
+            AnimatedPane {
+                if (selectedGroup != null) {
+                    PaddedColumn(PaddingValues(end = 16.dp)) {
+                        PaneHeader(
+                            title = campaignGroupDisplayTitle(selectedGroup.first().campaign, merchantNames),
+                            trailing = {
+                                IconButton(onClick = onBack) {
+                                    Icon(Icons.Default.Close, contentDescription = "詳細を閉じる")
+                                }
+                            },
+                        )
+                        CampaignDetail(
+                            judgments = selectedGroup,
+                            merchantNames = merchantNames,
+                            onBack = onBack,
+                            onFindChains = onFindChains,
+                            onEditCustom = onEditCustom,
+                            onDeleteCustom = onDeleteCustom,
+                            // FAB(キャンペーンを自分で登録)は二ペインでも Scaffold 側に出したままの
+                            // ため、末尾まで送っても FAB に隠れない高さを空ける(一覧側と同じ 88dp)
+                            contentPadding = PaddingValues(bottom = 88.dp),
+                        )
+                    }
+                } else {
+                    Centered {
+                        Text(
+                            "キャンペーンを選ぶと、詳細をここに表示します。",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
+                }
+            }
+        },
+    )
+}
+
+/**
+ * 施策詳細グループがカスタムキャンペーン由来なら、その登録内容(編集・削除の対象)を返す。
+ * 登録内容は customCampaigns から引く。複数決済の展開 id は決済サフィックスを剥がした
+ * 登録単位の id で逆引きする。全画面オーバーレイと二ペインの詳細ペインで共用する。
+ */
+private fun customCampaignSource(
+    group: List<CampaignJudgment>,
+    customCampaigns: List<CustomCampaign>,
+): CustomCampaign? = group.firstOrNull()?.campaign
+    ?.takeIf { it.isCustom }
+    ?.let { c -> customCampaigns.firstOrNull { it.id == customCampaignBaseId(c.id) } }
 
 /**
  * ペインの見出し行(#54)。全画面時に TopAppBar が担うタイトルと操作をペイン内で置き換える。

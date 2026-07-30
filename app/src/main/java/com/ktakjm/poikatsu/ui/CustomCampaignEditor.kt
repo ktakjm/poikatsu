@@ -1,5 +1,6 @@
 package com.ktakjm.poikatsu.ui
 
+import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -32,6 +33,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DisplayMode
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -56,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.ktakjm.poikatsu.data.CustomCampaign
@@ -875,8 +878,13 @@ private fun EditorDatePickerDialog(
     onConfirm: (LocalDate?) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // 横画面はウィンドウ高(412dp 級)が M3 カレンダーの推奨高(約568dp)に満たず、曜日ヘッダーと
+    // 第1週が重なって読めないため、テキスト入力モードで開く(compact-height 向けの M3 標準解。#55)。
+    // 判定は #4 と同じ window の向きで足りる(回転で Activity が再生成されるため)
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val state = rememberDatePickerState(
         initialSelectedDateMillis = initial?.atStartOfDay(ZoneOffset.UTC)?.toInstant()?.toEpochMilli(),
+        initialDisplayMode = if (isLandscape) DisplayMode.Input else DisplayMode.Picker,
     )
     DatePickerDialog(
         onDismissRequest = onDismiss,
@@ -891,6 +899,8 @@ private fun EditorDatePickerDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("キャンセル") } },
     ) {
-        DatePicker(state = state)
+        // モード切替でカレンダーに戻したときも高さ不足で潰れないよう、カレンダー自体を
+        // スクロール可能にしておく(公式ドキュメント案内のフォールバック)
+        DatePicker(state = state, modifier = Modifier.verticalScroll(rememberScrollState()))
     }
 }

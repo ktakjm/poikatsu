@@ -83,6 +83,8 @@ internal fun CampaignPane(
     /** 「登録地域のみ」絞り込み中か(既定 ON。OFF=すべて表示) */
     regionFilterOn: Boolean,
     onToggleRegionFilter: () -> Unit,
+    /** 二ペイン時に詳細ペインへ出しているグループの先頭施策 id(選択カードのハイライト用)。一覧のみなら null */
+    selectedGroupId: String? = null,
     onSelectGroup: (List<Campaign>) -> Unit,
 ) {
     // 地域絞り込みで 0 件のときは全画面の空表示にせず、チップ行と件数メッセージを出す
@@ -175,7 +177,7 @@ internal fun CampaignPane(
                 )
             }
             items(activeGroups, key = { it.first().id }) { group ->
-                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, personalRates, onClick = { onSelectGroup(group) })
+                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, personalRates, selected = group.first().id == selectedGroupId, onClick = { onSelectGroup(group) })
             }
         }
         if (permanentGroups.isNotEmpty()) {
@@ -188,7 +190,7 @@ internal fun CampaignPane(
                 )
             }
             items(permanentGroups, key = { "permanent_${it.first().id}" }) { group ->
-                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, personalRates, onClick = { onSelectGroup(group) })
+                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, personalRates, selected = group.first().id == selectedGroupId, onClick = { onSelectGroup(group) })
             }
         }
         if (offDayGroups.isNotEmpty()) {
@@ -201,7 +203,7 @@ internal fun CampaignPane(
                 )
             }
             items(offDayGroups, key = { "offday_${it.first().id}" }) { group ->
-                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, personalRates, onClick = { onSelectGroup(group) })
+                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, personalRates, selected = group.first().id == selectedGroupId, onClick = { onSelectGroup(group) })
             }
         }
         if (permanentOffDayGroups.isNotEmpty()) {
@@ -214,7 +216,7 @@ internal fun CampaignPane(
                 )
             }
             items(permanentOffDayGroups, key = { "permanent_offday_${it.first().id}" }) { group ->
-                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, personalRates, onClick = { onSelectGroup(group) })
+                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, personalRates, selected = group.first().id == selectedGroupId, onClick = { onSelectGroup(group) })
             }
         }
         if (upcomingGroups.isNotEmpty()) {
@@ -227,7 +229,7 @@ internal fun CampaignPane(
                 )
             }
             items(upcomingGroups, key = { "upcoming_${it.first().id}" }) { group ->
-                CampaignSummaryCard(group, CampaignStatus.UPCOMING, merchantNames, campaignColors, personalRates, onClick = { onSelectGroup(group) })
+                CampaignSummaryCard(group, CampaignStatus.UPCOMING, merchantNames, campaignColors, personalRates, selected = group.first().id == selectedGroupId, onClick = { onSelectGroup(group) })
             }
         }
         if (allActiveGroups.isEmpty() && upcomingGroups.isEmpty()) {
@@ -264,6 +266,7 @@ internal fun CampaignPane(
                     merchantNames,
                     campaignColors,
                     personalRates,
+                    selected = group.first().id == selectedGroupId,
                     onClick = { onSelectGroup(group) },
                 )
             }
@@ -284,6 +287,7 @@ private fun CampaignSummaryCard(
     merchantNames: Map<String, String>,
     campaignColors: Map<String, String>,
     personalRates: Map<String, Double>,
+    selected: Boolean,
     onClick: () -> Unit,
 ) {
     val today = LocalDate.now()
@@ -310,6 +314,13 @@ private fun CampaignSummaryCard(
 
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        // 二ペイン時に詳細ペインへ出しているグループのハイライト(M3 list-detail の定石。
+        // お店タブの SearchResultCard と同じ)。一覧のみの表示では常に false
+        colors = if (selected) {
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        } else {
+            CardDefaults.cardColors()
+        },
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Row(Modifier.height(IntrinsicSize.Min)) {
@@ -408,6 +419,8 @@ internal fun CampaignDetail(
     onEditCustom: (() -> Unit)? = null,
     /** カスタムキャンペーンの削除(確認ダイアログは呼び出し側が出す) */
     onDeleteCustom: (() -> Unit)? = null,
+    /** 本文 LazyColumn の余白。二ペインの詳細ペインでは FAB に隠れない高さを下端に空ける(#55) */
+    contentPadding: PaddingValues = PaddingValues(bottom = 16.dp),
 ) {
     BackHandler(onBack = onBack)
 
@@ -420,7 +433,7 @@ internal fun CampaignDetail(
 
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(bottom = 16.dp),
+        contentPadding = contentPadding,
     ) {
         // カスタムキャンペーンだけ編集・削除の操作行を出す(登録内容の管理はこの詳細に集約)
         if (onEditCustom != null || onDeleteCustom != null) {
