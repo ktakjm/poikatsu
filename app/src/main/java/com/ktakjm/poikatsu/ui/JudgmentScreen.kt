@@ -232,7 +232,7 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
             NoticeRow("対象商品限定：${it.label}", warningContainerColor(), onWarningContainerColor())
         }
         if (judgment.campaign.requiresEntry) {
-            NoticeRow("事前エントリーが必要です(詳細ページから)", warningContainerColor(), onWarningContainerColor())
+            NoticeRow("事前エントリーが必要です", warningContainerColor(), onWarningContainerColor())
         }
         if (judgment.mayEndEarly) {
             // 終了日なし: 「早期」の比較対象が無いため「予告なく終了」の言い回しにする。
