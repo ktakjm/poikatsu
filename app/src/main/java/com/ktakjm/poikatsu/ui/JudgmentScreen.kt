@@ -66,60 +66,65 @@ internal fun JudgmentDetail(
     onFindNearby: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
-    CategoryTag(selection.merchant.category)
-    Spacer(Modifier.height(12.dp))
-    if (selection.displayName != null) {
-        Text(
-            "店舗情報: Web Services by Yahoo! JAPAN",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
-    }
-    if (selection.displayName == null) {
-        val locationHint = selection.merchant.locationHint
-        if (locationHint == null) {
-            FilledTonalButton(onClick = onFindNearby, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Default.Place, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("近くのこのお店を探す")
+    // 先頭領域(カテゴリタグ・帰属・ボタン)も判定カードと一緒にスクロールさせ、固定はタイトル
+    // (全画面=TopAppBar / 二ペイン=DetailPaneHeader)だけにする(#54)。横画面など高さの限られる
+    // 画面で判定カードの表示域を確保するため。ボタンは本文先頭にあり初期表示では従来どおり見える
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item(key = "__lead") {
+            // displayName あり = 地図(YOLP)から開いた店舗。帰属表示を出し、「近くを探す」は不要
+            val hasStoreName = selection.displayName != null
+            Column {
+                CategoryTag(selection.merchant.category)
+                Spacer(Modifier.height(12.dp))
+                if (hasStoreName) {
+                    YolpAttribution(Modifier.padding(bottom = 8.dp))
+                }
+                // 「近くを探す」と「対象か調べる」。両方出るときだけ間を 8dp 空ける
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (!hasStoreName) {
+                        val locationHint = selection.merchant.locationHint
+                        if (locationHint == null) {
+                            FilledTonalButton(onClick = onFindNearby, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.Place, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("近くのこのお店を探す")
+                            }
+                        } else {
+                            LocationHintNote(locationHint)
+                        }
+                    }
+                    if (selection.canCheckStore) {
+                        Button(onClick = onOpenStoreCheck, modifier = Modifier.fillMaxWidth()) {
+                            val storeCheckLabel =
+                                if (hasStoreName) "このお店が対象か調べる" else "対象のお店を調べる"
+                            Text(storeCheckLabel)
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        if (selection.judgments.isEmpty()) {
+            item(key = "__empty") {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "登録済みの高還元施策の対象外です。通常還元率のカード・コード決済を利用してください。",
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
             }
         } else {
-            LocationHintNote(locationHint)
-        }
-        Spacer(Modifier.height(8.dp))
-    }
-    if (selection.canCheckStore) {
-        Button(onClick = onOpenStoreCheck, modifier = Modifier.fillMaxWidth()) {
-            val storeCheckLabel =
-                if (selection.displayName != null) "このお店が対象か調べる" else "対象のお店を調べる"
-            Text(storeCheckLabel)
-            Spacer(Modifier.width(4.dp))
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-    }
-
-    if (selection.judgments.isEmpty()) {
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                "登録済みの高還元施策の対象外です。通常還元率のカード・コード決済を利用してください。",
-                modifier = Modifier.padding(16.dp),
-            )
-        }
-        return
-    }
-
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (selection.bestOption != null && selection.judgments.size >= 2) {
-            item(key = "__best") { BestOptionBanner(selection.bestOption) }
-        }
-        items(selection.judgments, key = { it.campaign.id }) { judgment ->
-            CampaignJudgmentCard(judgment)
+            if (selection.bestOption != null && selection.judgments.size >= 2) {
+                item(key = "__best") { BestOptionBanner(selection.bestOption) }
+            }
+            items(selection.judgments, key = { it.campaign.id }) { judgment ->
+                CampaignJudgmentCard(judgment)
+            }
         }
     }
 }

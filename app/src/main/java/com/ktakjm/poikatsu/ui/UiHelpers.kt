@@ -35,10 +35,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.ScrollState
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.core.content.ContextCompat
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.DataSource
@@ -51,7 +60,6 @@ import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.CampaignType
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.formatBenefit
-import com.ktakjm.poikatsu.domain.trimRate
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningContainerColor
 import java.time.LocalDate
@@ -368,16 +376,78 @@ internal fun CategoryTag(text: String) {
     }
 }
 
+/** [horizontalFadingEdges] のフェード幅。 */
+private val FADING_EDGE_WIDTH = 24.dp
+
+/**
+ * 横スクロール行の端に「まだ続きがある」ことを示すフェード(Android 標準の fading edge 相当)。
+ * スクロール余地のある側だけ内容をグラデーションで透明に落とす(右端=先に進める、左端=戻れる)。
+ * DstIn 合成でマスクするため、描画を一旦オフスクリーンに逃がす CompositingStrategy が必要。
+ * ブラシはサイズ確定時に一度だけ作る(drawWithCache。draw のたびに作るとシェーダキャッシュが効かない)。
+ * horizontalScroll より前(外側)にチェーンすること。アプリは日本語のみのため RTL は考慮しない。
+ */
+internal fun Modifier.horizontalFadingEdges(scrollState: ScrollState): Modifier =
+    this
+        .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+        .drawWithCache {
+            val w = FADING_EDGE_WIDTH.toPx()
+            val startFade = Brush.horizontalGradient(
+                colors = listOf(Color.Transparent, Color.Black),
+                startX = 0f,
+                endX = w,
+            )
+            val endFade = Brush.horizontalGradient(
+                colors = listOf(Color.Black, Color.Transparent),
+                startX = size.width - w,
+                endX = size.width,
+            )
+            onDrawWithContent {
+                drawContent()
+                if (scrollState.canScrollBackward) {
+                    drawRect(brush = startFade, size = Size(w, size.height), blendMode = BlendMode.DstIn)
+                }
+                if (scrollState.canScrollForward) {
+                    drawRect(
+                        brush = endFade,
+                        topLeft = Offset(size.width - w, 0f),
+                        size = Size(w, size.height),
+                        blendMode = BlendMode.DstIn,
+                    )
+                }
+            }
+        }
+
+/**
+ * YOLP 利用規約: 店舗データの帰属表示。YOLP 由来の店舗情報を表示する画面では常に出す。
+ * 色・サイズを潰さないこと(docs/map-data-stack.md §3.2/§7)。
+ */
+@Composable
+internal fun YolpAttribution(modifier: Modifier = Modifier) {
+    Text(
+        "店舗情報: Web Services by Yahoo! JAPAN",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier,
+    )
+}
+
 @Composable
 internal fun Centered(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
 }
 
-/** 地図以外の画面共通の縦並びコンテナ。従来ルートにあった横16dpパディングをここに移譲 */
+/**
+ * 地図以外の画面共通の縦並びコンテナ。従来ルートにあった横16dpパディングをここに移譲。
+ * 二ペインのペイン内容は画面端の側だけ余白を取る(ペイン間はライブラリの gutter が空ける)ため、
+ * padding を差し替えられるようにしている。
+ */
 @Composable
-internal fun PaddedColumn(content: @Composable ColumnScope.() -> Unit) {
+internal fun PaddedColumn(
+    padding: PaddingValues = PaddingValues(horizontal = 16.dp),
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxSize().padding(padding),
         content = content,
     )
 }

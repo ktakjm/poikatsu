@@ -28,6 +28,7 @@
 | androidx.work:work-runtime-ktx | キャンペーン開始/終了通知の日次バックグラウンドジョブ(2026-07-26 追加、#6) | Apache-2.0 |
 | com.jakewharton.timber:timber | ログ出力ラッパー(debug ビルドのみ Logcat 出力、release は無出力。2026-06-27 追加) | Apache-2.0 |
 | com.mikepenz:aboutlibraries-compose-m3(+ 推移的な aboutlibraries-core / aboutlibraries-compose-core) | OSS ライセンス表示画面(設定→このアプリ。ビルド時に Gradle 依存からメタデータを自動生成して一覧表示。2026-07-24 追加、#48) | Apache-2.0 |
+| androidx.compose.material3.adaptive:adaptive / adaptive-layout(+ 推移的な androidx.window) | お店タブの一覧+詳細二ペイン(ListDetailPaneScaffold。M3 canonical layout の窓サイズ判断に委ねる。2026-07-30 追加、#54) | Apache-2.0 |
 
 **OSS 依存はすべて Apache License 2.0**(コピーレフト/GPL系は一切なし)。**例外は Google Play Services 系(`play-services-maps` / `play-services-location`)で、これらは OSS ではなくプロプライエタリなサービス SDK**(Google APIs ToS 準拠)。location は maps で受け入れ済みの GMS 依存の範囲内であり、新たな規約・課金・キーは発生しない(位置情報取得は課金対象 API ではない)。バイナリ同梱はするが、Apache-2.0 §4 のような NOTICE 義務ではなく Google の規約・帰属表示(SDK が自動描画)に従う。判断の背景は下記「方針転換」と [map-data-stack.md](map-data-stack.md)。
 

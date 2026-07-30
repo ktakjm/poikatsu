@@ -7,7 +7,6 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -18,8 +17,6 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -76,6 +73,16 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
+import androidx.compose.material3.adaptive.layout.AnimatedPane
+import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffold
+import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldDefaults
+import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
+import androidx.compose.material3.adaptive.layout.PaneScaffoldDirective
+import androidx.compose.material3.adaptive.layout.ThreePaneScaffoldDestinationItem
+import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirective
+import androidx.compose.material3.adaptive.layout.calculateThreePaneScaffoldValue
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
@@ -88,13 +95,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -114,7 +121,7 @@ import com.ktakjm.poikatsu.domain.isCustom
 import com.ktakjm.poikatsu.ui.theme.AppIcons
 import com.ktakjm.poikatsu.util.GeoMath
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
@@ -200,10 +207,22 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
         }
     }
 
+    // お店タブの一覧+詳細(list-detail)を左右二ペインで並べられる窓か。判断は M3 canonical layout の
+    // 標準 directive に委ねる(#54。幅 Expanded 級=840dp 以上で 2 ペイン、それ未満は 1)。二ペインなら
+    // 判定詳細(selection)・店舗判定(storeCheck)を全画面オーバーレイでなく右の詳細ペインに出す。
+    // 一ペインの窓では従来どおり全画面オーバーレイ(縦画面と同じ見え方)になる。
+    val paneDirective = calculatePaneScaffoldDirective(currentWindowAdaptiveInfo())
+    val searchTwoPane = selectedTab == AppTab.SEARCH && paneDirective.maxHorizontalPartitions > 1
+
+    // 全画面オーバーレイとして扱う店舗判定・判定詳細。二ペイン時は詳細ペイン内の表示なので null になり、
+    // topBar・本文のオーバーレイ分岐と baseTabsVisible を素通りして SearchListDetail が受ける
+    val overlayStoreCheck = state.storeCheck?.takeUnless { searchTwoPane }
+    val overlaySelection = state.selection?.takeUnless { searchTwoPane }
+
     // 下位画面(詳細/店舗判定/キャンペーン詳細/カスタムキャンペーン編集/設定サブページ)や
     // ロード・エラーに重なっていないベースのタブ表示状態。下部ナビ・FAB の表示条件。
     val baseTabsVisible = !state.loading && state.error == null &&
-        state.selection == null && state.storeCheck == null &&
+        overlaySelection == null && overlayStoreCheck == null &&
         state.selectedCampaignGroup == null && state.settingsSubpage == null &&
         editingCustomCampaign == null
 
@@ -225,6 +244,10 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
     // M3 の定石(横長・中幅以上は Rail)。判定は WindowSizeClass でなく window の向きで足りる
     // (回転で Activity が再生成されるため、その場の Configuration を見ればよい)
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    // 検索窓を TopAppBar 側(SearchBarRow)に出すモード(横画面の1ペインのみ)。
+    // topBar の分岐と SearchPane(本文の検索窓を隠す)で同じ判断を共有する
+    val searchInHeader = selectedTab == AppTab.SEARCH && isLandscape && !searchTwoPane
 
     Row(Modifier.fillMaxSize()) {
         if (isLandscape && baseTabsVisible) {
@@ -263,16 +286,16 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             }
                         },
                     )
-                    state.storeCheck != null -> TopAppBar(
-                        title = { Text("${state.storeCheck!!.merchant.name} 対象判定") },
+                    overlayStoreCheck != null -> TopAppBar(
+                        title = { Text(storeCheckTitle(overlayStoreCheck)) },
                         navigationIcon = {
                             IconButton(onClick = viewModel::onCloseStoreCheck) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
                             }
                         },
                     )
-                    state.selection != null -> TopAppBar(
-                        title = { Text(state.selection!!.displayName ?: state.selection!!.merchant.name) },
+                    overlaySelection != null -> TopAppBar(
+                        title = { Text(selectionTitle(overlaySelection)) },
                         navigationIcon = {
                             IconButton(onClick = viewModel::onBack) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
@@ -301,6 +324,23 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         },
                     )
                     selectedTab == AppTab.NEARBY -> Unit
+                    // 二ペイン時はグローバルバーを出さない(アプリバーは各ペインに属する M3 の multi-pane
+                    // 定石)。タイトル行+全幅検索窓の2行ヘッダは一覧ペイン先頭に置き、
+                    // 詳細ペインは上端まで全高にして詳細カードの表示域を確保する(#54)
+                    searchTwoPane -> Unit
+                    // 横画面(1ペイン)は検索窓+再取得をタイトル直後に左詰めで同居させ、本文側の検索窓の
+                    // 行(約64dp)を節約する(#54)。actions(右寄せ)に置くと直下のカテゴリチップ行と分断
+                    // されるため title スロットに Row で置く
+                    searchInHeader -> TopAppBar(
+                        title = {
+                            SearchBarRow(
+                                query = state.query,
+                                onQueryChange = viewModel::onQueryChange,
+                                refreshing = state.refreshing,
+                                onRefresh = viewModel::onManualRefresh,
+                            )
+                        },
+                    )
                     selectedTab == AppTab.SEARCH -> TopAppBar(title = { Text("ポイ活ナビ") })
                     selectedTab == AppTab.CAMPAIGNS -> TopAppBar(title = { Text("おトク") })
                     selectedTab == AppTab.SETTINGS -> TopAppBar(title = { Text("設定") })
@@ -383,16 +423,18 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             onClose = { editingCustomCampaign = null },
                         )
                     }
-                    state.storeCheck != null -> PaddedColumn {
+                    // 店舗判定・判定詳細の全画面オーバーレイ(overlay* は二ペイン時 null=詳細ペイン内表示)。
+                    // topBar の分岐順と一致させること
+                    overlayStoreCheck != null -> PaddedColumn {
                         StoreCheckScreen(
-                            storeCheck = state.storeCheck!!,
+                            storeCheck = overlayStoreCheck,
                             onBack = viewModel::onCloseStoreCheck,
                             onStoreNameChange = viewModel::onStoreNameChange,
                         )
                     }
-                    state.selection != null -> PaddedColumn {
+                    overlaySelection != null -> PaddedColumn {
                         JudgmentDetail(
-                            selection = state.selection!!,
+                            selection = overlaySelection,
                             onBack = viewModel::onBack,
                             onOpenStoreCheck = viewModel::onOpenStoreCheck,
                             onFindNearby = {
@@ -585,26 +627,68 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         ),
                         onOpenSubpage = viewModel::onOpenSettingsSubpage,
                     )
-                    else -> PaddedColumn {
-                        SearchPane(
-                            query = state.query,
-                            categories = state.categories,
-                            selectedCategories = state.selectedCategories,
-                            results = state.results,
-                            dataStatus = dataStatusLabel(
-                                state.dataUpdatedAt,
-                                state.dataSource,
-                                state.useTestData,
-                                state.useBundledData,
-                            ),
-                            refreshing = state.refreshing,
-                            municipalAreaNames = state.searchMunicipalAreaNames,
-                            onQueryChange = viewModel::onQueryChange,
-                            onToggleCategory = viewModel::onToggleCategory,
-                            onSelect = viewModel::onSelect,
-                            onRefresh = viewModel::onManualRefresh,
-                            onOpenMunicipalCampaigns = viewModel::onOpenMunicipalCampaigns,
-                        )
+                    else -> {
+                        // お店タブ。二ペイン相当の窓なら一覧(左)+判定詳細(右)の list-detail、
+                        // 一ペインなら従来どおり一覧のみ(詳細は上の全画面オーバーレイ分岐が受ける)
+                        val searchPane: @Composable () -> Unit = {
+                            SearchPane(
+                                query = state.query,
+                                categories = state.categories,
+                                selectedCategories = state.selectedCategories,
+                                results = state.results,
+                                dataStatus = dataStatusLabel(
+                                    state.dataUpdatedAt,
+                                    state.dataSource,
+                                    state.useTestData,
+                                    state.useBundledData,
+                                ),
+                                refreshing = state.refreshing,
+                                municipalAreaNames = state.searchMunicipalAreaNames,
+                                searchInHeader = searchInHeader,
+                                compact = isLandscape,
+                                selectedMerchantId = state.selection?.merchant?.id,
+                                onQueryChange = viewModel::onQueryChange,
+                                onToggleCategory = viewModel::onToggleCategory,
+                                onSelect = viewModel::onSelect,
+                                onRefresh = viewModel::onManualRefresh,
+                                onOpenMunicipalCampaigns = viewModel::onOpenMunicipalCampaigns,
+                            )
+                        }
+                        if (searchTwoPane) {
+                            SearchListDetail(
+                                selection = state.selection,
+                                storeCheck = state.storeCheck,
+                                directive = paneDirective,
+                                listPane = {
+                                    // 二ペインはグローバル TopAppBar を持たない(詳細ペイン全高のため)ので、
+                                    // タイトル+再取得の行を一覧ペイン先頭に置く。検索窓は SearchPane 側の
+                                    // 全幅フィールド=タイトルと検索窓の2行構成(1行に同居させるとペイン幅
+                                    // では検索窓が短くなりすぎる)。再取得は横ではデータ状態行が無いため
+                                    // ここ、縦(タブレット級)では従来どおり状態行側に出す
+                                    PaneHeader(
+                                        title = "ポイ活ナビ",
+                                        trailing = {
+                                            if (isLandscape) {
+                                                RefreshAction(state.refreshing, viewModel::onManualRefresh)
+                                            }
+                                        },
+                                    )
+                                    searchPane()
+                                },
+                                onBack = viewModel::onBack,
+                                onOpenStoreCheck = viewModel::onOpenStoreCheck,
+                                onCloseStoreCheck = viewModel::onCloseStoreCheck,
+                                onStoreNameChange = viewModel::onStoreNameChange,
+                                onFindNearby = {
+                                    state.selection?.merchant?.let {
+                                        viewModel.onFindNearby(it)
+                                        onNearbyClick()
+                                    }
+                                },
+                            )
+                        } else {
+                            PaddedColumn { searchPane() }
+                        }
                     }
                 }
             }
@@ -650,59 +734,59 @@ private fun SearchPane(
     dataStatus: String,
     refreshing: Boolean,
     municipalAreaNames: List<String>,
+    searchInHeader: Boolean,
+    compact: Boolean,
+    selectedMerchantId: String?,
     onQueryChange: (String) -> Unit,
     onToggleCategory: (String) -> Unit,
     onSelect: (Merchant) -> Unit,
     onRefresh: () -> Unit,
     onOpenMunicipalCampaigns: () -> Unit,
 ) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = Modifier.fillMaxWidth(),
-        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-        placeholder = { Text("お店の名前(例: マック、サイゼ)") },
-        singleLine = true,
-    )
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        categories.forEach { category ->
-            FilterChip(
-                selected = category in selectedCategories,
-                onClick = { onToggleCategory(category) },
-                label = { Text(category) },
-            )
-        }
-    }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            dataStatus,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.outline,
-            modifier = Modifier.weight(1f),
+    // 検索窓は横画面(1ペイン)では TopAppBar の SearchBarRow 側にあるため本文には置かない
+    // (searchInHeader。二ペインはペイン幅の全幅フィールドをここに置く)。横画面(compact)は
+    // 上部を圧縮して検索結果の高さを確保する(#54): カテゴリチップは折り返しをやめて 1 行の
+    // 横スクロール(地図タブの NearbyFilterBar と同型)にし、データ状態行を省く
+    if (!searchInHeader) {
+        SearchQueryField(
+            query = query,
+            onQueryChange = onQueryChange,
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = "お店の名前(例: マック、サイゼ)",
         )
-        if (refreshing) {
-            // スピナーは IconButton(48dp)と高さを揃え、再取得中の行の高さブレを防ぐ
-            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-            }
-        } else {
-            // タッチ領域は M3 最小の 48dp を確保し、アイコンの見た目だけ 20dp に抑える
-            IconButton(onClick = onRefresh) {
-                Icon(
-                    Icons.Default.Refresh,
-                    contentDescription = "データを再取得",
-                    tint = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
+    }
+    if (compact) {
+        val chipScroll = rememberScrollState()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalFadingEdges(chipScroll)
+                .horizontalScroll(chipScroll),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            CategoryFilterChips(categories, selectedCategories, onToggleCategory)
+        }
+    } else {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            CategoryFilterChips(categories, selectedCategories, onToggleCategory)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                dataStatus,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.weight(1f),
+            )
+            RefreshAction(refreshing, onRefresh)
         }
     }
     Spacer(Modifier.height(4.dp))
     when {
-        // 初期画面(検索前)。自治体施策のお知らせは検索・判定と混ざらないようここだけに出す
+        // 初期画面(検索前)。自治体施策のお知らせは検索・判定と混ざらないようここだけに出す。
+        // 初期説明は横画面でも出す(検索結果が出れば消えるので、常設の圧迫にはならない)
         query.isBlank() && selectedCategories.isEmpty() -> {
             Text(
                 "お店の名前を入力するか、カテゴリを選択すると、おトクな支払い方法を表示します。",
@@ -726,9 +810,224 @@ private fun SearchPane(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(results, key = { it.merchant.id }) { result ->
-                SearchResultCard(result) { onSelect(result.merchant) }
+                SearchResultCard(
+                    result,
+                    selected = result.merchant.id == selectedMerchantId,
+                ) { onSelect(result.merchant) }
             }
         }
+    }
+}
+
+/**
+ * タイトル+検索窓+再取得の1行ヘッダ(#54)。横画面(1ペイン)の TopAppBar の title スロットに置く。
+ * 検索窓はタイトル直後の左詰め——右寄せ(actions)にすると直下のカテゴリチップ行と分断されて
+ * 「店名で検索 or ジャンルで絞る」の操作群に見えないため。二ペインでは使わない
+ * (ペイン幅では検索窓が短くなりすぎるため、一覧ペイン先頭のタイトル行+全幅検索窓の2行構成)。
+ */
+@Composable
+private fun SearchBarRow(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    ) {
+        Text("ポイ活ナビ", style = MaterialTheme.typography.titleLarge)
+        SearchQueryField(
+            query = query,
+            onQueryChange = onQueryChange,
+            modifier = Modifier.width(320.dp),
+            placeholder = "お店の名前(例: マック)",
+        )
+        RefreshAction(refreshing, onRefresh)
+    }
+}
+
+/**
+ * お店検索の入力フィールド。縦・二ペインの本文(全幅)と横1ペインの TopAppBar(320dp)で共用する。
+ * placeholder は置き場所の幅に合わせて呼び出し側が選ぶ(狭い側は例を1つに省略)。
+ */
+@Composable
+private fun SearchQueryField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier,
+    placeholder: String,
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = modifier,
+        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+        placeholder = { Text(placeholder, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        singleLine = true,
+    )
+}
+
+/**
+ * カテゴリ絞り込みチップの並び。お店タブの縦(FlowRow)・横(1行スクロール)と
+ * 地図タブ(NearbyFilterBar)で同じ見た目・挙動を共有する。
+ */
+@Composable
+private fun CategoryFilterChips(
+    categories: List<String>,
+    selectedCategories: Set<String>,
+    onToggleCategory: (String) -> Unit,
+) {
+    categories.forEach { category ->
+        FilterChip(
+            selected = category in selectedCategories,
+            onClick = { onToggleCategory(category) },
+            label = { Text(category) },
+        )
+    }
+}
+
+/** 判定詳細のタイトル。全画面時の TopAppBar と二ペインの詳細ペインヘッダで共用する。 */
+private fun selectionTitle(selection: MainViewModel.Selection): String =
+    selection.displayName ?: selection.merchant.name
+
+/** 店舗判定のタイトル。全画面時の TopAppBar と二ペインの詳細ペインヘッダで共用する。 */
+private fun storeCheckTitle(storeCheck: MainViewModel.StoreCheckState): String =
+    "${storeCheck.merchant.name} 対象判定"
+
+/**
+ * データ再取得の入口。取得中はスピナーに差し替える。スピナーは IconButton(48dp)と枠を揃えて
+ * 高さブレを防ぎ、アイコンはタッチ領域 48dp を保ったまま見た目だけ 20dp に抑える。
+ * 縦画面はデータ状態行の右端、横1ペインは SearchBarRow、二ペイン横は一覧ペインのタイトル行で共用する。
+ */
+@Composable
+private fun RefreshAction(refreshing: Boolean, onRefresh: () -> Unit) {
+    if (refreshing) {
+        Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+        }
+    } else {
+        IconButton(onClick = onRefresh) {
+            Icon(
+                Icons.Default.Refresh,
+                contentDescription = "データを再取得",
+                tint = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+/**
+ * お店タブの一覧+詳細二ペイン(M3 canonical layout の list-detail。#54)。
+ * 窓が二ペイン相当(directive.maxHorizontalPartitions > 1)のときだけ呼ばれ、判定詳細(selection)と
+ * 店舗判定(storeCheck)を全画面オーバーレイでなく右の詳細ペインに出す。店舗判定は詳細ペイン内で
+ * 判定詳細と置き換わる(戻る/←で判定詳細へ)。全画面時に TopAppBar が担っていたタイトルと
+ * 閉じる/戻るは DetailPaneHeader がペイン内で肩代わりする。
+ */
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
+@Composable
+private fun SearchListDetail(
+    selection: MainViewModel.Selection?,
+    storeCheck: MainViewModel.StoreCheckState?,
+    directive: PaneScaffoldDirective,
+    listPane: @Composable () -> Unit,
+    onBack: () -> Unit,
+    onOpenStoreCheck: () -> Unit,
+    onCloseStoreCheck: () -> Unit,
+    onStoreNameChange: (String) -> Unit,
+    onFindNearby: () -> Unit,
+) {
+    ListDetailPaneScaffold(
+        directive = directive,
+        value = calculateThreePaneScaffoldValue(
+            maxHorizontalPartitions = directive.maxHorizontalPartitions,
+            adaptStrategies = ListDetailPaneScaffoldDefaults.adaptStrategies(),
+            // この Composable は二ペイン時にしか呼ばれず List/Detail とも常時 Expanded になるため
+            // destination は固定でよい(一ペインへ縮んだ瞬間は外側の全画面オーバーレイ分岐が受ける)
+            currentDestination = ThreePaneScaffoldDestinationItem<Nothing>(ListDetailPaneScaffoldRole.Detail),
+        ),
+        listPane = {
+            AnimatedPane {
+                // 画面端の側だけ 16dp の余白(縦画面の PaddedColumn と同じ)。ペイン間は
+                // ライブラリの gutter が空ける
+                PaddedColumn(PaddingValues(start = 16.dp)) { listPane() }
+            }
+        },
+        detailPane = {
+            AnimatedPane {
+                when {
+                    storeCheck != null -> PaddedColumn(PaddingValues(end = 16.dp)) {
+                        PaneHeader(
+                            title = storeCheckTitle(storeCheck),
+                            leading = {
+                                IconButton(onClick = onCloseStoreCheck) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "判定詳細に戻る",
+                                    )
+                                }
+                            },
+                        )
+                        StoreCheckScreen(
+                            storeCheck = storeCheck,
+                            onBack = onCloseStoreCheck,
+                            onStoreNameChange = onStoreNameChange,
+                        )
+                    }
+                    selection != null -> PaddedColumn(PaddingValues(end = 16.dp)) {
+                        PaneHeader(
+                            title = selectionTitle(selection),
+                            trailing = {
+                                IconButton(onClick = onBack) {
+                                    Icon(Icons.Default.Close, contentDescription = "詳細を閉じる")
+                                }
+                            },
+                        )
+                        JudgmentDetail(
+                            selection = selection,
+                            onBack = onBack,
+                            onOpenStoreCheck = onOpenStoreCheck,
+                            onFindNearby = onFindNearby,
+                        )
+                    }
+                    else -> Centered {
+                        Text(
+                            "お店を選ぶと、おトクな支払い方法をここに表示します。",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
+                }
+            }
+        },
+    )
+}
+
+/**
+ * ペインの見出し行(#54)。全画面時に TopAppBar が担うタイトルと操作をペイン内で置き換える。
+ * 一覧ペインはタイトル+再取得(trailing)、判定詳細は右端の✕(ペインを閉じる=カード様式)、
+ * 店舗判定は左端の←(1 段深い画面から判定詳細へ戻る=TopAppBar 様式)。
+ */
+@Composable
+private fun PaneHeader(
+    title: String,
+    leading: @Composable () -> Unit = {},
+    trailing: @Composable () -> Unit = {},
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    ) {
+        leading()
+        Text(
+            title,
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.weight(1f),
+        )
+        trailing()
     }
 }
 
@@ -786,7 +1085,11 @@ private fun MunicipalCampaignBanner(areaNames: List<String>, onClick: () -> Unit
 // ---- 検索結果カード ----
 
 @Composable
-private fun SearchResultCard(result: MainViewModel.SearchResult, onClick: () -> Unit) {
+private fun SearchResultCard(
+    result: MainViewModel.SearchResult,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
     val fallback = MaterialTheme.colorScheme.primary
     val stripeColors = result.brandColors
         .mapNotNull { parseBrandColor(it) }
@@ -794,6 +1097,12 @@ private fun SearchResultCard(result: MainViewModel.SearchResult, onClick: () -> 
     val separatorColor = MaterialTheme.colorScheme.surfaceContainerHigh
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        // 二ペイン時に詳細ペインへ出している行のハイライト(M3 list-detail の定石)。一覧のみの表示では常に false
+        colors = if (selected) {
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        } else {
+            CardDefaults.cardColors()
+        },
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Row(Modifier.height(IntrinsicSize.Min)) {
@@ -1398,18 +1707,10 @@ private fun CompactDragHandle() {
 /** [CompactDragHandle] の総高(縦 padding 6dp×2 + ハンドル 4dp)。プレビュー用 peek 算出に使う。 */
 private val COMPACT_HANDLE_HEIGHT = 16.dp
 
-/**
- * YOLP 利用規約: 店舗データの帰属表示。常に視認できるようシート上部(ドラッグハンドル直下)に置く。
- * 色・サイズを潰さないこと(docs/map-data-stack.md §3.2/§7)。
- */
+/** YOLP 帰属表示([YolpAttribution])のシート配置。常に視認できるようドラッグハンドル直下に置く。 */
 @Composable
 private fun SheetAttribution() {
-    Text(
-        "店舗情報: Web Services by Yahoo! JAPAN",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
-    )
+    YolpAttribution(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp))
 }
 
 /**
@@ -1430,8 +1731,10 @@ private fun NearbyFilterBar(
     modifier: Modifier = Modifier,
 ) {
     val filtering = merchantFilters.isNotEmpty()
+    val scrollState = rememberScrollState()
     Row(
-        modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        // 右にスクロールできることが見た目で分かるよう、余地のある側をフェードさせる(お店タブと共通)
+        modifier = modifier.fillMaxWidth().horizontalFadingEdges(scrollState).horizontalScroll(scrollState),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1460,13 +1763,7 @@ private fun NearbyFilterBar(
                 )
             }
         } else {
-            categories.forEach { category ->
-                FilterChip(
-                    selected = category in selectedCategories,
-                    onClick = { onToggleCategory(category) },
-                    label = { Text(category) },
-                )
-            }
+            CategoryFilterChips(categories, selectedCategories, onToggleCategory)
         }
     }
 }

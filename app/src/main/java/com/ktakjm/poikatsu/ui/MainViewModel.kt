@@ -26,7 +26,6 @@ import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
-import com.ktakjm.poikatsu.data.QrPayment
 import com.ktakjm.poikatsu.data.RegisteredArea
 import com.ktakjm.poikatsu.data.SETTINGS_BACKUP_SCHEMA_VERSION
 import com.ktakjm.poikatsu.data.SettingsBackup
@@ -1250,7 +1249,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val engine = engine ?: return
         val merchant = place.merchant ?: return
         _state.update {
-            it.copy(selection = engine.selectionFor(merchant, place.name, displayName = place.name))
+            it.withSelection(engine.selectionFor(merchant, place.name, displayName = place.name))
         }
     }
 
@@ -1360,6 +1359,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * selection を開く・差し替える遷移。開いていた店舗判定は古い selection のものなので必ず閉じる
+     * (二ペイン(横画面)では店舗判定を開いたまま一覧の別のお店を選べるため。開いていなければ無害)。
+     */
+    private fun UiState.withSelection(selection: Selection): UiState =
+        copy(selection = selection, storeCheck = null)
+
     fun onSelect(merchant: Merchant) {
         val engine = engine ?: return
         _state.update {
@@ -1367,7 +1373,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val hint = it.query.trim()
                 .takeUnless { q -> q.isBlank() || engine.isExactNameMatch(merchant, q) }
                 .orEmpty()
-            it.copy(selection = engine.selectionFor(merchant, hint))
+            it.withSelection(engine.selectionFor(merchant, hint))
         }
     }
 
