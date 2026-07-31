@@ -1,6 +1,6 @@
 {
   "schema_version": 11,
-  "updated_at": "2026-07-29",
+  "updated_at": "2026-07-31",
   "campaigns": [
     {
       "id": "smcc_combini_restaurant",
@@ -70,7 +70,7 @@
         { "merchant_id": "hamazushi" },
         { "merchant_id": "kappazushi" }
       ],
-      "verified_date": "2026-07-12"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "mufg_point_up_program",
@@ -160,7 +160,7 @@
         "自動販売機/券売機・PayPay商品券での支払いは対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-18"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "yuzawa_aupay_2026_07",
@@ -182,7 +182,7 @@
         "name": "湯沢市",
         "prefecture": "秋田県"
       },
-      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5059",
+      "detail_url": "https://media.aupay.wallet.auone.jp/dominant/lp/202607_yuzawa/",
       "store_search_url": null,
       "ineligible_notes": [
         "インターネット販売・モバイルオーダー・公共料金/納税・タバコ・商品券/プリペイドカード・医療費自己負担分等は対象外"
@@ -191,7 +191,7 @@
         "還元はau PAY残高(税抜相当額基準)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-18"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "yuzawa_dpay_2026_07",
@@ -312,7 +312,7 @@
         "タバコ・自動販売機/券売機・PayPay商品券での支払いは対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-18"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "oda_aupay_2026_07",
@@ -345,7 +345,7 @@
         "還元はau PAY残高(不課税)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-18"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "oda_dpay_2026_07",
@@ -467,6 +467,72 @@
       "verified_date": "2026-07-13"
     },
     {
+      "id": "paypay_landrin_drug_2026_08",
+      "type": "promotion",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "PayPay",
+      "payment_method_id": "paypay",
+      "name": "ランドリンシリーズ還元祭",
+      "display_name": "ランドリン×ドラッグ5社",
+      "payment_instruction": "PayPayアプリ(残高・PayPayクレジット問わず)またはPayPayデビットで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-01",
+      "period_end": "2026-08-31",
+      "min_purchase": 2000,
+      "period_total_cap": 1000,
+      "product_scope": {
+        "label": "ランドリンシリーズの対象製品"
+      },
+      "ineligible_notes": [
+        "お店のQRコードを自分で読み取るスキャン支払いの店舗・レジは対象外"
+      ],
+      "memo": [
+        "最低購入額2,000円は対象製品の合計額に対する条件(1回のお会計)",
+        "対象製品は公式ページ掲載の対象JANコードで判定",
+        "還元はPayPayポイント(後日付与)。事前エントリー不要",
+        "同名シリーズでURL違いの別施策あり: retail-naturelab-20260601 はダイアン パーフェクトビューティー/マイブースターズ対象(最低1,500円)で2026-06-30終了済み。照合時に取り違えないこと"
+      ],
+      "merchant_rules": [
+        { "merchant_id": "welcia", "eligible_notes": ["ダックス・スーパードラッグひまわり・マルエドラッグ等のウエルシアHD各店も対象"] },
+        { "merchant_id": "sugi_pharmacy", "eligible_notes": ["ジャパン・ドラッグスギ含む"] },
+        { "merchant_id": "tsuruha", "eligible_notes": ["杏林堂薬局・くすりの福太郎・B&D・ウォンツ・ドラッグイレブン等のツルハHD各店も対象"] },
+        { "merchant_id": "matsukiyo", "eligible_notes": ["ドラッグセガミ・セイジョー・どらっぐぱぱす・matsukiyo LAB等のマツキヨココカラ各店も対象"] },
+        { "merchant_id": "cocokara_fine", "eligible_notes": ["ココカラファインプラスイズミヤ含む"] }
+      ],
+      "detail_url": "https://paypay.ne.jp/event/retail-naturelab-20260801/",
+      "verified_date": "2026-07-31"
+    },
+    {
+      "id": "aupay_sushiro_takeout_2026_07",
+      "type": "promotion",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "スシローのお持ち帰りネット注文でau PAYを使うと最大10％のPontaポイントを還元",
+      "payment_instruction": "スシローのお持ち帰りネット注文でau PAY(ネット支払い)で事前決済する",
+      "rate_base": 10.0,
+      "period_start": "2026-07-22",
+      "period_end": "2026-08-16",
+      "min_purchase": 5000,
+      "per_transaction_cap": 550,
+      "usage_limit": 2,
+      "requires_entry": true,
+      "ineligible_notes": [
+        "店頭でのau PAYコード支払いは対象外(対象はお持ち帰りネット注文でのネット支払いのみ)"
+      ],
+      "memo": [
+        "還元はPontaポイント(2026年10月末までに付与)",
+        "エントリーと決済の順番は問わない(決済後のエントリーも可)"
+      ],
+      "merchant_rules": [
+        { "merchant_id": "sushiro", "ineligible_notes": ["スシロー秋葉原中央通り店(イートイン専門)は対象外"] }
+      ],
+      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5157",
+      "verified_date": "2026-07-31"
+    },
+    {
       "id": "aupay_tanuki_lottery",
       "type": "promotion",
       "benefit_type": "lottery",
@@ -550,7 +616,7 @@
         "コンビニ・行政機関・金融機関・医療機関/調剤薬局・タクシー・駐車場等は対象外店舗"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-18"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "kanagawa_kanatoku_aupay_2026_06",
@@ -586,7 +652,7 @@
         "還元はau PAY残高(不課税)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-18"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "kanagawa_kanatoku_dpay_2026_06",
@@ -764,7 +830,7 @@
         "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "chiba_pref_aupay_2026_08",
@@ -821,7 +887,7 @@
         "name": "千葉県",
         "prefecture": "千葉県"
       },
-      "detail_url": "https://www.pref.chiba.lg.jp/keisei/press/2026/r8cashless-campaign.html",
+      "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/chiba_03/",
       "store_search_url": null,
       "eligible_notes": [
         "県内在住・在勤を問わず対象"
@@ -831,7 +897,7 @@
         "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "chiba_pref_rakuten_pay_2026_08",
@@ -929,7 +995,7 @@
         "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "chiba_city_aupay_2026_08",
@@ -982,7 +1048,7 @@
         "name": "千葉市",
         "prefecture": "千葉県"
       },
-      "detail_url": "https://www.city.chiba.jp/keizainosei/keizai/kikaku/2026_cashlesscampaign.html",
+      "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/chiba-city_02/",
       "store_search_url": null,
       "eligible_notes": [
         "千葉県キャンペーンと併用可（合わせて最大15%）"
@@ -991,7 +1057,7 @@
         "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "chiba_city_rakuten_pay_2026_08",
@@ -1065,26 +1131,165 @@
       "store_scope": "external",
       "operator": "PayPay",
       "payment_method_id": "paypay",
-      "name": "岐阜市物価高騰支援事業20%還元キャンペーン（最大20%戻ってくる）",
-      "payment_instruction": "PayPay残高・PayPayクレジットで支払う",
+      "name": "令和8年度 岐阜市物価高騰支援事業20％還元キャンペーン",
+      "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイント・PayPayデビットで支払う",
       "rate_base": 20.0,
       "period_start": "2026-08-01",
       "period_end": "2026-08-31",
       "per_transaction_cap": 1000,
       "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "岐阜市",
         "prefecture": "岐阜県"
       },
-      "detail_url": "https://paypay.ne.jp/notice/20260615/cp-jichitai/",
+      "detail_url": "https://paypay.ne.jp/event/gifu-gifu-city-20260801/",
       "store_search_url": null,
       "ineligible_notes": [
-        "岐阜市とPayPayが指定する市内加盟店以外は対象外",
+        "岐阜市が指定する市内の対象店舗以外は対象外",
+        "病院・調剤薬局等の保険診療を行う事業所は対象外店舗",
+        "タバコ・換金性の高いもの・公共料金・納税は対象外",
+        "オンラインショップ・自動販売機/券売機・PayPay商品券での支払いは対象外",
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-31"
+    },
+    {
+      "id": "gifu_aupay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "令和8年度 岐阜市物価高騰支援事業20％還元キャンペーン",
+      "payment_instruction": "au PAYのコード支払いで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-01",
+      "period_end": "2026-08-31",
+      "per_transaction_cap": 1000,
+      "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
+      "may_end_early": true,
+      "region": {
+        "name": "岐阜市",
+        "prefecture": "岐阜県"
+      },
+      "detail_url": "https://media.aupay.wallet.auone.jp/dominant/lp/202608_gifu/",
+      "store_search_url": null,
+      "ineligible_notes": [
+        "岐阜市が指定する市内の対象店舗以外は対象外",
+        "病院・調剤薬局等の保険診療を行う事業所は対象外店舗",
+        "タバコ・換金性の高いもの・公共料金・納税は対象外"
+      ],
+      "memo": [
+        "還元はau PAY残高(不課税)"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-31"
+    },
+    {
+      "id": "gifu_dpay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "d払い",
+      "payment_method_id": "dpay",
+      "name": "令和8年度 岐阜市物価高騰支援事業20％還元キャンペーン",
+      "payment_instruction": "d払いのコード決済で支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-01",
+      "period_end": "2026-08-31",
+      "per_transaction_cap": 1000,
+      "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
+      "may_end_early": true,
+      "region": {
+        "name": "岐阜市",
+        "prefecture": "岐阜県"
+      },
+      "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/gifu-city_05/",
+      "store_search_url": null,
+      "ineligible_notes": [
+        "岐阜市が指定する市内の対象店舗以外は対象外",
+        "病院・調剤薬局等の保険診療を行う事業所は対象外店舗",
+        "タバコ・換金性の高いもの・公共料金・納税は対象外",
+        "店舗アプリ経由の決済・自動販売機/券売機・クーポン利用分は対象外"
+      ],
+      "memo": [
+        "還元はdポイント(利用決済月の翌月末頃に付与)"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-31"
+    },
+    {
+      "id": "gifu_rakuten_pay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "楽天ペイ",
+      "payment_method_id": "rakuten_pay",
+      "name": "令和8年度 岐阜市物価高騰支援事業20％還元キャンペーン",
+      "payment_instruction": "楽天ペイのコード決済で支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-01",
+      "period_end": "2026-08-31",
+      "per_transaction_cap": 1000,
+      "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
+      "may_end_early": true,
+      "region": {
+        "name": "岐阜市",
+        "prefecture": "岐阜県"
+      },
+      "detail_url": "https://www.city.gifu.lg.jp/business/sangyoushinkou/1005713/1040284/1040912.html",
+      "store_search_url": null,
+      "ineligible_notes": [
+        "岐阜市が指定する市内の対象店舗以外は対象外",
+        "病院・調剤薬局等の保険診療を行う事業所は対象外店舗",
+        "タバコ・換金性の高いもの・公共料金・納税は対象外",
+        "請求書払い・楽天ポイントカード払いでの支払いは対象外"
+      ],
+      "memo": [
+        "還元は楽天ポイント(2026年10月末頃までに付与)"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-31"
+    },
+    {
+      "id": "gifu_aeon_pay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "AEON Pay",
+      "payment_method_id": "aeon_pay",
+      "name": "令和8年度 岐阜市物価高騰支援事業20％還元キャンペーン",
+      "payment_instruction": "AEON Payのコード決済で支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-01",
+      "period_end": "2026-08-31",
+      "per_transaction_cap": 1000,
+      "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
+      "may_end_early": true,
+      "region": {
+        "name": "岐阜市",
+        "prefecture": "岐阜県"
+      },
+      "detail_url": "https://www.city.gifu.lg.jp/business/sangyoushinkou/1005713/1040284/1040944.html",
+      "store_search_url": null,
+      "ineligible_notes": [
+        "岐阜市が指定する市内の対象店舗以外は対象外",
+        "病院・調剤薬局等の保険診療を行う事業所は対象外店舗",
+        "タバコ・換金性の高いもの・公共料金・納税は対象外",
+        "WAON POINT付与対象外カード(イオンJMBカード等)は対象外"
+      ],
+      "memo": [
+        "還元はWAON POINT(2026年10月末頃までに付与)。他自治体施策のAEON Pay残高付与と異なる"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-31"
     },
     {
       "id": "matsubara_paypay_2026_08",
@@ -1105,14 +1310,14 @@
         "name": "松原市",
         "prefecture": "大阪府"
       },
-      "detail_url": "https://paypay.ne.jp/notice/20260630/cp-jichitai/",
+      "detail_url": "https://paypay.ne.jp/event/osaka-matsubara-city/",
       "store_search_url": null,
       "ineligible_notes": [
         "松原市とPayPayが指定する市内加盟店以外は対象外",
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "kakogawa_paypay_2026_08",
@@ -1141,7 +1346,7 @@
         "たばこ・金券・電子マネーチャージ・公共料金・金融商品等は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "takehara_paypay_2026_08",
@@ -1169,7 +1374,7 @@
         "コンビニ・病院/医院・調剤薬局・介護施設・保険代理店・公共料金・金券・プリペイドカード・たばこ・市指定ごみ袋等は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "tsukumi_paypay_2026_08",
@@ -1190,14 +1395,14 @@
         "name": "津久見市",
         "prefecture": "大分県"
       },
-      "detail_url": "https://paypay.ne.jp/notice/20260615/cp-jichitai/",
+      "detail_url": "https://paypay.ne.jp/event/oita-tsukumi-city-20260801/",
       "store_search_url": null,
       "ineligible_notes": [
         "津久見市内の中規模・小規模のPayPay加盟店以外は対象外",
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "iwate_pref_paypay_2026_08",
@@ -1229,7 +1434,7 @@
         "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "iwate_pref_aupay_2026_08",
@@ -1283,7 +1488,7 @@
         "name": "岩手県",
         "prefecture": "岩手県"
       },
-      "detail_url": "https://iwate-premiumpoint.pref.iwate.jp/",
+      "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/iwate_03/",
       "store_search_url": null,
       "eligible_notes": [
         "岩手県外在住でも対象"
@@ -1293,7 +1498,7 @@
         "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "iwate_pref_rakuten_pay_2026_08",
@@ -1357,7 +1562,7 @@
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "asaka_paypay_2026_09",
@@ -1385,7 +1590,7 @@
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "ama_paypay_2026_09",
@@ -1413,7 +1618,7 @@
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "kimino_paypay_2026_09",
@@ -1441,7 +1646,7 @@
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-31"
     },
     {
       "id": "makurazaki_paypay_2026_09",
@@ -1469,7 +1674,39 @@
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-07-31"
+    },
+    {
+      "id": "erimo_dpay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "d払い",
+      "payment_method_id": "dpay",
+      "name": "日高山脈襟裳十勝国立公園d払いで満喫！ポイント還元キャンペーン",
+      "payment_instruction": "d払いのコード決済で支払う",
+      "rate_base": 30.0,
+      "period_start": "2026-08-01",
+      "period_end": "2026-08-31",
+      "per_transaction_cap": 1000,
+      "period_total_cap": 10000,
+      "may_end_early": true,
+      "region": {
+        "name": "えりも町",
+        "prefecture": "北海道"
+      },
+      "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/erimo_02/",
+      "store_search_url": null,
+      "ineligible_notes": [
+        "えりも町内の対象店舗以外は対象外",
+        "タバコ・自動販売機/券売機・クーポン利用分は対象外"
+      ],
+      "memo": [
+        "還元はdポイント(期間・用途限定。利用決済月の翌月末頃に付与)",
+        "施策名は日高山脈襟裳十勝国立公園を冠するが、公式は対象を「北海道えりも町の対象店舗にて」と明記(2026-07-31確認)"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-07-31"
     }
   ]
 }
