@@ -1,6 +1,6 @@
 {
   "schema_version": 11,
-  "updated_at": "2026-07-23",
+  "updated_at": "2026-08-01",
   "campaigns": [
     {
       "id": "test_card_program",
@@ -196,7 +196,7 @@
       "detail_url": "https://example.com/product-scope-campaign",
       "verified_date": "2026-07-13",
       "merchant_rules": [
-        { "merchant_id": "test_drugstore" },
+        { "merchant_id": "test_drugstore", "ineligible_banner_ids": ["test_sundrug"] },
         { "merchant_id": "test_super" }
       ]
     },

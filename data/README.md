@@ -4,7 +4,7 @@
 
 ## ファイル
 
-- `merchants.json` — チェーン店マスタ。`reading`(ひらがな読み)と `aliases`(略称・別ブランド名)は検索のヒット率に直結するので、追加時は必ず入れる。位置情報を持たない発行体(自販機など)は `location_hint`(`text`/`label`/`url`)を持たせる。これがあると判定詳細で「近くのこのお店を探す」を出さず、代わりに位置を確認できる外部アプリ/サイトへ案内する(例: コカ・コーラ自販機 → Coke ON 公式アプリ)。`yolp_config` で YOLP 検索の gc グループ設定、各 merchant の `yolp_search`/`yolp_keyword` で検索方式を持つ(§ YOLP 検索設定 参照)。
+- `merchants.json` — チェーン店マスタ。1 merchant = 1 系列(施策の帰属単位)で、傘下の看板(店頭の名前。UI 表記は「業態」)は `banners` に持つ(§ 系列と看板 参照)。`reading`(ひらがな読み)と `aliases`(略称・別ブランド名)は検索のヒット率に直結するので、追加時は必ず入れる。位置情報を持たない発行体(自販機など)は `location_hint`(`text`/`label`/`url`)を持たせる。これがあると判定詳細で「近くのこのお店を探す」を出さず、代わりに位置を確認できる外部アプリ/サイトへ案内する(例: コカ・コーラ自販機 → Coke ON 公式アプリ)。`yolp_config` で YOLP 検索の gc グループ設定、各 merchant の `yolp_search`/`yolp_keyword` で検索方式を持つ(§ YOLP 検索設定 参照)。
 - `campaigns.json` — 還元施策。`merchant_rules[].merchant_id` は merchants.json の `id`、`card_id` は payment_methods.json の `cards[].id` を参照する。**ユーザー固有の前提はここに書かず、汎用的な施策情報のみを持つ。** 常設施策(`card_program`)・期間限定施策(`promotion`)・自治体施策(`municipal`) の 3 種類をサポート。
 - `payment_methods.json` — 決済手段(カード + QR 決済)の**カタログ(マスタ)**。`cards` は現状: 三井住友(`smcc`、7%、`point_multiplier` でウエル活×1.5)、三菱UFJ(`mufg`、基準7%)。`brands` はそのカード製品で**選べるブランドの選択肢**で、実際に持っているブランドはユーザー設定(`CardOverride.brand`)に分離する(カタログにユーザー属性を混ぜない)。**設定画面でカード所有・還元率・ブランド・ウエル活を編集でき、差分はカード id をキーに DataStore に保存して起動時にこのカタログへ重ねる(payment_methods.json 自体は書き換えない)**。判定エンジンは**所有カードのみ**を対象とし、実ブランドが `ineligible_brands` に一致(または未選択でその除外ブランドを取りうる)ならその店を除外・リストに無いブランドなら無視、`effective_rate_default` を実効還元率として用いる。`qr_payments` に QR 決済サービスのカタログを持つ。
 - `municipalities.json` — 全国自治体マスタ(47 都道府県・1,741 市区町村・自治体グループ)。設定画面で居住地・行動圏を登録する際のピッカーデータと、おトクタブの地域フィルタ(グループ→自治体の展開)に使う。`scripts/generate_municipalities.py` が気象庁の予報区データから自動生成する(§ municipalities.json 参照)。
@@ -80,6 +80,10 @@
   - 例(アカチャンホンポ/MUFG): 公式([akachan.jp](https://www.akachan.jp/topics/mufgCPlist/))が◯対象/×対象外を店舗名で明示。両方を `eligible_stores`/`ineligible_stores` に登録し、未掲載店は要確認。公式ページに更新日表記が無いため `date_is_official: false`(確認日表示)。
   - 注意: 網羅的でない例示リストをここに入れると「非一致=対象」を誤って断定してしまう。断定できる完全なリストだけを登録すること。
 - `merchant_rules[].ineligible_brands` — この店で優遇対象外になる国際ブランド名のリスト(例: `["Amex"]`。現状使うのは MUFG のデータのみ)。値は payment_methods.json の `card_brands` の `name` を使う(整合性テストで強制)。実ブランドが一致する場合、これらの店は判定・検索・地図から除外される。**ブランド未選択でもそのカードが除外ブランドを取りうる(`brands` に含む)なら除外側に倒す**(不確かな情報で実際より好条件を提示しない方針。実ブランドを選択すると正確になる)。「Visa/MC のみ対象」のような限定も残りブランドの除外として登録する(対象側リストは持たない)。公式ページで店ごとの除外有無を確認済みの施策では、除外が無い店にも明示的に `[]` を書いて「確認済み」を表す。
+- `merchant_rules[].banner_ids` / `ineligible_banner_ids` — 看板(業態)単位の対象/対象外(#60)。値は merchants.json のその merchant の `banners[].id`(代表看板は merchant の `id` そのもの。整合性テストで参照を強制)。**両方は指定できない(排他)**。省略時は全看板対象(通常ケース):
+  - `banner_ids` — その看板**だけ**が対象(例: グループ内の 1 看板限定の施策)
+  - `ineligible_banner_ids` — その看板だけ**対象外**(例: すかいらーくグループ対象だがペルティカは対象外)。該当看板の POI は判定なし = 地図ピン・一覧からも消える
+  - 判定詳細では「対象は◯◯のみ」「◯◯は対象外」の注記に自動合成されるので、同じ内容を `ineligible_notes` に重ねて書かない
 - `verified_date` — 公式ページで最後に確認した日。**判定画面に必ず表示する。**
 - 識別色(brand_color)は campaigns.json には**持たない**。発行体(payment_methods.json の cards / card_brands / qr_payments)側で一元管理し、アプリが帰属(card_id / card_brand / payment_method_id)から解決する(同一発行体の施策間で色がぶれないようにするため。§ payment_methods.json 参照)
 
@@ -95,6 +99,28 @@
 - `point_multiplier`(任意) — ポイント価値の倍率。`{ label, factor, color }`。設定画面で「ウエル活利用時の還元率を表示」チェックを出し、ON で `factor` 倍した実効還元率を表示する。`color` はバッジ色(ウエルシアのロゴ色 #RRGGBB)。三井住友(Vポイント)に設定。
 - `qr_payments` — 利用中の QR 決済サービスのカタログ。`{ id, name, brand_color, app_packages, store_search_label, enabled_default }`。設定画面でチェックした QR 決済が判定エンジンのフィルタに使われる。DataStore に差分保存。
   - `app_packages` — そのサービスで決済できるアプリのリスト `[{ package, label }]`(優先順)。1 サービスを複数アプリが担える(AEON Pay = 単独アプリ / iAEON の 2 本立て)ため 1:N で持ち、判定詳細の起動リンクは候補全部をボタンで出す。`label` は起動先アプリの実名(サービス名と一致するとは限らない。メルペイ → メルカリ)。**パッケージ名は app の AndroidManifest `<queries>` と対で管理**(宣言が無いと Android 11+ でインストール済みでも起動 Intent が取れず Play ストア送りになる。リモート JSON で追加してもアプリ更新が要る)
+
+### merchants.json — 系列と看板(banners)
+
+1 merchant = 1 **系列**(施策の帰属単位。ホールディングス等)で、傘下で別の名前を掲げる**看板**(UI 表記は「業態」)は `banners` に入れ子で持つ(#60。ドラッグストア系の「系列単位で対象・公式は看板を全列挙」型の施策に対応するため)。
+
+```jsonc
+{ "id": "tsuruha", "name": "ツルハドラッグ", "reading": "つるはどらっぐ", "aliases": ["ツルハ"],
+  "category": "ドラッグストア", "group_label": "ツルハグループ",
+  "banners": [
+    { "id": "kyorindo", "name": "杏林堂薬局", "reading": "きょうりんどうやっきょく", "aliases": ["杏林堂"] }
+  ] }
+```
+
+- merchant 自体の `name`/`reading`/`aliases` は**代表看板**(banner id = merchant の `id`)として扱われる。`campaigns.json` の `merchant_rules` は従来どおり `merchant_id` を書くだけで傘下看板がすべて対象・地図表示になる(看板の列挙は不要)
+- **alias と banner の線引き**: alias = **同一看板の略称・表記ゆれ**(マツキヨ・welcia・KFC)/ banner = **街で別の名前を掲げる店**(ハックドラッグ・杏林堂薬局)。看板を alias に入れると絞り込み・表示ラベルが系列名に化ける(#60 の不都合)ので banner にする
+- `group_label` — グループ名(例: 「ツルハグループ」)。検索結果の従属表示・地図の絞り込みの束ね見出し・判定詳細の業態行・施策詳細の「対象:」ラベル(全業態対象の系列はグループ名で出す)に使う。未設定時は「{name}グループ」で代用。**その merchant の傘下範囲を正確に表す名前**を入れること(マツキヨココカラのように複数 merchant に跨る持株会社名は使わない — matsukiyo は「マツモトキヨシグループ」、cocokara_fine は「ココカラファイングループ」)
+- `banners` は**網羅リストでなくてよい**。未登録の看板は照合されず「出ないだけ」(誤って対象と表示されない安全側)。施策のカバレッジやユーザーの必要が生じた分だけ登録する
+- `banners` の**並び順 = 表示優先順**(店舗数・知名度の降順の目安)。お店タブのカテゴリ一覧カードは先頭 2 業態を「◯◯・◯◯ など N業態」と併記し、判定詳細の全列挙・カスタム登録ピッカーもこの順で出す。照合には順序は影響しない
+- **既存の系列に看板を追加するときは、その merchant を参照している全施策を見直す**こと。追加した瞬間、グループ対象の既存施策が(公式では対象外でも)新看板に効いてしまう。公式が対象外にしている看板なら同時に該当施策へ `ineligible_banner_ids` を入れる(手順は collect-campaigns スキルの mapping.md)
+- 看板名の登録時は照合の制約に注意: **正規化後 3 文字未満(かな・英数)のキーは POI 照合されない**(B&D→「B&Dドラッグストア」で登録)。かな 3 文字は誤爆しやすい(シミズ→「シミズ薬品」、ダルマ→「ダルマ薬局」)。登録の有効性・キーの一意性・banner_ids の参照はユニットテスト(BannerTest)が検証する
+- **公式表記だけでなく YOLP の実 POI 名も確認して alias を補う**。実データには短縮形が混在する(「ぱぱす」「くすりセイジョー」等。2026-08 実測)。かな 3〜4 文字の短縮 alias は誤爆(かな後続は自動ブロックされるが**漢字後続は素通り**: 「だるま食堂」)と取りこぼしを天秤にかけて判断し、否定テストを BannerTest に残す
+- `yolp_search: "keyword"` の merchant には banners を持たせない(キーワードは merchant 単位で 1 つのため、看板ぶんの取得ができない)。ドラッグストア等の gc 取得では banner を増やしても YOLP コールは増えない
 
 ### merchants.json — YOLP 検索設定
 
@@ -174,7 +200,7 @@
 - **テストコンビニ**: test_card_program(7%)・test_promotion(10%)・test_recurrence_weekly(20% 金土)・test_lottery(抽選)・test_rebate_fixed(500 円還元 PayPay)・test_upcoming(25% 未開始)・test_ending_soon(15% 終了間近)
 - **テストバーガー**: test_card_program(7%)・test_promotion(15% override)・test_brand_promotion(Visa 30% OFF)・test_recurrence_monthly(12% 5・20・30 日)・test_discount_fixed(300 円引き PayPay)・test_upcoming(25% 未開始)
 - **テストスーパー**: test_card_program(7%・Amex 除外)・test_product_scope(30% 対象商品限定 PayPay)。無条件の 7% と商品限定 30% が並んでも最大おトク率が 7% のまま(商品限定を最良比較に載せない)ことを確認できる
-- **テストドラッグ**: test_product_scope(30% 対象商品限定 PayPay)のみ。商品限定施策しか無いチェーンの一覧ラベル「30% 還元(対象商品)」の確認用。実在ドラッグストア 6 チェーン(ウエルシア・スギ薬局・ツルハ・マツキヨ・サンドラッグ・ココカラファイン)を aliases に持ち、gc グループ `0202001` で地図表示・店舗ピンの実機確認ができる
+- **テストドラッグ**: test_product_scope(30% 対象商品限定 PayPay)のみ。商品限定施策しか無いチェーンの一覧ラベル「30% 還元(対象商品)」の確認用。実在ドラッグストア 6 チェーンを **banners**(テストドラッググループの業態)として持ち、gc グループ `0202001` で地図表示・業態レンズ・グループ束ね UI の実機確認ができる。施策側は `ineligible_banner_ids: ["test_sundrug"]` の使用例を兼ね、**サンドラッグの実店舗ピンだけ地図から消える**(看板スコープの実機確認用。#60)
 
 #### 日付依存パターンの手直し手順
 
@@ -194,7 +220,7 @@
 
 - 月 1 回、`sources` の公式 URL を確認して `verified_date` を更新する。
 - 施策の改定があったら率・店舗リストを直し、`updated_at` を更新する。
-- 整合性チェック: merchant_id の参照切れ・エイリアス衝突がないこと(リポジトリの検証スクリプトを流す)。
+- 整合性チェック: merchant_id / banner_ids の参照切れ・照合キー(name/reading/aliases/banners)の衝突がないこと(`./gradlew :app:testDebugUnitTest` の実データテストが検証する)。
 
 ### 期間限定キャンペーン・クーポンの運用
 

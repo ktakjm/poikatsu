@@ -1,6 +1,6 @@
 {
   "schema_version": 11,
-  "updated_at": "2026-07-31",
+  "updated_at": "2026-08-01",
   "campaigns": [
     {
       "id": "smcc_combini_restaurant",
@@ -491,14 +491,15 @@
         "最低購入額2,000円は対象製品の合計額に対する条件(1回のお会計)",
         "対象製品は公式ページ掲載の対象JANコードで判定",
         "還元はPayPayポイント(後日付与)。事前エントリー不要",
-        "同名シリーズでURL違いの別施策あり: retail-naturelab-20260601 はダイアン パーフェクトビューティー/マイブースターズ対象(最低1,500円)で2026-06-30終了済み。照合時に取り違えないこと"
+        "同名シリーズでURL違いの別施策あり: retail-naturelab-20260601 はダイアン パーフェクトビューティー/マイブースターズ対象(最低1,500円)で2026-06-30終了済み。照合時に取り違えないこと",
+        "公式の対象46看板は merchants.json の banners(系列4社+サブ看板)で全カバー。傘下看板の列挙 notes は #60 でマスタ側へ移した"
       ],
       "merchant_rules": [
-        { "merchant_id": "welcia", "eligible_notes": ["ダックス・スーパードラッグひまわり・マルエドラッグ等のウエルシアHD各店も対象"] },
-        { "merchant_id": "sugi_pharmacy", "eligible_notes": ["ジャパン・ドラッグスギ含む"] },
-        { "merchant_id": "tsuruha", "eligible_notes": ["杏林堂薬局・くすりの福太郎・B&D・ウォンツ・ドラッグイレブン等のツルハHD各店も対象"] },
-        { "merchant_id": "matsukiyo", "eligible_notes": ["ドラッグセガミ・セイジョー・どらっぐぱぱす・matsukiyo LAB等のマツキヨココカラ各店も対象"] },
-        { "merchant_id": "cocokara_fine", "eligible_notes": ["ココカラファインプラスイズミヤ含む"] }
+        { "merchant_id": "welcia" },
+        { "merchant_id": "sugi_pharmacy" },
+        { "merchant_id": "tsuruha" },
+        { "merchant_id": "matsukiyo" },
+        { "merchant_id": "cocokara_fine" }
       ],
       "detail_url": "https://paypay.ne.jp/event/retail-naturelab-20260801/",
       "verified_date": "2026-07-31"

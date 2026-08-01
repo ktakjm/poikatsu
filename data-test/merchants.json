@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-07-14",
+  "updated_at": "2026-08-01",
 
   "yolp_config": {
     "gc_groups": [
@@ -52,8 +52,17 @@
       "id": "test_drugstore",
       "name": "テストドラッグ",
       "reading": "てすとどらっぐ",
-      "aliases": ["ウエルシア", "ウエルシア薬局", "スギ薬局", "スギドラッグ", "ツルハドラッグ", "ツルハ", "マツモトキヨシ", "マツキヨ", "サンドラッグ", "ココカラファイン"],
-      "category": "ドラッグストア"
+      "aliases": ["マツキヨ", "ツルハ"],
+      "category": "ドラッグストア",
+      "group_label": "テストドラッググループ",
+      "banners": [
+        { "id": "test_welcia", "name": "ウエルシア", "reading": "うえるしあ", "aliases": ["ウエルシア薬局"] },
+        { "id": "test_sugi", "name": "スギ薬局", "reading": "すぎやっきょく", "aliases": ["スギドラッグ"] },
+        { "id": "test_tsuruha", "name": "ツルハドラッグ", "reading": "つるはどらっぐ" },
+        { "id": "test_matsukiyo", "name": "マツモトキヨシ", "reading": "まつもときよし" },
+        { "id": "test_sundrug", "name": "サンドラッグ", "reading": "さんどらっぐ" },
+        { "id": "test_cocokara", "name": "ココカラファイン", "reading": "ここからふぁいん" }
+      ]
     },
     {
       "id": "test_vending",
