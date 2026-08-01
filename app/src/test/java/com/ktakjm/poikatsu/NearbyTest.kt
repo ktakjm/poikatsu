@@ -50,14 +50,14 @@ class StoreMatchTest {
 
     @Test
     fun `POI名からチェーンを特定できる`() {
-        assertEquals("mcdonalds", engine.matchStore("マクドナルド 渋谷駅前店")?.id)
-        assertEquals("seven_eleven", engine.matchStore("セブン-イレブン 横浜北幸1丁目店")?.id)
+        assertEquals("mcdonalds", engine.matchStore("マクドナルド 渋谷駅前店")?.merchant?.id)
+        assertEquals("seven_eleven", engine.matchStore("セブン-イレブン 横浜北幸1丁目店")?.merchant?.id)
     }
 
     @Test
     fun `最長一致でステーキガストがガストに誤マッチしない`() {
-        assertEquals("steak_gusto", engine.matchStore("ステーキガスト 町田店")?.id)
-        assertEquals("gusto", engine.matchStore("ガスト 町田店")?.id)
+        assertEquals("steak_gusto", engine.matchStore("ステーキガスト 町田店")?.merchant?.id)
+        assertEquals("gusto", engine.matchStore("ガスト 町田店")?.merchant?.id)
     }
 
     @Test
@@ -75,11 +75,11 @@ class StoreMatchTest {
     fun `漢字2文字のチェーン名でもマッチする`() {
         // 「松屋」等の漢字2文字は3文字未満だが照合対象(かなの「もす」等と違い誤爆しにくい)。
         // POI 名は漢字表記なので読み(まつや)では当たらず、これが無いと素の松屋を全て取りこぼす(#38)
-        assertEquals("matsuya", engine.matchStore("松屋 横浜西口店")?.id)
-        assertEquals("matsuya", engine.matchStore("松屋横浜西口店")?.id)
-        assertEquals("yumean", engine.matchStore("夢庵 港南台店")?.id)
+        assertEquals("matsuya", engine.matchStore("松屋 横浜西口店")?.merchant?.id)
+        assertEquals("matsuya", engine.matchStore("松屋横浜西口店")?.merchant?.id)
+        assertEquals("yumean", engine.matchStore("夢庵 港南台店")?.merchant?.id)
         // 別名(松のや)経由の併設店も従来どおりマッチする
-        assertEquals("matsuya", engine.matchStore("松のや伊勢佐木町店（松屋併設）")?.id)
+        assertEquals("matsuya", engine.matchStore("松のや伊勢佐木町店（松屋併設）")?.merchant?.id)
     }
 
     @Test
@@ -95,27 +95,27 @@ class StoreMatchTest {
     fun `YOLPの連結店名(支店名がひらがな始まり)でもマッチする`() {
         // YOLP は支店名を区切りなく連結する。正規化後「肉のはなまさ|ひばりが丘店」のように
         // チェーン名の直後がひらがなでも、長いキーなら支店名の一部として許容する(取りこぼし防止)。
-        assertEquals("hanamasa", engine.matchStore("肉のハナマサひばりヶ丘店")?.id)
+        assertEquals("hanamasa", engine.matchStore("肉のハナマサひばりヶ丘店")?.merchant?.id)
         // 漢字始まりの支店名は従来から境界OK
-        assertEquals("ok_store", engine.matchStore("オーケー大泉インター店")?.id)
+        assertEquals("ok_store", engine.matchStore("オーケー大泉インター店")?.merchant?.id)
     }
 
     @Test
     fun `重複排除キーは空白違い・別名違いを同一、別支店を別とする`() {
-        val aka = engine.matchStore("アカチャンホンポ和光イトーヨーカドー店")!!
+        val aka = engine.matchStore("アカチャンホンポ和光イトーヨーカドー店")!!.merchant
         // 空白の有無だけ違う同一店舗 → 同じ支店キー
         assertEquals(
             engine.normalizedBranch(aka, "アカチャンホンポ和光 イトーヨーカドー店"),
             engine.normalizedBranch(aka, "アカチャンホンポ和光イトーヨーカドー店"),
         )
         // 「KFC」と「ケンタッキーフライドチキン」(別名違い)→ 支店名が同じなら同じキー
-        val kfc = engine.matchStore("KFC渋谷店")!!
+        val kfc = engine.matchStore("KFC渋谷店")!!.merchant
         assertEquals(
             engine.normalizedBranch(kfc, "KFC渋谷店"),
             engine.normalizedBranch(kfc, "ケンタッキーフライドチキン渋谷店"),
         )
         // 同一モール内の別店舗(支店名が違う)→ 別キー(誤って1件に潰さない)
-        val sbux = engine.matchStore("スターバックスコーヒーイオンレイクタウンkaze店")!!
+        val sbux = engine.matchStore("スターバックスコーヒーイオンレイクタウンkaze店")!!.merchant
         assertNotEquals(
             engine.normalizedBranch(sbux, "スターバックスコーヒーイオンレイクタウンkaze店"),
             engine.normalizedBranch(sbux, "スターバックスコーヒーイオンレイクタウンmori店"),

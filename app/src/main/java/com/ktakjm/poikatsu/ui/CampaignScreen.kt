@@ -44,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.ktakjm.poikatsu.data.Campaign
+import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.CampaignStatus
@@ -411,7 +412,7 @@ private fun CampaignSummaryCard(
 @Composable
 internal fun CampaignDetail(
     judgments: List<CampaignJudgment>,
-    merchantNames: Map<String, String>,
+    merchants: Map<String, Merchant>,
     onBack: () -> Unit,
     /** 対象チェーンの地図ブリッジ(merchant_id 群を渡す。チップは1件、まとめては全件) */
     onFindChains: (List<String>) -> Unit,
@@ -426,10 +427,23 @@ internal fun CampaignDetail(
 
     // managed 施策の対象チェーン(自治体系は merchant_rules を持たないため出ない)。
     // グループは promotion なら1施策なので、実質その施策の merchant_rules を解決した一覧
-    val chainIds = judgments
-        .filter { it.campaign.storeScope == "managed" }
-        .flatMap { j -> j.campaign.merchantRules.map { it.merchantId } }
+    val campaigns = judgments.map { it.campaign }
+    val chainIds = campaigns
+        .filter { it.storeScope == "managed" }
+        .flatMap { c -> c.merchantRules.map { it.merchantId } }
         .distinct()
+    // 「対象:」の表示ラベル(業態対応の詳細は campaignTargetLabels)。表示条件:
+    // - 2件以上: 従来どおり列挙
+    // - カスタム施策: タイトルが登録名固定で対象がどこにも出ないため 1 件でも出す
+    // - 単一系列でも業態を持つグループ: タイトル(merchant 名)だけでは範囲が伝わらないため
+    //   「対象: ◯◯グループ」を出す(「マツモトキヨシ」が業態かグループか区別できない問題)
+    val allTargetLabels = campaignTargetLabels(campaigns, merchants)
+    val targetLabels = when {
+        allTargetLabels.size >= 2 -> allTargetLabels
+        campaigns.any { it.isCustom } -> allTargetLabels
+        chainIds.singleOrNull()?.let { merchants[it]?.banners?.isNotEmpty() } == true -> allTargetLabels
+        else -> emptyList()
+    }
 
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -462,7 +476,7 @@ internal fun CampaignDetail(
                 TargetChainSection(
                     campaign = judgments.first { it.campaign.storeScope == "managed" }.campaign,
                     chainIds = chainIds,
-                    merchantNames = merchantNames,
+                    targetLabels = targetLabels,
                     onFindChains = onFindChains,
                 )
             }
@@ -493,7 +507,7 @@ private const val TARGET_CHAINS_COLLAPSED_COUNT = 4
 private fun TargetChainSection(
     campaign: Campaign,
     chainIds: List<String>,
-    merchantNames: Map<String, String>,
+    targetLabels: List<String>,
     onFindChains: (List<String>) -> Unit,
 ) {
     val today = LocalDate.now()
@@ -509,8 +523,9 @@ private fun TargetChainSection(
             Spacer(Modifier.width(8.dp))
             Text(if (chainIds.size == 1) "近くのこのお店を探す" else "近くの対象のお店を探す")
         }
-        if (chainIds.size >= 2) {
-            val names = chainIds.mapNotNull { merchantNames[it] }
+        // 表示するラベルの選別(単一チェーンの同梱施策では空になる等)は CampaignDetail 側で行う
+        if (targetLabels.isNotEmpty()) {
+            val names = targetLabels
             if (names.size <= TARGET_CHAINS_COLLAPSE_THRESHOLD) {
                 Text(
                     "対象: ${names.joinToString("・")}",

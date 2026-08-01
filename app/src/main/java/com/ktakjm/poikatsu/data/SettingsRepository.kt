@@ -74,6 +74,17 @@ data class CustomPayment(
 )
 
 /**
+ * カスタムキャンペーンの業態(看板)単位の選択1件(#60)。系列まるごとではなく
+ * 「杏林堂薬局だけ」のような対象を表す。bannerId は merchants.json の banners[].id
+ * (代表看板は merchant.id)。変換時に banner_ids 付きの MerchantRule になる。
+ */
+@Serializable
+data class BannerSelection(
+    val merchantId: String,
+    val bannerId: String,
+)
+
+/**
  * ユーザーが登録するカスタムキャンペーン(#7)。会員ポータル限定クーポン等、同梱データ
  * (campaigns.json)で配信できない施策を本人が登録し、同梱施策と同様に判定・表示する。
  * 判定エンジンへは domain の変換(toCampaigns / buildCustomMerchants)で Campaign / Merchant に
@@ -92,8 +103,10 @@ data class CustomCampaign(
     val qrPaymentId: String? = null,
     /** 紐付け先の決済手段(1件以上)。決済ごとに Campaign へ展開される */
     val payments: List<CustomPayment> = emptyList(),
-    /** 対象チェーン(merchants.json の id)。[storeNames] と併用可 */
+    /** 対象チェーン(merchants.json の id)。系列まるごとの選択。[storeNames] と併用可 */
     val merchantIds: List<String> = emptyList(),
+    /** 業態(看板)単位の選択(#60)。同じ merchant の [merchantIds](系列まるごと)とは排他で保存する */
+    val bannerSelections: List<BannerSelection> = emptyList(),
     /** カタログに無い店の自由入力店名。店名の部分一致でお店・地図タブにマッチさせる */
     val storeNames: List<String> = emptyList(),
     /**

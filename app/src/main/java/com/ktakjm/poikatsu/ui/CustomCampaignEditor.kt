@@ -61,6 +61,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.ktakjm.poikatsu.data.BannerSelection
 import com.ktakjm.poikatsu.data.CustomCampaign
 import com.ktakjm.poikatsu.data.CustomPayment
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_PERIOD_TOTAL
@@ -134,6 +135,7 @@ internal fun CustomCampaignEditorScreen(
         mutableStateOf(initial?.payments.orEmpty().map { it.optionKey() }.filter { it in optionKeys }.toSet())
     }
     var merchantIds by remember { mutableStateOf(initial?.merchantIds.orEmpty().toSet()) }
+    var bannerSelections by remember { mutableStateOf(initial?.bannerSelections.orEmpty().toSet()) }
     var storeNames by remember { mutableStateOf(initial?.storeNames.orEmpty()) }
     var storeNameInput by remember { mutableStateOf("") }
     var allStores by remember { mutableStateOf(initial?.allStores == true) }
@@ -202,8 +204,8 @@ internal fun CustomCampaignEditorScreen(
     val periodError = startDate != null && endDate != null && startDate!! > endDate!!
     // 自由入力欄に書きかけ(未チップ化)の店名も保存時に取り込むため、店舗ありとみなす。
     // 全店舗対象トグル ON はお店の指定が不要(選び忘れの誤登録と区別するため明示トグルにしている)
-    val hasStore = allStores ||
-        merchantIds.isNotEmpty() || storeNames.isNotEmpty() || storeNameInput.isNotBlank()
+    val hasStore = allStores || merchantIds.isNotEmpty() || bannerSelections.isNotEmpty() ||
+        storeNames.isNotEmpty() || storeNameInput.isNotBlank()
     // 抽選は率・額を持たない(「抽選」表示)。それ以外は率・定額・メモのどれかが必要
     val hasBenefit = isLottery || rate != null || discount != null || note.isNotBlank()
     val minPurchase = minPurchaseText.trim().toIntOrNull()
@@ -235,6 +237,12 @@ internal fun CustomCampaignEditorScreen(
             payments = selectedPaymentKeys.mapNotNull { optionsByKey[it]?.toPayment() },
             // 全店舗対象はお店を持たせない(トグル前に選んだ内容は保存時に捨てる)
             merchantIds = if (allStores) emptyList() else merchantIds.toList(),
+            // 系列まるごと選択がある merchant の業態選択は冗長なので保存時に除く
+            bannerSelections = if (allStores) {
+                emptyList()
+            } else {
+                bannerSelections.filterNot { it.merchantId in merchantIds }.toList()
+            },
             storeNames = if (allStores) emptyList() else storeNames,
             allStores = allStores,
             benefitType = benefitType,
@@ -356,8 +364,24 @@ internal fun CustomCampaignEditorScreen(
                 ChainPickerDropdown(
                     chains = chains,
                     selectedIds = merchantIds,
+                    selectedBanners = bannerSelections,
                     onToggle = { id ->
-                        merchantIds = if (id in merchantIds) merchantIds - id else merchantIds + id
+                        if (id in merchantIds) {
+                            merchantIds = merchantIds - id
+                        } else {
+                            merchantIds = merchantIds + id
+                            // 系列まるごとを選んだら、同系列の業態選択は畳む(重ね掛けしない)
+                            bannerSelections = bannerSelections.filterNot { it.merchantId == id }.toSet()
+                        }
+                    },
+                    onToggleBanner = { sel ->
+                        if (sel in bannerSelections) {
+                            bannerSelections = bannerSelections - sel
+                        } else {
+                            bannerSelections = bannerSelections + sel
+                            // 業態を選んだら、同系列のまるごと選択は外す(絞り直しの意図に追従)
+                            merchantIds = merchantIds - sel.merchantId
+                        }
                     },
                 )
                 chains.filter { it.id in merchantIds }.forEach { m ->
@@ -369,6 +393,22 @@ internal fun CustomCampaignEditorScreen(
                             Icon(
                                 Icons.Default.Close,
                                 contentDescription = "${m.name}を外す",
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                    )
+                }
+                bannerSelections.sortedBy { it.merchantId }.forEach { sel ->
+                    val label = chains.firstOrNull { it.id == sel.merchantId }
+                        ?.bannerName(sel.bannerId) ?: sel.bannerId
+                    InputChip(
+                        selected = true,
+                        onClick = { bannerSelections = bannerSelections - sel },
+                        label = { Text(label) },
+                        trailingIcon = {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "${label}を外す",
                                 modifier = Modifier.size(18.dp),
                             )
                         },
@@ -823,17 +863,37 @@ private fun NameWithColorDotItem(name: String, color: String?) {
  * 目当てのチェーンを探せないため、**カテゴリ見出し(データ定義順=お店タブのチップと同順)で
  * 区切り、各カテゴリ内は読み仮名順**で並べる。トグルしてもメニューは閉じず続けて選べる
  * (地図タブの ChainFilterDropdown と同じ操作感)。
+ * 業態(banners)を持つ系列は「{系列} 全て」行+業態行のインデントで束ね、**初期状態から
+ * 展開済み**にする(#60)。系列単位・業態単位のどちらでも選択でき、同系列での重ね掛けは
+ * 呼び出し側のトグルで解決する(まるごと⇔業態は置き換え)。
  */
 @Composable
 private fun ChainPickerDropdown(
     chains: List<Merchant>,
     selectedIds: Set<String>,
+    selectedBanners: Set<BannerSelection>,
     onToggle: (String) -> Unit,
+    onToggleBanner: (BannerSelection) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     // groupBy はカテゴリの出現順(データ定義順)を保つ
     val grouped = remember(chains) {
         chains.groupBy { it.category }.mapValues { (_, members) -> members.sortedBy { it.reading } }
+    }
+
+    @Composable
+    fun pickerRow(label: String, checked: Boolean, indent: Boolean = false, onClick: () -> Unit) {
+        DropdownMenuItem(
+            text = { Text(label) },
+            leadingIcon = {
+                Checkbox(
+                    checked = checked,
+                    onCheckedChange = null, // 行タップに委ねる(タッチ領域を行全体にする)
+                )
+            },
+            onClick = onClick,
+            modifier = if (indent) Modifier.padding(start = 16.dp) else Modifier,
+        )
     }
     Box {
         AssistChip(
@@ -854,16 +914,23 @@ private fun ChainPickerDropdown(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                 )
                 members.forEach { merchant ->
-                    DropdownMenuItem(
-                        text = { Text(merchant.name) },
-                        leadingIcon = {
-                            Checkbox(
-                                checked = merchant.id in selectedIds,
-                                onCheckedChange = null, // 行タップに委ねる(タッチ領域を行全体にする)
-                            )
-                        },
-                        onClick = { onToggle(merchant.id) },
-                    )
+                    if (merchant.banners.isEmpty()) {
+                        pickerRow(merchant.name, checked = merchant.id in selectedIds) {
+                            onToggle(merchant.id)
+                        }
+                    } else {
+                        pickerRow("${merchant.name} 全て", checked = merchant.id in selectedIds) {
+                            onToggle(merchant.id)
+                        }
+                        // 代表看板も業態行として出す(「ウエルシアだけ」の選択もできるように)
+                        (listOf(merchant.id to merchant.name) + merchant.banners.map { it.id to it.name })
+                            .forEach { (bannerId, bannerName) ->
+                                val sel = BannerSelection(merchant.id, bannerId)
+                                pickerRow(bannerName, checked = sel in selectedBanners, indent = true) {
+                                    onToggleBanner(sel)
+                                }
+                            }
+                    }
                 }
             }
         }

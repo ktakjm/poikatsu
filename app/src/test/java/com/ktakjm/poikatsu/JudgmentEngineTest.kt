@@ -108,27 +108,27 @@ class JudgmentEngineTest {
 
     @Test
     fun `エイリアスで検索できる`() {
-        assertEquals("マクドナルド", engine.search("マック").first().name)
-        assertTrue(engine.search("サイゼ").any { it.name == "サイゼリヤ" })
-        assertTrue(engine.search("KFC").any { it.id == "kfc" })
+        assertEquals("マクドナルド", engine.search("マック").first().merchant.name)
+        assertTrue(engine.search("サイゼ").any { it.merchant.name == "サイゼリヤ" })
+        assertTrue(engine.search("KFC").any { it.merchant.id == "kfc" })
     }
 
     @Test
     fun `ひらがな入力でカタカナ店名にヒットする`() {
-        assertTrue(engine.search("ろーそん").any { it.id == "lawson" })
-        assertTrue(engine.search("すたば").any { it.id == "starbucks" })
+        assertTrue(engine.search("ろーそん").any { it.merchant.id == "lawson" })
+        assertTrue(engine.search("すたば").any { it.merchant.id == "starbucks" })
     }
 
     @Test
     fun `ハイフン有無は無視される`() {
-        assertTrue(engine.search("セブンイレブン").any { it.id == "seven_eleven" })
+        assertTrue(engine.search("セブンイレブン").any { it.merchant.id == "seven_eleven" })
     }
 
     @Test
     fun `前方一致が部分一致より上に来る`() {
         val results = engine.search("ガスト")
-        assertEquals("ガスト", results.first().name)
-        assertTrue(results.any { it.name == "ステーキガスト" })
+        assertEquals("ガスト", results.first().merchant.name)
+        assertTrue(results.any { it.merchant.name == "ステーキガスト" })
     }
 
     @Test
@@ -158,22 +158,22 @@ class JudgmentEngineTest {
     fun `カテゴリのみで絞り込める`() {
         val results = engine.search("", setOf("コンビニ"))
         assertTrue(results.isNotEmpty())
-        assertTrue(results.all { it.category == "コンビニ" })
-        assertTrue(results.any { it.id == "seven_eleven" })
+        assertTrue(results.all { it.merchant.category == "コンビニ" })
+        assertTrue(results.any { it.merchant.id == "seven_eleven" })
     }
 
     @Test
     fun `カテゴリは複数選択できる`() {
         val results = engine.search("", setOf("コンビニ", "カフェ"))
-        assertEquals(setOf("コンビニ", "カフェ"), results.map { it.category }.toSet())
+        assertEquals(setOf("コンビニ", "カフェ"), results.map { it.merchant.category }.toSet())
     }
 
     @Test
     fun `店名とカテゴリの組み合わせで絞り込める`() {
         // 「す」はスシロー(回転寿司)にもヒットするが、カフェに絞ればスタバ系のみ
         val results = engine.search("す", setOf("カフェ"))
-        assertTrue(results.all { it.category == "カフェ" })
-        assertTrue(results.any { it.id == "starbucks" })
+        assertTrue(results.all { it.merchant.category == "カフェ" })
+        assertTrue(results.any { it.merchant.id == "starbucks" })
     }
 
     @Test
@@ -188,8 +188,8 @@ class JudgmentEngineTest {
 
     @Test
     fun `具体店舗名のフル入力でもチェーンにヒットする`() {
-        assertEquals("マクドナルド", engine.search("マクドナルド渋谷駅前店").first().name)
-        assertTrue(engine.search("くら寿司ららぽーとTOKYO-BAY店").any { it.id == "kurazushi" })
+        assertEquals("マクドナルド", engine.search("マクドナルド渋谷駅前店").first().merchant.name)
+        assertTrue(engine.search("くら寿司ららぽーとTOKYO-BAY店").any { it.merchant.id == "kurazushi" })
     }
 
     // ---- 店舗対象判定(公式リスト) ----

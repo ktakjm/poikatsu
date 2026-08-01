@@ -16,6 +16,7 @@ import com.ktakjm.poikatsu.data.GithubRawClient
 import com.ktakjm.poikatsu.data.LoadedData
 import com.ktakjm.poikatsu.data.LocationProvider
 import com.ktakjm.poikatsu.data.Merchant
+import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.YolpClient
 import com.ktakjm.poikatsu.data.YolpSearchConfig
 import com.ktakjm.poikatsu.data.AppSettings
@@ -137,6 +138,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     data class SearchResult(
         val merchant: Merchant,
+        /**
+         * 傘下看板(業態)のキーに一致したヒットならその id / 表示名(例: 杏林堂薬局)。
+         * null は系列(グループ)としてのヒット(代表看板の名前・カテゴリのみの絞り込み)。
+         */
+        val bannerId: String? = null,
+        val bannerName: String? = null,
         /** 最良特典のラベル(定率なら「7% 還元」、定額なら「300円引き」等)。特典を整形できない場合のみ null */
         val bestBenefit: BenefitLabel?,
         val campaignCount: Int,
@@ -149,6 +156,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val merchant: Merchant,
         val judgments: List<CampaignJudgment>,
         val bestOption: BestPaymentOption? = null,
+        /**
+         * どの看板(業態)としての判定か(POI 照合・看板ヒットの検索由来)。null はグループ視点
+         * (看板スコープの施策も注記付きで全部出す)。地図ブリッジのレンズにも引き継ぐ。
+         */
+        val bannerId: String? = null,
         /** 公式が対象/対象外を言い切っているチェーンか。true のときだけ対象判定画面へ遷移できる */
         val canCheckStore: Boolean = false,
         /** 店舗対象判定画面を開くときのプリフィル(検索クエリやNearbyのPOI名の店舗名部分) */
@@ -173,6 +185,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         /** 地図中心(検索時のカメラ中心)からの距離(m)。リストのソート用 */
         val distanceFromCenter: Int,
         val merchant: Merchant?,
+        /** POI が一致した看板(業態)の id(代表看板は merchant.id)。業態レンズの絞り込みに使う */
+        val bannerId: String? = null,
         /** 最良特典のラベル(定率なら「7% 還元」、定額なら「300円引き」等)。null なら特典表示なし */
         val bestBenefit: BenefitLabel?,
         val lat: Double,
@@ -184,6 +198,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val brandColors: List<String> = emptyList(),
         val hasTimeLimited: Boolean = false,
     )
+
+    /**
+     * 「地図」の絞り込みレンズ 1 件。bannerId = null は系列(グループ)全体、
+     * 非 null はその看板(業態)だけに絞る。等価判定は (merchant.id, bannerId) で行う
+     * (Merchant はデータ更新で別インスタンスになり得るため)。
+     */
+    data class NearbyLens(
+        val merchant: Merchant,
+        val bannerId: String? = null,
+    ) {
+        /** ピル・見出しの表示名。業態レンズは業態名、グループレンズは merchant 名 */
+        val label: String
+            get() = bannerId?.let { merchant.bannerName(it) } ?: merchant.name
+
+        fun matches(place: NearbyPlace): Boolean =
+            place.merchant?.id == merchant.id && (bannerId == null || place.bannerId == bannerId)
+
+        fun sameTarget(other: NearbyLens): Boolean =
+            merchant.id == other.merchant.id && bannerId == other.bannerId
+    }
 
     /**
      * 近隣取得のローディング段階。リングの待ち時間が何待ちかを表示で出し分けるために持つ。
@@ -280,12 +314,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          */
         val nearbySelectedCategories: Set<String> = emptySet(),
         /**
-         * 「地図」のチェーン絞り込み(レンズ2段目)。非空なら ジャンル絞り込みより優先し、地図/一覧を
-         * これらのチェーンだけに絞る。在チェーン選択((2))とブリッジ(探す→近く・おトクの施策詳細,(3))の
-         * 着地状態を共有する(単一チェーンのブリッジは要素1個の Set)。空セットで未絞り込み。
-         * 表示名にのみ使うので Merchant をそのまま保持(フィルタは id 比較)。
+         * 「地図」のお店絞り込み(レンズ2段目)。非空なら ジャンル絞り込みより優先し、地図/一覧を
+         * これらのレンズ(系列 or 業態)だけに絞る。在チェーン選択((2))とブリッジ(探す→近く・
+         * おトクの施策詳細,(3))の着地状態を共有する(単一チェーンのブリッジは要素1個の Set)。
+         * 空セットで未絞り込み。表示名にのみ Merchant を使う(フィルタは id 比較)。
          */
-        val nearbyMerchantFilters: Set<Merchant> = emptySet(),
+        val nearbyMerchantFilters: Set<NearbyLens> = emptySet(),
         /**
          * 「地図」の起点(地名検索)。null は GPS 起点(既定)。設定中は距離・並び順をこの地点から測る。
          * 再検索(searchHere/fetchNearby)をまたいで保持し、「現在地で検索」/検索バーの✕で null に戻す。
@@ -312,6 +346,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          */
         val campaignPersonalRates: Map<String, Double> = emptyMap(),
         val merchantNames: Map<String, String> = emptyMap(),
+        /** id → Merchant(統合データ)。施策詳細の「対象:」で banner_ids を業態名に解決するのに使う(#60) */
+        val merchantsById: Map<String, Merchant> = emptyMap(),
         /** 施策 id → 発行体の識別色(#RRGGBB)。色は施策でなく発行体カタログ側に持つため、ここで解決して配る */
         val campaignBrandColors: Map<String, String> = emptyMap(),
         val selectedCampaignGroup: List<CampaignJudgment>? = null,
@@ -586,17 +622,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun enabledQrIds(): Set<String> = lastSettings.enabledQrPaymentIds
 
-    /** チェーンと店舗名ヒントから判定詳細用の Selection を組む(判定・遷移可否をまとめて引く) */
+    /**
+     * チェーンと店舗名ヒントから判定詳細用の Selection を組む(判定・遷移可否をまとめて引く)。
+     * bannerId はどの看板(業態)としての判定か(POI 照合・看板ヒットの検索由来)。null はグループ視点。
+     */
     private fun JudgmentEngine.selectionFor(
         merchant: Merchant,
         storeNameHint: String,
         displayName: String? = null,
+        bannerId: String? = null,
     ): Selection {
-        val result = judgeAll(merchant, LocalDate.now(), enabledQrIds())
+        val result = judgeAll(merchant, LocalDate.now(), enabledQrIds(), bannerId)
         return Selection(
             merchant = merchant,
             judgments = result.judgments,
             bestOption = result.bestOption,
+            bannerId = bannerId,
             canCheckStore = canCheckStore(merchant),
             storeNameHint = storeNameHint,
             displayName = displayName,
@@ -605,13 +646,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 検索結果のうち、所有カードで対象になる施策が1つ以上あるチェーンだけ残す(reward 無しは一覧に出さない) */
     private fun JudgmentEngine.searchRewarded(query: String, categories: Set<String>): List<SearchResult> =
-        search(query, categories).mapNotNull { merchant ->
+        search(query, categories).mapNotNull { hit ->
             val today = LocalDate.now()
-            val result = judgeAll(merchant, today, enabledQrIds())
+            // 業態ヒットはその業態としての判定(看板スコープ外の施策は数えない)
+            val result = judgeAll(hit.merchant, today, enabledQrIds(), hit.bannerId)
             if (result.judgments.isEmpty()) return@mapNotNull null
             val allCampaigns = result.judgments.map { it.campaign }
             SearchResult(
-                merchant = merchant,
+                merchant = hit.merchant,
+                bannerId = hit.bannerId,
+                bannerName = hit.bannerName,
                 bestBenefit = result.bestBenefitLabel(),
                 campaignCount = allCampaigns.distinctBy { it.id }.size,
                 brandColors = result.judgments.mapNotNull { it.brandColor }.distinct().take(3),
@@ -745,7 +789,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 results = newEngine.searchRewarded(it.query, it.selectedCategories),
                 selection = it.selection?.let { sel ->
                     newDisplayData.merchants.firstOrNull { m -> m.id == sel.merchant.id }
-                        ?.let { m -> newEngine.selectionFor(m, sel.storeNameHint, sel.displayName) }
+                        ?.let { m -> newEngine.selectionFor(m, sel.storeNameHint, sel.displayName, sel.bannerId) }
                 },
                 storeCheck = it.storeCheck?.let { sc ->
                     newDisplayData.merchants.firstOrNull { m -> m.id == sc.merchant.id }
@@ -775,6 +819,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 searchMunicipalAreaNames = searchMunicipalAreaNames,
                 // 名前・色の解決はカスタム分(合成 Merchant・カスタムカードの色)も含む統合データから引く
                 merchantNames = newDisplayData.merchants.associate { it.id to it.name },
+                merchantsById = newDisplayData.merchants.associateBy { it.id },
                 campaignBrandColors = newDisplayData.campaigns
                     .mapNotNull { c -> newDisplayData.brandColorOf(c)?.let { c.id to it } }
                     .toMap(),
@@ -971,7 +1016,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val data = displayData
         // チェーン絞り込み中の merchant は、非対象日・開始前でも YOLP 検索対象に加える
         // (施策詳細からのブリッジで「場所の下見」ができるように。判定が無い店は還元率ラベルなしで出す)
-        val filterIds = _state.value.nearbyMerchantFilters.map { it.id }.toSet()
+        val filterIds = _state.value.nearbyMerchantFilters.map { it.merchant.id }.toSet()
         val config = data?.yolpConfig?.let { yolpConfig ->
             YolpSearchConfig.build(yolpConfig, data.merchants, engine.activeManagedMerchantIds(LocalDate.now()) + filterIds)
         }
@@ -991,10 +1036,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val qrIds = enabledQrIds()
         val places = pois
             .mapNotNull { poi ->
-                val merchant = engine.matchStore(poi.name) ?: return@mapNotNull null
-                if (engine.isFacilityTenant(merchant.name, poi.name)) return@mapNotNull null
+                val match = engine.matchStore(poi.name) ?: return@mapNotNull null
+                val merchant = match.merchant
+                if (engine.isFacilityTenant(match.bannerName, poi.name)) return@mapNotNull null
                 if (engine.isExcludedStore(merchant, poi.name)) return@mapNotNull null
-                val result = engine.judgeAll(merchant, today, qrIds)
+                // POI は具体的な看板(業態)なので看板スコープで判定する(対象外業態はここで判定なしになり消える)
+                val result = engine.judgeAll(merchant, today, qrIds, match.bannerId)
                 // 判定なしは通常出さないが、チェーン絞り込み中(ブリッジ由来)の merchant は
                 // 非対象日の場所確認用に残す(bestBenefit なし=還元率ラベルなしで表示)
                 if (result.judgments.isEmpty() && merchant.id !in filterIds) return@mapNotNull null
@@ -1004,6 +1051,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     distanceMeters = GeoMath.distanceMeters(originLat, originLon, poi.lat, poi.lon),
                     distanceFromCenter = GeoMath.distanceMeters(centerLat, centerLon, poi.lat, poi.lon),
                     merchant = merchant,
+                    bannerId = match.bannerId,
                     bestBenefit = result.bestBenefitLabel(),
                     lat = poi.lat,
                     lon = poi.lon,
@@ -1249,7 +1297,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val engine = engine ?: return
         val merchant = place.merchant ?: return
         _state.update {
-            it.withSelection(engine.selectionFor(merchant, place.name, displayName = place.name))
+            it.withSelection(
+                engine.selectionFor(merchant, place.name, displayName = place.name, bannerId = place.bannerId),
+            )
         }
     }
 
@@ -1286,16 +1336,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * 「地図」のチェーン絞り込みのトグル(在チェーンのピッカーのチェック/ピルの×=レンズ2段目)。
+     * 「地図」のお店絞り込みのトグル(在チェーンのピッカーのチェック/ピルの×=レンズ2段目)。
      * ジャンル選択は残したまま(全ピルを解除すると元のジャンル絞り込みに戻る=ドリルダウンの体験)。
+     * 同一系列のグループレンズと業態レンズは重ねない(グループを選んだら業態を外し、
+     * 業態を選んだらグループを外す=広げ直し/絞り直しの意図に追従する)。
      */
-    fun onToggleNearbyChain(merchant: Merchant) {
+    fun onToggleNearbyLens(lens: NearbyLens) {
         _state.update {
             val current = it.nearbyMerchantFilters
-            val next = if (current.any { m -> m.id == merchant.id }) {
-                current.filterNot { m -> m.id == merchant.id }.toSet()
+            val next = if (current.any { l -> l.sameTarget(lens) }) {
+                current.filterNot { l -> l.sameTarget(lens) }.toSet()
             } else {
-                current + merchant
+                val cleaned = if (lens.bannerId == null) {
+                    current.filterNot { l -> l.merchant.id == lens.merchant.id }
+                } else {
+                    current.filterNot { l -> l.merchant.id == lens.merchant.id && l.bannerId == null }
+                }
+                cleaned.toSet() + lens
             }
             it.copy(nearbyMerchantFilters = next)
         }
@@ -1310,34 +1367,61 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun onFindNearby(merchant: Merchant) {
         val returnSelection = _state.value.selection
-        onFindNearby(setOf(merchant))
+        // 業態としての判定詳細(POI・看板ヒット由来)から探すときは、その業態レンズを引き継ぐ
+        val bannerId = returnSelection?.takeIf { it.merchant.id == merchant.id }?.bannerId
+        onFindNearby(setOf(NearbyLens(merchant, bannerId)))
         _state.update { it.copy(selectionBridgeReturn = returnSelection) }
     }
 
     /**
      * 施策詳細から: merchant_rules の merchant_id 群を解決してブリッジする(解決できた分だけ)。
-     * location_hint 持ち(自販機等)は地図で探せないので除く。閉じる施策詳細を campaignBridgeReturn に
-     * 保存し、地図タブの戻る操作で施策詳細へ復帰できるようにする。
+     * location_hint 持ち(自販機等)は地図で探せないので除く。看板スコープ(banner_ids /
+     * ineligible_banner_ids)のあるルールは対象業態のレンズへ展開し、対象外業態のピンに飛ばさない。
+     * 閉じる施策詳細を campaignBridgeReturn に保存し、地図タブの戻る操作で施策詳細へ復帰できるようにする。
      */
     fun onFindNearbyByIds(merchantIds: Collection<String>) {
         val idSet = merchantIds.toSet()
         // 合成 Merchant(カスタムキャンペーンの自由入力店名)からもブリッジできるよう統合データで引く
         val merchants = displayData?.merchants.orEmpty()
             .filter { it.id in idSet && it.locationHint == null }
-            .toSet()
         if (merchants.isEmpty()) return
+        // 表示中の施策詳細(グループ)のルールから看板スコープを引く(ブリッジはこの画面からしか呼ばれない)
+        val rulesById = _state.value.selectedCampaignGroup.orEmpty()
+            .flatMap { it.campaign.merchantRules }
+            .groupBy { it.merchantId }
+        val lenses = merchants.flatMap { m -> lensesFor(m, rulesById[m.id].orEmpty()) }.toSet()
         val returnGroup = _state.value.selectedCampaignGroup
-        onFindNearby(merchants)
+        onFindNearby(lenses)
         _state.update { it.copy(campaignBridgeReturn = returnGroup) }
     }
 
-    private fun onFindNearby(merchants: Set<Merchant>) {
+    /**
+     * merchant 1 件ぶんのブリッジ用レンズ。看板スコープの無いルールが 1 つでもあれば
+     * グループ全体(bannerId = null)。スコープ付きのみなら対象業態のレンズへ展開し、
+     * 結果的に全業態が対象ならグループレンズ 1 個に畳む(ピルを増やさない)。
+     */
+    private fun lensesFor(merchant: Merchant, rules: List<MerchantRule>): List<NearbyLens> {
+        if (rules.isEmpty() || rules.any { it.bannerIds.isEmpty() && it.ineligibleBannerIds.isEmpty() }) {
+            return listOf(NearbyLens(merchant))
+        }
+        val allowed = rules.flatMap { rule ->
+            if (rule.bannerIds.isNotEmpty()) rule.bannerIds
+            else merchant.allBannerIds - rule.ineligibleBannerIds.toSet()
+        }.distinct().filter { merchant.bannerName(it) != null }
+        return when {
+            allowed.isEmpty() -> listOf(NearbyLens(merchant))
+            allowed.toSet() == merchant.allBannerIds.toSet() -> listOf(NearbyLens(merchant))
+            else -> allowed.map { NearbyLens(merchant, it) }
+        }
+    }
+
+    private fun onFindNearby(lenses: Set<NearbyLens>) {
         val prev = _state.value.selectedTab
         if (prev == AppTab.NEARBY) nearbyGeneration++
         _state.update { st ->
             var s = st.copy(
                 selectedTab = AppTab.NEARBY,
-                nearbyMerchantFilters = merchants,
+                nearbyMerchantFilters = lenses,
                 nearbySelectedCategories = emptySet(),
                 selection = null,
                 storeCheck = null,
@@ -1366,14 +1450,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun UiState.withSelection(selection: Selection): UiState =
         copy(selection = selection, storeCheck = null)
 
-    fun onSelect(merchant: Merchant) {
+    fun onSelect(result: SearchResult) {
         val engine = engine ?: return
+        val merchant = result.merchant
         _state.update {
             // 「マクドナルド渋谷店」のような入力で選んだ場合は、店舗名部分を対象判定のプリフィルに引き継ぐ
             val hint = it.query.trim()
                 .takeUnless { q -> q.isBlank() || engine.isExactNameMatch(merchant, q) }
                 .orEmpty()
-            it.withSelection(engine.selectionFor(merchant, hint))
+            // 業態ヒットの行は業態としての判定+タイトルも業態名(杏林堂薬局)で開く
+            it.withSelection(
+                engine.selectionFor(merchant, hint, displayName = result.bannerName, bannerId = result.bannerId),
+            )
         }
     }
 

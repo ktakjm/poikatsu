@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.core.content.ContextCompat
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.DataSource
+import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_PERIOD_TOTAL
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_TRANSACTION
 import com.ktakjm.poikatsu.data.RegisteredArea
@@ -645,6 +646,39 @@ internal fun MinPurchaseRow(minPurchase: Int?, scope: String = MIN_PURCHASE_SCOP
  * 複数チェーンは「{先頭チェーン} 他Nチェーン」(→ merchant_rules が無ければ campaign.name)。
  * 多チェーン施策が先頭 merchant 名だけで「1チェーンの施策」に見えないようにする。
  */
+/**
+ * merchant のグループ名(未設定なら「{代表看板}グループ」)。検索結果の従属表示・
+ * 地図の束ね見出し・判定詳細の業態行・施策詳細の対象ラベルで共用する。
+ */
+internal fun groupLabelOf(merchant: Merchant): String =
+    merchant.groupLabel ?: "${merchant.name}グループ"
+
+/**
+ * 施策詳細の「対象:」に出すラベル一覧(#60)。managed 施策の merchant_rules を解決する:
+ * - `banner_ids` で看板(業態)を限定したルールは**業態名**(「杏林堂だけ」のカスタムで
+ *   「ツルハドラッグ」と出す誤解を避ける)
+ * - 業態を持つ系列の全業態ルールは**グループ名**(「マツモトキヨシ」だと業態名なのか
+ *   グループなのか区別できないため。一部除外(`ineligible_banner_ids`)もグループ扱いで、
+ *   除外の内訳は判定カードの注記が示す)
+ * - 業態を持たない merchant は従来どおり merchant 名
+ */
+internal fun campaignTargetLabels(
+    campaigns: List<Campaign>,
+    merchants: Map<String, Merchant>,
+): List<String> = campaigns
+    .filter { it.storeScope == "managed" }
+    .flatMap { it.merchantRules }
+    .flatMap { rule ->
+        val merchant = merchants[rule.merchantId] ?: return@flatMap emptyList<String>()
+        when {
+            rule.bannerIds.isNotEmpty() ->
+                rule.bannerIds.mapNotNull { merchant.bannerName(it) }.ifEmpty { listOf(merchant.name) }
+            merchant.banners.isNotEmpty() -> listOf(groupLabelOf(merchant))
+            else -> listOf(merchant.name)
+        }
+    }
+    .distinct()
+
 internal fun campaignGroupDisplayTitle(first: Campaign, merchantNames: Map<String, String>): String =
     if (first.campaignType == CampaignType.MUNICIPAL) {
         val prefecture = first.region?.prefecture ?: ""

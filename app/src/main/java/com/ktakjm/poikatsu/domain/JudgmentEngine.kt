@@ -289,14 +289,52 @@ fun JudgmentResult.bestBenefitLabel(): BenefitLabel? {
     }?.let { BenefitLabel(it.value, "${it.suffix}(対象商品)") }
 }
 
+/**
+ * POI 名の照合結果。どの merchant(系列)のどの看板(業態)に一致したか。
+ * 代表看板(merchant の name/reading/aliases に一致)は bannerId = merchant.id。
+ */
+data class StoreMatch(
+    val merchant: Merchant,
+    val bannerId: String,
+    val bannerName: String,
+)
+
+/**
+ * お店タブ検索のヒット 1 件。bannerId = null は「系列(グループ)としてのヒット」
+ * (代表看板のキーに一致・カテゴリのみの絞り込み)で、判定はグループ視点(全ルール)になる。
+ * 非 null は傘下看板のキーに一致したヒットで、表示ラベル・判定は看板単位になる。
+ */
+data class SearchHit(
+    val merchant: Merchant,
+    val bannerId: String? = null,
+    val bannerName: String? = null,
+)
+
 class JudgmentEngine(private val data: PoikatsuData) {
 
-    private val searchIndex: List<Pair<Merchant, List<String>>> = data.merchants.map { m ->
-        m to buildList {
-            add(JapaneseText.normalize(m.name))
-            if (m.reading.isNotBlank()) add(JapaneseText.normalize(m.reading))
-            m.aliases.forEach { add(JapaneseText.normalize(it)) }
+    /** 照合キー1束(merchant × 看板)。代表看板は bannerId = merchant.id */
+    private data class IndexEntry(
+        val merchant: Merchant,
+        val bannerId: String,
+        val bannerName: String,
+        val keys: List<String>,
+    )
+
+    private fun buildKeys(name: String, reading: String, aliases: List<String>): List<String> =
+        buildList {
+            add(JapaneseText.normalize(name))
+            if (reading.isNotBlank()) add(JapaneseText.normalize(reading))
+            aliases.forEach { add(JapaneseText.normalize(it)) }
         }.distinct()
+
+    // 代表看板を先頭に置く(検索スコアが同点のとき代表看板ヒットを優先し、グループ視点で開くため)
+    private val searchIndex: List<IndexEntry> = data.merchants.flatMap { m ->
+        buildList {
+            add(IndexEntry(m, m.id, m.name, buildKeys(m.name, m.reading, m.aliases)))
+            m.banners.forEach { b ->
+                add(IndexEntry(m, b.id, b.name, buildKeys(b.name, b.reading, b.aliases)))
+            }
+        }
     }
 
     private val qrPaymentMap: Map<String, QrPayment> =
@@ -307,20 +345,25 @@ class JudgmentEngine(private val data: PoikatsuData) {
 
     /**
      * 店名とカテゴリで検索する。カテゴリ未選択(空セット)は全カテゴリ扱い。
-     * 店名が空でもカテゴリが選択されていればそのカテゴリの全店舗を返す。
-     * 店名検索は前方一致を部分一致より優先する。
+     * 店名が空でもカテゴリが選択されていればそのカテゴリの全店舗(系列単位)を返す。
+     * 店名検索は前方一致を部分一致より優先する。傘下看板のキーにも一致し、その場合は
+     * ヒットに看板情報が付く(1 merchant につき最良の 1 ヒットに集約する)。
      */
-    fun search(query: String, selectedCategories: Set<String> = emptySet()): List<Merchant> {
+    fun search(query: String, selectedCategories: Set<String> = emptySet()): List<SearchHit> {
         val pool = if (selectedCategories.isEmpty()) searchIndex
-        else searchIndex.filter { it.first.category in selectedCategories }
+        else searchIndex.filter { it.merchant.category in selectedCategories }
 
         val q = JapaneseText.normalize(query)
         if (q.isBlank()) {
-            // カテゴリのみの絞り込み。未選択なら何も表示しない(入力前のヒント画面を出す)
-            return if (selectedCategories.isEmpty()) emptyList() else pool.map { it.first }
+            // カテゴリのみの絞り込み(系列単位=代表看板の行だけ)。未選択なら何も表示しない
+            return if (selectedCategories.isEmpty()) {
+                emptyList()
+            } else {
+                pool.filter { it.bannerId == it.merchant.id }.map { SearchHit(it.merchant) }
+            }
         }
-        return pool.mapNotNull { (merchant, keys) ->
-            val score = keys.minOf { key ->
+        return pool.mapNotNull { entry ->
+            val score = entry.keys.minOf { key ->
                 when {
                     key.startsWith(q) -> 0
                     key.contains(q) -> 1
@@ -330,29 +373,40 @@ class JudgmentEngine(private val data: PoikatsuData) {
                     else -> Int.MAX_VALUE
                 }
             }
-            if (score == Int.MAX_VALUE) null else merchant to score
+            if (score == Int.MAX_VALUE) null else entry to score
         }
-            .sortedWith(compareBy({ it.second }, { it.first.reading }))
-            .map { it.first }
+            // merchant ごとに最良スコアの1エントリへ集約(同点は searchIndex 順=代表看板を優先)
+            .groupBy { it.first.merchant.id }
+            .map { (_, entries) -> entries.minBy { it.second } }
+            .sortedWith(compareBy({ it.second }, { it.first.merchant.reading }))
+            .map { (entry, _) ->
+                if (entry.bannerId == entry.merchant.id) {
+                    SearchHit(entry.merchant) // 代表看板ヒットはグループとしてのヒット扱い
+                } else {
+                    SearchHit(entry.merchant, entry.bannerId, entry.bannerName)
+                }
+            }
     }
 
-    /** 入力がチェーン名そのもの(店舗名部分なし)かどうか */
+    /** 入力がチェーン名そのもの(店舗名部分なし)かどうか。傘下看板の名前も含めて見る */
     fun isExactNameMatch(merchant: Merchant, query: String): Boolean {
         val q = JapaneseText.normalize(query)
-        return searchIndex.firstOrNull { it.first.id == merchant.id }?.second?.contains(q) == true
+        return searchIndex.any { it.merchant.id == merchant.id && q in it.keys }
     }
 
     /**
      * 地図POIの店舗名(例: "マクドナルド 渋谷駅前店")から該当チェーンを特定する。
-     * 「ステーキガスト」が「ガスト」に誤マッチしないよう、一致したキーが最長のチェーンを採用する。
+     * 「ステーキガスト」が「ガスト」に誤マッチしないよう、一致したキーが最長のものを採用する。
+     * 傘下看板(banners)のキーにも一致し、どの看板に一致したかを返す(判定の看板スコープと
+     * 地図の業態絞り込みに使う)。
      */
-    fun matchStore(storeName: String): Merchant? {
+    fun matchStore(storeName: String): StoreMatch? {
         val normalizedName = JapaneseText.normalize(storeName)
-        return searchIndex.mapNotNull { (merchant, keys) ->
-            val best = keys.filter { key -> isMatchableKey(key) && containsAsWord(normalizedName, key) }
+        return searchIndex.mapNotNull { entry ->
+            val best = entry.keys.filter { key -> isMatchableKey(key) && containsAsWord(normalizedName, key) }
                 .maxOfOrNull { it.length }
-            if (best == null) null else merchant to best
-        }.maxByOrNull { it.second }?.first
+            if (best == null) null else entry to best
+        }.maxByOrNull { it.second }?.first?.let { StoreMatch(it.merchant, it.bannerId, it.bannerName) }
     }
 
     /**
@@ -437,7 +491,8 @@ class JudgmentEngine(private val data: PoikatsuData) {
      */
     fun normalizedBranch(merchant: Merchant, poiName: String): String {
         var s = JapaneseText.normalize(poiName)
-        val keys = searchIndex.firstOrNull { it.first.id == merchant.id }?.second.orEmpty()
+        // 傘下看板のキーも含めて剥がす(同じ店が看板名の別表記で重複登録されている場合に効く)
+        val keys = searchIndex.filter { it.merchant.id == merchant.id }.flatMap { it.keys }
         // 長いキーから順に 1 回だけ除去(短いキーの部分一致で支店名を削りすぎないため)
         for (key in keys.filter { it.isNotBlank() }.sortedByDescending { it.length }) {
             val i = s.indexOf(key)
@@ -491,9 +546,27 @@ class JudgmentEngine(private val data: PoikatsuData) {
             .map { it.merchantId }
             .toSet()
 
-    /** この施策におけるそのチェーンのルール(なければ対象外) */
-    private fun Campaign.ruleFor(merchant: Merchant): MerchantRule? =
-        merchantRules.firstOrNull { it.merchantId == merchant.id }
+    /**
+     * この施策におけるそのチェーンのルール(なければ対象外)。bannerId を渡すとその看板(業態)に
+     * 適用されるルールだけを返す(看板スコープ外なら null = その店は対象外)。
+     * bannerId = null はグループ視点(スコープ付きルールも返し、内訳は注記で示す)。
+     */
+    private fun Campaign.ruleFor(merchant: Merchant, bannerId: String? = null): MerchantRule? =
+        merchantRules.firstOrNull { it.merchantId == merchant.id && it.appliesToBanner(bannerId) }
+
+    /**
+     * 看板スコープ(banner_ids / ineligible_banner_ids)の内訳を「対象外・限定」の言い切りに合成する。
+     * データ側の ineligible_notes と同じ「見落とすと損する情報」として warning 面に出す。
+     */
+    private fun bannerScopeNote(merchant: Merchant, rule: MerchantRule): String? = when {
+        rule.bannerIds.isNotEmpty() ->
+            rule.bannerIds.mapNotNull { merchant.bannerName(it) }
+                .takeIf { it.isNotEmpty() }?.let { "対象は${it.joinToString("・")}のみ" }
+        rule.ineligibleBannerIds.isNotEmpty() ->
+            rule.ineligibleBannerIds.mapNotNull { merchant.bannerName(it) }
+                .takeIf { it.isNotEmpty() }?.let { "${it.joinToString("・")}は対象外" }
+        else -> null
+    }
 
     private fun usageLimitText(campaign: Campaign): String? =
         campaign.usageLimitNote
@@ -501,6 +574,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
 
     private fun buildJudgment(
         campaign: Campaign,
+        merchant: Merchant,
         rule: MerchantRule?,
         badgeLabel: String,
         effectiveRate: Double?,
@@ -525,7 +599,8 @@ class JudgmentEngine(private val data: PoikatsuData) {
             daysRemaining = days,
             // 出どころ(施策全体か店舗固有か)は読者には関係ないため、レベル横断で連結して1セクションずつにする
             eligibleNotes = campaign.eligibleNotes + rule?.eligibleNotes.orEmpty(),
-            ineligibleNotes = campaign.ineligibleNotes + rule?.ineligibleNotes.orEmpty(),
+            ineligibleNotes = campaign.ineligibleNotes + rule?.ineligibleNotes.orEmpty() +
+                listOfNotNull(rule?.let { bannerScopeNote(merchant, it) }),
             storeListUrl = rule?.storeListUrl,
             warnings = buildList {
                 if (days != null && days <= 3) add("残り${days}日")
@@ -579,14 +654,15 @@ class JudgmentEngine(private val data: PoikatsuData) {
     /**
      * カード施策の判定を返す。期間 + 対象日(recurrence)フィルタ適用済み。
      * store_scope == "managed" の施策のみ対象。ソートは judgeAll で一括。
+     * bannerId はその看板(業態)としての判定(POI 照合・看板ヒットの検索)。null はグループ視点。
      */
-    fun judgeCards(merchant: Merchant, today: LocalDate): List<CampaignJudgment> =
+    fun judgeCards(merchant: Merchant, today: LocalDate, bannerId: String? = null): List<CampaignJudgment> =
         data.campaigns
             .filter { campaignStatus(it, today) == CampaignStatus.ACTIVE && isTargetDay(it, today) }
             .filter { it.storeScope == "managed" }
             .filter { it.paymentMethodId == null }
             .mapNotNull { campaign ->
-                val rule = campaign.ruleFor(merchant) ?: return@mapNotNull null
+                val rule = campaign.ruleFor(merchant, bannerId) ?: return@mapNotNull null
                 val card = resolveCard(campaign) ?: return@mapNotNull null
                 if (excludedByBrand(rule, card)) return@mapNotNull null
                 // 率の優先基準(promotion=施策の率 / card_program=カードの実効率、定額・率なし
@@ -597,6 +673,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
                 val isBrandCampaign = campaign.cardBrand != null
                 buildJudgment(
                     campaign = campaign,
+                    merchant = merchant,
                     rule = rule,
                     badgeLabel = campaign.cardBrand ?: card.cardName,
                     effectiveRate = resolved.effectiveRate,
@@ -616,16 +693,22 @@ class JudgmentEngine(private val data: PoikatsuData) {
      * QR 決済の判定を返す。ユーザーが利用中の QR 決済でフィルタ済み。
      * store_scope == "managed" のみ。期間 + 対象日(recurrence)フィルタ適用済み。
      */
-    fun judgeQr(merchant: Merchant, today: LocalDate, enabledQrIds: Set<String>): List<CampaignJudgment> =
+    fun judgeQr(
+        merchant: Merchant,
+        today: LocalDate,
+        enabledQrIds: Set<String>,
+        bannerId: String? = null,
+    ): List<CampaignJudgment> =
         data.campaigns
             .filter { campaignStatus(it, today) == CampaignStatus.ACTIVE && isTargetDay(it, today) }
             .filter { it.storeScope == "managed" }
             .filter { it.paymentMethodId != null && it.paymentMethodId in enabledQrIds }
             .mapNotNull { campaign ->
-                val rule = campaign.ruleFor(merchant) ?: return@mapNotNull null
+                val rule = campaign.ruleFor(merchant, bannerId) ?: return@mapNotNull null
                 val qr = qrPaymentMap[campaign.paymentMethodId] ?: return@mapNotNull null
                 buildJudgment(
                     campaign = campaign,
+                    merchant = merchant,
                     rule = rule,
                     badgeLabel = qr.name,
                     effectiveRate = rule.rateOverride ?: campaign.rateBase,
@@ -638,10 +721,16 @@ class JudgmentEngine(private val data: PoikatsuData) {
             }
 
     /**
-     * カード + QR をまとめた包括判定。
+     * カード + QR をまとめた包括判定。bannerId はその看板(業態)としての判定(看板スコープの
+     * 施策はスコープ外なら出ない)。null はグループ視点(全ルールを出し、内訳は注記で示す)。
      */
-    fun judgeAll(merchant: Merchant, today: LocalDate, enabledQrIds: Set<String> = emptySet()): JudgmentResult {
-        val all = (judgeCards(merchant, today) + judgeQr(merchant, today, enabledQrIds))
+    fun judgeAll(
+        merchant: Merchant,
+        today: LocalDate,
+        enabledQrIds: Set<String> = emptySet(),
+        bannerId: String? = null,
+    ): JudgmentResult {
+        val all = (judgeCards(merchant, today, bannerId) + judgeQr(merchant, today, enabledQrIds, bannerId))
             .sortedWith(
                 compareBy<CampaignJudgment> { it.discountAmount != null }
                     .thenByDescending { it.effectiveRate ?: 0.0 }

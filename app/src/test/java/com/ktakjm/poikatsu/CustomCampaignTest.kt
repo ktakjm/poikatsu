@@ -241,7 +241,7 @@ class CustomCampaignTest {
     @Test
     fun `カタログのチェーンに紐付けたカスタム施策が判定に出る(施策の率を優先)`() {
         val engine = engineWith(listOf(custom(merchantIds = listOf("mcdonalds"), rate = 10.0)))
-        val merchant = engine.search("マクドナルド").first()
+        val merchant = engine.search("マクドナルド").first().merchant
         val result = engine.judgeAll(merchant, today)
         val judgment = result.judgments.single()
         assertEquals("custom:test", judgment.campaign.id)
@@ -259,7 +259,7 @@ class CustomCampaignTest {
                 PaymentCard(id = "owned_brand_amex", cardName = "Amexカード", brands = listOf("Amex"), brand = "Amex"),
             ),
         )
-        val merchant = engine.search("マクドナルド").first()
+        val merchant = engine.search("マクドナルド").first().merchant
         val judgment = engine.judgeAll(merchant, today).judgments.single()
         // ブランド施策のバッジはブランド名、色は card_brands カタログから
         assertEquals("Amex", judgment.badgeLabel)
@@ -277,7 +277,7 @@ class CustomCampaignTest {
             ),
             qrPayments = listOf(QrPayment(id = "testpay", name = "テストペイ", brandColor = "#00AA00")),
         )
-        val merchant = engine.search("マクドナルド").first()
+        val merchant = engine.search("マクドナルド").first().merchant
         val result = engine.judgeAll(merchant, today, enabledQrIds = setOf("testpay"))
         assertEquals(setOf("百貨店カード", "テストペイ"), result.judgments.map { it.badgeLabel }.toSet())
         assertTrue(result.judgments.all { customCampaignBaseId(it.campaign.id) == "custom:test" })
@@ -288,7 +288,7 @@ class CustomCampaignTest {
         val engine = engineWith(
             listOf(custom(merchantIds = listOf("mcdonalds"), benefitType = "discount", rate = null, discountAmount = 500)),
         )
-        val merchant = engine.search("マクドナルド").first()
+        val merchant = engine.search("マクドナルド").first().merchant
         val judgment = engine.judgeAll(merchant, today).judgments.single()
         assertEquals(BenefitType.DISCOUNT, judgment.benefitType)
         assertEquals(500, judgment.discountAmount)
@@ -299,11 +299,11 @@ class CustomCampaignTest {
     fun `自由入力店名は検索とPOI照合の部分一致でマッチする`() {
         val engine = engineWith(listOf(custom(storeNames = listOf("駅前ベーカリー"), rate = 8.0)))
         // お店タブ: 店名検索
-        assertTrue(engine.search("駅前ベーカリー").any { it.id == customStoreMerchantId("駅前ベーカリー") })
+        assertTrue(engine.search("駅前ベーカリー").any { it.merchant.id == customStoreMerchantId("駅前ベーカリー") })
         // 地図タブ: POI 名(支店付き)からの照合
         val matched = engine.matchStore("駅前ベーカリー 渋谷店")
         assertNotNull(matched)
-        val result = engine.judgeAll(matched!!, today)
+        val result = engine.judgeAll(matched!!.merchant, today)
         assertEquals("custom:test", result.judgments.single().campaign.id)
     }
 
@@ -319,14 +319,14 @@ class CustomCampaignTest {
         assertNotNull(matched)
         assertEquals(
             setOf("custom:a", "custom:b"),
-            engine.judgeAll(matched!!, today).judgments.map { it.campaign.id }.toSet(),
+            engine.judgeAll(matched!!.merchant, today).judgments.map { it.campaign.id }.toSet(),
         )
     }
 
     @Test
     fun `開始前はもうすぐ開始扱いで判定に出ない`() {
         val engine = engineWith(listOf(custom(merchantIds = listOf("mcdonalds"), startDate = "2026-08-01")))
-        val merchant = engine.search("マクドナルド").first()
+        val merchant = engine.search("マクドナルド").first().merchant
         assertTrue(engine.judgeAll(merchant, today).judgments.isEmpty())
         assertEquals(1, engine.upcomingCampaigns(today).size)
         // 開始後は判定に出る
@@ -337,7 +337,7 @@ class CustomCampaignTest {
     fun `曜日指定(recurrence)は対象日のみ判定に出る`() {
         // 2026-07-20 は月曜
         val engine = engineWith(listOf(custom(merchantIds = listOf("mcdonalds"), daysOfWeek = listOf("SAT", "SUN"))))
-        val merchant = engine.search("マクドナルド").first()
+        val merchant = engine.search("マクドナルド").first().merchant
         assertTrue(engine.judgeAll(merchant, today).judgments.isEmpty())
         val saturday = LocalDate.of(2026, 7, 25)
         val judgment = engine.judgeAll(merchant, saturday).judgments.single()
@@ -347,7 +347,7 @@ class CustomCampaignTest {
     @Test
     fun `終了日を過ぎると判定と開催中一覧から消える`() {
         val engine = engineWith(listOf(custom(merchantIds = listOf("mcdonalds"), endDate = "2026-07-19")))
-        val merchant = engine.search("マクドナルド").first()
+        val merchant = engine.search("マクドナルド").first().merchant
         assertTrue(engine.judgeAll(merchant, today).judgments.isEmpty())
         assertTrue(engine.activeCampaigns(today).isEmpty())
     }
@@ -355,7 +355,7 @@ class CustomCampaignTest {
     @Test
     fun `終了日なしは常設として判定に出続ける(期間限定バッジなし)`() {
         val engine = engineWith(listOf(custom(merchantIds = listOf("mcdonalds"), endDate = null)))
-        val merchant = engine.search("マクドナルド").first()
+        val merchant = engine.search("マクドナルド").first().merchant
         val judgment = engine.judgeAll(merchant, today).judgments.single()
         assertNull(judgment.daysRemaining)
         assertFalse(judgment.campaign.periodEnd != null)
@@ -391,7 +391,7 @@ class CustomCampaignTest {
                 PaymentCard(id = "custom:card1", cardName = "百貨店カード", effectiveRateDefault = 1.0),
             ),
         )
-        val merchant = engine.search("マクドナルド").first()
+        val merchant = engine.search("マクドナルド").first().merchant
         val result = engine.judgeAll(merchant, today)
         val judgment = result.judgments.single()
         assertNull(judgment.effectiveRate)
@@ -435,7 +435,7 @@ class CustomCampaignTest {
             updatedAt = "2026-07-01",
         )
         val engine = JudgmentEngine(data)
-        val merchant = engine.search("マクドナルド").first()
+        val merchant = engine.search("マクドナルド").first().merchant
         // 施策の率(10%)がカードの常設率(1%)より優先される(従来どおり)
         assertEquals(10.0, engine.judgeAll(merchant, today).judgments.single().effectiveRate!!, 0.0)
     }

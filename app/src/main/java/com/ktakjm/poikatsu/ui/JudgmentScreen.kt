@@ -58,6 +58,23 @@ import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningColor
 import com.ktakjm.poikatsu.ui.theme.warningContainerColor
 
+/**
+ * 判定詳細の業態(看板)コンテキスト行(#60)。
+ * - グループ視点(業態を持つ系列を系列名で開いた): 対象業態を全列挙する(「ダックスも対象か」を
+ *   ここで確かめられる)。施策ごとの対象外業態は各判定カードの対象外欄に出る
+ * - 業態視点(杏林堂薬局などの業態名で開いた): 所属グループ名を示す
+ */
+private fun bannerContextText(selection: MainViewModel.Selection): String? {
+    val merchant = selection.merchant
+    return when {
+        selection.bannerId != null && selection.bannerId != merchant.id ->
+            "${groupLabelOf(merchant)}の業態"
+        selection.bannerId == null && merchant.banners.isNotEmpty() ->
+            "対象業態: ${merchant.name}・" + merchant.banners.joinToString("・") { it.name }
+        else -> null
+    }
+}
+
 @Composable
 internal fun JudgmentDetail(
     selection: MainViewModel.Selection,
@@ -75,6 +92,14 @@ internal fun JudgmentDetail(
             val hasStoreName = selection.displayName != null
             Column {
                 CategoryTag(selection.merchant.category)
+                bannerContextText(selection)?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Spacer(Modifier.height(12.dp))
                 if (hasStoreName) {
                     YolpAttribution(Modifier.padding(bottom = 8.dp))

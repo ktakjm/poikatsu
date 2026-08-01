@@ -12,11 +12,45 @@ data class Merchant(
     val reading: String = "",
     val aliases: List<String> = emptyList(),
     val category: String = "",
+    /**
+     * 傘下の看板(UI 表記は「業態」)。merchant 自体は系列(施策の帰属単位)を表し、
+     * name/reading/aliases は「代表看板」(banner id = merchant.id)として扱う。
+     * 網羅リストでなくてよい(未登録の看板は照合されず「出ないだけ」の安全側)。
+     * alias(同一看板の略称・表記ゆれ)と banner(街で別の名前を掲げる店)の線引きは data/README.md 参照。
+     */
+    val banners: List<Banner> = emptyList(),
+    /**
+     * グループ名(例: "ウエルシアグループ")。banners を持つ merchant の束ね見出しや
+     * 検索結果の従属表示に使う。null なら name で代用する。
+     */
+    @SerialName("group_label") val groupLabel: String? = null,
     // 位置情報を持たない発行体(自販機など)の案内。これがあると「地図」探索が行き止まりになるため、
     // 判定詳細では「近くのこの店を探す」を出さず、代わりに外部アプリ/サイトでの確認を促す。
     @SerialName("location_hint") val locationHint: LocationHint? = null,
     @SerialName("yolp_search") val yolpSearch: String = "gc",
     @SerialName("yolp_keyword") val yolpKeyword: String? = null,
+) {
+    /** 看板 id → 表示名。代表看板(merchant.id)は merchant 名。未知の id は null */
+    fun bannerName(bannerId: String): String? = when {
+        bannerId == id -> name
+        else -> banners.firstOrNull { it.id == bannerId }?.name
+    }
+
+    /** 代表看板を含む全看板の id(merchant_rules の banner_ids が参照できる範囲) */
+    val allBannerIds: List<String> get() = listOf(id) + banners.map { it.id }
+}
+
+/**
+ * 看板(UI 表記は「業態」)1 件。系列(merchant)の傘下で別の名前を掲げる店。
+ * id は merchant 内で一意(整合性テストで強制)で、merchant_rules の
+ * banner_ids / ineligible_banner_ids から参照される。
+ */
+@Serializable
+data class Banner(
+    val id: String,
+    val name: String,
+    val reading: String = "",
+    val aliases: List<String> = emptyList(),
 )
 
 /** 位置情報を持たない発行体で、店舗位置を確認できる外部導線(例: Coke ON 公式アプリ)を示す。 */
@@ -126,7 +160,28 @@ data class MerchantRule(
     @SerialName("ineligible_brands") val ineligibleBrands: List<String> = emptyList(),
     @SerialName("store_list_url") val storeListUrl: String? = null,
     @SerialName("official_store_list") val officialStoreList: OfficialStoreList? = null,
-)
+    /**
+     * この看板(業態)だけが対象(merchants.json の banners[].id。代表看板は merchant.id)。
+     * 空 = 全看板対象(通常ケース)。ineligible_banner_ids と排他(整合性テストで強制)
+     */
+    @SerialName("banner_ids") val bannerIds: List<String> = emptyList(),
+    /**
+     * この看板(業態)だけ対象外(例: すかいらーくグループ対象だがペルティカは対象外)。
+     * 該当看板の POI は判定なし = 地図ピン・一覧からも消える
+     */
+    @SerialName("ineligible_banner_ids") val ineligibleBannerIds: List<String> = emptyList(),
+) {
+    /**
+     * この看板にルールが適用されるか。bannerId = null は「系列(グループ)全体の視点」
+     * (お店タブのカテゴリ一覧カード等)で、看板スコープに関わらず適用扱いにする
+     * (スコープの内訳は判定詳細の注記で示す)。
+     */
+    fun appliesToBanner(bannerId: String?): Boolean = when {
+        bannerId == null -> true
+        bannerIds.isNotEmpty() -> bannerId in bannerIds
+        else -> bannerId !in ineligibleBannerIds
+    }
+}
 
 /**
  * 店舗に紐づかない条件別の還元率(external 施策の段階制。例: 中小20%・大手10%)。

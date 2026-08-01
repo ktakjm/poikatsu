@@ -77,9 +77,18 @@ fun CustomCampaign.toCampaigns(operatorFor: (CustomPayment) -> String): List<Cam
     val merchantRules = if (allStores) {
         emptyList()
     } else {
-        (merchantIds + storeNames.filter { it.isNotBlank() }.map { customStoreMerchantId(it) })
+        val wholeRules = (merchantIds + storeNames.filter { it.isNotBlank() }.map { customStoreMerchantId(it) })
             .distinct()
             .map { MerchantRule(merchantId = it) }
+        // 業態(看板)単位の選択は banner_ids 付きルールへ(#60)。同 merchant の系列まるごと選択が
+        // あれば看板選択は冗長なので落とす(保存時にも除去するが、旧データや手編集に備えて防御)
+        val bannerRules = bannerSelections
+            .filterNot { it.merchantId in merchantIds }
+            .groupBy { it.merchantId }
+            .map { (merchantId, sels) ->
+                MerchantRule(merchantId = merchantId, bannerIds = sels.map { it.bannerId }.distinct())
+            }
+        wholeRules + bannerRules
     }
     val recurrence = Recurrence(daysOfWeek = daysOfWeek, daysOfMonth = daysOfMonth)
         .takeIf { daysOfWeek.isNotEmpty() || daysOfMonth.isNotEmpty() }
