@@ -112,6 +112,7 @@ poikatsu/
     └── test/java/com/ktakjm/poikatsu/
         ├── JudgmentEngineTest.kt        # フィクスチャで検索・判定ロジックを検証（48 件）
         ├── JudgmentEngineRealDataTest.kt # 実データの整合性・施策固有の振る舞い検証（18 件）
+        ├── BannerTest.kt                 # 系列と看板の2階層（照合・看板スコープ・実データの取りこぼし/誤爆検知。#60）
         ├── DataRepositoryTest.kt         # ロード戦略のテスト（8 件、インライン JSON フィクスチャ）
         └── NearbyTest.kt                 # チェーン特定・YOLP パース・密度クリップ・YolpSearchConfig（25 件）
 ```
@@ -126,12 +127,19 @@ poikatsu/
 erDiagram
     MERCHANT {
         string id PK
-        string name
+        string name "代表看板の名前(まとめ表示のラベル)"
         string reading "ひらがな読み（検索用）"
-        string_list aliases "略称・別表記"
+        string_list aliases "同一看板の略称・表記ゆれ"
         string category "コンビニ/ファミレス等"
+        string group_label "グループ名(任意。束ね見出し・従属表示・対象ラベル)"
         string yolp_search "gc/keyword/none"
         string yolp_keyword "keyword時の検索語(任意)"
+    }
+    BANNER {
+        string id PK "merchant内一意(代表看板のidはmerchant.id)"
+        string name "看板の名前(UI表記は業態。例: ハックドラッグ)"
+        string reading "ひらがな読み"
+        string_list aliases "同一看板の略称・表記ゆれ(YOLP実POI名の短縮形含む)"
     }
     LOCATION_HINT {
         string text "案内文"
@@ -180,6 +188,8 @@ erDiagram
         string_list eligible_notes "店固有の対象の言い切り(「〜も含む」等)"
         string_list ineligible_notes "店固有の対象外・限定の言い切り(「〜以外は対象外」形)"
         string_list ineligible_brands "優遇対象外のブランド(card_brands 参照)"
+        string_list banner_ids "この看板だけ対象(banners参照。空=全看板)"
+        string_list ineligible_banner_ids "この看板だけ対象外(banner_idsと排他)"
         string store_list_url "公式店舗一覧/検索リンク"
     }
     OFFICIAL_STORE_LIST {
@@ -232,8 +242,10 @@ erDiagram
     PAYMENT_METHODS ||--o{ QR_PAYMENT : "qr_payments[]"
     CAMPAIGN ||--o{ MERCHANT_RULE : "merchant_rules[]"
     CAMPAIGN ||--o| REGION : "region(自治体施策のみ)"
+    MERCHANT ||--o{ BANNER : "banners[](系列と看板の2階層。#60)"
     MERCHANT ||--o| LOCATION_HINT : "location_hint(自販機等)"
     MERCHANT_RULE }o--|| MERCHANT : "merchant_id で参照"
+    MERCHANT_RULE }o--o{ BANNER : "banner_ids / ineligible_banner_ids で参照(任意)"
     MERCHANT_RULE ||--o| OFFICIAL_STORE_LIST : "official_store_list(任意)"
     CAMPAIGN }o--o| PAYMENT_CARD : "card_id で参照(1カード:N施策)"
     PAYMENT_CARD ||--o| POINT_MULTIPLIER : "point_multiplier(任意)"
@@ -242,7 +254,7 @@ erDiagram
 
 3 つの JSON の役割分担:
 
-- `merchants.json` — チェーンの正規化マスタ。検索ヒット率は `reading` / `aliases` の充実度で決まる。トップレベルに `yolp_config`（YOLP 検索の gc グループ定義・密度チューニング用の `max_pages`）を持ち、各 merchant の `yolp_search`（`gc`/`keyword`/`none`）で検索方式を指定する。`YolpClient` はこの設定から `YolpSearchConfig` を動的に構築し、アクティブな施策が参照する merchant だけを検索対象にする（該当 merchant がいない gc_group はスキップ）。位置情報を持たない発行体（自販機など）は `location_hint` で外部導線（Coke ON アプリ等）を案内し、「近くのこのお店を探す」を出さない
+- `merchants.json` — チェーンの正規化マスタ。**1 merchant = 1 系列**（施策の帰属単位）で、傘下で別の名前を掲げる**看板**（UI 表記は「業態」）は `banners` に入れ子で持つ（#60。merchant 自身の name/reading/aliases は「代表看板」= banner id は merchant.id）。施策側は `merchant_id` を書くだけで傘下看板がすべて対象になり、看板単位の対象/対象外は `merchant_rules[].banner_ids` / `ineligible_banner_ids` で表す。alias（同一看板の略称・表記ゆれ）と banner（別の看板）の線引き・照合制約・運用ルールは data/README.md「系列と看板」参照。検索ヒット率は `reading` / `aliases` の充実度で決まる。トップレベルに `yolp_config`（YOLP 検索の gc グループ定義・密度チューニング用の `max_pages`）を持ち、各 merchant の `yolp_search`（`gc`/`keyword`/`none`）で検索方式を指定する。`YolpClient` はこの設定から `YolpSearchConfig` を動的に構築し、アクティブな施策が参照する merchant だけを検索対象にする（該当 merchant がいない gc_group はスキップ）。位置情報を持たない発行体（自販機など）は `location_hint` で外部導線（Coke ON アプリ等）を案内し、「近くのこのお店を探す」を出さない
 - `campaigns.json` — 汎用的な施策情報のみ。**ユーザー固有の前提を書かない**（規約）。`type` で常設カード（`card_program`）/ キャンペーン（`promotion`。managed=特定チェーン対象、external=全加盟店対象のおトクタブ専用。#44）/ 自治体施策（`municipal`）を区分し、`benefit_type` でポイント還元（`rebate`）/ 即時割引（`discount`）を区分し、定率/定額は `rate_base` / `discount_amount` のどちらが入っているかで導出する。`store_scope` が `managed` ならチェーン検索・地図に表示、`external` ならおトクタブのみ表示（`detail_url`/`store_search_url` で公式ページへリンク）。施策の帰属は `card_id`（カード施策。payment_methods.json の `cards[].id` を参照、1 カード : N 施策）か `payment_method_id`（QR 施策・自治体施策）の**ちょうど一方**を持つ
 - `payment_methods.json` — 決済手段カタログ（カード `cards` + QR 決済 `qr_payments`）。ユーザー固有値は持たず（差分は DataStore）、merchants/campaigns と同様にリモート更新・テストデータ切替の対象。`point_multiplier`（`PointMultiplier`）を持つカードはポイント価値の倍率（例: ウエル活 ×1.5）を設定画面で ON/OFF でき、ON 時は `effectiveRateDefault × factor` が実質還元率になる。`point_multiplier.color` はウエルシアのロゴ色など識別バッジに使う
 
@@ -351,7 +363,7 @@ adb uninstall com.ktakjm.poikatsu                       # アンインストー�
 
 ### 5.1 検索（search）
 
-コンストラクタで全チェーンの検索キー（正規化済みの name / reading / aliases）を `searchIndex` として前計算する。検索はスコアリング方式:
+コンストラクタで全チェーンの検索キー（正規化済みの name / reading / aliases）を **merchant × 看板（banners。代表看板含む）単位**で `searchIndex` として前計算する（#60）。検索はスコアリング方式で、merchant ごとに最良の 1 エントリへ集約する（同点は代表看板を優先）。傘下看板のキーに一致したヒットは `SearchHit` に看板情報が付き、UI は主ラベル=業態名+従属にグループ名（`group_label`）で出す:
 
 | スコア | 条件 | 例 |
 |---|---|---|
@@ -425,8 +437,8 @@ flowchart LR
 - **店舗単位の判定 `checkStore(merchant, storeName)`**: `official_store_list` を持つ施策ごとに、`ineligible_stores` 一致 → 対象外 / `eligible_stores` 一致 → 対象 / どちらにも無し → 要確認（`StoreEligibility.UNKNOWN`）の **3 状態**を返す（対象外を優先）。リスト網羅性を仮定せず、**公式が店舗名で明示した店だけ言い切る**設計（旧 `facility_risk_patterns` によるキーワード推測警告は実際の対象外店舗との乖離が大きく廃止）。
 - `canCheckStore(merchant)`: `official_store_list` を持つ施策が 1 つでもあれば、対象判定画面（`StoreCheckScreen`）に遷移できる。
 - `isExcludedStore(merchant, storeName)`: 近隣リスト用。`checkStore` の結果が INELIGIBLE を含み ELIGIBLE を含まないときだけ true（**明示的対象外のみ**近隣リストから除外する）。
-- チェーン rule の引き当ては `Campaign.ruleFor(merchant)`（private 拡張）に集約。
-- `matchStore(storeName)` は GPS 検索用。地図 POI 名（「マクドナルド 渋谷駅前店」）からチェーンを特定する。「ステーキガスト」が「ガスト」に負けないよう、**一致キーが最長のチェーンを採用**する。照合キーは 3 文字以上、または**漢字のみ 2 文字**（松屋・夢庵等。#38）。漢字キーは前方境界のみ厳格（「小松屋」の「松屋」は別の店名の一部とみなす。直後の漢字は「松屋渋谷店」のように支店名なので許容）
+- チェーン rule の引き当ては `Campaign.ruleFor(merchant, bannerId)`（private 拡張）に集約。bannerId 非 null は看板（業態）としての判定で、看板スコープ（`banner_ids` / `ineligible_banner_ids`）に合わないルールは適用されない=対象外看板の POI は判定ゼロで地図からも消える。null はグループ視点（お店タブのカテゴリ一覧カード等）で、スコープ付きルールも「対象は◯◯のみ / ◯◯は対象外」の合成注記付きで全部出す（#60）
+- `matchStore(storeName)` は GPS 検索用。地図 POI 名（「マクドナルド 渋谷駅前店」）からチェーンを特定し、**どの看板（業態）に一致したか**を `StoreMatch(merchant, bannerId, bannerName)` で返す（判定の看板スコープと地図の業態レンズに使う。#60）。「ステーキガスト」が「ガスト」に負けないよう、**一致キーが最長のものを採用**する。照合キーは 3 文字以上、または**漢字のみ 2 文字**（松屋・夢庵等。#38）。漢字キーは前方境界のみ厳格（「小松屋」の「松屋」は別の店名の一部とみなす。直後の漢字は「松屋渋谷店」のように支店名なので許容）
 
 ### 5.5 統一判定型 CampaignJudgment と統合判定（judgeAll）
 
@@ -565,11 +577,11 @@ sequenceDiagram
     Note over YC: config の gc_groups（グループごと maxPages）<br/>＋keywordQueries で POI を取得・start でページング<br/>mergeAndClip で密度差を補正。結果はキャッシュせず毎回ライブ取得
     YC-->>VM: List(Poi)
     loop 各 POI
-        VM->>JE: matchStore(poi.name, poi.brand)
-        JE-->>VM: 該当チェーン or null（捨てる）
+        VM->>JE: matchStore(poi.name)
+        JE-->>VM: StoreMatch（merchant＋一致看板）or null（捨てる）
         VM->>JE: isExcludedStore(merchant, displayName)
         Note over JE: 公式に明示的「対象外」なら<br/>リストから除外
-        VM->>JE: judgeAll(merchant, today, qrIds) → CampaignJudgment リスト（期間フィルタ済み・最高還元率・対応発行体の色一覧）
+        VM->>JE: judgeAll(merchant, today, qrIds, bannerId) → CampaignJudgment リスト（期間＋看板スコープ適用済み・最高還元率・対応発行体の色一覧）
     end
     VM-->>SC: NearbyUi（地図中心からの距離昇順・対象チェーンのみ・明示的対象外は除外）
     U->>SC: 店舗をタップ（リスト行 / 地図ピン）
@@ -602,7 +614,7 @@ sequenceDiagram
 - **再検索中も地図・一覧を残す（まっさらにしない）**: `searchHere`/`fetchNearby` は、以前は `NearbyUi(loading=true)` を新規生成して `center`/`places` を捨てるため毎回全画面ローディングに落ちていた。現在は**直前の `NearbyUi` を `copy` して `loading` だけ立て**（`center`/`places`/現在地を保持）、`NearbyPane` も「`center` があれば再検索中でも地図・シートを出す」ゲートに変えた。進捗は全画面スピナーでなく、地図中央の「このエリアを検索」ボタンを **進捗ピル（小スピナー＋文言）** に差し替えて示し、その間 📍 は無効化して二重起動を防ぐ。文言は測位中／YOLP 検索中で出し分ける（`MainViewModel.NearbyLoadPhase` LOCATING/SEARCHING を `NearbyUi.loadingPhase` で運び、全画面ローディングと共通の `nearbyLoadingText` で表示）。初回（`center` がまだ無い）だけは従来どおり全画面ローディング。
 - **失敗は「表示すべき内容の有無」と「位置情報 vs YOLP」で出し分け**: 位置情報の取得失敗は初回なら**デフォルト地点（新宿駅）にフォールバック**して地図を出しつつ Snackbar 通知（`fallbackToDefaultPlace`）、地図表示後なら地図を残して Snackbar のみ（`failNearby`）。YOLP 等のデータ取得失敗時は `failNearby` が『既に地図（`center`）が出ているか』で分岐し、出ている再検索の一時失敗は**地図・一覧を残したまま Snackbar 通知**（`UiState.nearbySearchFailed` に文言をセット→表示後 `onNearbySearchFailedShown` で消費）。表示すべき内容が無い初回失敗は**全画面エラー＋「再試行」**（`NearbyRetryState`、`onReload`＝`fetchNearby`）。Snackbar の文言はパーミッション拒否（「位置情報の許可が必要です…」）と取得タイムアウト（「現在地を取得できませんでした…」）を `hasPermission()` で出し分ける。CLAUDE.md「一時的失敗は Snackbar・致命的は全画面」に沿う運用。この Snackbar は**外側 `Scaffold` の host だと下部シート（peek）の裏に隠れる**ため、`NearbyPane` の `BottomSheetScaffold` 自身の `snackbarHost` に出す。世代カウンタ（`nearbyGeneration`）が古い失敗は無視し、`onCloseNearby` で未表示の失敗文言も破棄して、次に「地図」を開いたとき古い Snackbar が出ないようにする。
 - **距離表示は起点基準、ソートは地図中心基準**: リストの距離ラベル（「現在地から○○m」「{起点名}から○○m」）は `NearbyPlace.distanceMeters`（`originLat/originLon` から算出）で表示し、リストの並び順は `NearbyPlace.distanceFromCenter`（`centerLat/centerLon` から算出）の昇順。地図を見ているエリアの店が上に来つつ、距離は起点基準でわかる。起点名は先頭の都道府県名（`^.{2,3}[都道府県]`）を除去して短縮し、それでも 10 文字を超える場合は省略（「渋谷区渋谷２丁目２１…から850m」）。GPS 起点（既定）なら「現在地から」、地名起点なら「{検索地名}から」を表示する。**再検索中は前回の起点名を維持**し、新起点名と旧距離が混在する不整合を防ぐ（`stableOriginName: MutableState` で `loading=false` 時のみ更新）。`NearbyUi.userLat/userLon` は常に実 GPS（青ドット用）を保持し、距離の意味とは分離する。`centerLat/centerLon` は YOLP の検索範囲・地図カメラ・ソート順・「このエリアを検索」表示条件の基準に使う。
-- **絞り込み（レンズ）とブリッジ（お店/期間限定→地図）**: 「地図」への機能追加は3層モデル（**モード**＝下部ナビのタブ固定 /**レンズ**＝表示集合を絞る /**ブリッジ**＝モード間で選択を運ぶ）で整理し、散らからないようにする。**ジャンル絞り込み**（`UiState.nearbySelectedCategories`・お店側 `selectedCategories` とは独立）と**チェーン絞り込み**（`UiState.nearbyMerchantFilters: Set<Merchant>`・非空ならジャンルより優先）はどちらもクライアント側フィルタで、`nearby.places` を `visiblePlaces` に絞って地図ピン・一覧の両方へ適用する（YOLP 再取得なし）。フィルタ状態は毎回作り直す `NearbyUi` でなく `UiState` 側に持ち再検索をまたいで保持する。チェーンは**生のテキスト検索を足さず**（検索の入口は「お店」に一本化）、いま周辺に在るチェーンを件数つきで挙げる `ChainFilterDropdown`（「お店で絞る」・`presentChains`＝現在の `nearby.places` から導出、全体リストではない）の**チェックボックスで複数選択**でき（トグルしてもメニューは閉じず続けて選べる）、選択中はチェーンごとの解除可能ピル（`InputChip`・増えたら横スクロール）で示す。絞り込み中もピッカーを残し、解除せずに追加・入れ替えできる（トグル＝`onToggleNearbyChain`。全ピル解除でジャンル絞り込みへ戻る）。**ブリッジ**は2系統が**同じ `nearbyMerchantFilters` に収束**する（UI・状態は1つで賄う）: (1) 判定詳細（**名前検索由来＝`Selection.displayName == null` のときだけ表示**。近隣由来は既に地図上なので出さない）の「近くのこのお店を探す」（`onFindNearby`＝要素1個の Set）、(2) おトクタブの施策詳細（`CampaignDetail` の `TargetChainSection`）。(2) の UI はお店タブと視覚文法を揃え、**本文の上**に FilledTonalButton（単一チェーン「近くのこのお店を探す」/複数「近くの対象のお店を探す」＝全チェーンで地図へ）を主動線として置く（`onFindNearbyByIds` が merchant_id 群を Merchant に解決。location_hint 持ちは除く）。チェーン個別の絞り込みは施策詳細側ではやらず**地図タブ側のフィルタピル（各✕で解除）に一本化**する（個別チェーンのチップは「そのチェーン単独で地図表示」のアクションに読めないため 2026-07 に廃止）。複数チェーンのときはボタン下に「対象: ○○・△△」の情報テキストを添える（7 チェーン以上は先頭 4 件+「他N」に畳み、タップで全展開できる chevron 付きの面にする。SMCC/MUFG の常設 30 チェーン級で詳細が埋まらないように。#44）。どちらも元の画面を閉じ→UI 側が続けて `onNearbyClick`（パーミッション→`fetchNearby`）で「地図」へ突入する。**開始前・recurrence 非対象日でもブリッジは許可**する（場所の下見用途）: YOLP 取得対象は `activeManagedMerchantIds(today)`（`isTargetDay` フィルタ済み）に**チェーン絞り込み中の merchant を加えた集合**（`loadNearbyAround` の `filterIds`）で、絞り込み中の merchant は判定 0 件でも地図・一覧に残す（還元率ラベルなし）。施策詳細側は「本日は対象日ではありません（次の対象日: ○/○）。地図ではお店の場所のみ確認できます」を warning 色の注意面（`warningContainerColor`+`onWarningContainerColor` の Surface+Warning アイコン。ExtendedColors の container 対）で目立たせる。どちらのブリッジも閉じた元画面を保存し（(1)＝判定詳細を `UiState.selectionBridgeReturn`、(2)＝施策詳細を `UiState.campaignBridgeReturn`）、**地図タブの戻る操作（`onCloseNearby`）でブリッジ元のタブ+詳細画面へ復帰**する（下部ナビでの手動タブ切替は通常のタブ移動なので `onSelectTab` が破棄する。新しいブリッジは古い復元先を無効化する）。
+- **絞り込み（レンズ）とブリッジ（お店/期間限定→地図）**: 「地図」への機能追加は3層モデル（**モード**＝下部ナビのタブ固定 /**レンズ**＝表示集合を絞る /**ブリッジ**＝モード間で選択を運ぶ）で整理し、散らからないようにする。**ジャンル絞り込み**（`UiState.nearbySelectedCategories`・お店側 `selectedCategories` とは独立）と**お店絞り込み**（`UiState.nearbyMerchantFilters: Set<NearbyLens>`。レンズ＝系列まるごと(bannerId=null) or 業態単位(bannerId 非 null)の 2 粒度。#60。非空ならジャンルより優先）はどちらもクライアント側フィルタで、`nearby.places` を `visiblePlaces` に絞って地図ピン・一覧の両方へ適用する（YOLP 再取得なし）。フィルタ状態は毎回作り直す `NearbyUi` でなく `UiState` 側に持ち再検索をまたいで保持する。お店は**生のテキスト検索を足さず**（検索の入口は「お店」に一本化）、いま周辺に在るお店を件数つきで挙げる `ChainFilterDropdown`（「お店で絞る」・`presentChains`＝現在の `nearby.places` から系列×業態で導出、全体リストではない）の**チェックボックスで複数選択**でき（トグルしてもメニューは閉じず続けて選べる）、選択中はレンズごとの解除可能ピル（`InputChip`・ラベルは業態名/系列名・増えたら横スクロール）で示す。同一系列の業態が複数在るときは**グループ見出し行（=系列一括選択）+業態行のインデントで束ね、初期状態から展開済み**にする（業態がどのグループか知らなくても業態行に直接届く。見出しと業態は重ね掛けせず置き換え＝`onToggleNearbyLens` が解決）。絞り込み中もピッカーを残し、解除せずに追加・入れ替えできる（全ピル解除でジャンル絞り込みへ戻る）。**ブリッジ**は2系統が**同じ `nearbyMerchantFilters` に収束**する（UI・状態は1つで賄う）: (1) 判定詳細（**名前検索由来＝`Selection.displayName == null` のときだけ表示**。近隣由来は既に地図上なので出さない）の「近くのこのお店を探す」（`onFindNearby`＝要素1個の Set）、(2) おトクタブの施策詳細（`CampaignDetail` の `TargetChainSection`）。(2) の UI はお店タブと視覚文法を揃え、**本文の上**に FilledTonalButton（単一チェーン「近くのこのお店を探す」/複数「近くの対象のお店を探す」＝全チェーンで地図へ）を主動線として置く（`onFindNearbyByIds` が merchant_id 群を Merchant に解決し、施策の看板スコープ（`banner_ids`/`ineligible_banner_ids`）があれば対象業態のレンズへ展開して対象外業態のピンに飛ばさない。location_hint 持ちは除く）。チェーン個別の絞り込みは施策詳細側ではやらず**地図タブ側のフィルタピル（各✕で解除）に一本化**する（個別チェーンのチップは「そのチェーン単独で地図表示」のアクションに読めないため 2026-07 に廃止）。ボタン下の「対象: ○○・△△」情報テキストは `campaignTargetLabels` で組む: banner_ids で業態を限定したルールは**業態名**、業態を持つ系列の全業態ルールは**グループ名**（「マツモトキヨシ」が業態かグループか区別できないため）、業態を持たない merchant は merchant 名。表示条件は「2 件以上/カスタム施策（タイトルが登録名固定で対象がどこにも出ない）/単一系列でも業態を持つグループ」のいずれか（7 件以上は先頭 4 件+「他N」に畳み、タップで全展開できる chevron 付きの面にする。SMCC/MUFG の常設 30 チェーン級で詳細が埋まらないように。#44）。どちらも元の画面を閉じ→UI 側が続けて `onNearbyClick`（パーミッション→`fetchNearby`）で「地図」へ突入する。**開始前・recurrence 非対象日でもブリッジは許可**する（場所の下見用途）: YOLP 取得対象は `activeManagedMerchantIds(today)`（`isTargetDay` フィルタ済み）に**チェーン絞り込み中の merchant を加えた集合**（`loadNearbyAround` の `filterIds`）で、絞り込み中の merchant は判定 0 件でも地図・一覧に残す（還元率ラベルなし）。施策詳細側は「本日は対象日ではありません（次の対象日: ○/○）。地図ではお店の場所のみ確認できます」を warning 色の注意面（`warningContainerColor`+`onWarningContainerColor` の Surface+Warning アイコン。ExtendedColors の container 対）で目立たせる。どちらのブリッジも閉じた元画面を保存し（(1)＝判定詳細を `UiState.selectionBridgeReturn`、(2)＝施策詳細を `UiState.campaignBridgeReturn`）、**地図タブの戻る操作（`onCloseNearby`）でブリッジ元のタブ+詳細画面へ復帰**する（下部ナビでの手動タブ切替は通常のタブ移動なので `onSelectTab` が破棄する。新しいブリッジは古い復元先を無効化する）。
 
 周辺店舗データの設計判断（`YolpClient`。docs/map-data-stack.md）:
 
