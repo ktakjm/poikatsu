@@ -1243,11 +1243,13 @@ private fun MunicipalCampaignBanner(areaNames: List<String>, onClick: () -> Unit
  */
 private fun searchResultSubtitle(result: MainViewModel.SearchResult): String {
     val merchant = result.merchant
-    if (result.bannerName != null) return "${merchant.category}・${groupLabelOf(merchant)}"
+    // カテゴリと業態情報は種類の違う情報なので「・」で並べず「 | 」で区切る
+    // (全部「・」だとカテゴリ名が業態列挙に溶け込む。#62 実機フィードバック)
+    if (result.bannerName != null) return "${merchant.category} | ${groupLabelOf(merchant)}"
     if (merchant.banners.isEmpty()) return merchant.category
     // 全列挙はカードが縦に伸びるため、先頭2業態+総数(代表看板を含む)にとどめる
     val names = merchant.banners.take(2).joinToString("・") { it.name }
-    return "${merchant.category}・${names} など${merchant.banners.size + 1}業態"
+    return "${merchant.category} | $names など${merchant.banners.size + 1}業態"
 }
 
 @Composable
