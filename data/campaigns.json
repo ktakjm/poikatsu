@@ -1,6 +1,6 @@
 {
   "schema_version": 11,
-  "updated_at": "2026-08-01",
+  "updated_at": "2026-08-03",
   "campaigns": [
     {
       "id": "smcc_combini_restaurant",
@@ -35,10 +35,10 @@
       ],
       "merchant_rules": [
         { "merchant_id": "seven_eleven", "ineligible_notes": ["スマホレジ(セブンスマホレジ)は対象外"] },
-        { "merchant_id": "lawson", "eligible_notes": ["ナチュラルローソン・ローソンストア100・ローソンスリーエフ含む"], "ineligible_notes": ["ローソンスマホレジは対象外"] },
+        { "merchant_id": "lawson", "ineligible_notes": ["ローソンスマホレジは対象外"] },
         { "merchant_id": "ministop" },
-        { "merchant_id": "seicomart", "eligible_notes": ["タイエー・ハマナスクラブ・ハセガワストア含む"] },
-        { "merchant_id": "poplar", "eligible_notes": ["生活彩家含む"] },
+        { "merchant_id": "seicomart" },
+        { "merchant_id": "poplar" },
         { "merchant_id": "mcdonalds", "eligible_notes": ["モバイルオーダーも対象"], "ineligible_notes": ["デリバリー(マックデリバリー等)は対象外"] },
         { "merchant_id": "mos_burger", "eligible_notes": ["モバイルオーダー(自社配達含む)も対象"] },
         { "merchant_id": "kfc", "eligible_notes": ["モバイルオーダー(自社配達含む)も対象"], "ineligible_notes": ["一部店舗のみ対象。公式の対象店舗検索で要確認"], "store_list_url": "https://www.smbc-card.com/mem/wp/store_list/kfc.jsp" },
@@ -100,34 +100,41 @@
         "条件達成判定は毎月1日〜末日、達成状況が翌月16日〜翌々月15日の利用分に適用",
         "スペシャルポイントは請求確定の翌々月25日頃付与",
         "エントリー初回特典: エントリー月の翌月15日まで一律10%適用",
-        "キャッシング・年会費・リボ/分割手数料等は月5万円利用条件の集計に入らない"
+        "キャッシング・年会費・リボ/分割手数料等は月5万円利用条件の集計に入らない",
+        "ローソンスリーエフは公式の対象店舗に記載がない(ナチュラルローソン・ローソンストア100だけを明記。2026-08-03 確認)ため ineligible_banner_ids に反映済み",
+        "松屋は公式に「松屋フーズのブランド全てが対象」と明記(松のや・マイカリー食堂・ステーキ屋松・松軒中華食堂・すし松を含む9ブランド列挙)。各ブランドは独立 merchant のため rule を個別に持つ(#62)"
       ],
       "merchant_rules": [
         { "merchant_id": "seven_eleven", "ineligible_notes": ["複合商業施設内の一部店舗・オンライン/デリバリー・セブン自販機・スマホレジは対象外"], "ineligible_brands": [] },
-        { "merchant_id": "lawson", "eligible_notes": ["ナチュラルローソン・ローソンストア100含む"], "ineligible_notes": ["複合商業施設内・駅ビル内・GS併設の一部店舗、オンライン/デリバリー、スマホレジは対象外"], "ineligible_brands": [] },
+        { "merchant_id": "lawson", "ineligible_banner_ids": ["lawson_three_f"], "ineligible_notes": ["複合商業施設内・駅ビル内・GS併設の一部店舗、オンライン/デリバリー、スマホレジは対象外"], "ineligible_brands": [] },
         { "merchant_id": "coke_on", "eligible_notes": ["タッチ決済/QUICPay/Coke ON Pay・Coke ON Passが対象"], "ineligible_notes": ["Coke ONのApple Pay利用分は対象外"], "ineligible_brands": [] },
         { "merchant_id": "kurazushi", "ineligible_notes": ["一部店舗(例: ららぽーとTOKYO-BAY店)、オンライン事前決済(スマホでお持ち帰り等)は対象外"], "ineligible_brands": ["Amex"] },
         { "merchant_id": "sushiro", "ineligible_notes": ["一部店舗、オンライン決済、京樽スシロー・スシローToGoは対象外"], "ineligible_brands": [] },
         { "merchant_id": "pizza_hut", "ineligible_notes": ["店頭・電話注文は対象外(公式サイト・公式アプリのオンライン注文のみ対象)"], "ineligible_brands": [] },
-        { "merchant_id": "matsuya", "eligible_notes": ["店舗の券売機・セルフレジ利用分と松弁ネット・モバイルオーダー・松弁デリバリーが対象(松のや・マイカリー食堂等の対応ブランド含む)"], "ineligible_notes": ["高速道路SA/PA内の一部店舗、松屋公式オンラインショップは対象外"], "ineligible_brands": [] },
+        { "merchant_id": "matsuya", "eligible_notes": ["店舗の券売機・セルフレジ利用分と松弁ネット・モバイルオーダー・松弁デリバリーが対象"], "ineligible_notes": ["高速道路SA/PA内の一部店舗、松屋公式オンラインショップは対象外"], "ineligible_brands": [] },
+        { "merchant_id": "matsunoya", "eligible_notes": ["店舗の券売機・セルフレジ利用分と松弁ネット・モバイルオーダー・松弁デリバリーが対象"], "ineligible_notes": ["高速道路SA/PA内の一部店舗は対象外"], "ineligible_brands": [] },
+        { "merchant_id": "mycurry_shokudo", "eligible_notes": ["店舗の券売機・セルフレジ利用分と松弁ネット・モバイルオーダー・松弁デリバリーが対象"], "ineligible_notes": ["高速道路SA/PA内の一部店舗は対象外"], "ineligible_brands": [] },
+        { "merchant_id": "steakya_matsu", "eligible_notes": ["店舗の券売機・セルフレジ利用分とモバイルオーダーが対象"], "ineligible_notes": ["高速道路SA/PA内の一部店舗は対象外"], "ineligible_brands": [] },
+        { "merchant_id": "matsuken_chuka", "eligible_notes": ["店舗の券売機・セルフレジ利用分とモバイルオーダーが対象"], "ineligible_notes": ["高速道路SA/PA内の一部店舗は対象外"], "ineligible_brands": [] },
+        { "merchant_id": "sushi_matsu", "eligible_notes": ["店舗の券売機・セルフレジ利用分と松弁ネット・モバイルオーダーが対象"], "ineligible_notes": ["高速道路SA/PA内の一部店舗は対象外"], "ineligible_brands": [] },
         { "merchant_id": "zetteria", "eligible_notes": ["店頭および公式アプリのモバイルオーダーが対象"], "ineligible_brands": [] },
         { "merchant_id": "ueshima_coffee", "eligible_notes": ["UCC Cafe Plaza含む"], "ineligible_brands": ["Amex"] },
         { "merchant_id": "cafe_de_crie", "ineligible_notes": ["モバイルオーダー・クリエカードチャージは対象外"], "ineligible_brands": ["Amex"] },
         { "merchant_id": "starbucks", "ineligible_notes": ["店頭での入金・店頭利用は対象外(スターバックスカードへのオンライン入金のみ対象)"], "ineligible_brands": [] },
         { "merchant_id": "ok_store", "ineligible_notes": ["ネットスーパー等は対象外"], "ineligible_brands": ["Amex"] },
         { "merchant_id": "ozeki", "ineligible_brands": ["Amex"] },
-        { "merchant_id": "aoki_super", "eligible_notes": ["フードストアあおき含む"], "ineligible_brands": ["Amex"] },
-        { "merchant_id": "sunlive", "eligible_notes": ["マルショク・リブホール・サンク・サンリブBUONO含む"], "ineligible_notes": ["テナント/専門店売場は対象外"], "ineligible_brands": [] },
-        { "merchant_id": "sanwa", "eligible_notes": ["フードワン含む"], "ineligible_brands": ["Amex"] },
-        { "merchant_id": "super_uochou", "eligible_notes": ["生鮮乃木市場・生鮮げんき市場含む"], "ineligible_brands": ["Amex"] },
-        { "merchant_id": "kinsho_store", "eligible_notes": ["ハーベス・Pochette含む"], "ineligible_notes": ["ネットスーパー等は対象外"], "ineligible_brands": [] },
-        { "merchant_id": "tokyu_store", "eligible_notes": ["プレッセ・フードステーション含む"], "ineligible_notes": ["ネットスーパー等は対象外"], "ineligible_brands": ["Amex"] },
+        { "merchant_id": "aoki_super", "ineligible_brands": ["Amex"] },
+        { "merchant_id": "sunlive", "ineligible_notes": ["テナント/専門店売場は対象外"], "ineligible_brands": [] },
+        { "merchant_id": "sanwa", "ineligible_brands": ["Amex"] },
+        { "merchant_id": "super_uochou", "ineligible_brands": ["Amex"] },
+        { "merchant_id": "kinsho_store", "ineligible_notes": ["ネットスーパー等は対象外"], "ineligible_brands": [] },
+        { "merchant_id": "tokyu_store", "ineligible_notes": ["ネットスーパー等は対象外"], "ineligible_brands": ["Amex"] },
         { "merchant_id": "tobu_store", "ineligible_notes": ["ネットスーパー等は対象外"], "ineligible_brands": [] },
         { "merchant_id": "domy", "ineligible_brands": ["Amex"] },
         { "merchant_id": "hanamasa", "ineligible_notes": ["フランチャイズ店は対象外"], "ineligible_brands": ["Amex"] },
-        { "merchant_id": "japan_meat", "eligible_notes": ["MEATMeet・パワーマート含む"], "ineligible_brands": ["Amex"] },
+        { "merchant_id": "japan_meat", "ineligible_brands": ["Amex"] },
         { "merchant_id": "feel", "ineligible_brands": ["Amex"] },
-        { "merchant_id": "yamanaka", "eligible_notes": ["フランテ・フランテロゼ含む"], "ineligible_brands": ["Amex"] },
+        { "merchant_id": "yamanaka", "ineligible_brands": ["Amex"] },
         { "merchant_id": "akachan_honpo", "eligible_notes": ["Online Shop含む"], "ineligible_notes": ["Amexは店頭決済のみ対象外(Online Shopは対象)"], "ineligible_brands": ["Amex"], "official_store_list": {"eligible_stores": ["シーナシーナ屯田", "新さっぽろアークシティ", "アリオ札幌", "シーナシーナ青森", "仙台泉", "ヨークパーク郡山", "トナリエつくば", "ニューポートひたちなか", "ベルモール", "高崎", "スマーク伊勢崎", "ステラタウン大宮", "アリオ川口", "エミテラス所沢", "アリオ深谷", "アリオ上尾", "ALCo越谷", "和光イトーヨーカドー", "アリオ鷲宮", "テラスモール松戸", "アリオ柏", "アリオ市原", "四街道イトーヨーカドー", "アリオ北砂", "ウィラ大井", "池袋東武", "セブンタウン小豆沢", "アリオ西新井", "アリオ亀有", "アリオ葛西", "セレオ八王子", "昭島イトーヨーカドー", "武蔵小金井イトーヨーカドー", "東久留米イトーヨーカドー", "横浜別所イトーヨーカドー", "港南台バーズ", "グランツリー武蔵小杉", "溝口", "古淵イトーヨーカドー", "アリオ橋本", "テラスモール湘南", "大和鶴間イトーヨーカドー", "新潟亀田アピタ", "リバーサイド千秋", "ファボーレ", "アピタタウン金沢ベイ", "アルプラザ小松", "福井", "甲府昭和イトーヨーカドー", "アリオ上田", "アイシティ２１", "カラフルタウン岐阜", "静岡イトーヨーカドー", "浜松プラザ", "アクロスプラザ春日井", "リーフウォーク稲沢", "プライムツリー赤池", "ビバシティ彦根", "エイスクエア草津", "洛北阪急スクエア", "MOMOテラス", "精華台", "あべのイトーヨーカドー", "京阪シティモール", "大阪本町", "高槻阪急スクエア", "くずはモール", "アリオ八尾", "ホームズ寝屋川", "スマイル御影クラッセ", "ブルメール舞多聞", "カナート西神戸", "ゆめタウン姫路", "MEGAドン・キホーテ姫路広畑", "つかしん", "明石イトーヨーカドー", "トナリエ大和高田", "イズミヤ和歌山", "ゆめタウン出雲", "ハピータウン岡南", "ブランチ北長瀬", "フジグラン緑井", "ゆめタウンみゆき", "ゆめタウン福山", "ゆめタウン廿日市", "イオンタウン防府", "ゆめタウン徳島", "瓦町FLAG", "エミフルMASAKI", "リバーウォーク北九州", "福岡マリナタウン", "ガーデンズ千早", "ゆめタウン飯塚", "ゆめタウン筑紫野", "ゆめタウン佐賀", "ゆめタウンはません", "ゆめタウン光の森", "パークプレイス大分", "ニトリモール宮崎", "オプシアミスミ", "浦添西海岸パルコシティ", "ハンビータウン", "西原シティ"], "ineligible_stores": ["ララガーデン長町", "ララガーデン川口", "ララガーデン春日部", "ららぽーと富士見", "ららぽーと新三郷", "幕張イトーヨーカドー", "ららぽーとTOKYO-BAY", "ららぽーと柏の葉", "アルカキット錦糸町", "ららぽーと豊洲", "ららぽーと立川立飛", "ららぽーと横浜", "立場イトーヨーカドー", "ラゾーナ川崎", "ららぽーと湘南平塚", "ららぽーと海老名", "ららぽーと沼津", "ららぽーと磐田", "ららぽーと名古屋みなとアクルス", "ららぽーと安城", "ららぽーと愛知東郷", "ららぽーと堺", "ららぽーとEXPOCITY", "ららぽーと和泉", "ららぽーと門真", "ららぽーと甲子園"], "updated_date": "2026-06-15", "date_is_official": false, "source_url": "https://www.akachan.jp/topics/mufgCPlist/"} },
         { "merchant_id": "curves", "eligible_notes": ["入会金・月会費が対象"], "ineligible_brands": [] }
       ],
@@ -454,14 +461,19 @@
       "min_purchase": 800,
       "period_total_cap": 10000,
       "requires_entry": true,
-      "eligible_notes": [
-        "松のや・マイカリー食堂等のグループブランドも対象"
-      ],
       "ineligible_notes": [
         "店頭(券売機・セルフレジ)での楽天ペイ決済は対象外(対象は松弁ネット・松屋モバイルオーダー・松弁デリバリーでの事前決済のみ)"
       ],
+      "memo": [
+        "公式の「松のや・マイカリー食堂等のグループブランドも対象」は各ブランドの merchant_rules に反映済み(#62 でブランドを独立 merchant 化)"
+      ],
       "merchant_rules": [
-        { "merchant_id": "matsuya" }
+        { "merchant_id": "matsuya" },
+        { "merchant_id": "matsunoya" },
+        { "merchant_id": "mycurry_shokudo" },
+        { "merchant_id": "steakya_matsu" },
+        { "merchant_id": "matsuken_chuka" },
+        { "merchant_id": "sushi_matsu" }
       ],
       "detail_url": "https://www.matsuyafoods.co.jp/matsuya/whatsnew/campaign/160563.html",
       "verified_date": "2026-07-13"

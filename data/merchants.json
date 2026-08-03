@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-08-01",
+  "updated_at": "2026-08-03",
 
   "yolp_config": {
     "gc_groups": [
@@ -28,17 +28,36 @@
 
   "merchants": [
     { "id": "seven_eleven", "name": "セブン-イレブン", "reading": "せぶんいれぶん", "aliases": ["セブンイレブン", "セブン", "7-Eleven", "711"], "category": "コンビニ" },
-    { "id": "lawson", "name": "ローソン", "reading": "ろーそん", "aliases": ["LAWSON", "ナチュラルローソン", "ローソンストア100", "ローソンスリーエフ"], "category": "コンビニ" },
+    { "id": "lawson", "name": "ローソン", "reading": "ろーそん", "aliases": ["LAWSON"], "category": "コンビニ",
+      "banners": [
+        { "id": "natural_lawson", "name": "ナチュラルローソン", "reading": "なちゅらるろーそん" },
+        { "id": "lawson_store_100", "name": "ローソンストア100", "reading": "ろーそんすとあひゃく" },
+        { "id": "lawson_three_f", "name": "ローソンスリーエフ", "reading": "ろーそんすりーえふ" }
+      ] },
     { "id": "ministop", "name": "ミニストップ", "reading": "みにすとっぷ", "aliases": ["MINISTOP"], "category": "コンビニ" },
-    { "id": "seicomart", "name": "セイコーマート", "reading": "せいこーまーと", "aliases": ["セコマ", "タイエー", "ハマナスクラブ", "ハセガワストア"], "category": "コンビニ" },
-    { "id": "poplar", "name": "ポプラ", "reading": "ぽぷら", "aliases": ["生活彩家"], "category": "コンビニ" },
+    { "id": "seicomart", "name": "セイコーマート", "reading": "せいこーまーと", "aliases": ["セコマ"], "category": "コンビニ",
+      "group_label": "セコマグループ",
+      "banners": [
+        { "id": "taie", "name": "タイエー", "reading": "たいえー" },
+        { "id": "hamanasu_club", "name": "ハマナスクラブ", "reading": "はまなすくらぶ" },
+        { "id": "hasegawa_store", "name": "ハセガワストア", "reading": "はせがわすとあ" }
+      ] },
+    { "id": "poplar", "name": "ポプラ", "reading": "ぽぷら", "aliases": [], "category": "コンビニ",
+      "banners": [
+        { "id": "seikatsu_saika", "name": "生活彩家", "reading": "せいかつさいか" }
+      ] },
     { "id": "mcdonalds", "name": "マクドナルド", "reading": "まくどなるど", "aliases": ["マック", "マクド", "McDonald's"], "category": "ファストフード" },
     { "id": "mos_burger", "name": "モスバーガー", "reading": "もすばーがー", "aliases": ["モス", "モスバーガー&カフェ", "MOS BURGER"], "category": "ファストフード" },
     { "id": "kfc", "name": "ケンタッキーフライドチキン", "reading": "けんたっきーふらいどちきん", "aliases": ["ケンタッキー", "ケンタ", "KFC"], "category": "ファストフード" },
     { "id": "yoshinoya", "name": "吉野家", "reading": "よしのや", "aliases": [], "category": "ファストフード" },
     { "id": "sukiya", "name": "すき家", "reading": "すきや", "aliases": ["SUKIYA"], "category": "ファストフード" },
     { "id": "zetteria", "name": "ゼッテリア", "reading": "ぜってりあ", "aliases": ["ZETTERIA"], "category": "ファストフード" },
-    { "id": "matsuya", "name": "松屋", "reading": "まつや", "aliases": ["松のや", "マイカリー食堂", "ステーキ屋松", "松軒中華食堂", "すし松", "松弁ネット"], "category": "ファストフード" },
+    { "id": "matsuya", "name": "松屋", "reading": "まつや", "aliases": ["松弁ネット"], "category": "ファストフード" },
+    { "id": "matsunoya", "name": "松のや", "reading": "まつのや", "aliases": ["松乃家"], "category": "ファストフード" },
+    { "id": "mycurry_shokudo", "name": "マイカリー食堂", "reading": "まいかりーしょくどう", "aliases": [], "category": "ファストフード" },
+    { "id": "steakya_matsu", "name": "ステーキ屋松", "reading": "すてーきやまつ", "aliases": [], "category": "ファストフード" },
+    { "id": "matsuken_chuka", "name": "松軒中華食堂", "reading": "まつけんちゅうかしょくどう", "aliases": [], "category": "ファストフード" },
+    { "id": "sushi_matsu", "name": "すし松", "reading": "すしまつ", "aliases": [], "category": "回転寿司" },
     { "id": "pizza_hut", "name": "ピザハット", "reading": "ぴざはっと", "aliases": ["Pizza Hut"], "category": "ファストフード", "yolp_search": "keyword" },
     { "id": "saizeriya", "name": "サイゼリヤ", "reading": "さいぜりや", "aliases": ["サイゼ", "サイゼリア"], "category": "ファミレス" },
     { "id": "gusto", "name": "ガスト", "reading": "がすと", "aliases": [], "category": "ファミレス" },
@@ -72,18 +91,50 @@
     { "id": "coke_on", "name": "コカ・コーラ自販機", "reading": "こかこーらじはんき", "aliases": ["Coke ON", "コークオン", "コカコーラ自販機"], "category": "その他", "location_hint": { "text": "Coke ON 公式アプリで対応自販機を探せます", "label": "Coke ON で探す", "url": "https://play.google.com/store/apps/details?id=com.coke.cokeon" }, "yolp_search": "none" },
     { "id": "ok_store", "name": "オーケー", "reading": "おーけー", "aliases": ["オーケーストア", "OKストア"], "category": "スーパー", "yolp_search": "keyword", "yolp_keyword": "オーケー" },
     { "id": "ozeki", "name": "オオゼキ", "reading": "おおぜき", "aliases": [], "category": "スーパー" },
-    { "id": "aoki_super", "name": "アオキスーパー", "reading": "あおきすーぱー", "aliases": ["フードストアあおき"], "category": "スーパー" },
-    { "id": "sunlive", "name": "サンリブ", "reading": "さんりぶ", "aliases": ["マルショク", "リブホール", "サンク", "サンリブBUONO"], "category": "スーパー" },
-    { "id": "sanwa", "name": "三和", "reading": "さんわ", "aliases": ["スーパー三和", "フードワン"], "category": "スーパー" },
-    { "id": "super_uochou", "name": "スーパー魚長", "reading": "すーぱーうおちょう", "aliases": ["生鮮乃木市場", "生鮮げんき市場"], "category": "スーパー" },
-    { "id": "kinsho_store", "name": "近商ストア", "reading": "きんしょうすとあ", "aliases": ["ハーベス", "Pochette"], "category": "スーパー" },
-    { "id": "tokyu_store", "name": "東急ストア", "reading": "とうきゅうすとあ", "aliases": ["プレッセ", "フードステーション"], "category": "スーパー" },
+    { "id": "aoki_super", "name": "アオキスーパー", "reading": "あおきすーぱー", "aliases": [], "category": "スーパー",
+      "banners": [
+        { "id": "food_store_aoki", "name": "フードストアあおき", "reading": "ふーどすとああおき" }
+      ] },
+    { "id": "sunlive", "name": "サンリブ", "reading": "さんりぶ", "aliases": [], "category": "スーパー",
+      "banners": [
+        { "id": "marushoku", "name": "マルショク", "reading": "まるしょく" },
+        { "id": "lib_hall", "name": "リブホール", "reading": "りぶほーる" },
+        { "id": "sanku", "name": "サンク", "reading": "さんく" },
+        { "id": "sunlive_buono", "name": "サンリブBUONO", "reading": "さんりぶぼーの" }
+      ] },
+    { "id": "sanwa", "name": "三和", "reading": "さんわ", "aliases": ["スーパー三和"], "category": "スーパー",
+      "banners": [
+        { "id": "food_one", "name": "フードワン", "reading": "ふーどわん" }
+      ] },
+    { "id": "super_uochou", "name": "スーパー魚長", "reading": "すーぱーうおちょう", "aliases": [], "category": "スーパー",
+      "banners": [
+        { "id": "seisen_nogi_ichiba", "name": "生鮮乃木市場", "reading": "せいせんのぎいちば" },
+        { "id": "seisen_genki_ichiba", "name": "生鮮げんき市場", "reading": "せいせんげんきいちば" }
+      ] },
+    { "id": "kinsho_store", "name": "近商ストア", "reading": "きんしょうすとあ", "aliases": [], "category": "スーパー",
+      "banners": [
+        { "id": "harves", "name": "ハーベス", "reading": "はーべす" },
+        { "id": "pochette", "name": "Pochette", "reading": "ぽしぇっと", "aliases": ["ポシェット"] }
+      ] },
+    { "id": "tokyu_store", "name": "東急ストア", "reading": "とうきゅうすとあ", "aliases": [], "category": "スーパー",
+      "banners": [
+        { "id": "precce", "name": "プレッセ", "reading": "ぷれっせ" },
+        { "id": "food_station", "name": "フードステーション", "reading": "ふーどすてーしょん" }
+      ] },
     { "id": "tobu_store", "name": "東武ストア", "reading": "とうぶすとあ", "aliases": [], "category": "スーパー" },
     { "id": "domy", "name": "ドミー", "reading": "どみー", "aliases": [], "category": "スーパー" },
     { "id": "hanamasa", "name": "肉のハナマサ", "reading": "にくのはなまさ", "aliases": ["ハナマサ"], "category": "スーパー" },
-    { "id": "japan_meat", "name": "ジャパンミート", "reading": "じゃぱんみーと", "aliases": ["MEATMeet", "パワーマート"], "category": "スーパー" },
+    { "id": "japan_meat", "name": "ジャパンミート", "reading": "じゃぱんみーと", "aliases": [], "category": "スーパー",
+      "banners": [
+        { "id": "meat_meet", "name": "MEATMeet", "reading": "みーとみーと", "aliases": ["ミートミート"] },
+        { "id": "power_mart", "name": "パワーマート", "reading": "ぱわーまーと" }
+      ] },
     { "id": "feel", "name": "フィール", "reading": "ふぃーる", "aliases": [], "category": "スーパー" },
-    { "id": "yamanaka", "name": "ヤマナカ", "reading": "やまなか", "aliases": ["フランテ", "フランテロゼ"], "category": "スーパー" },
+    { "id": "yamanaka", "name": "ヤマナカ", "reading": "やまなか", "aliases": [], "category": "スーパー",
+      "banners": [
+        { "id": "frante", "name": "フランテ", "reading": "ふらんて" },
+        { "id": "frante_rose", "name": "フランテロゼ", "reading": "ふらんてろぜ" }
+      ] },
     { "id": "akachan_honpo", "name": "アカチャンホンポ", "reading": "あかちゃんほんぽ", "aliases": ["赤ちゃん本舗"], "category": "その他", "yolp_search": "keyword" },
     { "id": "curves", "name": "カーブス", "reading": "かーぶす", "aliases": ["Curves"], "category": "その他", "yolp_search": "keyword" },
     { "id": "welcia", "name": "ウエルシア", "reading": "うえるしあ", "aliases": ["ウエルシア薬局", "welcia"], "category": "ドラッグストア",

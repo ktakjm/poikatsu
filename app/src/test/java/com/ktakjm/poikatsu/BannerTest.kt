@@ -387,6 +387,54 @@ class BannerRealDataTest {
         assertEquals("matsukiyo", match?.merchant?.id)
         assertEquals("matsukiyo_lab", match?.bannerId)
     }
+
+    @Test
+    fun `実データ_ローソンスリーエフはMUFG施策の対象外_看板スコープの実データ初使用`() {
+        // MUFG 公式はナチュラルローソン・ローソンストア100のみ対象と明記(スリーエフの記載なし。
+        // 2026-08-03 確認)。#62 で banners 化した際に ineligible_banner_ids で除外した
+        val date = LocalDate.of(2026, 8, 3)
+        val threeF = engine.matchStore("ローソンスリーエフ 久米川店")!!
+        assertEquals("lawson", threeF.merchant.id)
+        assertEquals("lawson_three_f", threeF.bannerId)
+        val threeFIds = engine.judgeCards(threeF.merchant, date, threeF.bannerId).map { it.campaign.id }
+        assertTrue("スリーエフに MUFG 施策が出てはいけない", "mufg_point_up_program" !in threeFIds)
+        // 三井住友は公式にスリーエフ含むと明記されており対象のまま
+        assertTrue("スリーエフは三井住友施策の対象", "smcc_combini_restaurant" in threeFIds)
+        // 除外されていない看板(ナチュラルローソン)には MUFG が出る
+        val natural = engine.matchStore("ナチュラルローソン麹町店")!!
+        assertEquals("natural_lawson", natural.bannerId)
+        assertTrue(
+            "mufg_point_up_program" in engine.judgeCards(natural.merchant, date, natural.bannerId).map { it.campaign.id },
+        )
+    }
+
+    @Test
+    fun `実データ_松屋フーズのブランドは独立merchantとして照合される`() {
+        // 飲食店はグループ化せず業態ごとに独立 merchant(#62 の方針)。松のやが松屋に化けない
+        assertEquals("matsunoya", engine.matchStore("松のや伊勢佐木町店(松屋併設)")?.merchant?.id)
+        assertEquals("matsunoya", engine.matchStore("松乃家 船橋店")?.merchant?.id)
+        assertEquals("matsuya", engine.matchStore("松屋 新宿三丁目店")?.merchant?.id)
+        // MUFG 施策は松屋フーズ全ブランドが対象(公式明記)
+        val date = LocalDate.of(2026, 8, 3)
+        listOf("松のや", "マイカリー食堂", "ステーキ屋松", "松軒中華食堂", "すし松").forEach { name ->
+            val match = engine.matchStore("$name 中央店")
+            assertTrue("「$name」が照合できない", match != null)
+            val ids = engine.judgeCards(match!!.merchant, date).map { it.campaign.id }
+            assertTrue("「$name」に MUFG 施策が出ない", "mufg_point_up_program" in ids)
+        }
+    }
+
+    @Test
+    fun `実データ_横展開の看板追加で誤爆しない`() {
+        // サンク(サンリブ。かな3文字)はかな後続を別単語として弾く
+        assertNull(engine.matchStore("サンクス茅ヶ崎店"))
+        // ハーベス(近商ストア)はハーベストに誤爆しない
+        assertNull(engine.matchStore("ハーベスト南林間店"))
+        // フランテロゼはフランテでなく最長一致でフランテロゼに帰属
+        assertEquals("frante_rose", engine.matchStore("フランテロゼ覚王山店")?.bannerId)
+        // ローソンストア100は代表看板ローソンでなく看板に帰属
+        assertEquals("lawson_store_100", engine.matchStore("ローソンストア100中野店")?.bannerId)
+    }
 }
 
 /**
