@@ -104,8 +104,9 @@
 - `merchant_id` は merchants.json の `id`。**未収録チェーンは merchants.json への追加下書きが先**(下記)
 - **系列(グループ)単位で対象の施策は merchant_rule 1 件だけ書く**(#60)。傘下看板(ウエルシアHD のダックス等)は merchants.json の `banners` が表現するため、施策側に看板の列挙 notes は書かない。ただし**公式の看板列挙とマスタの `banners` を必ず突き合わせる**:
   - 公式に載っているのにマスタに無い看板 → merchants.json への banner 追加を下書き(id・name・reading。かな 3 文字以下や記号入りは data/README.md「系列と看板」の照合制約に注意。**YOLP の実 POI 名に短縮形が無いかも確認**し、あれば alias を補う)
-  - マスタに居るのに公式に載っていない看板 → その施策の rule に `ineligible_banner_ids` を付ける
-- 看板単位の対象/対象外は `banner_ids`(その看板のみ対象)/ `ineligible_banner_ids`(その看板だけ対象外。例: すかいらーく系施策のペルティカ除外)。両方は指定不可。判定詳細への注記は自動合成されるため notes に重複記載しない
+  - マスタに居るのに公式に載っていない看板 → その施策の rule に `ineligible_banner_ids` を付ける(実例: MUFG ポイントアッププログラムのローソンスリーエフ。#62)
+- **飲食店の系列は banners にまとめない**(#62 の方針。業態ごとに独立 merchant: すかいらーく・ゼンショー・松屋フーズ等)。飲食グループ全体が対象の施策は**業態 merchant を列挙**し、公式のブランド列挙と突き合わせて漏れなく書く(例: MUFG の松屋フーズは matsuya / matsunoya / mycurry_shokudo / steakya_matsu / matsuken_chuka / sushi_matsu の 6 rule)
+- 看板単位の対象/対象外は `banner_ids`(その看板のみ対象)/ `ineligible_banner_ids`(その看板だけ対象外)。両方は指定不可。判定詳細への注記は自動合成されるため notes に重複記載しない
 - **マツキヨココカラ&カンパニー対象の施策は `matsukiyo` と `cocokara_fine` の両方の rule を書く**(マツモトキヨシとココカラファインはどちらも主要看板のため 2 merchant 体制。傘下 17 看板は出自で両者の banners に振り分け済み)
 - その店だけ率が違う → `rate_override`。店固有の対象/対象外 → `eligible_notes` / `ineligible_notes`(線引きは上記セクションと同じ。「〜のみ対象」型の限定は ineligible 側に言い換え)
 - `official_store_list` は**公式が店舗名で対象/対象外を言い切っている完全リストがある場合だけ**。例示レベル(「例: ◯◯店」)は `ineligible_notes` の文章止まり(網羅性を仮定しない設計)
@@ -114,7 +115,7 @@
 ## merchants.json への新規追加
 
 - `id`(ローマ字スネーク)・`name`・`reading`(ひらがな。検索ヒット率に直結、必須)・`aliases`(略称・別ブランド名、必須)・`category`
-- **系列と看板**: 傘下で別の名前を掲げる店(看板)は `aliases` でなく `banners`(id・name・reading)へ。alias は同一看板の略称・表記ゆれ専用(線引きと照合の注意は data/README.md「系列と看板」)。`banners` の並び順は**店舗数・知名度の降順**(先頭 2 業態がカテゴリ一覧カードに併記される表示優先順)
+- **系列と看板**: 傘下で別の名前を掲げる店(看板)は `aliases` でなく `banners`(id・name・reading)へ。alias は同一看板の略称・表記ゆれ専用(線引きと照合の注意は data/README.md「系列と看板」)。`banners` の並び順は**店舗数・知名度の降順**(先頭 2 業態がカテゴリ一覧カードに併記される表示優先順)。**banners 化は飲食店以外(コンビニ・スーパー・ドラッグストア等)に限る**。飲食店の系列は業態ごとに独立 merchant にする(#62。系列がジャンルを跨ぐ+施策が業態単位で対象を分けるため)。例外: POI 名が基本的に親ブランドで出る併設・変種看板(モスバーガー&カフェ)は alias に残す
 - **既存の系列に看板を追加するときは、その merchant を参照している全施策を見直す**(追加した瞬間、グループ対象の既存施策が新看板にも効く。公式で対象外なら該当施策へ `ineligible_banner_ids` を同時に付ける)
 - `yolp_search` / `yolp_keyword` は判断根拠(既存カテゴリの gc グループに載るか)が無ければ**要確認マークを付けて報告**し、勝手に決めない。`keyword` の merchant には banners を持たせない
 - `brand_color` は merchants 側には持たない(発行体側で一元管理)
