@@ -4,9 +4,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -106,10 +106,10 @@ internal fun CampaignPane(
                     tint = MaterialTheme.colorScheme.outline,
                 )
                 Spacer(Modifier.height(16.dp))
-                Text("おトクな施策はありません", style = MaterialTheme.typography.titleMedium)
+                Text("おトクなキャンペーンはありません", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "カード会社のキャンペーンや自治体のキャッシュレス還元施策、常設のポイントアップ施策が登録されると、ここに表示されます。右下の＋からは会員ポータル限定クーポンなどを自分で登録できます。",
+                    "カード会社のキャンペーンや自治体のキャッシュレス還元キャンペーン、常設のポイントアップキャンペーンが登録されると、ここに表示されます。右下の＋からは会員ポータル限定クーポンなどを自分で登録できます。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.outline,
                 )
@@ -324,24 +324,24 @@ private fun CampaignSummaryCard(
         },
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
-        Row(Modifier.height(IntrinsicSize.Min)) {
-            StripeBar(stripeColors, separatorColor)
+        // 本文が高さを決め、左端ストライプは matchParentSize で全高に追従する。
+        // Row(IntrinsicSize.Min) だとタイトル+バッジの FlowRow が折り返したときに
+        // 2行目がカード高さからクリップされるため使わない
+        Box {
             Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                modifier = Modifier.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    // バッジを常に見せるため、バッジが先に幅を確保しタイトルは残り幅で折り返す
-                    // (weight(fill=false)。FlowRow は外側 IntrinsicSize.Min と相性が悪く、
-                    // 折り返した2行目がカード高さからクリップされるため使わない)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                    // タイトルとバッジが幅に入らないときはバッジを潰さず折り返して次の行に出す
+                    FlowRow(
+                        itemVerticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Text(
                             title,
                             style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.weight(1f, fill = false),
                         )
                         if (campaigns.any { it.isCustom }) {
                             CustomCampaignBadge()
@@ -402,6 +402,9 @@ private fun CampaignSummaryCard(
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
+            }
+            Box(Modifier.matchParentSize()) {
+                StripeBar(stripeColors, separatorColor)
             }
         }
     }

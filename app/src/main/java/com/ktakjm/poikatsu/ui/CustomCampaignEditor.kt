@@ -299,7 +299,7 @@ internal fun CustomCampaignEditorScreen(
         // --- 紐付け先の決済手段(複数可) ---
         EditorSectionHeader("お支払い方法")
         Text(
-            "複数選ぶと、同じ内容の施策が支払い方法ごとに登録されます(率・条件は共通。率が異なる場合は別々に登録してください)。",
+            "複数選ぶと、同じ内容のキャンペーンが支払い方法ごとに登録されます(率・条件は共通。率が異なる場合は別々に登録してください)。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline,
         )
@@ -346,7 +346,7 @@ internal fun CustomCampaignEditorScreen(
                 Text("お店を指定しない(全店舗対象)", style = MaterialTheme.typography.bodyMedium)
                 Text(
                     if (allStores) {
-                        "支払い方法が使える全てのお店が対象の施策として、おトクタブにのみ表示されます(お店・地図タブの判定には出ません)。"
+                        "支払い方法が使える全てのお店が対象のキャンペーンとして、おトクタブにのみ表示されます(お店・地図タブの判定には出ません)。"
                     } else {
                         "抽選会など、その支払い方法の全加盟店が対象のキャンペーン向け。"
                     },
@@ -552,7 +552,7 @@ internal fun CustomCampaignEditorScreen(
                         mayEndEarly ->
                             "「終了日未定」のキャンペーンとして、予告なく終了する場合がある旨の注記付きで表示されます。"
                         endDate == null ->
-                            "チェックしない場合は常設の施策として「常設」セクションに表示されます。"
+                            "チェックしない場合は常設のキャンペーンとして「常設」セクションに表示されます。"
                         else ->
                             "予算到達などで期限より早く終わり得る場合にチェックします。"
                     },

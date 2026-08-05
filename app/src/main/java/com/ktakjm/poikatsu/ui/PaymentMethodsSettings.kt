@@ -448,7 +448,7 @@ private fun CardSettingItem(
                 val unselectedNote = if (card.ineligibleBrands.isNotEmpty()) {
                     "ブランド未選択のため、${card.ineligibleBrands.joinToString("/")} で優遇対象外になり得るお店は対象外として扱われます。お持ちのブランドを選ぶと正確に判定されます"
                 } else {
-                    "ブランド未選択のため、ブランド限定の施策は判定に出ません。お持ちのブランドを選ぶと正確に判定されます"
+                    "ブランド未選択のため、ブランド限定のキャンペーンは判定に出ません。お持ちのブランドを選ぶと正確に判定されます"
                 }
                 Text(
                     unselectedNote,
