@@ -1,6 +1,7 @@
 package com.ktakjm.poikatsu
 
 import com.ktakjm.poikatsu.data.Campaign
+import com.ktakjm.poikatsu.data.ExcludedStorePair
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_PERIOD_TOTAL
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_TRANSACTION
 import com.ktakjm.poikatsu.data.Merchant
@@ -249,6 +250,60 @@ class JudgmentEngineTest {
         // 公式リストの無いチェーン → 除外しない
         val (eng2, m2) = storeCheckEngine(hasList = false)
         assertFalse(eng2.isExcludedStore(m2, "何でも"))
+    }
+
+    // ---- ユーザー登録の対象外ペア(#63) ----
+
+    @Test
+    fun `対象外ペアはその施策だけ判定から間引かれ別枠で返る`() {
+        val seven = data.merchants.first { it.id == "seven_eleven" }
+        val pairs = listOf(
+            ExcludedStorePair("smcc_combini_restaurant", "seven_eleven", "セブン-イレブン 与野本町駅前店"),
+        )
+        val excludedIds = engine.excludedCampaignIdsFor(seven, "セブン-イレブン与野本町駅前店", pairs)
+        assertEquals(setOf("smcc_combini_restaurant"), excludedIds)
+        val result = engine.judgeAll(seven, today, excludedCampaignIds = excludedIds)
+        // 該当施策は judgments から消え、excludedJudgments に分けて返る(判定詳細の畳み表示用)
+        assertTrue(result.judgments.none { it.campaign.id == "smcc_combini_restaurant" })
+        assertEquals(listOf("smcc_combini_restaurant"), result.excludedJudgments.map { it.campaign.id })
+        // 他の施策は残り、bestOption も残った施策から選び直される
+        assertTrue(result.judgments.any { it.campaign.id == "mufg_point_up_program" })
+        assertEquals("MUFGカード", result.bestOption?.method)
+    }
+
+    @Test
+    fun `支店名が違う店は間引かれない`() {
+        val seven = data.merchants.first { it.id == "seven_eleven" }
+        val pairs = listOf(
+            ExcludedStorePair("smcc_combini_restaurant", "seven_eleven", "セブン-イレブン 与野本町駅前店"),
+        )
+        assertTrue(engine.excludedCampaignIdsFor(seven, "セブン-イレブン 大宮駅前店", pairs).isEmpty())
+    }
+
+    @Test
+    fun `保存した店舗名とPOI名の表記ゆれは支店名の正規化で一致する`() {
+        val kfc = data.merchants.first { it.id == "kfc" }
+        // 別名(KFC)+空白違いで保存されていても、同じ支店なら一致する
+        val pairs = listOf(ExcludedStorePair("smcc_combini_restaurant", "kfc", "KFC 与野店"))
+        assertEquals(
+            setOf("smcc_combini_restaurant"),
+            engine.excludedCampaignIdsFor(kfc, "ケンタッキーフライドチキン与野店", pairs),
+        )
+    }
+
+    @Test
+    fun `別チェーンの登録は影響しない`() {
+        val steakGusto = data.merchants.first { it.id == "steak_gusto" }
+        val pairs = listOf(ExcludedStorePair("smcc_combini_restaurant", "gusto", "ガスト与野店"))
+        assertTrue(engine.excludedCampaignIdsFor(steakGusto, "ステーキガスト与野店", pairs).isEmpty())
+    }
+
+    @Test
+    fun `登録ペアが無ければ判定は変わらない`() {
+        val seven = data.merchants.first { it.id == "seven_eleven" }
+        val result = engine.judgeAll(seven, today)
+        assertTrue(result.excludedJudgments.isEmpty())
+        assertEquals(2, result.judgments.size)
     }
 
     /** official_store_list を組んだ最小データで JudgmentEngine を作る。hasList=false で公式リスト無し */

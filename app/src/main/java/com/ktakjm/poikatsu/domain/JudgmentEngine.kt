@@ -1,6 +1,7 @@
 package com.ktakjm.poikatsu.domain
 
 import com.ktakjm.poikatsu.data.Campaign
+import com.ktakjm.poikatsu.data.ExcludedStorePair
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.PaymentCard
@@ -268,6 +269,12 @@ data class BestPaymentOption(
 data class JudgmentResult(
     val judgments: List<CampaignJudgment>,
     val bestOption: BestPaymentOption?,
+    /**
+     * ユーザーが「このお店では対象外」と登録したため判定から間引いた施策(#63)。
+     * 判定詳細で「登録済み」として畳み表示し、その場で解除できるようにするために別枠で返す
+     * (黙って消すと「施策がどこに行ったか」が分からない)。bestOption・一覧の集計には含まれない。
+     */
+    val excludedJudgments: List<CampaignJudgment> = emptyList(),
 )
 
 /**
@@ -723,12 +730,15 @@ class JudgmentEngine(private val data: PoikatsuData) {
     /**
      * カード + QR をまとめた包括判定。bannerId はその看板(業態)としての判定(看板スコープの
      * 施策はスコープ外なら出ない)。null はグループ視点(全ルールを出し、内訳は注記で示す)。
+     * excludedCampaignIds はこの店舗で間引く施策 id(#63。[excludedCampaignIdsFor] で算出)。
+     * 該当施策は judgments でなく excludedJudgments に分けて返し、bestOption の比較にも載せない。
      */
     fun judgeAll(
         merchant: Merchant,
         today: LocalDate,
         enabledQrIds: Set<String> = emptySet(),
         bannerId: String? = null,
+        excludedCampaignIds: Set<String> = emptySet(),
     ): JudgmentResult {
         val all = (judgeCards(merchant, today, bannerId) + judgeQr(merchant, today, enabledQrIds, bannerId))
             .sortedWith(
@@ -736,9 +746,35 @@ class JudgmentEngine(private val data: PoikatsuData) {
                     .thenByDescending { it.effectiveRate ?: 0.0 }
                     .thenByDescending { it.discountAmount ?: 0 },
             )
-        val bestOption = determineBest(all)
-        return JudgmentResult(all, bestOption)
+        val (excluded, active) = all.partition { it.campaign.id in excludedCampaignIds }
+        val bestOption = determineBest(active)
+        return JudgmentResult(active, bestOption, excluded)
     }
+
+    /**
+     * ユーザー登録の対象外ペア(#63)のうち、この店舗(poiName)に一致するもの。
+     * 店舗の同定は重複排除と同じ「merchant + 支店名([normalizedBranch])」で行う。保存された
+     * 店舗名も毎回正規化して比較するため、エイリアス・空白の表記ゆれや merchants.json の
+     * キー変更に追従する。解除操作(この店舗の登録だけ消す)にも使う。
+     */
+    fun excludedPairsFor(
+        merchant: Merchant,
+        poiName: String,
+        pairs: List<ExcludedStorePair>,
+    ): List<ExcludedStorePair> {
+        val relevant = pairs.filter { it.merchantId == merchant.id }
+        if (relevant.isEmpty()) return emptyList()
+        val branch = normalizedBranch(merchant, poiName)
+        return relevant.filter { normalizedBranch(merchant, it.storeName) == branch }
+    }
+
+    /** [excludedPairsFor] の施策 id 集合。judgeAll の excludedCampaignIds に渡す */
+    fun excludedCampaignIdsFor(
+        merchant: Merchant,
+        poiName: String,
+        pairs: List<ExcludedStorePair>,
+    ): Set<String> =
+        excludedPairsFor(merchant, poiName, pairs).map { it.campaignId }.toSet()
 
     private fun determineBest(judgments: List<CampaignJudgment>): BestPaymentOption? {
         // 抽選は確定還元でないため比較に載せない(buildJudgment で率を null にしているが意図を明示)。

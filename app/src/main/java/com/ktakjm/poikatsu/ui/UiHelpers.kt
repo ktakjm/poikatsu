@@ -189,6 +189,13 @@ internal fun notificationSummary(enabled: Boolean, notifyTimeMinutes: Int): Stri
     if (enabled) "キャンペーン通知 オン(毎日${notifyTimeLabel(notifyTimeMinutes)})" else "キャンペーン通知 オフ"
 
 /**
+ * 「対象外に登録したお店」行のサマリ(#63)。未登録時は登録の入口(判定詳細)を一言添える
+ * (この画面からは登録できないため)。
+ */
+internal fun excludedStoresSummary(count: Int): String =
+    if (count == 0) "未登録(お店・地図タブの判定詳細から登録できます)" else "${count}件を登録中"
+
+/**
  * 通知を出せる状態か(Android 13+ の POST_NOTIFICATIONS が許可済みか)。12 以下は実行時権限が
  * 無いため常に true。「許可を取ってから通知設定を ON にする」判断を、通知サブページの ON 操作(#6)と
  * 通知 ON のバックアップの復元(#50)で共有するために切り出している。
@@ -219,6 +226,9 @@ internal fun backupContentSummary(backup: SettingsBackup): String {
         if (backup.registeredAreas.isNotEmpty()) add("マイエリア${backup.registeredAreas.size}件")
         if (backup.customCampaigns.isNotEmpty()) {
             add("自分で登録したキャンペーン${backup.customCampaigns.size}件")
+        }
+        if (backup.excludedStorePairs.isNotEmpty()) {
+            add("対象外に登録したお店${backup.excludedStorePairs.size}件")
         }
     }
     return if (parts.isEmpty()) "登録内容なし(表示・通知の設定のみ)" else parts.joinToString("・")

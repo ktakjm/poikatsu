@@ -47,6 +47,7 @@ data class SettingsBackup(
     val registeredAreas: List<RegisteredArea> = emptyList(),
     val customCards: List<CustomCard> = emptyList(),
     val customCampaigns: List<CustomCampaign> = emptyList(),
+    val excludedStorePairs: List<ExcludedStorePair> = emptyList(),
 )
 
 /** 現在の設定をバックアップに写す。開発者向け設定は [SettingsBackup] の方針どおり落とす */
@@ -65,6 +66,7 @@ fun AppSettings.toBackup(exportedAt: String, appVersion: String): SettingsBackup
     registeredAreas = registeredAreas,
     customCards = customCards,
     customCampaigns = customCampaigns,
+    excludedStorePairs = excludedStorePairs,
 )
 
 /**
@@ -84,6 +86,8 @@ fun SettingsBackup.toSettings(): AppSettings = AppSettings(
     registeredAreas = registeredAreas.distinctBy { it.type to it.code },
     customCards = customCards.distinctBy { it.id },
     customCampaigns = customCampaigns.distinctBy { it.id }.map { it.normalized() },
+    excludedStorePairs = excludedStorePairs
+        .distinctBy { Triple(it.campaignId, it.merchantId, it.storeName) },
 )
 
 // 中身を目で追える(不具合報告時にそのまま読める)よう整形し、既定値も省略せず書き出す

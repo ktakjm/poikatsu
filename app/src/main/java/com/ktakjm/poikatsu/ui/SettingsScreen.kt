@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -28,6 +29,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -56,9 +58,11 @@ import com.mikepenz.aboutlibraries.ui.compose.android.produceLibraries
 import com.mikepenz.aboutlibraries.ui.compose.m3.LibrariesContainer
 import com.ktakjm.poikatsu.BuildConfig
 import com.ktakjm.poikatsu.R
+import com.ktakjm.poikatsu.data.ExcludedStorePair
 import com.ktakjm.poikatsu.data.ThemeMode
 import com.ktakjm.poikatsu.domain.ENDS_SOON_DAYS
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
+import com.ktakjm.poikatsu.ui.theme.warningColor
 import com.ktakjm.poikatsu.ui.theme.warningContainerColor
 
 /**
@@ -80,6 +84,7 @@ internal fun SettingsScreen(
     municipalitySummary: String,
     notificationSummary: String,
     dataSummary: String,
+    excludedStoresSummary: String,
     developerSummary: String,
     onOpenSubpage: (SettingsSubpage) -> Unit,
 ) {
@@ -89,6 +94,7 @@ internal fun SettingsScreen(
         SettingsCategoryRow(SettingsSubpage.MUNICIPALITIES, municipalitySummary, onOpenSubpage)
         SettingsCategoryRow(SettingsSubpage.NOTIFICATIONS, notificationSummary, onOpenSubpage)
         SettingsCategoryRow(SettingsSubpage.DATA, dataSummary, onOpenSubpage)
+        SettingsCategoryRow(SettingsSubpage.EXCLUDED_STORES, excludedStoresSummary, onOpenSubpage)
         // バックアップは状態を持たない操作の入口なので、サマリは現在値でなく用途を出す
         SettingsCategoryRow(
             SettingsSubpage.BACKUP,
@@ -292,7 +298,7 @@ internal fun NotificationSettingsPage(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "予算到達しだい早く終わる施策は、終了日が確定していないため終了間近をお知らせできないことがあります。",
+                "予算到達しだい早く終わるキャンペーンは、終了日が確定していないため終了間近をお知らせできないことがあります。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
             )
@@ -427,6 +433,136 @@ internal fun DataSettingsPage(
             },
             colors = if (useBundledData) disabledColors else ListItemDefaults.colors(),
             modifier = Modifier.clickable(enabled = !refreshing && !useBundledData, onClick = onRefresh),
+        )
+    }
+}
+
+// ---- サブページ: 対象外に登録したお店 ----
+
+/**
+ * 「対象外のお店として登録」(#63)の管理一覧。判定詳細から登録した (施策, 店舗) ペアを
+ * 一覧し、個別削除と「終了したキャンペーン」(データから消えた or 期間終了=どちらも今の判定では
+ * 参照されない登録)の一括削除を提供する。終了した登録も自動では消さない(データの一時的な
+ * 取得失敗で消えると困る・期間終了は同じ id で更新され得るため、削除は明示操作に限る)。
+ * この画面から登録はできない(登録は店舗を特定できる判定詳細のみ)。
+ */
+@Composable
+internal fun ExcludedStoresSettingsPage(
+    pairs: List<ExcludedStorePair>,
+    campaignNames: Map<String, String>,
+    expiredCampaignIds: Set<String>,
+    merchantNames: Map<String, String>,
+    onBack: () -> Unit,
+    onRemove: (ExcludedStorePair) -> Unit,
+    onRemoveStale: () -> Unit,
+) {
+    BackHandler(onBack = onBack)
+    // 削除の確認ダイアログを出している対象(登録を戻す手段が判定詳細の再登録しかないため確認を挟む)
+    var deletingPair by remember { mutableStateOf<ExcludedStorePair?>(null) }
+    var confirmingStaleRemoval by remember { mutableStateOf(false) }
+    // 終了扱い = データから消えた or 期間終了。ViewModel の一括削除(onRemoveStale)と同じ基準
+    fun isEnded(pair: ExcludedStorePair): Boolean =
+        pair.campaignId !in campaignNames || pair.campaignId in expiredCampaignIds
+    val staleCount = pairs.count(::isEnded)
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Text(
+            if (pairs.isEmpty()) {
+                "登録はありません。お店・地図タブの判定詳細にある「対象外のお店として登録」から登録すると、" +
+                    "そのお店をそのキャンペーンの判定・地図表示から除外できます。"
+            } else {
+                "名前が一致するお店は、そのキャンペーンの判定・地図表示から除外されます。" +
+                    "削除すると、そのお店は再びキャンペーンの対象として扱われます。"
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        if (staleCount > 0) {
+            TextButton(
+                onClick = { confirmingStaleRemoval = true },
+                modifier = Modifier.padding(horizontal = 8.dp),
+            ) {
+                Text("終了したキャンペーンの登録をまとめて削除(${staleCount}件)")
+            }
+        }
+        pairs.forEach { pair ->
+            val campaignName = campaignNames[pair.campaignId]
+            ListItem(
+                headlineContent = { Text(pair.storeName) },
+                supportingContent = {
+                    Column {
+                        if (campaignName != null) {
+                            Text(campaignName)
+                        }
+                        if (isEnded(pair)) {
+                            // 施策がデータから消えた(期限切れ削除・改定)か期間終了した登録。
+                            // 実害はないが使われていないことを知らせ、上の一括削除へ誘導する
+                            Text("キャンペーン終了(この登録は使われていません)", color = warningColor())
+                        }
+                        val merchant = merchantNames[pair.merchantId] ?: pair.merchantId
+                        Text(
+                            if (pair.registeredDate.isBlank()) merchant
+                            else "$merchant・登録日 ${pair.registeredDate}",
+                        )
+                    }
+                },
+                trailingContent = {
+                    IconButton(onClick = { deletingPair = pair }) {
+                        Icon(Icons.Default.Close, contentDescription = "この登録を削除")
+                    }
+                },
+            )
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+    deletingPair?.let { pair ->
+        AlertDialog(
+            onDismissRequest = { deletingPair = null },
+            title = { Text("登録を削除") },
+            text = {
+                val campaignName = campaignNames[pair.campaignId]
+                Text(
+                    if (!isEnded(pair) && campaignName != null) {
+                        "「${pair.storeName}」の登録を削除しますか？ 削除すると、このお店は「$campaignName」の対象として扱われます。"
+                    } else {
+                        "「${pair.storeName}」の登録を削除しますか？ キャンペーンは終了しているため、削除しても判定は変わりません。"
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onRemove(pair)
+                        deletingPair = null
+                    },
+                ) { Text("削除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingPair = null }) { Text("キャンセル") }
+            },
+        )
+    }
+    if (confirmingStaleRemoval) {
+        AlertDialog(
+            onDismissRequest = { confirmingStaleRemoval = false },
+            title = { Text("まとめて削除") },
+            text = {
+                Text(
+                    "終了したキャンペーンの登録${staleCount}件を削除しますか？ " +
+                        "キャンペーンは終了しているため、削除しても判定は変わりません。",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onRemoveStale()
+                        confirmingStaleRemoval = false
+                    },
+                ) { Text("削除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingStaleRemoval = false }) { Text("キャンセル") }
+            },
         )
     }
 }

@@ -10,8 +10,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,17 +27,23 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -81,15 +88,20 @@ internal fun JudgmentDetail(
     onBack: () -> Unit,
     onOpenStoreCheck: () -> Unit,
     onFindNearby: () -> Unit,
+    onExcludeStore: (campaignId: String, storeName: String) -> Unit,
+    onRestoreExcludedStore: (campaignId: String) -> Unit,
 ) {
     BackHandler(onBack = onBack)
+    // displayName あり = 地図(YOLP)から開いた店舗。帰属表示を出し、「近くを探す」は不要。
+    // 対象外登録(#63)も店舗が特定できるこの場合だけ出す
+    val hasStoreName = selection.displayName != null
+    // 「対象外のお店として登録」の確認ダイアログを出している施策(null なら非表示)
+    var excludingCampaign by remember { mutableStateOf<CampaignJudgment?>(null) }
     // 先頭領域(カテゴリタグ・帰属・ボタン)も判定カードと一緒にスクロールさせ、固定はタイトル
     // (全画面=TopAppBar / 二ペイン=DetailPaneHeader)だけにする(#54)。横画面など高さの限られる
     // 画面で判定カードの表示域を確保するため。ボタンは本文先頭にあり初期表示では従来どおり見える
     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item(key = "__lead") {
-            // displayName あり = 地図(YOLP)から開いた店舗。帰属表示を出し、「近くを探す」は不要
-            val hasStoreName = selection.displayName != null
             Column {
                 CategoryTag(selection.merchant.category)
                 bannerContextText(selection)?.let {
@@ -138,7 +150,7 @@ internal fun JudgmentDetail(
             item(key = "__empty") {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        "登録済みの高還元施策の対象外です。通常還元率のカード・コード決済を利用してください。",
+                        "登録済みの高還元キャンペーンの対象外です。通常還元率のカード・コード決済を利用してください。",
                         modifier = Modifier.padding(16.dp),
                     )
                 }
@@ -148,10 +160,133 @@ internal fun JudgmentDetail(
                 item(key = "__best") { BestOptionBanner(selection.bestOption) }
             }
             items(selection.judgments, key = { it.campaign.id }) { judgment ->
-                CampaignJudgmentCard(judgment)
+                CampaignJudgmentCard(
+                    judgment,
+                    onExcludeStore = if (hasStoreName) ({ excludingCampaign = judgment }) else null,
+                )
+            }
+        }
+        // ユーザーが対象外に登録済みの施策(#63)。黙って消すと「施策がどこに行ったか」が
+        // 分からないため、畳んだ形で残してその場で解除できるようにする
+        if (selection.excludedJudgments.isNotEmpty()) {
+            item(key = "__excluded") {
+                ExcludedJudgmentsSection(selection.excludedJudgments, onRestoreExcludedStore)
             }
         }
     }
+    excludingCampaign?.let { judgment ->
+        ExcludeStoreDialog(
+            campaignName = judgment.campaign.name,
+            initialStoreName = selection.displayName.orEmpty(),
+            onConfirm = { name ->
+                onExcludeStore(judgment.campaign.id, name)
+                excludingCampaign = null
+            },
+            onDismiss = { excludingCampaign = null },
+        )
+    }
+}
+
+/** 対象外に登録済みの施策の畳み表示。行ごとの「解除」(確認ダイアログ付き)でその場で判定へ戻せる */
+@Composable
+private fun ExcludedJudgmentsSection(
+    judgments: List<CampaignJudgment>,
+    onRestore: (campaignId: String) -> Unit,
+) {
+    // 解除の確認ダイアログを出している施策(設定画面の削除と同じく、うっかり操作を確認で防ぐ)
+    var restoringJudgment by remember { mutableStateOf<CampaignJudgment?>(null) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "このお店は対象外に登録済み",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        judgments.forEach { judgment ->
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.padding(start = 14.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(
+                        Modifier.weight(1f).padding(vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(judgment.badgeLabel, style = MaterialTheme.typography.labelMedium)
+                        Text(judgment.campaign.name, style = MaterialTheme.typography.bodySmall)
+                    }
+                    TextButton(onClick = { restoringJudgment = judgment }) { Text("解除") }
+                }
+            }
+        }
+    }
+    restoringJudgment?.let { judgment ->
+        AlertDialog(
+            onDismissRequest = { restoringJudgment = null },
+            title = { Text("登録を解除") },
+            text = {
+                Text("「${judgment.campaign.name}」の対象外登録を解除しますか？ 解除すると、このお店はキャンペーンの対象として扱われます。")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onRestore(judgment.campaign.id)
+                        restoringJudgment = null
+                    },
+                ) { Text("解除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { restoringJudgment = null }) { Text("キャンセル") }
+            },
+        )
+    }
+}
+
+/**
+ * 「対象外のお店として登録」の確認ダイアログ(#63)。POI 名をプリフィルしつつユーザーが
+ * 確認・編集して確定する(保存するのはユーザー申告の店舗名のみ。YOLP 由来データの
+ * 永続化を避ける。docs/map-data-stack.md)。
+ */
+@Composable
+private fun ExcludeStoreDialog(
+    campaignName: String,
+    initialStoreName: String,
+    onConfirm: (storeName: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var storeName by remember { mutableStateOf(initialStoreName) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("対象外のお店として登録") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "「$campaignName」の判定から、この名前のお店を除外します(お店・地図タブに出なくなります)。" +
+                        "登録は設定の「対象外に登録したお店」からも削除できます。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                OutlinedTextField(
+                    value = storeName,
+                    onValueChange = { storeName = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("お店の名前") },
+                    singleLine = true,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(storeName) }, enabled = storeName.isNotBlank()) {
+                Text("登録")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("キャンセル") }
+        },
+    )
 }
 
 @Composable
@@ -185,38 +320,59 @@ private fun BestOptionBanner(best: BestPaymentOption) {
 
 // ---- 統一判定カード ----
 
+/** onExcludeStore 非 null なら「対象外のお店として登録」の導線を出す(判定詳細を具体的なお店として開いたときのみ。#63) */
 @Composable
-internal fun CampaignJudgmentCard(judgment: CampaignJudgment) {
+internal fun CampaignJudgmentCard(
+    judgment: CampaignJudgment,
+    onExcludeStore: (() -> Unit)? = null,
+) {
     val brandColor = parseBrandColor(judgment.brandColor) ?: MaterialTheme.colorScheme.primary
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
-        Row(Modifier.height(IntrinsicSize.Min)) {
-            Box(
-                Modifier
-                    .width(8.dp)
-                    .fillMaxHeight()
-                    .background(brandColor)
-            )
-            CampaignJudgmentCardBody(judgment, brandColor)
+        // 本文が高さを決め、左端ストライプは matchParentSize で全高に追従する。
+        // Row(IntrinsicSize.Min) + fillMaxHeight だと、バッジの FlowRow が折り返したときに
+        // 2行目がカード高さからクリップされるため使わない
+        Box {
+            CampaignJudgmentCardBody(judgment, brandColor, onExcludeStore)
+            Box(Modifier.matchParentSize()) {
+                Box(
+                    Modifier
+                        .width(8.dp)
+                        .fillMaxHeight()
+                        .background(brandColor)
+                )
+            }
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Color) {
+private fun CampaignJudgmentCardBody(
+    judgment: CampaignJudgment,
+    brandColor: Color,
+    onExcludeStore: (() -> Unit)? = null,
+) {
     val campaign = judgment.campaign
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // start はストライプ(8dp)+従来の余白(16dp)ぶん空ける(ストライプは本文に重ねて描かれる)
+    Column(
+        Modifier.padding(start = 24.dp, top = 16.dp, end = 16.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             BenefitDisplay(judgment)
             Spacer(Modifier.width(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                // バッジが多く幅に入らないとき(カード名+ウエル活+自作+期間限定 等)は
+                // 潰さず折り返して次の行に出す
+                FlowRow(
+                    itemVerticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     BrandBadge(judgment.badgeLabel, brandColor)
                     val pm = judgment.pointMultiplier
@@ -313,6 +469,14 @@ private fun CampaignJudgmentCardBody(judgment: CampaignJudgment, brandColor: Col
             )
         }
         VerifiedDateRow(campaign.verifiedDate)
+        // 実際に対象外だったお店をユーザーが申告する導線(#63)。文字リンク風だとタップ可能に
+        // 見えないため、枠付きの OutlinedButton でボタンと分かる見た目にする。誤タップで
+        // 消えないよう確認ダイアログ(ExcludeStoreDialog)を挟む
+        if (onExcludeStore != null) {
+            OutlinedButton(onClick = onExcludeStore) {
+                Text("対象外のお店として登録")
+            }
+        }
     }
 }
 

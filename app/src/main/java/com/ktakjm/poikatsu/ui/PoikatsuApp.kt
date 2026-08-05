@@ -11,7 +11,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
@@ -459,6 +458,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                                     onNearbyClick()
                                 }
                             },
+                            onExcludeStore = viewModel::onExcludeStore,
+                            onRestoreExcludedStore = viewModel::onRestoreExcludedStore,
                         )
                     }
                     // キャンペーン詳細(タブ非依存のオーバーレイ)。topBar の分岐順と一致させること
@@ -528,6 +529,15 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             onBack = viewModel::onCloseSettingsSubpage,
                             onAutoRefreshChange = viewModel::onSetAutoRefresh,
                             onRefresh = viewModel::onManualRefresh,
+                        )
+                        SettingsSubpage.EXCLUDED_STORES -> ExcludedStoresSettingsPage(
+                            pairs = state.excludedStorePairs,
+                            campaignNames = state.allCampaignNames,
+                            expiredCampaignIds = state.expiredCampaignIds,
+                            merchantNames = state.merchantNames,
+                            onBack = viewModel::onCloseSettingsSubpage,
+                            onRemove = viewModel::onRemoveExcludedStorePair,
+                            onRemoveStale = viewModel::onRemoveStaleExcludedStorePairs,
                         )
                         SettingsSubpage.BACKUP -> BackupSettingsPage(
                             pendingImport = state.pendingSettingsImport,
@@ -663,6 +673,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             state.useTestData,
                             state.useBundledData,
                         ),
+                        excludedStoresSummary = excludedStoresSummary(state.excludedStorePairs.size),
                         developerSummary = developerRowSummary(
                             state.developerMode,
                             state.dataCommitRef,
@@ -729,6 +740,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                                         onNearbyClick()
                                     }
                                 },
+                                onExcludeStore = viewModel::onExcludeStore,
+                                onRestoreExcludedStore = viewModel::onRestoreExcludedStore,
                             )
                         } else {
                             PaddedColumn { searchPane() }
@@ -870,7 +883,7 @@ private fun SearchPane(
         }
         results.isEmpty() -> Text(
             if (query.isBlank()) "選択中のカテゴリにお店がありません。"
-            else "「$query」に一致するお店が見つかりませんでした。登録済みの高還元施策の対象外の可能性があります。",
+            else "「$query」に一致するお店が見つかりませんでした。登録済みの高還元キャンペーンの対象外の可能性があります。",
             style = MaterialTheme.typography.bodyMedium,
         )
         else -> LazyColumn(
@@ -1005,6 +1018,8 @@ private fun SearchListDetail(
     onCloseStoreCheck: () -> Unit,
     onStoreNameChange: (String) -> Unit,
     onFindNearby: () -> Unit,
+    onExcludeStore: (campaignId: String, storeName: String) -> Unit,
+    onRestoreExcludedStore: (campaignId: String) -> Unit,
 ) {
     ListDetailPaneScaffold(
         directive = directive,
@@ -1057,6 +1072,8 @@ private fun SearchListDetail(
                             onBack = onBack,
                             onOpenStoreCheck = onOpenStoreCheck,
                             onFindNearby = onFindNearby,
+                            onExcludeStore = onExcludeStore,
+                            onRestoreExcludedStore = onRestoreExcludedStore,
                         )
                     }
                     else -> Centered {
@@ -1252,6 +1269,7 @@ private fun searchResultSubtitle(result: MainViewModel.SearchResult): String {
     return "${merchant.category} | $names など${merchant.banners.size + 1}業態"
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SearchResultCard(
     result: MainViewModel.SearchResult,
@@ -1273,16 +1291,20 @@ private fun SearchResultCard(
         },
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
-        Row(Modifier.height(IntrinsicSize.Min)) {
-            StripeBar(stripeColors, separatorColor)
+        // 本文が高さを決め、左端ストライプは matchParentSize で全高に追従する。
+        // Row(IntrinsicSize.Min) だと店名+バッジの FlowRow が折り返したときに
+        // 2行目がカード高さからクリップされるため使わない
+        Box {
             Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                modifier = Modifier.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                    // 店名が長くバッジが幅に入らないときは潰さず折り返して次の行に出す
+                    FlowRow(
+                        itemVerticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         // 業態ヒットは主ラベルを業態名で出す(「杏林堂」で検索して「ツルハドラッグ」と
                         // 出る食い違いを避ける)。グループ名は従属表示で学べる
@@ -1307,12 +1329,15 @@ private fun SearchResultCard(
                     }
                     if (result.campaignCount > 1) {
                         Text(
-                            "${result.campaignCount}件の施策",
+                            "${result.campaignCount}件のキャンペーン",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
+            }
+            Box(Modifier.matchParentSize()) {
+                StripeBar(stripeColors, separatorColor)
             }
         }
     }
@@ -1788,7 +1813,7 @@ private fun NearbySheetContent(
                                 merchantFilters.joinToString("") { "「${it.label}」" } +
                                     "はこの範囲にありません。地図を動かすか、絞り込みを解除してください。"
                             nearby.places.isEmpty() ->
-                                "この範囲に対象施策のあるお店が見つかりませんでした。地図を動かして探してください。"
+                                "この範囲に対象キャンペーンのあるお店が見つかりませんでした。地図を動かして探してください。"
                             else -> "選択中のジャンルに該当する周辺のお店がありません。"
                         },
                         style = MaterialTheme.typography.bodyMedium,
@@ -1827,6 +1852,7 @@ private fun NearbySheetContent(
  * 選択中の店舗プレビュー(ボトムシート内)。地図を残したまま店舗情報を見せ、
  * 「判定の詳細を見る」で初めて全画面の判定詳細へ遷移する。× / 戻るで一覧に復帰。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun NearbyPreview(
     place: MainViewModel.NearbyPlace,
@@ -1840,9 +1866,11 @@ private fun NearbyPreview(
     ) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                // 店名が長くバッジが幅に入らないときは潰さず折り返して次の行に出す
+                FlowRow(
+                    itemVerticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(place.name, style = MaterialTheme.typography.titleMedium)
                     if (place.hasTimeLimited) {

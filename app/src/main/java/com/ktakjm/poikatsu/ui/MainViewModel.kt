@@ -22,6 +22,7 @@ import com.ktakjm.poikatsu.data.YolpSearchConfig
 import com.ktakjm.poikatsu.data.AppSettings
 import com.ktakjm.poikatsu.data.CustomCampaign
 import com.ktakjm.poikatsu.data.CustomCard
+import com.ktakjm.poikatsu.data.ExcludedStorePair
 import com.ktakjm.poikatsu.data.MunicipalityMaster
 import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PointMultiplier
@@ -126,6 +127,9 @@ enum class SettingsSubpage(val title: String) {
     MUNICIPALITIES("マイエリア"),
     NOTIFICATIONS("通知"),
     DATA("キャンペーンデータ"),
+
+    /** ユーザーが「この施策はこのお店では対象外」と登録したペアの管理一覧(#63) */
+    EXCLUDED_STORES("対象外に登録したお店"),
     BACKUP("バックアップ"),
     DEVELOPER("開発者向け"),
     ABOUT("このアプリ"),
@@ -170,6 +174,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          * null のときはチェーン名(merchant.name)を使う。
          */
         val displayName: String? = null,
+        /**
+         * ユーザーが「このお店では対象外」と登録して間引かれた施策(#63)。
+         * displayName あり(具体的なお店として開いた)のときだけ入り、「登録済み」の
+         * 畳み表示+解除の導線に使う。
+         */
+        val excludedJudgments: List<CampaignJudgment> = emptyList(),
     )
 
     data class StoreCheckState(
@@ -385,6 +395,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          * 消えるだけでよいが、カスタムは消えると編集・削除の入口を失うため専用セクションに出す。
          */
         val expiredCustomCampaigns: List<Campaign> = emptyList(),
+        /** ユーザー登録の対象外 (施策, 店舗) ペア(#63。DataStore 由来)。設定画面の管理一覧が参照する */
+        val excludedStorePairs: List<ExcludedStorePair> = emptyList(),
+        /**
+         * 統合データの全施策(期限切れ・非アクティブ含む)の id → 名前。対象外ペア管理一覧の
+         * 施策名解決に使い、ここに無い id は「終了したキャンペーン」(データから消えた)とみなす。
+         */
+        val allCampaignNames: Map<String, String> = emptyMap(),
+        /**
+         * 統合データ中で期間終了(EXPIRED)している施策の id。データにはまだ残っているが判定には
+         * 出ないため、対象外ペア管理一覧ではデータから消えた登録と同じ「終了したキャンペーン」扱いにする。
+         */
+        val expiredCampaignIds: Set<String> = emptySet(),
         /** カタログのチェーン一覧(カスタムキャンペーン編集ダイアログの対象店舗ピッカー用) */
         val catalogMerchants: List<Merchant> = emptyList(),
         /** 登録済みエリア(自治体単体・グループ) */
@@ -632,7 +654,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         displayName: String? = null,
         bannerId: String? = null,
     ): Selection {
-        val result = judgeAll(merchant, LocalDate.now(), enabledQrIds(), bannerId)
+        // 具体的なお店として開いたとき(displayName = POI 名)だけ、ユーザー登録の対象外ペア(#63)を
+        // 適用する。チェーン視点(お店タブの検索ヒット)は店舗が特定できないため適用しない
+        val excludedIds = displayName
+            ?.let { excludedCampaignIdsFor(merchant, it, lastSettings.excludedStorePairs) }
+            ?: emptySet()
+        val result = judgeAll(merchant, LocalDate.now(), enabledQrIds(), bannerId, excludedIds)
         return Selection(
             merchant = merchant,
             judgments = result.judgments,
@@ -641,6 +668,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             canCheckStore = canCheckStore(merchant),
             storeNameHint = storeNameHint,
             displayName = displayName,
+            excludedJudgments = result.excludedJudgments,
         )
     }
 
@@ -807,6 +835,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 customCards = settings.customCards,
                 customCampaigns = settings.customCampaigns,
                 expiredCustomCampaigns = expiredCustomCampaigns,
+                excludedStorePairs = settings.excludedStorePairs,
+                allCampaignNames = merged.engineData.campaigns.associate { c -> c.id to c.name },
+                expiredCampaignIds = merged.engineData.campaigns
+                    .filter { c -> newEngine.campaignStatus(c, today) == CampaignStatus.EXPIRED }
+                    .map { c -> c.id }
+                    .toSet(),
+                // 開いている地図があれば判定由来の表示(ラベル・ピン色・表示可否)を新しい
+                // エンジン・設定で作り直す(対象外ペアの登録・解除を YOLP 再検索なしで即反映する)
+                nearby = it.nearby?.let { n ->
+                    recomputeNearbyPlaces(n, newEngine, settings, it.nearbyMerchantFilters)
+                },
                 catalogMerchants = loaded.data.merchants,
                 registeredAreas = settings.registeredAreas,
                 dataCommitRef = settings.dataCommitRef,
@@ -1040,8 +1079,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val merchant = match.merchant
                 if (engine.isFacilityTenant(match.bannerName, poi.name)) return@mapNotNull null
                 if (engine.isExcludedStore(merchant, poi.name)) return@mapNotNull null
-                // POI は具体的な看板(業態)なので看板スコープで判定する(対象外業態はここで判定なしになり消える)
-                val result = engine.judgeAll(merchant, today, qrIds, match.bannerId)
+                // POI は具体的な看板(業態)なので看板スコープで判定する(対象外業態はここで判定なしになり消える)。
+                // ユーザー登録の対象外ペア(#63)も店舗単位でここで間引く(該当施策だけ判定から外れ、
+                // 全施策が間引かれた店は下の判定なしと同じ扱いで消える)
+                val excludedIds =
+                    engine.excludedCampaignIdsFor(merchant, poi.name, lastSettings.excludedStorePairs)
+                val result = engine.judgeAll(merchant, today, qrIds, match.bannerId, excludedIds)
                 // 判定なしは通常出さないが、チェーン絞り込み中(ブリッジ由来)の merchant は
                 // 非対象日の場所確認用に残す(bestBenefit なし=還元率ラベルなしで表示)
                 if (result.judgments.isEmpty() && merchant.id !in filterIds) return@mapNotNull null
@@ -1092,6 +1135,42 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             ),
         )
         resolveMunicipalNotice(gen, centerLat, centerLon)
+    }
+
+    /**
+     * 開いている地図の判定由来フィールド(還元ラベル・ピン色・表示可否)を、新しいエンジン・設定で
+     * 再計算する(rebuild から呼ぶ)。対象外ペア(#63)の登録・解除や設定変更を、YOLP 再検索なし
+     * (取得済みリストのメモリ内再計算)で開いている地図へ即反映するため。判定が 0 件になった店は
+     * ピンごと消える(チェーン絞り込み中の merchant は場所確認用に残す。loadNearbyAround と同基準)。
+     * 一度消えた店は登録を解除しても次の検索まで戻らない(タブを離れて戻れば再検索される)。
+     */
+    private fun recomputeNearbyPlaces(
+        nearby: NearbyUi,
+        engine: JudgmentEngine,
+        settings: AppSettings,
+        filters: Set<NearbyLens>,
+    ): NearbyUi {
+        if (nearby.places.isEmpty()) return nearby
+        val today = LocalDate.now()
+        val qrIds = settings.enabledQrPaymentIds
+        val filterIds = filters.map { it.merchant.id }.toSet()
+        val places = nearby.places.mapNotNull { place ->
+            val merchant = place.merchant ?: return@mapNotNull place
+            val excludedIds =
+                engine.excludedCampaignIdsFor(merchant, place.name, settings.excludedStorePairs)
+            val result = engine.judgeAll(merchant, today, qrIds, place.bannerId, excludedIds)
+            if (result.judgments.isEmpty() && merchant.id !in filterIds) return@mapNotNull null
+            place.copy(
+                bestBenefit = result.bestBenefitLabel(),
+                brandColors = result.judgments.mapNotNull { it.brandColor }.distinct(),
+                hasTimeLimited = result.judgments.any { it.campaign.isTimeLimited },
+            )
+        }
+        // プレビュー中の店は再計算後のインスタンスへ差し替え、消えた店ならプレビューを閉じる
+        val selected = nearby.selectedPlace?.let { sp ->
+            places.firstOrNull { it.name == sp.name && it.lat == sp.lat && it.lon == sp.lon }
+        }
+        return nearby.copy(places = places, selectedPlace = selected)
     }
 
     /**
@@ -1939,6 +2018,51 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onRemoveCustomCampaign(id: String) =
         viewModelScope.launch { settingsRepo.removeCustomCampaign(id) }
+
+    /**
+     * 「対象外のお店として登録」(#63)。判定詳細(具体的なお店として開いた場合)から呼ぶ。
+     * storeName はプリフィルをユーザーが確認・編集した値(YOLP 由来データをそのまま永続化しない)。
+     * 反映は設定 Flow → rebuild 経由(判定詳細は登録済みの畳み表示へ、開いている地図は再計算)。
+     */
+    fun onExcludeStore(campaignId: String, storeName: String) {
+        val merchantId = _state.value.selection?.merchant?.id ?: return
+        val name = storeName.trim()
+        if (name.isEmpty()) return
+        viewModelScope.launch {
+            settingsRepo.addExcludedStorePair(
+                ExcludedStorePair(campaignId, merchantId, name, LocalDate.now().toString()),
+            )
+        }
+    }
+
+    /** 判定詳細の「登録済み」からの解除。開いているお店に一致する登録を表記ゆれ分も含めて消す */
+    fun onRestoreExcludedStore(campaignId: String) {
+        val engine = engine ?: return
+        val sel = _state.value.selection ?: return
+        val storeName = sel.displayName ?: return
+        val pairs = engine.excludedPairsFor(sel.merchant, storeName, lastSettings.excludedStorePairs)
+            .filter { it.campaignId == campaignId }
+        if (pairs.isEmpty()) return
+        viewModelScope.launch { settingsRepo.removeExcludedStorePairs(pairs) }
+    }
+
+    /** 設定画面「対象外に登録したお店」からの個別削除 */
+    fun onRemoveExcludedStorePair(pair: ExcludedStorePair) =
+        viewModelScope.launch { settingsRepo.removeExcludedStorePairs(listOf(pair)) }
+
+    /**
+     * 終了した施策(データから消えた or 期間終了で判定に出ない)の登録をまとめて削除する。
+     * サイレント自動削除はしない方針(データの一時的な取得失敗で消えると困る・期間終了は
+     * 同じ id で更新され得る)のため、設定画面からの明示操作でのみ呼ばれる。
+     */
+    fun onRemoveStaleExcludedStorePairs() {
+        val st = _state.value
+        val stale = lastSettings.excludedStorePairs.filter {
+            it.campaignId !in st.allCampaignNames || it.campaignId in st.expiredCampaignIds
+        }
+        if (stale.isEmpty()) return
+        viewModelScope.launch { settingsRepo.removeExcludedStorePairs(stale) }
+    }
 
     /**
      * 紐付け先 QR を「利用中」に自動登録する。QR 施策の判定は利用中の QR に限られる

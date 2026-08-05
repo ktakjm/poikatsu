@@ -5,6 +5,7 @@ import com.ktakjm.poikatsu.data.CardOverride
 import com.ktakjm.poikatsu.data.CustomCampaign
 import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.CustomPayment
+import com.ktakjm.poikatsu.data.ExcludedStorePair
 import com.ktakjm.poikatsu.data.RegisteredArea
 import com.ktakjm.poikatsu.data.RegisteredAreaType
 import com.ktakjm.poikatsu.data.SETTINGS_BACKUP_SCHEMA_VERSION
@@ -55,6 +56,9 @@ class SettingsBackupTest {
                 endDate = "2026-12-31",
             ),
         ),
+        excludedStorePairs = listOf(
+            ExcludedStorePair("smcc_combini_restaurant", "saizeriya", "サイゼリヤ 与野店", "2026-08-01"),
+        ),
         // 開発者向け設定。バックアップには含めない
         dataCommitRef = "abc1234",
         useTestData = true,
@@ -76,6 +80,7 @@ class SettingsBackupTest {
         assertEquals(settings.registeredAreas, restored.registeredAreas)
         assertEquals(settings.customCards, restored.customCards)
         assertEquals(settings.customCampaigns, restored.customCampaigns)
+        assertEquals(settings.excludedStorePairs, restored.excludedStorePairs)
     }
 
     @Test
@@ -146,10 +151,12 @@ class SettingsBackupTest {
         val duplicated = settings.copy(
             customCards = settings.customCards + settings.customCards,
             customCampaigns = settings.customCampaigns + settings.customCampaigns,
+            excludedStorePairs = settings.excludedStorePairs + settings.excludedStorePairs,
         )
         val restored = roundTrip(duplicated)
         assertEquals(1, restored.customCards.size)
         assertEquals(1, restored.customCampaigns.size)
+        assertEquals(1, restored.excludedStorePairs.size)
     }
 
     // 旧スキーマ(単一 cardId)の登録も、読み込み時に payments へ折り畳まれた形で復元される
@@ -169,7 +176,8 @@ class SettingsBackupTest {
     fun `確認ダイアログの要約は登録のある種別だけ並べる`() {
         val backup = settings.toBackup("2026-07-27T10:00:00", "0.9.0")
         assertEquals(
-            "マイカードの設定2件・カスタムカード1枚・国際ブランド1件・コード決済2件・マイエリア1件・自分で登録したキャンペーン1件",
+            "マイカードの設定2件・カスタムカード1枚・国際ブランド1件・コード決済2件・マイエリア1件・" +
+                "自分で登録したキャンペーン1件・対象外に登録したお店1件",
             backupContentSummary(backup),
         )
         assertEquals(

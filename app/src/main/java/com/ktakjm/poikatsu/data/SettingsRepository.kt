@@ -173,6 +173,33 @@ data class CustomCampaign(
     }
 }
 
+/**
+ * ユーザーが「このお店ではこの施策は対象外だった」と登録した (施策, 店舗) ペア(#63)。
+ * チェーン全店施策のうち生活圏の特定店舗だけ対象外(例: SMCC 7% のサイゼリヤ一部店舗)を
+ * 判定・地図から取り除くために使う。
+ *
+ * 店舗は一意 ID を持たない(YOLP の ID は保持しない方針)ため、storeName は
+ * 「ユーザーが確認・編集した店舗名の生文字列」を保存し、照合は毎回
+ * JudgmentEngine.normalizedBranch(チェーン識別子を剥がした支店名)で行う。
+ * POI 名をそのまま永続化しない(プリフィル後にユーザーが確定した申告データとして扱う)のは
+ * YOLP 規約(店舗データの永続キャッシュ禁止。docs/map-data-stack.md)への配慮。座標も保存しない。
+ */
+@Serializable
+data class ExcludedStorePair(
+    /** campaigns.json(またはカスタムキャンペーン展開後)の施策 id */
+    val campaignId: String,
+    /** merchants.json の系列 id。照合の前提(normalizedBranch は merchant のキーに依存する) */
+    val merchantId: String,
+    /** ユーザーが確認・編集した店舗名(生文字列)。照合時に正規化する */
+    val storeName: String,
+    /** 登録日(YYYY-MM-DD)。管理一覧の表示用 */
+    val registeredDate: String = "",
+) {
+    /** 重複登録の判定キー(同じ施策×同じ店舗名は 1 件に保つ。登録日は同一性に含めない) */
+    fun sameTarget(other: ExcludedStorePair): Boolean =
+        campaignId == other.campaignId && merchantId == other.merchantId && storeName == other.storeName
+}
+
 /** アプリ全体の設定スナップショット。DataStore から1本の Flow で配る。 */
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -212,6 +239,8 @@ data class AppSettings(
     val customCards: List<CustomCard> = emptyList(),
     /** ユーザー登録のカスタムキャンペーン(登録順) */
     val customCampaigns: List<CustomCampaign> = emptyList(),
+    /** ユーザーが対象外として登録した (施策, 店舗) ペア(#63。登録順) */
+    val excludedStorePairs: List<ExcludedStorePair> = emptyList(),
 )
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore("settings")
@@ -246,6 +275,7 @@ class SettingsRepository(private val context: Context) {
         val REGISTERED_AREAS = stringPreferencesKey("registered_areas")
         val CUSTOM_CARDS = stringPreferencesKey("custom_cards")
         val CUSTOM_CAMPAIGNS = stringPreferencesKey("custom_campaigns")
+        val EXCLUDED_STORE_PAIRS = stringPreferencesKey("excluded_store_pairs")
     }
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -267,6 +297,7 @@ class SettingsRepository(private val context: Context) {
             registeredAreas = prefs.decodeRegisteredAreas(),
             customCards = prefs.decodeCustomCards(),
             customCampaigns = prefs.decodeCustomCampaigns(),
+            excludedStorePairs = prefs.decodeExcludedStorePairs(),
         )
     }
 
@@ -292,6 +323,7 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.REGISTERED_AREAS] = json.encodeToString(settings.registeredAreas)
             prefs[Keys.CUSTOM_CARDS] = json.encodeToString(settings.customCards)
             prefs[Keys.CUSTOM_CAMPAIGNS] = json.encodeToString(settings.customCampaigns)
+            prefs[Keys.EXCLUDED_STORE_PAIRS] = json.encodeToString(settings.excludedStorePairs)
         }
     }
 
@@ -466,6 +498,25 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    /** 対象外ペアの登録。同じ (施策, 店舗名) の再登録は無視する */
+    suspend fun addExcludedStorePair(pair: ExcludedStorePair) {
+        context.settingsDataStore.edit { prefs ->
+            val current = prefs.decodeExcludedStorePairs()
+            if (current.none { it.sameTarget(pair) }) {
+                prefs[Keys.EXCLUDED_STORE_PAIRS] = json.encodeToString(current + pair)
+            }
+        }
+    }
+
+    suspend fun removeExcludedStorePairs(pairs: Collection<ExcludedStorePair>) {
+        if (pairs.isEmpty()) return
+        context.settingsDataStore.edit { prefs ->
+            val updated = prefs.decodeExcludedStorePairs()
+                .filterNot { current -> pairs.any { it.sameTarget(current) } }
+            prefs[Keys.EXCLUDED_STORE_PAIRS] = json.encodeToString(updated)
+        }
+    }
+
     private fun Preferences.decodeOverrides(): Map<String, CardOverride> =
         this[Keys.CARD_OVERRIDES]
             ?.let { runCatching { json.decodeFromString<Map<String, CardOverride>>(it) }.getOrNull() }
@@ -495,6 +546,11 @@ class SettingsRepository(private val context: Context) {
         this[Keys.CUSTOM_CAMPAIGNS]
             ?.let { runCatching { json.decodeFromString<List<CustomCampaign>>(it) }.getOrNull() }
             ?.map { it.normalized() }
+            ?: emptyList()
+
+    private fun Preferences.decodeExcludedStorePairs(): List<ExcludedStorePair> =
+        this[Keys.EXCLUDED_STORE_PAIRS]
+            ?.let { runCatching { json.decodeFromString<List<ExcludedStorePair>>(it) }.getOrNull() }
             ?: emptyList()
 
     private fun Preferences.decodeNotifiedKeys(): List<String> =
