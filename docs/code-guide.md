@@ -195,6 +195,7 @@ erDiagram
     OFFICIAL_STORE_LIST {
         string_list eligible_stores "公式の対象店舗"
         string_list ineligible_stores "公式の対象外店舗"
+        bool list_is_exhaustive "eligible_storesが網羅リストか(掲載なし=対象外と断定。#64)"
         string updated_date "鮮度(確認日 or 公式更新日)"
         bool date_is_official
         string source_url
@@ -319,7 +320,7 @@ flowchart TD
 
 ### 設定の永続化（data/SettingsRepository.kt）
 
-テーマ・データ取得・マイカード・QR 決済・自治体の設定は **DataStore Preferences**（`SettingsRepository`）に保存する。テーマ／dynamic color／自動更新は型付きキー、カード差分（`CardOverride`：所有・還元率・ブランド・ウエル活）はカード id（payment_methods.json の `cards[].id`）をキーにした Map を JSON 文字列として 1 キーに格納する（キー数が可変でも Preferences のキーを増やさない）。QR 決済の有効 ID（`Set<String>`）・カタログ外カードの保有ブランド（`owned_brands`: `Set<String>`。card_brand 施策の仮想カード合成に使う）・登録エリア（`registered_areas`: `List<RegisteredArea>`。自治体単体かグループを type+code で持ち、おトクタブの地域フィルタに使う）も同様に JSON 文字列として格納する。`MainViewModel` は `settings` Flow を購読し、変更のたびに **payment_methods.json（カタログ＝既定値）へユーザー差分を重ねて**エンジンを作り直す（マージは VM 層、`JudgmentEngine` は純 Kotlin のまま）。payment_methods.json 自体は書き換えない。テーマは描画前に必要なので `MainActivity` が `state.themeMode`/`dynamicColor` を `PoikatsuTheme` に渡す（6.1 参照）。
+テーマ・データ取得・マイカード・QR 決済・自治体の設定は **DataStore Preferences**（`SettingsRepository`）に保存する。テーマ／dynamic color／自動更新は型付きキー、カード差分（`CardOverride`：所有・還元率・ブランド・ウエル活）はカード id（payment_methods.json の `cards[].id`）をキーにした Map を JSON 文字列として 1 キーに格納する（キー数が可変でも Preferences のキーを増やさない）。QR 決済の有効 ID（`Set<String>`）・カタログ外カードの保有ブランド（`owned_brands`: `Set<String>`。card_brand 施策の仮想カード合成に使う）・登録エリア（`registered_areas`: `List<RegisteredArea>`。自治体単体かグループを type+code で持ち、おトクタブの地域フィルタに使う）・ユーザー登録の対象外ペア（`excluded_store_pairs`: `List<ExcludedStorePair>`。#63。詳細は 5.4）も同様に JSON 文字列として格納する。`MainViewModel` は `settings` Flow を購読し、変更のたびに **payment_methods.json（カタログ＝既定値）へユーザー差分を重ねて**エンジンを作り直す（マージは VM 層、`JudgmentEngine` は純 Kotlin のまま）。payment_methods.json 自体は書き換えない。テーマは描画前に必要なので `MainActivity` が `state.themeMode`/`dynamicColor` を `PoikatsuTheme` に渡す（6.1 参照）。
 
 ### 設定のバックアップと引き継ぎ（#50 / #51）
 
@@ -434,9 +435,10 @@ flowchart LR
 - **設定値の反映はマージ層**: 還元率の手入力・MUFG ブランド・ウエル活 ×1.5（`PaymentCard.point_multiplier` の係数）は `MainViewModel` が DataStore の差分（`CardOverride`）をカタログのカード一覧に重ねてからエンジンへ渡す。`JudgmentEngine` は純 Kotlin・実データテストのまま保つ（4 章「設定の永続化」／6.1 参照）。
 - **reward の無いチェーンは一覧に出さない**: 判定が空（所有カードで対象になる施策が無い）チェーンは検索結果・近隣リストから除外する（`MainViewModel.searchRewarded` と `loadNearbyAround` で `judgeAll` 非空のものだけ残す）。
 - **エントリー要否は持たない**: 還元率はユーザーが公式アプリの実効値（エントリー込み）を手入力する前提のため、`entry_done` フラグと未エントリー警告は廃止した。`CampaignJudgment.warnings` は期限切れ間近（残り 3 日以下）の警告に使われる。
-- **店舗単位の判定 `checkStore(merchant, storeName)`**: `official_store_list` を持つ施策ごとに、`ineligible_stores` 一致 → 対象外 / `eligible_stores` 一致 → 対象 / どちらにも無し → 要確認（`StoreEligibility.UNKNOWN`）の **3 状態**を返す（対象外を優先）。リスト網羅性を仮定せず、**公式が店舗名で明示した店だけ言い切る**設計（旧 `facility_risk_patterns` によるキーワード推測警告は実際の対象外店舗との乖離が大きく廃止）。
-- `canCheckStore(merchant)`: `official_store_list` を持つ施策が 1 つでもあれば、対象判定画面（`StoreCheckScreen`）に遷移できる。
-- `isExcludedStore(merchant, storeName)`: 近隣リスト用。`checkStore` の結果が INELIGIBLE を含み ELIGIBLE を含まないときだけ true（**明示的対象外のみ**近隣リストから除外する）。
+- **店舗単位の判定 `checkStore(merchant, storeName)`**: `official_store_list` を持つ施策ごとに、`ineligible_stores` 一致 → 対象外 / `eligible_stores` 一致 → 対象 / どちらにも無し → 要確認（`StoreEligibility.UNKNOWN`）の **3 状態**を返す（対象外を優先）。リスト網羅性を仮定せず、**公式が店舗名で明示した店だけ言い切る**設計（旧 `facility_risk_patterns` によるキーワード推測警告は実際の対象外店舗との乖離が大きく廃止）。例外は **`list_is_exhaustive: true` の網羅リスト（#64）**: 「対象は次のN店舗のみ」型（コジマ×ビックカメラの au PAY クーポン等）では掲載なし=**対象外**と断定する（`matched = null` の INELIGIBLE。UI は「対象のお店リストに掲載がない」理由文に分岐）。
+- **網羅リストの店舗単位間引き（#64）**: `exhaustiveListIneligibleCampaignIds(merchant, poiName)` が「網羅リストで対象と確認できない施策 id」を返し、`judgeAll(..., storeIneligibleCampaignIds)` が該当施策を**黙って**間引く（ユーザー登録ペア #63 の `excludedCampaignIds` と違い解除の概念が無いため `excludedJudgments` に載せない=看板スコープ外と同じ扱い）。適用箇所は #63 と同じ3箇所（`loadNearbyAround` / `selectionFor` の displayName 非 null / `recomputeNearbyPlaces`）。店のピンは他の施策が残れば残る。
+- `canCheckStore(merchant)`: **非網羅の** `official_store_list` を持つ施策が 1 つでもあれば、対象判定画面（`StoreCheckScreen`）に遷移できる。網羅リスト（`list_is_exhaustive`）だけのチェーンは導線を出さない（対象店だけが地図・判定に出るため手動で調べる意味がない。#64）。
+- `isExcludedStore(merchant, storeName)`: 近隣リスト用。`checkStore` の結果が**明示一致の** INELIGIBLE（`matched != null`）を含み ELIGIBLE を含まないときだけ true（明示的対象外のみ店舗ごと除外する）。網羅リストの「掲載なし=対象外」はここに含めず、施策単位の間引き（上記）で扱う。
 - **ユーザー登録の対象外ペア（#63）**: 「このお店ではこの施策は対象外だった」をユーザーが (施策, 店舗) ペアで登録し、店舗単位で判定から間引く。`judgeAll(..., excludedCampaignIds)` が該当施策を `JudgmentResult.excludedJudgments` に**分けて返し**（黙って消さない。判定詳細の「登録済み」畳み表示+その場解除に使う）、`bestOption` は残った施策から選び直す。除外集合は `excludedCampaignIdsFor(merchant, poiName, pairs)` が DataStore の `ExcludedStorePair`（campaignId × merchantId × ユーザー申告の店舗名）から算出。店舗の同定は重複排除と同じ `normalizedBranch` を**保存名・POI 名の双方に毎回適用**して比較する（表記ゆれ・alias 変更に追従）。適用は店舗を特定できる判定のみ: 地図パイプライン（`loadNearbyAround`。全施策が間引かれた店はピンごと消える）と、判定詳細を具体的なお店として開いたとき（`selectionFor` の displayName 非 null）。チェーン視点（お店タブの検索ヒット）には適用しない。POI 名は登録ダイアログのプリフィルに使うだけで、**保存するのはユーザーが確認・確定した店舗名のみ・座標は保存しない**（YOLP 規約=店舗データの永続キャッシュ禁止への配慮。map-data-stack.md）。管理一覧は設定→「対象外に登録したお店」（個別削除+終了した施策の一括削除。自動削除はしない）。
 - チェーン rule の引き当ては `Campaign.ruleFor(merchant, bannerId)`（private 拡張）に集約。bannerId 非 null は看板（業態）としての判定で、看板スコープ（`banner_ids` / `ineligible_banner_ids`）に合わないルールは適用されない=対象外看板の POI は判定ゼロで地図からも消える。null はグループ視点（お店タブのカテゴリ一覧カード等）で、スコープ付きルールも「対象は◯◯のみ / ◯◯は対象外」の合成注記付きで全部出す（#60）
 - `matchStore(storeName)` は GPS 検索用。地図 POI 名（「マクドナルド 渋谷駅前店」）からチェーンを特定し、**どの看板（業態）に一致したか**を `StoreMatch(merchant, bannerId, bannerName)` で返す（判定の看板スコープと地図の業態レンズに使う。#60）。「ステーキガスト」が「ガスト」に負けないよう、**一致キーが最長のものを採用**する。照合キーは 3 文字以上、または**漢字のみ 2 文字**（松屋・夢庵等。#38）。漢字キーは前方境界のみ厳格（「小松屋」の「松屋」は別の店名の一部とみなす。直後の漢字は「松屋渋谷店」のように支店名なので許容）
