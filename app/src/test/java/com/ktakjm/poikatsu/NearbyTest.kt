@@ -320,14 +320,21 @@ class YolpSearchConfigRealDataTest {
 
     @Test
     fun `実データ_施策が参照するkeyword_merchantはアクティブにカバーされ枠を超えない`() {
-        val activeMerchantIds = engine.activeManagedMerchantIds(today)
         val referencedIds = data.campaigns.flatMap { c -> c.merchantRules.map { it.merchantId } }.toSet()
         val keywordMerchants = data.merchants.filter { it.yolpSearch == "keyword" }
-        // 施策が参照する keyword merchant はアクティブ判定にカバーされていること。施策未参照の
+        // 施策が参照する keyword merchant は、その施策の開催中にアクティブ判定へカバーされること
+        // (期間限定施策(コジマ #64 等)は固定の検証日でなく施策の開始日で評価する)。施策未参照の
         // merchant は、繰り返し開催されるキャンペーンの事前登録(ドラッグストア×メーカー等 #43)
         // として許容する(YOLP 検索は activeMerchantIds でフィルタされるためコストは掛からない)
-        keywordMerchants.filter { it.id in referencedIds }.forEach {
-            assertTrue("${it.id} がアクティブな施策にカバーされていない", it.id in activeMerchantIds)
+        keywordMerchants.filter { it.id in referencedIds }.forEach { m ->
+            val checkDates = data.campaigns
+                .filter { c -> c.merchantRules.any { it.merchantId == m.id } }
+                .map { c -> c.periodStart?.let { JudgmentEngine.parseDate(it) } ?: today }
+                .distinct()
+            assertTrue(
+                "${m.id} がアクティブな施策にカバーされていない",
+                checkDates.any { d -> m.id in engine.activeManagedMerchantIds(d) },
+            )
         }
         // 事前登録分も含め、全チェーンが同時にアクティブになっても keyword ソース枠に収まること
         assertTrue(

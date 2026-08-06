@@ -76,10 +76,13 @@ enum class StoreEligibility {
 data class StoreVerdict(
     val campaign: Campaign,
     val eligibility: StoreEligibility,
+    /** 一致した公式リストの店舗名。網羅リストの「掲載なし=対象外」(#64)では INELIGIBLE でも null */
     val matched: String?,
     val updatedDate: String,
     val dateIsOfficial: Boolean,
     val sourceUrl: String?,
+    /** 網羅リスト(list_is_exhaustive)由来の判定か。UI の理由文の出し分けに使う */
+    val listIsExhaustive: Boolean = false,
 )
 
 enum class BenefitType(val jsonValue: String) {
@@ -732,6 +735,9 @@ class JudgmentEngine(private val data: PoikatsuData) {
      * 施策はスコープ外なら出ない)。null はグループ視点(全ルールを出し、内訳は注記で示す)。
      * excludedCampaignIds はこの店舗で間引く施策 id(#63。[excludedCampaignIdsFor] で算出)。
      * 該当施策は judgments でなく excludedJudgments に分けて返し、bestOption の比較にも載せない。
+     * storeIneligibleCampaignIds は網羅リスト由来の店舗対象外(#64。
+     * [exhaustiveListIneligibleCampaignIds] で算出)。ユーザー登録と違い解除の概念が無いため、
+     * excludedJudgments には載せず看板スコープ外と同じ扱いで黙って間引く。
      */
     fun judgeAll(
         merchant: Merchant,
@@ -739,8 +745,10 @@ class JudgmentEngine(private val data: PoikatsuData) {
         enabledQrIds: Set<String> = emptySet(),
         bannerId: String? = null,
         excludedCampaignIds: Set<String> = emptySet(),
+        storeIneligibleCampaignIds: Set<String> = emptySet(),
     ): JudgmentResult {
         val all = (judgeCards(merchant, today, bannerId) + judgeQr(merchant, today, enabledQrIds, bannerId))
+            .filterNot { it.campaign.id in storeIneligibleCampaignIds }
             .sortedWith(
                 compareBy<CampaignJudgment> { it.discountAmount != null }
                     .thenByDescending { it.effectiveRate ?: 0.0 }
@@ -799,13 +807,16 @@ class JudgmentEngine(private val data: PoikatsuData) {
     /**
      * 公式が対象/対象外を言い切っている店舗リスト(official_store_list)を持つ施策が
      * 1 つでもあれば、店舗単位の対象判定画面に遷移できる。
+     * 網羅リスト(list_is_exhaustive)だけのチェーンは対象外(#64): 対象店だけが地図・判定に
+     * 出る(掲載なしは自動で間引かれる)ため、手動で調べる導線は不要。
      */
     fun canCheckStore(merchant: Merchant): Boolean =
-        data.campaigns.any { it.ruleFor(merchant)?.officialStoreList != null }
+        data.campaigns.any { it.ruleFor(merchant)?.officialStoreList?.listIsExhaustive == false }
 
     /**
      * 特定店舗の判定を、公式リストを持つ施策ごとに返す。
      * 対象外(ineligible)を優先し、対象(eligible)、どちらにも無ければ要確認(UNKNOWN)。
+     * 網羅リスト(list_is_exhaustive。#64)では「掲載なし=対象外」と断定する(matched = null)。
      */
     fun checkStore(merchant: Merchant, storeName: String): List<StoreVerdict> {
         val normalized = JapaneseText.normalize(storeName)
@@ -819,6 +830,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
             val (eligibility, matched) = when {
                 ineligible != null -> StoreEligibility.INELIGIBLE to ineligible
                 eligible != null -> StoreEligibility.ELIGIBLE to eligible
+                list.listIsExhaustive -> StoreEligibility.INELIGIBLE to null
                 else -> StoreEligibility.UNKNOWN to null
             }
             StoreVerdict(
@@ -828,19 +840,33 @@ class JudgmentEngine(private val data: PoikatsuData) {
                 updatedDate = list.updatedDate,
                 dateIsOfficial = list.dateIsOfficial,
                 sourceUrl = list.sourceUrl,
+                listIsExhaustive = list.listIsExhaustive,
             )
         }
     }
 
     /**
-     * 近隣リスト用: その店舗が公式に「対象外」と明示されているか。
+     * 近隣リスト用: その店舗が公式に「対象外」と明示されているか(店舗ごと除外)。
      * 対象(eligible)明示がある場合は除外扱いにしない。official_store_list が無いチェーンは常に false。
+     * 網羅リストの「掲載なし=対象外」(matched = null)はここに含めない — その店に他の施策が
+     * あり得るため、ピンごと消さず [exhaustiveListIneligibleCampaignIds] で施策単位に間引く(#64)。
      */
     fun isExcludedStore(merchant: Merchant, storeName: String): Boolean {
         val verdicts = checkStore(merchant, storeName)
-        return verdicts.any { it.eligibility == StoreEligibility.INELIGIBLE } &&
+        return verdicts.any { it.eligibility == StoreEligibility.INELIGIBLE && it.matched != null } &&
             verdicts.none { it.eligibility == StoreEligibility.ELIGIBLE }
     }
+
+    /**
+     * 網羅リスト(list_is_exhaustive)を持つ施策のうち、この店舗が対象と確認できない
+     * (eligible に一致しない)ものの施策 id(#64)。judgeAll の storeIneligibleCampaignIds に
+     * 渡して店舗単位で間引く。非網羅リスト(既定)は「掲載なし=要確認」のため間引かない。
+     */
+    fun exhaustiveListIneligibleCampaignIds(merchant: Merchant, storeName: String): Set<String> =
+        checkStore(merchant, storeName)
+            .filter { it.listIsExhaustive && it.eligibility == StoreEligibility.INELIGIBLE }
+            .map { it.campaign.id }
+            .toSet()
 
     companion object {
         private val dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE

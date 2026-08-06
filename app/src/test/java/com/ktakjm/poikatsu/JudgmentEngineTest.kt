@@ -236,6 +236,9 @@ class JudgmentEngineTest {
         assertTrue(withList.canCheckStore(mWith))
         val (without, mWithout) = storeCheckEngine(hasList = false)
         assertFalse(without.canCheckStore(mWithout))
+        // 網羅リストだけのチェーンは対象店しか表示されないため、調べる導線を出さない(#64)
+        val (exhaustiveOnly, mExhaustive) = storeCheckEngine(eligible = listOf("浦和店"), exhaustive = true)
+        assertFalse(exhaustiveOnly.canCheckStore(mExhaustive))
     }
 
     @Test
@@ -250,6 +253,58 @@ class JudgmentEngineTest {
         // 公式リストの無いチェーン → 除外しない
         val (eng2, m2) = storeCheckEngine(hasList = false)
         assertFalse(eng2.isExcludedStore(m2, "何でも"))
+    }
+
+    // ---- 網羅リスト(list_is_exhaustive。#64) ----
+
+    @Test
+    fun `網羅リストでは掲載のない店舗を対象外と断定する`() {
+        val (eng, m) = storeCheckEngine(eligible = listOf("浦和店", "川口店"), exhaustive = true)
+        val verdict = eng.checkStore(m, "テスト店 大宮店").single()
+        assertEquals(StoreEligibility.INELIGIBLE, verdict.eligibility)
+        assertNull(verdict.matched)
+        assertTrue(verdict.listIsExhaustive)
+        // 掲載店は従来どおり対象
+        assertEquals(StoreEligibility.ELIGIBLE, eng.checkStore(m, "テスト店 浦和店").single().eligibility)
+    }
+
+    @Test
+    fun `非網羅リストは従来どおり掲載なしを要確認にする`() {
+        val (eng, m) = storeCheckEngine(eligible = listOf("浦和店"))
+        assertEquals(StoreEligibility.UNKNOWN, eng.checkStore(m, "テスト店 大宮店").single().eligibility)
+        assertTrue(eng.exhaustiveListIneligibleCampaignIds(m, "テスト店 大宮店").isEmpty())
+    }
+
+    @Test
+    fun `網羅リストの掲載なしは店舗ごと除外でなく施策単位で間引く`() {
+        val (eng, m) = storeCheckEngine(eligible = listOf("浦和店"), exhaustive = true)
+        // ピンごと消す isExcludedStore は発火しない(その店に他の施策があれば残すため)
+        assertFalse(eng.isExcludedStore(m, "テスト店 大宮店"))
+        // 施策単位の間引き集合には入る
+        assertEquals(setOf("c1"), eng.exhaustiveListIneligibleCampaignIds(m, "テスト店 大宮店"))
+        assertTrue(eng.exhaustiveListIneligibleCampaignIds(m, "テスト店 浦和店").isEmpty())
+    }
+
+    @Test
+    fun `網羅リストでも明示的対象外は従来どおり店舗ごと除外にかかる`() {
+        val (eng, m) = storeCheckEngine(
+            eligible = listOf("浦和店"),
+            ineligible = listOf("大宮店"),
+            exhaustive = true,
+        )
+        assertTrue(eng.isExcludedStore(m, "テスト店 大宮店"))
+    }
+
+    @Test
+    fun `storeIneligibleCampaignIdsの施策は判定から黙って消える`() {
+        val (eng, m) = storeCheckEngine(eligible = listOf("浦和店"), exhaustive = true)
+        val ineligibleIds = eng.exhaustiveListIneligibleCampaignIds(m, "テスト店 大宮店")
+        val result = eng.judgeAll(m, today, storeIneligibleCampaignIds = ineligibleIds)
+        assertTrue(result.judgments.isEmpty())
+        // ユーザー登録の対象外(#63)と違い解除の概念が無いため、excludedJudgments にも載せない
+        assertTrue(result.excludedJudgments.isEmpty())
+        // 掲載店では通常どおり判定に出る
+        assertEquals(listOf("c1"), eng.judgeAll(m, today).judgments.map { it.campaign.id })
     }
 
     // ---- ユーザー登録の対象外ペア(#63) ----
@@ -311,11 +366,13 @@ class JudgmentEngineTest {
         eligible: List<String> = emptyList(),
         ineligible: List<String> = emptyList(),
         hasList: Boolean = true,
+        exhaustive: Boolean = false,
     ): Pair<JudgmentEngine, Merchant> {
         val merchant = Merchant(id = "m1", name = "テスト店", reading = "てすとてん")
         val campaign = Campaign(
             id = "c1",
             operator = "test",
+            cardId = "test_card",
             name = "テスト施策",
             paymentInstruction = "タッチ決済",
             rateBase = 5.0,
@@ -326,6 +383,7 @@ class JudgmentEngineTest {
                     officialStoreList = if (!hasList) null else OfficialStoreList(
                         eligibleStores = eligible,
                         ineligibleStores = ineligible,
+                        listIsExhaustive = exhaustive,
                         updatedDate = "2026-05-01",
                         dateIsOfficial = false,
                         sourceUrl = "https://example.com",
@@ -336,6 +394,7 @@ class JudgmentEngineTest {
         val data = PoikatsuData(
             merchants = listOf(merchant),
             campaigns = listOf(campaign),
+            cards = listOf(PaymentCard(id = "test_card", cardName = "テストカード", effectiveRateDefault = 5.0)),
             updatedAt = "2026-06-01",
         )
         return JudgmentEngine(data) to merchant
@@ -1379,6 +1438,46 @@ class JudgmentEngineRealDataTest {
         assertEquals(StoreEligibility.ELIGIBLE, engine.checkStore(merchant, "アリオ札幌店").single().eligibility)
         // どちらのリストにも無い → 要確認
         assertEquals(StoreEligibility.UNKNOWN, engine.checkStore(merchant, "架空のどこか店").single().eligibility)
+    }
+
+    /**
+     * コジマ×ビックカメラの網羅リスト施策(#64)。施策が期限切れ削除されたら検証対象なしで抜ける
+     * (collect-campaigns の削除運用でテストが壊れないように)。
+     */
+    @Test
+    fun `実データ_コジマの網羅リスト施策は掲載店だけ対象になる`() {
+        val merchant = data.merchants.firstOrNull { it.id == "kojima" } ?: return
+        val exhaustiveCampaigns = data.campaigns.filter { c ->
+            c.merchantRules.any { it.merchantId == "kojima" && it.officialStoreList?.listIsExhaustive == true }
+        }
+        if (exhaustiveCampaigns.isEmpty()) return
+        // 網羅リストだけのチェーンなので「このお店が対象か調べる」導線は出さない
+        // (対象店だけが地図・判定に出るため。#64)
+        assertFalse(engine.canCheckStore(merchant))
+        // 実 POI 名の照合: 正式名・別名(コジマ単独表記)ともチェーンに一致する。
+        // かな3文字キー(こじま)+かな始まり支店名(ららぽーと等)は境界判定の既知の制限で
+        // 照合不可のため(#60)、別名の検証は漢字始まりの支店名で行う
+        assertEquals("kojima", engine.matchStore("コジマ×ビックカメラ 浦和店")?.merchant?.id)
+        assertEquals("kojima", engine.matchStore("コジマ 三鷹店")?.merchant?.id)
+        // 首都圏リスト掲載店(浦和)は首都圏施策で対象、千葉施策では掲載なし=対象外
+        val urawa = engine.checkStore(merchant, "コジマ×ビックカメラ浦和店")
+        assertTrue(
+            urawa.filter { it.campaign.id.contains("shutoken") }
+                .all { it.eligibility == StoreEligibility.ELIGIBLE },
+        )
+        assertTrue(
+            urawa.filter { it.campaign.id.contains("chiba") }
+                .all { it.eligibility == StoreEligibility.INELIGIBLE },
+        )
+        // どのリストにも無い店舗(首都圏・千葉外)は全施策で対象外(網羅リストの断定)
+        val sapporo = engine.checkStore(merchant, "コジマ×ビックカメラ札幌店")
+        assertTrue(sapporo.isNotEmpty())
+        assertTrue(sapporo.all { it.eligibility == StoreEligibility.INELIGIBLE })
+        // 施策単位の間引き: 未掲載店では網羅リスト施策が全部間引かれる
+        assertEquals(
+            exhaustiveCampaigns.map { it.id }.toSet(),
+            engine.exhaustiveListIneligibleCampaignIds(merchant, "コジマ×ビックカメラ札幌店"),
+        )
     }
 
     // ---- 実データの新フィールド検証 ----

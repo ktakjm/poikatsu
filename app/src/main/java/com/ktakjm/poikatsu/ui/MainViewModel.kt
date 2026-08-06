@@ -654,12 +654,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         displayName: String? = null,
         bannerId: String? = null,
     ): Selection {
-        // 具体的なお店として開いたとき(displayName = POI 名)だけ、ユーザー登録の対象外ペア(#63)を
-        // 適用する。チェーン視点(お店タブの検索ヒット)は店舗が特定できないため適用しない
+        // 具体的なお店として開いたとき(displayName = POI 名)だけ、ユーザー登録の対象外ペア(#63)と
+        // 網羅リストの店舗対象外(#64)を適用する。チェーン視点(お店タブの検索ヒット)は
+        // 店舗が特定できないため適用しない
         val excludedIds = displayName
             ?.let { excludedCampaignIdsFor(merchant, it, lastSettings.excludedStorePairs) }
             ?: emptySet()
-        val result = judgeAll(merchant, LocalDate.now(), enabledQrIds(), bannerId, excludedIds)
+        val ineligibleIds = displayName
+            ?.let { exhaustiveListIneligibleCampaignIds(merchant, it) }
+            ?: emptySet()
+        val result = judgeAll(merchant, LocalDate.now(), enabledQrIds(), bannerId, excludedIds, ineligibleIds)
         return Selection(
             merchant = merchant,
             judgments = result.judgments,
@@ -1080,11 +1084,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (engine.isFacilityTenant(match.bannerName, poi.name)) return@mapNotNull null
                 if (engine.isExcludedStore(merchant, poi.name)) return@mapNotNull null
                 // POI は具体的な看板(業態)なので看板スコープで判定する(対象外業態はここで判定なしになり消える)。
-                // ユーザー登録の対象外ペア(#63)も店舗単位でここで間引く(該当施策だけ判定から外れ、
-                // 全施策が間引かれた店は下の判定なしと同じ扱いで消える)
+                // ユーザー登録の対象外ペア(#63)と網羅リストの店舗対象外(#64)も店舗単位でここで間引く
+                // (該当施策だけ判定から外れ、全施策が間引かれた店は下の判定なしと同じ扱いで消える)
                 val excludedIds =
                     engine.excludedCampaignIdsFor(merchant, poi.name, lastSettings.excludedStorePairs)
-                val result = engine.judgeAll(merchant, today, qrIds, match.bannerId, excludedIds)
+                val ineligibleIds = engine.exhaustiveListIneligibleCampaignIds(merchant, poi.name)
+                val result = engine.judgeAll(merchant, today, qrIds, match.bannerId, excludedIds, ineligibleIds)
                 // 判定なしは通常出さないが、チェーン絞り込み中(ブリッジ由来)の merchant は
                 // 非対象日の場所確認用に残す(bestBenefit なし=還元率ラベルなしで表示)
                 if (result.judgments.isEmpty() && merchant.id !in filterIds) return@mapNotNull null
@@ -1158,7 +1163,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val merchant = place.merchant ?: return@mapNotNull place
             val excludedIds =
                 engine.excludedCampaignIdsFor(merchant, place.name, settings.excludedStorePairs)
-            val result = engine.judgeAll(merchant, today, qrIds, place.bannerId, excludedIds)
+            val ineligibleIds = engine.exhaustiveListIneligibleCampaignIds(merchant, place.name)
+            val result = engine.judgeAll(merchant, today, qrIds, place.bannerId, excludedIds, ineligibleIds)
             if (result.judgments.isEmpty() && merchant.id !in filterIds) return@mapNotNull null
             place.copy(
                 bestBenefit = result.bestBenefitLabel(),

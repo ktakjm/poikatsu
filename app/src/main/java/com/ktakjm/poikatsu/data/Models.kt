@@ -127,13 +127,21 @@ data class MerchantsFile(
  * 別画面で店舗名を入力して判定する。
  * - ineligible_stores に一致 → 対象外
  * - eligible_stores に一致 → 対象
- * - どちらにも無い → 要確認(公式リスト外。一部対象外店舗があるため断定しない)
+ * - どちらにも無い → 要確認(公式リスト外。一部対象外店舗があるため断定しない)。
+ *   ただし list_is_exhaustive = true(網羅リスト)のときは対象外(#64)
  * exclusion(ineligible)を優先判定する。
  */
 @Serializable
 data class OfficialStoreList(
     @SerialName("eligible_stores") val eligibleStores: List<String> = emptyList(),
     @SerialName("ineligible_stores") val ineligibleStores: List<String> = emptyList(),
+    /**
+     * eligible_stores が対象店舗の網羅リスト(掲載のない店は対象外)か(#64)。
+     * 「対象は次の20店舗のみ」型の特定複数店舗限定キャンペーンで true にすると、
+     * 掲載のない店舗はこの施策の判定・地図から店舗単位で間引かれる。
+     * 既定 false = 網羅性を仮定せず、掲載のない店は要確認(従来どおり)。
+     */
+    @SerialName("list_is_exhaustive") val listIsExhaustive: Boolean = false,
     /** 断定の鮮度として表示する日付。official=true なら公式情報自体の更新日、false なら当方の確認日 */
     @SerialName("updated_date") val updatedDate: String = "",
     @SerialName("date_is_official") val dateIsOfficial: Boolean = false,

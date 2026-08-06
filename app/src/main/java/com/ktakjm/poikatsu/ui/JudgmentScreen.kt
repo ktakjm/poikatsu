@@ -689,10 +689,14 @@ private fun StoreVerdictCard(verdict: StoreVerdict) {
             contentColor = onWarningContainerColor()
         }
     }
-    val reason = when (verdict.eligibility) {
-        StoreEligibility.ELIGIBLE -> "「${verdict.matched}」は公式の対象のお店です"
-        StoreEligibility.INELIGIBLE -> "「${verdict.matched}」は公式の対象外のお店です"
-        StoreEligibility.UNKNOWN ->
+    val reason = when {
+        verdict.eligibility == StoreEligibility.ELIGIBLE -> "「${verdict.matched}」は公式の対象のお店です"
+        verdict.eligibility == StoreEligibility.INELIGIBLE && verdict.matched != null ->
+            "「${verdict.matched}」は公式の対象外のお店です"
+        // 網羅リスト(#64): 掲載が無いこと自体が対象外の根拠(「対象は次のお店のみ」型)
+        verdict.eligibility == StoreEligibility.INELIGIBLE ->
+            "公式の対象のお店リストに掲載がないお店です。このキャンペーンは対象のお店が限定されています"
+        else ->
             "公式の対象/対象外リストに掲載がないお店です。一部対象外のお店があるため、店頭・公式サイトでご確認ください"
     }
     Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
