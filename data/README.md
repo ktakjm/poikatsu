@@ -75,6 +75,7 @@
   - `ineligible_stores` に一致 → **対象外**(⛔)。`eligible_stores` に一致 → **対象**(✅)。どちらにも無い → **要確認**(❓。公式リスト外。一部対象外店舗があるため断定しない)。対象外(ineligible)を優先判定する。
   - 各 store は店舗名の部分文字列(正規化後 `contains` 判定。カナ種・全半角・記号は正規化で吸収されるので「らら/ララ」等は気にしなくてよい)。識別できる範囲で短く書く(「ららぽーと豊洲」等、`店`接尾辞は不要)。
   - 片方のリストだけでも可。ただし「一致しなければ反対」と断定はせず、未掲載は常に要確認になる(網羅性を仮定しない設計)。
+  - `list_is_exhaustive: true`(#64) — `eligible_stores` が**対象店舗の網羅リスト**であることの宣言(「対象は次のN店舗のみ」型の特定複数店舗限定キャンペーン。例: コジマ×ビックカメラの au PAY クーポン)。掲載のない店舗は要確認でなく**対象外**と断定し、その施策だけが判定・地図から店舗単位で間引かれる(店のピン自体は他の施策があれば残る)。**公式が「対象店舗はこのリストが全て」と言い切っている場合のみ** true にする。網羅リストのエントリは、部分一致で別の支店を誤って対象と判定しないよう**識別性の高い表記で書く**(非網羅リストの「短く書く」と逆で、`店`接尾辞まで含める。非網羅の誤登録は要確認どまりだが、網羅では誤って「対象」と断定してしまうため)。網羅リスト**だけ**のチェーンは「このお店が対象か調べる」導線を出さない(対象店しか表示されないため調べる必要がない)。
   - `updated_date` + `date_is_official` — 断定の鮮度として判定画面に表示する日付。`date_is_official: true` なら**公式情報自体の更新日**、`false` なら**当方の確認日**(「公式に更新日記載なし」付き)として表示。いずれもこのアプリのデータ更新日 `verified_date`/`updated_at` とは別物。
   - `source_url` — (任意)根拠とした公式ページ。
   - 例(アカチャンホンポ/MUFG): 公式([akachan.jp](https://www.akachan.jp/topics/mufgCPlist/))が◯対象/×対象外を店舗名で明示。両方を `eligible_stores`/`ineligible_stores` に登録し、未掲載店は要確認。公式ページに更新日表記が無いため `date_is_official: false`(確認日表示)。
@@ -191,6 +192,7 @@
 | `test_recurrence_monthly` | `recurrence` 日付型(5・20・30 日) | 検証日依存 |
 | `test_lottery` | 抽選型(`lottery`)、`memo`(当選確率。非表示)、`ineligible_wallets` Google Pay のみ対象外・Apple Pay 情報なし(付記なし警告) | 常時安定 |
 | `test_discount_fixed` | **即時定額** discount+`discount_amount`(300 円引き)、`min_purchase`(500 円)、`usage_limit`(1 回) | 常時安定 |
+| `test_exhaustive_store_list` | **網羅リスト**(`list_is_exhaustive`。#64): 掲載店(テスト対象1号店/2号店)以外のドラッグストアではこの施策だけ判定・地図から消える(他施策があれば店は残る)。網羅リストのみのチェーンのため「このお店が対象か調べる」導線は出ない | 常時安定 |
 | `test_rebate_fixed` | **後日定額** rebate+`discount_amount`(500 円還元)、`usage_limit`(3 回)、`usage_limit_note`、`period_total_cap` | 常時安定 |
 | `test_product_scope` | **対象商品限定**(`product_scope`。最良比較から分離・「対象商品」冠表示)、`min_purchase_scope: period_total`(期間累計の最低購入額表示)、`requires_entry`(要エントリー警告)、**多チェーン+`display_name`**(カードタイトルの手動略記。`display_name` の無い多チェーンの自動生成「{先頭} 他Nチェーン」は `test_promotion` で確認) | 常時安定 |
 | `test_upcoming` | **UPCOMING** 状態(常時未開始)、`requires_entry` | 常時安定 |

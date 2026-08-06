@@ -1,6 +1,6 @@
 {
   "schema_version": 11,
-  "updated_at": "2026-08-03",
+  "updated_at": "2026-08-06",
   "campaigns": [
     {
       "id": "smcc_combini_restaurant",
@@ -544,6 +544,136 @@
       ],
       "detail_url": "https://media.aupay.wallet.auone.jp/articles/5157",
       "verified_date": "2026-07-31"
+    },
+    {
+      "id": "aupay_kojima_shutoken_2026_08a",
+      "type": "promotion",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "コジマ×ビックカメラ 首都圏の対象20店舗限定 au PAY最大20%割引クーポン(第2弾)",
+      "payment_instruction": "au PAYアプリで事前にクーポンを獲得し、コード支払いで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-01",
+      "period_end": "2026-08-09",
+      "min_purchase": 100,
+      "per_transaction_cap": 1000,
+      "may_end_early": true,
+      "ineligible_notes": [
+        "事前にクーポンの獲得が必要(支払い後のクーポン利用は不可)",
+        "一部対象外の商品あり"
+      ],
+      "memo": [
+        "コジマのキャッシュレスリレーキャンペーン第2弾(PayPay弾の第1弾は終了・第3弾は詳細未公表のため未収録)",
+        "割引はクーポン適用による会計時の即時割引(割引上限1,000円/回)",
+        "対象店舗リストはコジマ公式ページ(埼玉5・東京15)より。au PAY記事(5167)と一致確認済み"
+      ],
+      "merchant_rules": [
+        {
+          "merchant_id": "kojima",
+          "official_store_list": {
+            "eligible_stores": [
+              "ニトリホームズ宮原店", "浦和店", "川口店", "和光店", "新座店",
+              "KAMEIDO CLOCK店", "南砂町SUNAMO店", "善福寺店", "高井戸東店",
+              "ベルクスモール浮間舟渡店", "高島平店", "志村店", "上板橋店", "豊玉店",
+              "新小岩店", "江戸川店", "三鷹店", "コーナン田無店", "西友ひばりヶ丘店", "西東京店"
+            ],
+            "list_is_exhaustive": true,
+            "updated_date": "2026-08-06",
+            "date_is_official": false,
+            "source_url": "https://www.kojima.net/shop/campaign/cashless/"
+          }
+        }
+      ],
+      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5167",
+      "verified_date": "2026-08-06"
+    },
+    {
+      "id": "aupay_kojima_shutoken_2026_08b",
+      "type": "promotion",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "コジマ×ビックカメラ 首都圏の対象20店舗限定 au PAY最大20%割引クーポン(第4弾)",
+      "payment_instruction": "au PAYアプリで事前にクーポンを獲得し、コード支払いで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-15",
+      "period_end": "2026-08-23",
+      "min_purchase": 100,
+      "per_transaction_cap": 1000,
+      "may_end_early": true,
+      "ineligible_notes": [
+        "事前にクーポンの獲得が必要(支払い後のクーポン利用は不可)",
+        "一部対象外の商品あり"
+      ],
+      "memo": [
+        "コジマのキャッシュレスリレーキャンペーン第4弾(クーポン配布・利用期間 8/15〜8/23。第3弾PayPayは詳細未公表のため未収録)",
+        "割引はクーポン適用による会計時の即時割引(割引上限1,000円/回)",
+        "対象店舗リストは第2弾(aupay_kojima_shutoken_2026_08a)と同一"
+      ],
+      "merchant_rules": [
+        {
+          "merchant_id": "kojima",
+          "official_store_list": {
+            "eligible_stores": [
+              "ニトリホームズ宮原店", "浦和店", "川口店", "和光店", "新座店",
+              "KAMEIDO CLOCK店", "南砂町SUNAMO店", "善福寺店", "高井戸東店",
+              "ベルクスモール浮間舟渡店", "高島平店", "志村店", "上板橋店", "豊玉店",
+              "新小岩店", "江戸川店", "三鷹店", "コーナン田無店", "西友ひばりヶ丘店", "西東京店"
+            ],
+            "list_is_exhaustive": true,
+            "updated_date": "2026-08-06",
+            "date_is_official": false,
+            "source_url": "https://www.kojima.net/shop/campaign/cashless/"
+          }
+        }
+      ],
+      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5167",
+      "verified_date": "2026-08-06"
+    },
+    {
+      "id": "aupay_kojima_chiba_2026_08",
+      "type": "promotion",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "コジマ×ビックカメラ 千葉県の対象9店舗限定 au PAY最大10%割引クーポン",
+      "payment_instruction": "au PAYアプリで事前にクーポンを獲得し、コード支払いで支払う",
+      "rate_base": 10.0,
+      "period_start": "2026-08-07",
+      "period_end": "2026-08-23",
+      "min_purchase": 100,
+      "per_transaction_cap": 1500,
+      "usage_limit": 1,
+      "may_end_early": true,
+      "ineligible_notes": [
+        "事前にクーポンの獲得が必要(支払い後のクーポン利用は不可)",
+        "金券類・処方箋医薬品・たばこ等は対象外"
+      ],
+      "memo": [
+        "割引はクーポン適用による会計時の即時割引(割引上限1,500円/回)",
+        "利用は1au IDあたり1回まで"
+      ],
+      "merchant_rules": [
+        {
+          "merchant_id": "kojima",
+          "official_store_list": {
+            "eligible_stores": [
+              "松戸店", "ワンズモール稲毛店", "新船橋店", "習志野店", "船橋店",
+              "ららぽーとTOKYO-BAY店", "柏店", "フルルガーデン八千代店", "COTOE流山おおたかの森店"
+            ],
+            "list_is_exhaustive": true,
+            "updated_date": "2026-08-06",
+            "date_is_official": false,
+            "source_url": "https://media.aupay.wallet.auone.jp/articles/5196"
+          }
+        }
+      ],
+      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5196",
+      "verified_date": "2026-08-06"
     },
     {
       "id": "aupay_tanuki_lottery",

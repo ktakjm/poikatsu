@@ -1,6 +1,6 @@
 {
   "schema_version": 11,
-  "updated_at": "2026-08-01",
+  "updated_at": "2026-08-06",
   "campaigns": [
     {
       "id": "test_card_program",
@@ -152,6 +152,35 @@
       "verified_date": "2026-07-07",
       "merchant_rules": [
         { "merchant_id": "test_fastfood", "eligible_notes": ["モバイルオーダーも対象"] }
+      ]
+    },
+    {
+      "id": "test_exhaustive_store_list",
+      "type": "promotion",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "テストPayPay",
+      "payment_method_id": "test_paypay",
+      "name": "テスト網羅リスト限定クーポン（対象2店舗のみ20%割引）",
+      "payment_instruction": "テストPayPayのコード決済で支払う",
+      "rate_base": 20.0,
+      "min_purchase": 100,
+      "per_transaction_cap": 1000,
+      "period_start": "2026-01-01",
+      "period_end": "2099-12-31",
+      "detail_url": "https://example.com/exhaustive-coupon",
+      "verified_date": "2026-08-06",
+      "merchant_rules": [
+        {
+          "merchant_id": "test_drugstore",
+          "official_store_list": {
+            "eligible_stores": ["テスト対象1号店", "テスト対象2号店"],
+            "list_is_exhaustive": true,
+            "updated_date": "2026-08-06",
+            "date_is_official": false,
+            "source_url": "https://example.com/exhaustive-list"
+          }
+        }
       ]
     },
     {

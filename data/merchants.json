@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-08-03",
+  "updated_at": "2026-08-06",
 
   "yolp_config": {
     "gc_groups": [
@@ -136,6 +136,7 @@
         { "id": "frante_rose", "name": "フランテロゼ", "reading": "ふらんてろぜ" }
       ] },
     { "id": "akachan_honpo", "name": "アカチャンホンポ", "reading": "あかちゃんほんぽ", "aliases": ["赤ちゃん本舗"], "category": "その他", "yolp_search": "keyword" },
+    { "id": "kojima", "name": "コジマ×ビックカメラ", "reading": "こじまびっくかめら", "aliases": ["コジマ"], "category": "家電量販店", "yolp_search": "keyword" },
     { "id": "curves", "name": "カーブス", "reading": "かーぶす", "aliases": ["Curves"], "category": "その他", "yolp_search": "keyword" },
     { "id": "welcia", "name": "ウエルシア", "reading": "うえるしあ", "aliases": ["ウエルシア薬局", "welcia"], "category": "ドラッグストア",
       "group_label": "ウエルシアグループ",
