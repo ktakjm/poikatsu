@@ -46,7 +46,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.ktakjm.poikatsu.data.CardClass
 import com.ktakjm.poikatsu.data.CustomCard
+import com.ktakjm.poikatsu.data.PointValueConfig
 import com.ktakjm.poikatsu.domain.trimRate
 import com.ktakjm.poikatsu.ui.theme.warningColor
 
@@ -66,6 +68,8 @@ internal fun PaymentMethodsSettingsPage(
     onCardRateChange: (String, Double?) -> Unit,
     onCardBrandChange: (String, String) -> Unit,
     onCardWelcatsuChange: (String, Boolean) -> Unit,
+    onCardClassChange: (String, String) -> Unit,
+    onCardPointValueChange: (String, Double?) -> Unit,
     onAddCustomCard: (name: String, color: String?, brand: String) -> Unit,
     onUpdateCustomCard: (CustomCard) -> Unit,
     onRemoveCustomCard: (String) -> Unit,
@@ -94,6 +98,8 @@ internal fun PaymentMethodsSettingsPage(
                 onRateChange = { onCardRateChange(card.cardId, it) },
                 onBrandChange = { onCardBrandChange(card.cardId, it) },
                 onWelcatsuChange = { onCardWelcatsuChange(card.cardId, it) },
+                onClassChange = { onCardClassChange(card.cardId, it) },
+                onPointValueChange = { onCardPointValueChange(card.cardId, it) },
             )
         }
         // カタログ外のカスタムカード。識別はロゴでなく色(方針どおり)なので、色スウォッチを先頭に出す
@@ -414,8 +420,11 @@ private fun CardSettingItem(
     onRateChange: (Double?) -> Unit,
     onBrandChange: (String) -> Unit,
     onWelcatsuChange: (Boolean) -> Unit,
+    onClassChange: (String) -> Unit,
+    onPointValueChange: (Double?) -> Unit,
 ) {
     var showRateDialog by remember { mutableStateOf(false) }
+    var showPointValueDialog by remember { mutableStateOf(false) }
     var showBrandRequiredDialog by remember { mutableStateOf(false) }
     // ブランドが判定に効くカード(showBrandPicker)は、未選択のままだと除外側に倒れて
     // 過少表示になり得るため、有効化時にブランド選択を必須にする(選択せず閉じたら有効化しない)
@@ -466,13 +475,46 @@ private fun CardSettingItem(
                 )
             }
         }
+        // カードクラス(JCB CARD W/S 等)。持っている種類で還元率が変わるカードだけ出す
+        if (card.cardClasses.isNotEmpty()) {
+            ListItem(
+                headlineContent = { Text("カードの種類") },
+                trailingContent = {
+                    CardClassDropdown(
+                        classes = card.cardClasses,
+                        selectedId = card.cardClassId,
+                        onChange = onClassChange,
+                    )
+                },
+                modifier = Modifier.padding(start = 24.dp),
+            )
+        }
+        // 1pt の価値(J-POINT のように使い道で価値が変動するポイント通貨のカードだけ出す)
+        card.pointValueConfig?.let { pv ->
+            ListItem(
+                headlineContent = { Text(pv.label) },
+                supportingContent = pv.note.takeIf { it.isNotBlank() }?.let { { Text(it) } },
+                trailingContent = {
+                    Text("1pt=${trimRate(card.pointValue)}円", style = MaterialTheme.typography.titleMedium)
+                },
+                modifier = Modifier.padding(start = 24.dp).clickable { showPointValueDialog = true },
+            )
+        }
+        // クラス/1pt価値を持つカードの還元率は上の設定からの導出値(手入力させると二重管理になる)
+        val rateDerived = card.cardClasses.isNotEmpty() || card.pointValueConfig != null
         ListItem(
-            headlineContent = { Text("還元率") },
-            supportingContent = { Text("公式アプリに表示される還元率を入力") },
+            headlineContent = { Text(if (rateDerived) "還元率(最大)" else "還元率") },
+            supportingContent = {
+                Text(
+                    if (rateDerived) "上の設定から自動計算。お店ごとの率は判定に表示されます"
+                    else "公式アプリに表示される還元率を入力"
+                )
+            },
             trailingContent = {
                 Text("${trimRate(card.rate)}%", style = MaterialTheme.typography.titleMedium)
             },
-            modifier = Modifier.padding(start = 24.dp).clickable { showRateDialog = true },
+            modifier = Modifier.padding(start = 24.dp)
+                .then(if (rateDerived) Modifier else Modifier.clickable { showRateDialog = true }),
         )
         card.pointMultiplier?.let { pm ->
             val welcatsuNote: (@Composable () -> Unit)? = if (card.welcatsu) {
@@ -498,6 +540,19 @@ private fun CardSettingItem(
             },
         )
     }
+    if (showPointValueDialog) {
+        card.pointValueConfig?.let { pv ->
+            PointValueEditDialog(
+                config = pv,
+                initial = card.pointValue,
+                onDismiss = { showPointValueDialog = false },
+                onConfirm = {
+                    onPointValueChange(it)
+                    showPointValueDialog = false
+                },
+            )
+        }
+    }
     if (showBrandRequiredDialog) {
         BrandRequiredDialog(
             cardName = card.cardName,
@@ -509,6 +564,34 @@ private fun CardSettingItem(
             },
             onDismiss = { showBrandRequiredDialog = false },
         )
+    }
+}
+
+/** カードクラス選択(JCB CARD W/S 等)。選択肢はカタログ(payment_methods.json の card_classes)から出す。 */
+@Composable
+private fun CardClassDropdown(
+    classes: List<CardClass>,
+    selectedId: String?,
+    onChange: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selected = classes.firstOrNull { it.id == selectedId } ?: classes.firstOrNull()
+    Box {
+        TextButton(onClick = { expanded = true }) {
+            Text(selected?.label ?: "選択")
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            classes.forEach { c ->
+                DropdownMenuItem(
+                    text = { Text(c.label) },
+                    onClick = {
+                        onChange(c.id)
+                        expanded = false
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -563,6 +646,45 @@ private fun BrandRequiredDialog(
         },
         confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text("キャンセル") } },
+    )
+}
+
+/** 1pt 価値の数値入力ダイアログ。「既定に戻す」で上書きを解除する(null を返す)。 */
+@Composable
+private fun PointValueEditDialog(
+    config: PointValueConfig,
+    initial: Double,
+    onDismiss: () -> Unit,
+    onConfirm: (Double?) -> Unit,
+) {
+    var text by remember { mutableStateOf(trimRate(initial)) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(config.label) },
+        text = {
+            Column {
+                Text(
+                    buildString {
+                        append("1ポイントをいくらの価値として計算するか入力してください。")
+                        if (config.note.isNotBlank()) append("\n${config.note}")
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    prefix = { Text("1pt=") },
+                    suffix = { Text("円") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(text.toDoubleOrNull()) }) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = { onConfirm(null) }) { Text("既定に戻す") } },
     )
 }
 

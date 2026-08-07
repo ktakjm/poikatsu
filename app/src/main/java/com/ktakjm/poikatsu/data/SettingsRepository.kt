@@ -33,6 +33,10 @@ data class CardOverride(
     val brand: String? = null,
     /** ウエル活(ポイント価値 ×倍率)で表示するか。 */
     val welcatsu: Boolean = false,
+    /** カードクラス(カタログ card_classes の id。JCB W/S 等)。null ならカタログ先頭(保守側)。 */
+    val cardClass: String? = null,
+    /** 1pt の価値(円)。null ならカタログ(point_value.default)の既定値。 */
+    val pointValue: Double? = null,
 )
 
 /**
@@ -414,6 +418,12 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setWelcatsu(cardId: String, enabled: Boolean) =
         updateOverride(cardId) { it.copy(welcatsu = enabled) }
+
+    suspend fun setCardClass(cardId: String, cardClass: String?) =
+        updateOverride(cardId) { it.copy(cardClass = cardClass) }
+
+    suspend fun setPointValue(cardId: String, pointValue: Double?) =
+        updateOverride(cardId) { it.copy(pointValue = pointValue) }
 
     private suspend fun updateOverride(cardId: String, transform: (CardOverride) -> CardOverride) {
         context.settingsDataStore.edit { prefs ->

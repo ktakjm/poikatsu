@@ -57,6 +57,7 @@ import com.ktakjm.poikatsu.domain.isTargetDay
 import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.nextTargetDay
 import com.ktakjm.poikatsu.domain.recurrenceLabel
+import com.ktakjm.poikatsu.domain.trimRate
 import com.ktakjm.poikatsu.ui.theme.AppIcons
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningColor
@@ -130,12 +131,13 @@ internal fun CampaignPane(
         groupCampaignsForDisplay(upcomingCampaigns.filter(filterFn))
     }
     // 常設(isTimeLimited=false。card_program・常設 promotion・終了日なしカスタム)は
-    // 期間限定の「開催中」と混ぜず専用セクションに出す
+    // 「期間限定」と混ぜず専用セクションに出す(見出しの軸は開催状態でなく限定性で統一。
+    // 常設も開催中ではあるため旧見出し「開催中」は常設との対比がずれていた)
     val today = LocalDate.now()
     val (allPermanentGroups, timeLimitedActiveGroups) = allActiveGroups.partition { group ->
         group.none { it.isTimeLimited }
     }
-    // recurrence 施策で今日が対象日でないグループは「開催中」「常設」と混ぜず別セクションに出す
+    // recurrence 施策で今日が対象日でないグループは「期間限定」「常設」と混ぜず別セクションに出す
     // (期間内=開催中だが今日は使えないため。カード内で「次の対象日」を案内する)。
     // 常設側もたぬきの抽選会(毎月5/8/15/25日)のような recurrence 持ちがあるため同じ振り分けをする
     val (activeGroups, offDayGroups) = timeLimitedActiveGroups.partition { group ->
@@ -171,7 +173,7 @@ internal fun CampaignPane(
         if (activeGroups.isNotEmpty()) {
             item {
                 Text(
-                    "開催中",
+                    "期間限定",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 8.dp),
@@ -197,7 +199,7 @@ internal fun CampaignPane(
         if (offDayGroups.isNotEmpty()) {
             item {
                 Text(
-                    "開催中（本日対象外）",
+                    "期間限定（本日対象外）",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(top = 16.dp),
@@ -416,6 +418,8 @@ private fun CampaignSummaryCard(
 internal fun CampaignDetail(
     judgments: List<CampaignJudgment>,
     merchants: Map<String, Merchant>,
+    /** 施策 id → (merchant_id → 実効率)。店舗別レート施策の率別グルーピング用(UiState.campaignStoreRates) */
+    storeRates: Map<String, Map<String, Double>> = emptyMap(),
     onBack: () -> Unit,
     /** 対象チェーンの地図ブリッジ(merchant_id 群を渡す。チップは1件、まとめては全件) */
     onFindChains: (List<String>) -> Unit,
@@ -435,16 +439,23 @@ internal fun CampaignDetail(
         .filter { it.storeScope == "managed" }
         .flatMap { c -> c.merchantRules.map { it.merchantId } }
         .distinct()
-    // 「対象:」の表示ラベル(業態対応の詳細は campaignTargetLabels)。表示条件:
+    // 「対象:」の表示ラベル(業態対応の詳細は campaignTargetLabelGroups)。店舗別レートを持つ
+    // 施策(J-POINT パートナー等)は率別にグルーピングして出す(#52。「最大10%」+全店列挙だと
+    // 低率店も最大率と誤読されるため)。表示条件:
     // - 2件以上: 従来どおり列挙
     // - カスタム施策: タイトルが登録名固定で対象がどこにも出ないため 1 件でも出す
     // - 単一系列でも業態を持つグループ: タイトル(merchant 名)だけでは範囲が伝わらないため
     //   「対象: ◯◯グループ」を出す(「マツモトキヨシ」が業態かグループか区別できない問題)
-    val allTargetLabels = campaignTargetLabels(campaigns, merchants)
-    val targetLabels = when {
-        allTargetLabels.size >= 2 -> allTargetLabels
-        campaigns.any { it.isCustom } -> allTargetLabels
-        chainIds.singleOrNull()?.let { merchants[it]?.banners?.isNotEmpty() } == true -> allTargetLabels
+    val allTargetGroups = campaignTargetLabelGroups(
+        campaigns,
+        merchants,
+        campaigns.flatMap { storeRates[it.id]?.toList().orEmpty() }.toMap(),
+    )
+    val allLabelCount = allTargetGroups.sumOf { it.labels.size }
+    val targetGroups = when {
+        allLabelCount >= 2 -> allTargetGroups
+        campaigns.any { it.isCustom } -> allTargetGroups
+        chainIds.singleOrNull()?.let { merchants[it]?.banners?.isNotEmpty() } == true -> allTargetGroups
         else -> emptyList()
     }
 
@@ -479,7 +490,7 @@ internal fun CampaignDetail(
                 TargetChainSection(
                     campaign = judgments.first { it.campaign.storeScope == "managed" }.campaign,
                     chainIds = chainIds,
-                    targetLabels = targetLabels,
+                    targetGroups = targetGroups,
                     onFindChains = onFindChains,
                 )
             }
@@ -510,7 +521,7 @@ private const val TARGET_CHAINS_COLLAPSED_COUNT = 4
 private fun TargetChainSection(
     campaign: Campaign,
     chainIds: List<String>,
-    targetLabels: List<String>,
+    targetGroups: List<TargetLabelGroup>,
     onFindChains: (List<String>) -> Unit,
 ) {
     val today = LocalDate.now()
@@ -526,53 +537,18 @@ private fun TargetChainSection(
             Spacer(Modifier.width(8.dp))
             Text(if (chainIds.size == 1) "近くのこのお店を探す" else "近くの対象のお店を探す")
         }
-        // 表示するラベルの選別(単一チェーンの同梱施策では空になる等)は CampaignDetail 側で行う
-        if (targetLabels.isNotEmpty()) {
-            val names = targetLabels
-            if (names.size <= TARGET_CHAINS_COLLAPSE_THRESHOLD) {
-                Text(
-                    "対象: ${names.joinToString("・")}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        // 表示するグループの選別(単一チェーンの同梱施策では空になる等)は CampaignDetail 側で行う。
+        // 率別グループ(#52)は「{率}%: 」を行頭に付けて率ごとに行を分ける。複数グループのときは
+        // 全グループを 1 つの枠にまとめて一括で畳む(グループ行単位に畳むと、長いグループだけが
+        // 枠付きになり短いグループが枠外に見えて分断されるため)
+        when {
+            targetGroups.size == 1 -> targetGroups.single().let { group ->
+                TargetLabelLine(
+                    prefix = group.rate?.let { "${trimRate(it)}%" } ?: "対象",
+                    names = group.labels,
                 )
-            } else {
-                // 多チェーン施策(SMCC/MUFG の常設プログラム等)は全列挙が長大になるため先頭だけ
-                // 見せて畳む。展開できることが伝わるよう行全体をタップ可能な面(chevron 付き)にする
-                var expanded by remember(chainIds) { mutableStateOf(false) }
-                val label = if (expanded) {
-                    "対象: ${names.joinToString("・")}"
-                } else {
-                    "対象: ${names.take(TARGET_CHAINS_COLLAPSED_COUNT).joinToString("・")} " +
-                        "他${names.size - TARGET_CHAINS_COLLAPSED_COUNT}"
-                }
-                Surface(
-                    onClick = { expanded = !expanded },
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .heightIn(min = 48.dp)
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                    ) {
-                        Text(
-                            label,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Icon(
-                            if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                            contentDescription = if (expanded) "対象のお店を折りたたむ" else "対象のお店をすべて表示",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
             }
+            targetGroups.isNotEmpty() -> RateGroupedTargetLines(targetGroups)
         }
         if (!isTarget) {
             val note = if (!started) {
@@ -601,6 +577,118 @@ private fun TargetChainSection(
     }
 }
 
+/**
+ * 率別グループが複数あるときの対象チェーン列挙(#52)。全グループを 1 つの面にまとめ、
+ * どれかのグループが折りたたみ対象なら面全体をタップ可能(chevron 付き)にして一括で展開する。
+ * 折りたたみ時も各グループの行と率は必ず見せる(先頭数件+「他N」)。全グループが短ければ
+ * ただの面なしテキスト行にする(展開できない枠を出さない)。
+ */
+@Composable
+private fun RateGroupedTargetLines(groups: List<TargetLabelGroup>) {
+    val needsFold = groups.any { it.labels.size > TARGET_CHAINS_COLLAPSE_THRESHOLD }
+    var expanded by remember(groups) { mutableStateOf(false) }
+
+    @Composable
+    fun groupTexts() {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            groups.forEach { group ->
+                val prefix = group.rate?.let { "${trimRate(it)}%" } ?: "対象"
+                val names = group.labels
+                val label = if (expanded || names.size <= TARGET_CHAINS_COLLAPSE_THRESHOLD) {
+                    "$prefix: ${names.joinToString("・")}"
+                } else {
+                    "$prefix: ${names.take(TARGET_CHAINS_COLLAPSED_COUNT).joinToString("・")} " +
+                        "他${names.size - TARGET_CHAINS_COLLAPSED_COUNT}"
+                }
+                Text(
+                    label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+
+    if (!needsFold) {
+        groupTexts()
+        return
+    }
+    Surface(
+        onClick = { expanded = !expanded },
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+        ) {
+            Box(Modifier.weight(1f)) { groupTexts() }
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                contentDescription = if (expanded) "対象のお店を折りたたむ" else "対象のお店をすべて表示",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+/**
+ * 対象チェーン列挙の 1 行(単一グループの「対象: ◯◯・◯◯」)。
+ * 多チェーン(SMCC/MUFG の常設プログラム等)は全列挙が長大になるため先頭だけ見せて畳む。
+ * 展開できることが伝わるよう行全体をタップ可能な面(chevron 付き)にする。
+ */
+@Composable
+private fun TargetLabelLine(prefix: String, names: List<String>) {
+    if (names.isEmpty()) return
+    if (names.size <= TARGET_CHAINS_COLLAPSE_THRESHOLD) {
+        Text(
+            "$prefix: ${names.joinToString("・")}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+    var expanded by remember(names) { mutableStateOf(false) }
+    val label = if (expanded) {
+        "$prefix: ${names.joinToString("・")}"
+    } else {
+        "$prefix: ${names.take(TARGET_CHAINS_COLLAPSED_COUNT).joinToString("・")} " +
+            "他${names.size - TARGET_CHAINS_COLLAPSED_COUNT}"
+    }
+    Surface(
+        onClick = { expanded = !expanded },
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                contentDescription = if (expanded) "対象のお店を折りたたむ" else "対象のお店をすべて表示",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
 // ==================== 共通ヘルパー ====================
 
 /**
@@ -619,14 +707,23 @@ private fun campaignGroupMaxBenefit(
     if (comparable.isEmpty()) return "抽選"
     val type = BenefitType.fromString(comparable.first().benefitType)
     val allRates = comparable.flatMap { c ->
+        // 所有カードの card_program はユーザー実効率が最大値(店舗別 rate_override はカードの
+        // クラス加算・1pt価値でこれ以下にスケールされる。#52)。収録値の rate_override を混ぜると
+        // 1pt価値 < 1円 等の設定時に実際より大きい「最大◯%」が出るため、実効率だけを使う
+        personalRates[c.id]?.let { return@flatMap listOf(it) }
         c.merchantRules.mapNotNull { it.rateOverride } +
             c.rateRules.map { it.rate } +
-            listOfNotNull(personalRates[c.id] ?: c.rateBase)
+            listOfNotNull(c.rateBase)
     }
     val maxRate = allRates.maxOrNull()
     val maxDiscount = comparable.mapNotNull { it.discountAmount }.maxOrNull()
     val label = formatBenefit(type, maxRate, maxDiscount)?.toString() ?: return null
-    val ratesVary = allRates.distinct().size > 1 ||
+    // 店舗別レートのばらつきは personalRates で allRates を実効率 1 値に絞った後も検知できるよう
+    // 収録値(rate_override + rate_base)側で判定する
+    val storeRatesVary = comparable.any { c ->
+        (c.merchantRules.mapNotNull { it.rateOverride } + listOfNotNull(c.rateBase)).distinct().size > 1
+    }
+    val ratesVary = allRates.distinct().size > 1 || storeRatesVary ||
         comparable.any { it.rateRules.isNotEmpty() || it.productScope != null }
     return if (maxRate != null && ratesVary) "最大$label" else label
 }

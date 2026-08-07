@@ -52,6 +52,7 @@ import androidx.core.content.ContextCompat
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.DataSource
 import com.ktakjm.poikatsu.data.Merchant
+import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_PERIOD_TOTAL
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_TRANSACTION
 import com.ktakjm.poikatsu.data.RegisteredArea
@@ -675,19 +676,49 @@ internal fun groupLabelOf(merchant: Merchant): String =
 internal fun campaignTargetLabels(
     campaigns: List<Campaign>,
     merchants: Map<String, Merchant>,
-): List<String> = campaigns
-    .filter { it.storeScope == "managed" }
-    .flatMap { it.merchantRules }
-    .flatMap { rule ->
-        val merchant = merchants[rule.merchantId] ?: return@flatMap emptyList<String>()
-        when {
-            rule.bannerIds.isNotEmpty() ->
-                rule.bannerIds.mapNotNull { merchant.bannerName(it) }.ifEmpty { listOf(merchant.name) }
-            merchant.banners.isNotEmpty() -> listOf(groupLabelOf(merchant))
-            else -> listOf(merchant.name)
-        }
+): List<String> = campaignTargetLabelGroups(campaigns, merchants).flatMap { it.labels }.distinct()
+
+/** merchant_rule 1 件分の対象ラベル(業態限定は業態名 / 業態持ちの全業態はグループ名 / それ以外は merchant 名) */
+private fun ruleTargetLabels(rule: MerchantRule, merchants: Map<String, Merchant>): List<String> {
+    val merchant = merchants[rule.merchantId] ?: return emptyList()
+    return when {
+        rule.bannerIds.isNotEmpty() ->
+            rule.bannerIds.mapNotNull { merchant.bannerName(it) }.ifEmpty { listOf(merchant.name) }
+        merchant.banners.isNotEmpty() -> listOf(groupLabelOf(merchant))
+        else -> listOf(merchant.name)
     }
-    .distinct()
+}
+
+/** 率別の対象ラベルグループ(#52)。rate = null は「率の区別なし」(単一グループ=従来表示) */
+internal data class TargetLabelGroup(val rate: Double?, val labels: List<String>)
+
+/**
+ * 施策詳細の「対象:」を率別にグルーピングしたラベル一覧(#52)。J-POINT パートナーのように
+ * 1 施策内で店舗ごとに率が異なる場合、「最大10%」+全店列挙だと低率店(セブン 1.5% 等)も
+ * 最大率と誤読されるため、率ごとに分けて見せる。storeRates は merchant_id → 実効率
+ * (UiState.campaignStoreRates。所有カードならクラス加算・1pt価値の合成済み)。
+ * 率が 2 種類未満なら従来どおり単一グループ(rate = null)に畳む。
+ * 率の無いルールが混在する場合は rate = null のグループとして末尾に置く。
+ */
+internal fun campaignTargetLabelGroups(
+    campaigns: List<Campaign>,
+    merchants: Map<String, Merchant>,
+    storeRates: Map<String, Double> = emptyMap(),
+): List<TargetLabelGroup> {
+    val labeled = campaigns
+        .filter { it.storeScope == "managed" }
+        .flatMap { it.merchantRules }
+        .flatMap { rule -> ruleTargetLabels(rule, merchants).map { label -> label to storeRates[rule.merchantId] } }
+    val distinctRates = labeled.mapNotNull { it.second }.distinct()
+    if (distinctRates.size < 2) {
+        return listOf(TargetLabelGroup(null, labeled.map { it.first }.distinct()))
+            .filter { it.labels.isNotEmpty() }
+    }
+    val (rated, unrated) = labeled.groupBy { it.second }.entries.partition { it.key != null }
+    return rated.sortedByDescending { it.key!! }
+        .map { TargetLabelGroup(it.key, it.value.map { p -> p.first }.distinct()) } +
+        unrated.map { TargetLabelGroup(null, it.value.map { p -> p.first }.distinct()) }
+}
 
 internal fun campaignGroupDisplayTitle(first: Campaign, merchantNames: Map<String, String>): String =
     if (first.campaignType == CampaignType.MUNICIPAL) {

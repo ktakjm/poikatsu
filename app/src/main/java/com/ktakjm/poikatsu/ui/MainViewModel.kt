@@ -24,8 +24,10 @@ import com.ktakjm.poikatsu.data.CustomCampaign
 import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.ExcludedStorePair
 import com.ktakjm.poikatsu.data.MunicipalityMaster
+import com.ktakjm.poikatsu.data.CardClass
 import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PointMultiplier
+import com.ktakjm.poikatsu.data.PointValueConfig
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.RegisteredArea
@@ -355,6 +357,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          * 載っていない施策は施策側の率(rate_base 等)で表示する
          */
         val campaignPersonalRates: Map<String, Double> = emptyMap(),
+        /**
+         * 施策詳細の率別グルーピング用(#52): 店舗別レート(rate_override)を持つ managed 施策の
+         * 施策 id → (merchant_id → 実効率)。所有カードの card_program はクラス加算・1pt価値を
+         * 合成済み(お店タブの判定と同じ値)
+         */
+        val campaignStoreRates: Map<String, Map<String, Double>> = emptyMap(),
         val merchantNames: Map<String, String> = emptyMap(),
         /** id → Merchant(統合データ)。施策詳細の「対象:」で banner_ids を業態名に解決するのに使う(#60) */
         val merchantsById: Map<String, Merchant> = emptyMap(),
@@ -459,7 +467,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         /** 発行体の識別色(#RRGGBB)。カード名の左のドット表示に使う */
         val brandColor: String?,
         val owned: Boolean,
-        /** 表示・編集する還元率(上書きがあれば上書き値、無ければ既定) */
+        /**
+         * 表示・編集する還元率(上書きがあれば上書き値、無ければ既定)。
+         * クラス/1pt価値を持つカードではクラス加算・価値乗算を反映した導出値(手入力不可)
+         */
         val rate: Double,
         /** 実ブランド(ユーザー設定。単一ブランド製品は自動確定)。空文字は未選択 */
         val brand: String,
@@ -472,6 +483,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         /** ウエル活チェックの定義(null ならチェックを出さない) */
         val pointMultiplier: PointMultiplier?,
         val welcatsu: Boolean,
+        /** カードクラスの選択肢(カタログ。JCB W/S 等)。空 = クラス概念なし(選択 UI を出さない) */
+        val cardClasses: List<CardClass> = emptyList(),
+        /** 選択中クラスの id(未選択はカタログ先頭=保守側) */
+        val cardClassId: String? = null,
+        /** 1pt 価値の設定定義(カタログ)。null = 価値変動の概念なし(入力 UI を出さない) */
+        val pointValueConfig: PointValueConfig? = null,
+        /** 1pt の価値(円)(上書きがあれば上書き値、無ければカタログ既定) */
+        val pointValue: Double = 1.0,
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -746,6 +765,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (resolved.usesCardRate) c.id to (resolved.effectiveRate ?: 0.0) else null
             }
             .toMap()
+        // 施策詳細の率別グルーピング用(#52): 店舗別レート(rate_override)を持つ施策の
+        // merchant_id → 実効率。お店タブの判定と同じ基準(resolveCardCampaignRate)で解決するため、
+        // 所有カードの card_program はクラス加算・1pt価値を合成した値、未所有・QR は収録値そのまま
+        val campaignStoreRates = (campaignsActive + campaignsUpcoming)
+            .filter { c -> c.storeScope == "managed" && c.merchantRules.any { it.rateOverride != null } }
+            .associate { c ->
+                c.id to c.merchantRules.mapNotNull { r ->
+                    val rate = if (c.cardId != null) {
+                        resolveCardCampaignRate(c, newOwnedCardsById[c.cardId], r.rateOverride).effectiveRate
+                    } else {
+                        r.rateOverride ?: c.rateBase
+                    }
+                    rate?.let { r.merchantId to it }
+                }.toMap()
+            }
         // 終了日を過ぎたカスタムキャンペーンは判定・一覧から消えるが、編集・削除の入口を残すため
         // おトクタブの専用セクション用に別で持つ(同梱施策の期限切れは単に出さない)
         val expiredCustomCampaigns = merged.engineData.campaigns.filter {
@@ -770,12 +804,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 .flatMap { c -> c.merchantRules.flatMap { it.ineligibleBrands } }
                 .distinct()
             val brandAffectsJudgment = ineligibleBrands.isNotEmpty() || hasBrandCampaign
+            // クラス/1pt価値を持つカード(JCB W/S 等)の表示レートは UserDataMerge と同じ式で導出する:
+            // (率 + クラス加算) × 1pt価値。持たないカードは従来どおり(加算0・乗数1で同値)
+            val selectedClass = card.cardClasses.firstOrNull { it.id == ov?.cardClass }
+                ?: card.cardClasses.firstOrNull()
+            val pointValue = ov?.pointValue ?: card.pointValueConfig?.default ?: 1.0
             CardSetting(
                 cardId = card.id,
                 cardName = card.cardName,
                 brandColor = card.brandColor,
                 owned = ov?.owned ?: true,
-                rate = ov?.rate ?: card.effectiveRateDefault ?: 0.0,
+                rate = ((ov?.rate ?: card.effectiveRateDefault ?: 0.0) +
+                    (selectedClass?.rateBonus ?: 0.0)) * pointValue,
                 brand = ov?.brand ?: card.brands.singleOrNull().orEmpty(),
                 brands = card.brands,
                 // ブランドが判定に効き(ブランド除外 or ブランド施策あり)、かつ製品として選択肢が複数
@@ -784,6 +824,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ineligibleBrands = ineligibleBrands,
                 pointMultiplier = card.pointMultiplier,
                 welcatsu = ov?.welcatsu ?: false,
+                cardClasses = card.cardClasses,
+                cardClassId = selectedClass?.id,
+                pointValueConfig = card.pointValueConfig,
+                pointValue = pointValue,
             )
         }
 
@@ -859,6 +903,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 campaignsActive = campaignsActive,
                 campaignsUpcoming = campaignsUpcoming,
                 campaignPersonalRates = campaignPersonalRates,
+                campaignStoreRates = campaignStoreRates,
                 searchMunicipalAreaNames = searchMunicipalAreaNames,
                 // 名前・色の解決はカスタム分(合成 Merchant・カスタムカードの色)も含む統合データから引く
                 merchantNames = newDisplayData.merchants.associate { it.id to it.name },
@@ -1762,9 +1807,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 effectiveRate = effectiveRate.takeUnless { isLottery },
                 discountAmount = campaign.discountAmount.takeUnless { isLottery },
                 daysRemaining = e.daysRemaining(campaign, today),
-                // merchant 未特定のため店舗固有分は乗らず、campaign 直下(施策全体に一様に効く事実)だけが出る
+                // merchant 未特定のため店舗固有分は乗らず、campaign 直下(施策全体に一様に効く事実)だけが出る。
+                // 施策全体ビュー専用の注記(収録範囲の説明等。#52)はここでだけ連結する
+                // (店舗判定カードには出さない。特定のお店を見ているユーザーには無関係な情報のため)
                 eligibleNotes = campaign.eligibleNotes,
-                ineligibleNotes = campaign.ineligibleNotes,
+                ineligibleNotes = campaign.ineligibleNotes + campaign.overviewIneligibleNotes,
                 storeListUrl = null,
                 warnings = buildList {
                     val days = e.daysRemaining(campaign, today)
@@ -1987,6 +2034,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onSetCardWelcatsu(cardId: String, enabled: Boolean) =
         viewModelScope.launch { settingsRepo.setWelcatsu(cardId, enabled) }
+
+    fun onSetCardClass(cardId: String, cardClass: String) =
+        viewModelScope.launch { settingsRepo.setCardClass(cardId, cardClass) }
+
+    fun onSetCardPointValue(cardId: String, pointValue: Double?) =
+        viewModelScope.launch { settingsRepo.setPointValue(cardId, pointValue) }
 
     fun onSetQrEnabled(id: String, enabled: Boolean) =
         viewModelScope.launch { settingsRepo.setQrEnabled(id, enabled) }

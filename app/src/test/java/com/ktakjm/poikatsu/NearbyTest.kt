@@ -314,7 +314,12 @@ class YolpSearchConfigRealDataTest {
     fun `実データ_configは旧ハードコードと同じキーワードを使う`() {
         val activeMerchantIds = engine.activeManagedMerchantIds(today)
         val config = YolpSearchConfig.build(data.yolpConfig!!, data.merchants, activeMerchantIds)
-        val expected = setOf("カーブス", "アカチャンホンポ", "オーケー", "ピザハット", "上島珈琲", "はま寿司")
+        val expected = setOf(
+            "カーブス", "アカチャンホンポ", "オーケー", "ピザハット", "上島珈琲", "はま寿司",
+            // J-POINT パートナー(#52)で追加された keyword チェーン(常設のため常にアクティブ)。
+            // OWNDAYS は YOLP 上「オンデーズ」表記のため yolp_keyword で検索する(2026-08 実測)
+            "ドミノ・ピザ", "洋服の青山", "AOKI", "はるやま", "オンデーズ",
+        )
         assertEquals(expected, config.keywordQueries.toSet())
     }
 

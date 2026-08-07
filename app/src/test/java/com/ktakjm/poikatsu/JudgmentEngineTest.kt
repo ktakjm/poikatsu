@@ -1,6 +1,8 @@
 package com.ktakjm.poikatsu
 
 import com.ktakjm.poikatsu.data.Campaign
+import com.ktakjm.poikatsu.data.CardClass
+import com.ktakjm.poikatsu.data.CardOverride
 import com.ktakjm.poikatsu.data.ExcludedStorePair
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_PERIOD_TOTAL
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_TRANSACTION
@@ -9,6 +11,7 @@ import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.OfficialStoreList
 import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PointMultiplier
+import com.ktakjm.poikatsu.data.PointValueConfig
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.ProductScope
@@ -28,6 +31,7 @@ import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.formatBenefit
 import com.ktakjm.poikatsu.domain.isTimeLimited
+import com.ktakjm.poikatsu.domain.mergeUserData
 import com.ktakjm.poikatsu.domain.nextTargetDay
 import com.ktakjm.poikatsu.domain.recurrenceLabel
 import com.ktakjm.poikatsu.domain.resolveCardCampaignRate
@@ -1559,7 +1563,7 @@ class JudgmentEngineRealDataTest {
         // 線引き: 見落とすと損する言い切りは eligible/ineligible_notes(表示)、memo は非表示の補足のみ。
         // 「反映済み」注記(事実の本体が別フィールドにある印)だけは memo に対象外文言を書いてよい
         data.campaigns.forEach { c ->
-            (c.eligibleNotes + c.ineligibleNotes + c.memo).forEach { n ->
+            (c.eligibleNotes + c.ineligibleNotes + c.overviewIneligibleNotes + c.memo).forEach { n ->
                 assertTrue("${c.id}: 空白の note がある", n.isNotBlank())
             }
             c.merchantRules.forEach { r ->
@@ -1587,6 +1591,100 @@ class JudgmentEngineRealDataTest {
         assertTrue(mufg.appLinks.isEmpty())
         // MUFG は apple_pay が eligible なので「Apple Payは対象」の付記まで出る
         assertTrue(mufg.warnings.any { it.contains("Google Pay") && it.contains("Apple Payは対象") })
+    }
+
+    // ---- JCB J-POINT パートナー(#52。card_program の店舗別レート) ----
+
+    @Test
+    fun `実データ_JPOINTパートナーは店舗別レートで判定される`() {
+        // カタログ直パース(未マージ)は S・1pt=1円相当(rateBonus 0・rateMultiplier 1)で収録値がそのまま出る
+        val seven = data.merchants.first { it.id == "seven_eleven" }
+        val sevenJcb = engine.judgeCards(seven, today).first { it.campaign.id == "jcb_jpoint_partner" }
+        assertEquals(1.5, sevenJcb.effectiveRate!!, 0.001)
+        val gusto = data.merchants.first { it.id == "gusto" }
+        val gustoJcb = engine.judgeCards(gusto, today).first { it.campaign.id == "jcb_jpoint_partner" }
+        assertEquals(10.0, gustoJcb.effectiveRate!!, 0.001)
+        // 施策全体ビュー専用の注記(収録範囲の説明。overview_ineligible_notes)は店舗判定カードに
+        // 混ぜない(#52): マクドナルドの判定を見るユーザーに「低還元率のお店は非表示」は無関係な情報
+        assertTrue(gustoJcb.campaign.overviewIneligibleNotes.isNotEmpty())
+        gustoJcb.ineligibleNotes.forEach { note ->
+            assertTrue("店舗判定に overview 注記が混入: $note", note !in gustoJcb.campaign.overviewIneligibleNotes)
+        }
+    }
+
+    @Test
+    fun `実データ_店舗別レートを持つcard_programはrate_baseが最大値で全ルールに率がある`() {
+        // 登録規則(#52): card_program で店舗別レートを使うなら全ルールに rate_override を書き
+        // (省略するとその店だけカードの最大実効率で表示され誤り)、rate_base はその最大値にする
+        // (effective_rate_default と一致し「最大○%」表示・スケール計算の基準になる)
+        data.campaigns
+            .filter { it.campaignType == CampaignType.CARD_PROGRAM }
+            .filter { c -> c.merchantRules.any { it.rateOverride != null } }
+            .forEach { c ->
+                c.merchantRules.forEach { r ->
+                    assertNotNull("${c.id}/${r.merchantId}: 店舗別レート施策の全ルールに rate_override が必要", r.rateOverride)
+                }
+                assertEquals(
+                    "${c.id}: rate_base は rate_override の最大値であること",
+                    c.merchantRules.maxOf { it.rateOverride!! },
+                    c.rateBase,
+                )
+            }
+    }
+
+    @Test
+    fun `実データ_JPOINTのカタログ既定率はrate_baseと一致する`() {
+        val jcbCard = data.cards.first { it.id == "jcb_original" }
+        val jcbCampaign = data.campaigns.first { it.id == "jcb_jpoint_partner" }
+        // effective_rate_default = 最大レート店の収録値。ずれると一覧の「最大○%」と判定の率が食い違う
+        assertEquals(jcbCampaign.rateBase!!, jcbCard.effectiveRateDefault!!, 0.0)
+        // クラスは保守側(加算の小さい方)を先頭にする(未選択時の既定)
+        assertTrue(jcbCard.cardClasses.size >= 2)
+        assertEquals(jcbCard.cardClasses.minOf { it.rateBonus }, jcbCard.cardClasses.first().rateBonus, 0.0)
+    }
+
+    @Test
+    fun `実データ_OWNDAYSは網羅リストで掲載店だけ対象になる`() {
+        val owndays = data.merchants.first { it.id == "owndays" }
+        // 網羅リストのみのチェーンは「このお店が対象か調べる」導線を出さない(#64)
+        assertFalse(engine.canCheckStore(owndays))
+        assertEquals(
+            StoreEligibility.ELIGIBLE,
+            engine.checkStore(owndays, "OWNDAYS 池袋西口店").single().eligibility,
+        )
+        // 掲載のない店舗は対象外と断定され、施策単位で間引かれる
+        assertEquals(
+            StoreEligibility.INELIGIBLE,
+            engine.checkStore(owndays, "OWNDAYS 架空モール店").single().eligibility,
+        )
+        assertEquals(
+            setOf("jcb_jpoint_partner"),
+            engine.exhaustiveListIneligibleCampaignIds(owndays, "OWNDAYS 架空モール店"),
+        )
+        // YOLP の実 POI 名は「オンデーズ」表記(2026-08 実測)。カナ表記でもチェーン照合でき、
+        // 網羅リスト(店名はブランド名抜きで収録)にも一致する
+        assertEquals("owndays", engine.matchStore("オンデーズ ナイン秋葉原ラジオ会館店")?.merchant?.id)
+        assertEquals(
+            StoreEligibility.ELIGIBLE,
+            engine.checkStore(owndays, "オンデーズ ナイン秋葉原ラジオ会館店").single().eligibility,
+        )
+        // 本社 POI(株式会社オンデーズ)もチェーンに照合されるが、掲載なし=対象外で自動的に間引かれる
+        assertEquals("owndays", engine.matchStore("株式会社オンデーズ上野マルイ店")?.merchant?.id)
+        assertEquals(
+            setOf("jcb_jpoint_partner"),
+            engine.exhaustiveListIneligibleCampaignIds(owndays, "株式会社オンデーズ"),
+        )
+    }
+
+    @Test
+    fun `実データ_JPOINT専用チェーンは未所有だとYOLP検索対象に入らない`() {
+        // jcb_original を未所有にすると、J-POINT だけが参照するチェーン(OWNDAYS 等)は
+        // 判定に出ない = YOLP 検索(keyword ソース)からも外れる
+        assertTrue("owndays" in engine.activeManagedMerchantIds(today))
+        val withoutJcb = JudgmentEngine(data.copy(cards = data.cards.filter { it.id != "jcb_original" }))
+        assertFalse("owndays" in withoutJcb.activeManagedMerchantIds(today))
+        // 他施策(SMCC/MUFG)が参照するチェーンは残る
+        assertTrue("seven_eleven" in withoutJcb.activeManagedMerchantIds(today))
     }
 
     @Test
@@ -1756,6 +1854,14 @@ class JudgmentEngineRealDataTest {
                 )
             }
         }
+    }
+
+    @Test
+    fun `実データ_カテゴリ一覧は「その他」が末尾`() {
+        // カテゴリチップの並びはデータ定義順だが、雑多な「その他」だけは常に末尾へ送る
+        // (ファッション等のカテゴリ追加で「その他」が列の途中に挟まらないように)
+        assertEquals("その他", engine.categories.last())
+        assertEquals(engine.categories.toSet().size, engine.categories.size)
     }
 
     @Test
@@ -2083,6 +2189,108 @@ class ResolveCardCampaignRateTest {
         // 率も定額も無い promotion(メモのみのカスタム等): カードの常設率で代替しない(率の捏造防止)
         val memoOnly = resolveCardCampaignRate(campaign(CampaignType.PROMOTION), card)
         assertNull(memoOnly.effectiveRate)
+    }
+
+    // ---- card_program の店舗別レート(#52。J-POINT パートナー型) ----
+
+    @Test
+    fun `card_programの店舗別rate_overrideはクラス加算と1pt価値を合成する`() {
+        // マージ後を模す: W 選択(+0.5)・1pt=0.7円 → effectiveRateDefault = (10 + 0.5) × 0.7
+        val jcbLike = PaymentCard(
+            id = "c1",
+            cardName = "テストJCB",
+            effectiveRateDefault = 7.35,
+            rateBonus = 0.5,
+            rateMultiplier = 0.7,
+        )
+        val program = campaign(CampaignType.CARD_PROGRAM, rateBase = 10.0)
+        // 低倍率店(セブン 1.5%収録): (1.5 + 0.5) × 0.7 = 1.4%
+        val low = resolveCardCampaignRate(program, jcbLike, rateOverride = 1.5)
+        assertEquals(1.4, low.effectiveRate!!, 1e-9)
+        assertTrue("カード由来の率なのでウエル活等の注記条件は満たす", low.usesCardRate)
+        // 最大レート店(rate_base と同値の override): カードの実効率と一致する
+        val top = resolveCardCampaignRate(program, jcbLike, rateOverride = 10.0)
+        assertEquals(jcbLike.effectiveRateDefault!!, top.effectiveRate!!, 1e-9)
+    }
+
+    @Test
+    fun `card_programの店舗別rate_overrideは既定設定なら収録値そのまま`() {
+        // クラス概念の無いカード(rateBonus 0・rateMultiplier 1)は収録値がそのまま出る
+        val plain = PaymentCard(id = "c1", cardName = "テスト", effectiveRateDefault = 10.0)
+        val r = resolveCardCampaignRate(campaign(CampaignType.CARD_PROGRAM, rateBase = 10.0), plain, rateOverride = 2.5)
+        assertEquals(2.5, r.effectiveRate!!, 0.0)
+    }
+
+    @Test
+    fun `card_programの店舗別rate_overrideは未所有なら施策側の値へフォールバック`() {
+        val r = resolveCardCampaignRate(campaign(CampaignType.CARD_PROGRAM, rateBase = 10.0), card = null, rateOverride = 1.5)
+        assertEquals(1.5, r.effectiveRate!!, 0.0)
+        assertFalse(r.usesCardRate)
+    }
+}
+
+/**
+ * カードクラス(JCB W/S 等)と 1pt 価値のマージ(UserDataMerge)。
+ * 実効率は (率 + クラス加算) × 1pt価値 で合成され、店舗別レート用の
+ * rateBonus / rateMultiplier がマージ後カードに載る(#52)。
+ */
+class CardClassMergeTest {
+
+    private val jcbLikeCard = PaymentCard(
+        id = "jcb",
+        cardName = "テストJCB",
+        brands = listOf("JCB"),
+        effectiveRateDefault = 10.0,
+        cardClasses = listOf(
+            CardClass(id = "s", label = "S", rateBonus = 0.0),
+            CardClass(id = "w", label = "W", rateBonus = 0.5),
+        ),
+        pointValueConfig = PointValueConfig(label = "1ptの価値", default = 1.0),
+    )
+
+    private fun merged(overrides: Map<String, CardOverride>) = mergeUserData(
+        PoikatsuData(
+            merchants = emptyList(),
+            campaigns = emptyList(),
+            cards = listOf(jcbLikeCard),
+            updatedAt = "2026-08-07",
+        ),
+        cardOverrides = overrides,
+        ownedBrands = emptySet(),
+        customCards = emptyList(),
+        customCampaigns = emptyList(),
+    ).engineData.cards.single()
+
+    @Test
+    fun `未選択はカタログ先頭クラス(保守側)と既定の1pt価値`() {
+        val card = merged(emptyMap())
+        assertEquals(0.0, card.rateBonus, 0.0)
+        assertEquals(1.0, card.rateMultiplier, 0.0)
+        assertEquals(10.0, card.effectiveRateDefault!!, 0.0)
+    }
+
+    @Test
+    fun `クラスWと1pt価値0_7が実効率と店舗別レート係数に反映される`() {
+        val card = merged(mapOf("jcb" to CardOverride(cardClass = "w", pointValue = 0.7)))
+        assertEquals(0.5, card.rateBonus, 0.0)
+        assertEquals(0.7, card.rateMultiplier, 1e-9)
+        // (10.0 + 0.5) × 0.7 = 7.35
+        assertEquals(7.35, card.effectiveRateDefault!!, 1e-9)
+    }
+
+    @Test
+    fun `クラスの無いカードは従来どおり率のみ(係数は恒等)`() {
+        val plain = PaymentCard(id = "p", cardName = "テスト", effectiveRateDefault = 7.0)
+        val card = mergeUserData(
+            PoikatsuData(merchants = emptyList(), campaigns = emptyList(), cards = listOf(plain), updatedAt = ""),
+            cardOverrides = emptyMap(),
+            ownedBrands = emptySet(),
+            customCards = emptyList(),
+            customCampaigns = emptyList(),
+        ).engineData.cards.single()
+        assertEquals(0.0, card.rateBonus, 0.0)
+        assertEquals(1.0, card.rateMultiplier, 0.0)
+        assertEquals(7.0, card.effectiveRateDefault!!, 0.0)
     }
 }
 

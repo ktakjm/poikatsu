@@ -129,8 +129,12 @@ data class ResolvedCardRate(
  * (MainViewModel)で共有し、率の優先基準がずれないようにする(店舗非依存。店舗別の
  * rate_override は呼び出し側が [rateOverride] で渡す):
  * - promotion で施策に率がある → 施策の率(逆にするとカードの常設7%が期間限定10%を上書きする)
- * - card_program 等 → カードの実効率(ユーザー設定。ウエル活 ON ならマージ時に倍率適用済み)。
- *   card が null(未所有カードの施策をおトクタブで見る場合)は施策側の率へフォールバック
+ * - card_program で店舗別レート(rate_override)がある → [scaledStoreRate](店舗別レートに
+ *   ユーザー設定のクラス加算・1pt価値を合成した値)。JCB J-POINTパートナーのような
+ *   「1施策内で店舗ごとに率が異なる」常設プログラム用(#52)
+ * - card_program 等(rate_override なし) → カードの実効率(ユーザー設定。クラス加算・1pt価値・
+ *   ウエル活はマージ時に適用済み)。card が null(未所有カードの施策をおトクタブで見る場合)は
+ *   施策側の率へフォールバック
  * - 定額施策と「率も定額も無い」promotion には率を出さない(率の捏造・ソート崩れ防止)
  */
 fun resolveCardCampaignRate(
@@ -144,11 +148,22 @@ fun resolveCardCampaignRate(
         campaign.campaignType != CampaignType.PROMOTION
     val effectiveRate = when {
         usesCampaignRate -> campaignRate
+        usesCardRate && card != null && rateOverride != null -> scaledStoreRate(rateOverride, card)
         usesCardRate -> card?.effectiveRateDefault ?: campaignRate ?: 0.0
         else -> null
     }
     return ResolvedCardRate(effectiveRate, usesCardRate && card != null)
 }
+
+/**
+ * card_program の店舗別レート(rate_override。基準構成=カタログ既定クラス・1pt=既定価値の絶対%で
+ * 収録)に、ユーザー設定を合成した実効率。クラス加算はポイント数の加算なので価値の乗算より先に足す:
+ * (店舗別レート + クラス加算) × (1pt価値 × ウエル活倍率)。
+ * カタログの effective_rate_default = rate_override の最大値にしておくと(整合性テストで強制)、
+ * 最大レート店の値がカードの実効率(マージ済み)と一致し、一覧の「最大○%」とも整合する。
+ */
+fun scaledStoreRate(rateOverride: Double, card: PaymentCard): Double =
+    (rateOverride + card.rateBonus) * card.rateMultiplier
 
 // ---- ウォレット(スマホのタッチ決済)対応 ----
 // eligible_wallets / ineligible_wallets は「公式がウォレット単位で対象/対象外を言い切っている」
@@ -350,8 +365,12 @@ class JudgmentEngine(private val data: PoikatsuData) {
     private val qrPaymentMap: Map<String, QrPayment> =
         data.qrPayments.associateBy { it.id }
 
-    /** データ定義順のカテゴリ一覧 */
+    /**
+     * カテゴリ一覧(データ定義順)。「その他」だけは常に末尾へ送る(雑多カテゴリが
+     * チップ列の途中に挟まらないように。定義順ソートは安定なので他の並びは維持される)
+     */
     val categories: List<String> = data.merchants.map { it.category }.distinct()
+        .sortedBy { it == MISC_CATEGORY }
 
     /**
      * 店名とカテゴリで検索する。カテゴリ未選択(空セット)は全カテゴリ扱い。
@@ -513,7 +532,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
 
     // ---- 期間フィルタ ----
     // recurrence(対象日)は含まない期間の外枠だけの判定。おトクタブは期間内なら
-    // 非対象日でも「開催中」に出す(次の対象日を案内する)ため、対象日は isTargetDay で別判定する。
+    // 非対象日でも一覧に出す(「本日対象外」セクションで次の対象日を案内する)ため、対象日は isTargetDay で別判定する。
 
     fun campaignStatus(campaign: Campaign, today: LocalDate): CampaignStatus {
         val start = campaign.periodStart?.let { parseDate(it) }
@@ -548,10 +567,14 @@ class JudgmentEngine(private val data: PoikatsuData) {
     /**
      * アクティブな managed 施策が参照する merchant ID の集合(YOLP 検索対象の決定に使う)。
      * recurrence 施策は今日が対象日のときだけ含める(非対象日は判定にも出ないため検索しても無駄)。
+     * 未所有カードの施策も除く(判定に出ない = その施策だけが参照する店を検索してもピンは立たず、
+     * keyword ソース・取得コストの浪費になるため。#52 で未所有カード専用チェーンが増え顕在化)。
+     * QR 施策は enabledQrIds をここでは知れないため従来どおり常に含める。
      */
     fun activeManagedMerchantIds(today: LocalDate): Set<String> =
         activeCampaigns(today)
             .filter { it.storeScope == "managed" && isTargetDay(it, today) }
+            .filter { it.paymentMethodId != null || resolveCard(it) != null }
             .flatMap { it.merchantRules }
             .map { it.merchantId }
             .toSet()
@@ -871,5 +894,8 @@ class JudgmentEngine(private val data: PoikatsuData) {
     companion object {
         private val dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
         fun parseDate(s: String): LocalDate = LocalDate.parse(s, dateFormatter)
+
+        /** 雑多カテゴリ(merchants.json の category)。カテゴリ一覧では常に末尾に置く */
+        private const val MISC_CATEGORY = "その他"
     }
 }

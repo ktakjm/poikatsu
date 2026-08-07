@@ -29,6 +29,8 @@
         <package android:name="com.kouzoh.mercari" />
         <!-- ウォレット(Google Pay)。domain の WALLET_APP_PACKAGE と対で管理 -->
         <package android:name="com.google.android.apps.walletnfcrel" />
+        <!-- Coke ON(merchants.json の location_hint.app_package と対で管理) -->
+        <package android:name="com.coke.cokeon" />
     </queries>
 
     <application

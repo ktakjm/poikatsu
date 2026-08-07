@@ -69,7 +69,7 @@
       "name": "テスト自販機",
       "reading": "てすとじはんき",
       "category": "その他",
-      "location_hint": { "text": "テスト公式アプリで対応自販機を探せます", "label": "テストアプリで探す", "url": "https://example.com/vending-app" },
+      "location_hint": { "text": "テスト公式アプリで対応自販機を探せます", "label": "テストアプリで探す", "url": "https://example.com/vending-app", "app_package": "com.coke.cokeon" },
       "yolp_search": "none"
     }
   ]

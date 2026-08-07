@@ -1,6 +1,6 @@
 {
-  "schema_version": 7,
-  "updated_at": "2026-07-16",
+  "schema_version": 8,
+  "updated_at": "2026-08-07",
   "card_brands": [
     { "name": "Visa", "color": "#1A1F71" },
     { "name": "Mastercard", "color": "#EB001B" },
@@ -22,6 +22,18 @@
       "brand_color": "#E60000",
       "brands": ["Visa", "Mastercard", "JCB", "Amex"],
       "effective_rate_default": 7.0
+    },
+    {
+      "id": "jcb_original",
+      "card_name": "JCBオリジナルシリーズ",
+      "brand_color": "#00707C",
+      "brands": ["JCB"],
+      "effective_rate_default": 10.0,
+      "card_classes": [
+        { "id": "s", "label": "JCB CARD S", "rate_bonus": 0.0 },
+        { "id": "w", "label": "JCB CARD W / W plus L", "rate_bonus": 0.5 }
+      ],
+      "point_value": { "label": "J-POINTの価値", "default": 1.0, "note": "使い道により1pt=0.7〜1円。ポイントの使い道に合わせて調整できます" }
     }
   ],
   "qr_payments": [

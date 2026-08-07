@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-08-06",
+  "updated_at": "2026-08-08",
 
   "yolp_config": {
     "gc_groups": [
@@ -59,6 +59,7 @@
     { "id": "matsuken_chuka", "name": "松軒中華食堂", "reading": "まつけんちゅうかしょくどう", "aliases": [], "category": "ファストフード" },
     { "id": "sushi_matsu", "name": "すし松", "reading": "すしまつ", "aliases": [], "category": "回転寿司" },
     { "id": "pizza_hut", "name": "ピザハット", "reading": "ぴざはっと", "aliases": ["Pizza Hut"], "category": "ファストフード", "yolp_search": "keyword" },
+    { "id": "dominos_pizza", "name": "ドミノ・ピザ", "reading": "どみのぴざ", "aliases": ["ドミノピザ", "Domino's Pizza"], "category": "ファストフード", "yolp_search": "keyword" },
     { "id": "saizeriya", "name": "サイゼリヤ", "reading": "さいぜりや", "aliases": ["サイゼ", "サイゼリア"], "category": "ファミレス" },
     { "id": "gusto", "name": "ガスト", "reading": "がすと", "aliases": [], "category": "ファミレス" },
     { "id": "bamiyan", "name": "バーミヤン", "reading": "ばーみやん", "aliases": [], "category": "ファミレス" },
@@ -84,11 +85,13 @@
     { "id": "starbucks", "name": "スターバックス", "reading": "すたーばっくす", "aliases": ["スタバ", "Starbucks"], "category": "カフェ" },
     { "id": "ueshima_coffee", "name": "上島珈琲店", "reading": "うえしまこーひーてん", "aliases": ["UCC Cafe Plaza"], "category": "カフェ", "yolp_search": "keyword", "yolp_keyword": "上島珈琲" },
     { "id": "cafe_de_crie", "name": "カフェ・ド・クリエ", "reading": "かふぇどくりえ", "aliases": ["カフェドクリエ"], "category": "カフェ" },
+    { "id": "sanmarc_cafe", "name": "サンマルクカフェ", "reading": "さんまるくかふぇ", "aliases": [], "category": "カフェ" },
     { "id": "hamazushi", "name": "はま寿司", "reading": "はまずし", "aliases": ["はまずし"], "category": "回転寿司", "yolp_search": "keyword" },
     { "id": "kappazushi", "name": "かっぱ寿司", "reading": "かっぱずし", "aliases": ["かっぱずし"], "category": "回転寿司" },
     { "id": "kurazushi", "name": "くら寿司", "reading": "くらずし", "aliases": ["無添くら寿司", "くらずし"], "category": "回転寿司" },
     { "id": "sushiro", "name": "スシロー", "reading": "すしろー", "aliases": ["SUSHIRO"], "category": "回転寿司" },
-    { "id": "coke_on", "name": "コカ・コーラ自販機", "reading": "こかこーらじはんき", "aliases": ["Coke ON", "コークオン", "コカコーラ自販機"], "category": "その他", "location_hint": { "text": "Coke ON 公式アプリで対応自販機を探せます", "label": "Coke ON で探す", "url": "https://play.google.com/store/apps/details?id=com.coke.cokeon" }, "yolp_search": "none" },
+    { "id": "coke_on", "name": "コカ・コーラ自販機", "reading": "こかこーらじはんき", "aliases": ["Coke ON", "コークオン", "コカコーラ自販機"], "category": "その他", "location_hint": { "text": "Coke ON 公式アプリで対応自販機を探せます", "label": "Coke ON で探す", "url": "https://play.google.com/store/apps/details?id=com.coke.cokeon", "app_package": "com.coke.cokeon" }, "yolp_search": "none" },
+    { "id": "jihanpi", "name": "ジハンピ対応自販機", "reading": "じはんぴたいおうじはんき", "aliases": ["ジハンピ", "サントリー自販機"], "category": "その他", "location_hint": { "text": "サントリー公式の設置マップで対応自販機を探せます", "label": "設置マップで探す", "url": "https://www.suntory.co.jp/softdrink/jihanki/jihanpi/map/" }, "yolp_search": "none" },
     { "id": "ok_store", "name": "オーケー", "reading": "おーけー", "aliases": ["オーケーストア", "OKストア"], "category": "スーパー", "yolp_search": "keyword", "yolp_keyword": "オーケー" },
     { "id": "ozeki", "name": "オオゼキ", "reading": "おおぜき", "aliases": [], "category": "スーパー" },
     { "id": "aoki_super", "name": "アオキスーパー", "reading": "あおきすーぱー", "aliases": [], "category": "スーパー",
@@ -138,6 +141,10 @@
     { "id": "akachan_honpo", "name": "アカチャンホンポ", "reading": "あかちゃんほんぽ", "aliases": ["赤ちゃん本舗"], "category": "その他", "yolp_search": "keyword" },
     { "id": "kojima", "name": "コジマ×ビックカメラ", "reading": "こじまびっくかめら", "aliases": ["コジマ"], "category": "家電量販店", "yolp_search": "keyword" },
     { "id": "curves", "name": "カーブス", "reading": "かーぶす", "aliases": ["Curves"], "category": "その他", "yolp_search": "keyword" },
+    { "id": "aoyama", "name": "洋服の青山", "reading": "ようふくのあおやま", "aliases": [], "category": "ファッション", "yolp_search": "keyword" },
+    { "id": "aoki", "name": "AOKI", "reading": "あおき", "aliases": [], "category": "ファッション", "yolp_search": "keyword" },
+    { "id": "haruyama", "name": "はるやま", "reading": "はるやま", "aliases": ["はるやまチェーン"], "category": "ファッション", "yolp_search": "keyword" },
+    { "id": "owndays", "name": "OWNDAYS", "reading": "おんでーず", "aliases": ["オンデーズ"], "category": "ファッション", "yolp_search": "keyword", "yolp_keyword": "オンデーズ" },
     { "id": "welcia", "name": "ウエルシア", "reading": "うえるしあ", "aliases": ["ウエルシア薬局", "welcia"], "category": "ドラッグストア",
       "group_label": "ウエルシアグループ",
       "banners": [

@@ -1,7 +1,37 @@
 {
   "schema_version": 11,
-  "updated_at": "2026-08-06",
+  "updated_at": "2026-08-07",
   "campaigns": [
+    {
+      "id": "test_store_rate_program",
+      "type": "card_program",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "テストJCB発行会社",
+      "card_id": "test_card_jcb",
+      "name": "テスト店舗別レートプログラム（お店ごとに率が異なる）",
+      "display_name": "テストJCB 店舗別レート",
+      "payment_instruction": "事前のポイントアップ登録をして、テストJCBカードで支払う",
+      "rate_base": 10.0,
+      "period_start": null,
+      "period_end": null,
+      "requires_entry": true,
+      "ineligible_notes": [
+        "事前のポイントアップ登録なしで支払った分は対象外(検証用)"
+      ],
+      "overview_ineligible_notes": [
+        "還元率の低いお店はこのアプリでは表示対象外(検証用: キャンペーン詳細だけに出て、店舗判定カードには出ない)"
+      ],
+      "memo": [
+        "店舗別レート card_program(#52)の実機確認用: 設定でクラス(テストW=+0.5%)と1pt価値(0.7円)を変えると、判定・おトクタブ詳細の率別グルーピングがスケールすることを見る"
+      ],
+      "merchant_rules": [
+        { "merchant_id": "test_fastfood", "rate_override": 10.0, "eligible_notes": ["モバイルオーダーも対象(検証用)"] },
+        { "merchant_id": "test_combini", "rate_override": 1.5, "ineligible_notes": ["スマホレジは対象外(検証用)"] }
+      ],
+      "detail_url": "https://example.com/jpoint-partner",
+      "verified_date": "2026-08-07"
+    },
     {
       "id": "test_card_program",
       "type": "card_program",

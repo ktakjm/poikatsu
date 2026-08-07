@@ -468,6 +468,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         CampaignDetail(
                             judgments = overlayCampaignGroup,
                             merchants = state.merchantsById,
+                            storeRates = state.campaignStoreRates,
                             onBack = viewModel::onCloseCampaignDetail,
                             onFindChains = { ids ->
                                 viewModel.onFindNearbyByIds(ids)
@@ -495,6 +496,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             onCardRateChange = viewModel::onSetCardRate,
                             onCardBrandChange = viewModel::onSetCardBrand,
                             onCardWelcatsuChange = viewModel::onSetCardWelcatsu,
+                            onCardClassChange = viewModel::onSetCardClass,
+                            onCardPointValueChange = viewModel::onSetCardPointValue,
                             onAddCustomCard = viewModel::onAddCustomCard,
                             onUpdateCustomCard = viewModel::onUpdateCustomCard,
                             onRemoveCustomCard = viewModel::onRemoveCustomCard,
@@ -632,6 +635,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                                 selectedGroup = state.selectedCampaignGroup,
                                 merchantNames = state.merchantNames,
                                 merchants = state.merchantsById,
+                                storeRates = state.campaignStoreRates,
                                 directive = paneDirective,
                                 listPane = {
                                     // 二ペインはグローバル TopAppBar を持たない(詳細ペイン全高のため)ので、
@@ -1103,6 +1107,7 @@ private fun CampaignsListDetail(
     selectedGroup: List<CampaignJudgment>?,
     merchantNames: Map<String, String>,
     merchants: Map<String, Merchant>,
+    storeRates: Map<String, Map<String, Double>>,
     directive: PaneScaffoldDirective,
     listPane: @Composable () -> Unit,
     onBack: () -> Unit,
@@ -1139,6 +1144,7 @@ private fun CampaignsListDetail(
                         CampaignDetail(
                             judgments = selectedGroup,
                             merchants = merchants,
+                            storeRates = storeRates,
                             onBack = onBack,
                             onFindChains = onFindChains,
                             onEditCustom = onEditCustom,

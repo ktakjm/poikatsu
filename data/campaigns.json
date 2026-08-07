@@ -1,6 +1,6 @@
 {
   "schema_version": 11,
-  "updated_at": "2026-08-06",
+  "updated_at": "2026-08-08",
   "campaigns": [
     {
       "id": "smcc_combini_restaurant",
@@ -139,6 +139,64 @@
         { "merchant_id": "curves", "eligible_notes": ["入会金・月会費が対象"], "ineligible_brands": [] }
       ],
       "verified_date": "2026-07-18"
+    },
+    {
+      "id": "jcb_jpoint_partner",
+      "type": "card_program",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "JCB",
+      "card_id": "jcb_original",
+      "name": "J-POINTパートナー(対象店舗でポイント優待)",
+      "display_name": "JCBカード J-POINTパートナー",
+      "payment_instruction": "事前のポイントアップ登録(無料)をして、JCBオリジナルシリーズのカードで支払う ※対象の支払い方法はお店ごとに異なる",
+      "rate_base": 10.0,
+      "period_start": null,
+      "period_end": null,
+      "requires_entry": true,
+      "detail_url": "https://j-pointpartner.jcb.co.jp/",
+      "eligible_notes": [
+        "QUICPayに紐づけた対象カードでの支払いも原則対象(一部のお店を除く)"
+      ],
+      "ineligible_notes": [
+        "事前のポイントアップ登録(無料)なしで支払った分は優待対象外",
+        "提携カードなどJCBオリジナルシリーズ以外のJCBカードは対象外"
+      ],
+      "overview_ineligible_notes": [
+        "還元率がJCB CARD Wで2%(Sで1.5%)未満のお店(ウエルシア・コジマなど)は、このアプリでは表示対象外(詳細ページで確認できます)"
+      ],
+      "memo": [
+        "率は JCB CARD S・1pt=1円換算の絶対%で収録(20倍=10%、5倍=2.5%、3倍=1.5%)。W の +0.5% と 1pt 価値はユーザー設定(カードクラス/J-POINTの価値)からアプリが合成する(#52)",
+        "2026-01-13 に Oki Doki ポイント→J-POINT へ移行(200円=1pt)。2026年2月から1pt=1円で使える予定と公式ガイドに記載",
+        "ボーナスポイントはカード利用締切日の約10日後(毎月25日前後)に付与。表示倍率のうち1倍分は通常ポイント",
+        "複数のオリジナルシリーズカードを MyJCB おまとめログインしている場合は ID ごとにポイントアップ登録が必要",
+        "ポイントアップ登録はお店(パートナー)単位で1回・全店有効(公式ガイド)。単位の説明は登録サイトのUIで自明なため、UI文言では「事前のポイントアップ登録」とだけ書く(2026-08-08 判断)",
+        "公式にポイント付与上限の記載なし(2026-08-07 時点・全店舗ページ確認)",
+        "ポイントアップ登録の有効期限の記載なし。掲載期間は店舗ごとに定めあり(例: 2026-01-13〜2027-01-12)だが実質更新制のため常設として収録",
+        "収録基準: W 換算還元率 2% 以上(5倍以上+セブンの3倍)の物理チェーン。2倍=1%(ウエルシア系・コジマ・ジョーシン・ソフマップ・成城石井・やまや・ウェルパーク等)、物理店舗でないパートナー(Amazon・Google Play・メルカリ等)、単店・地方限定(仙台三吉・ダイシン・江釣子SC・福田屋等)、プレミアムカード限定倍率(高島屋・USJ・GO等)は収録見送り(低還元率のお店が非表示である旨は ineligible_notes に反映済み)",
+        "青山の QUICPay 受付は東海地区のみ(決済手段の受付制限で優遇除外ではない)",
+        "スターバックスは公式上3施策(オンライン入金/eGift/モバイルオーダー)に分かれるが率が同一のため1ルールに集約(登録が3種類それぞれ必要な旨は merchant_rules の ineligible_notes に反映済み)",
+        "OWNDAYS は YOLP 上「オンデーズ」表記(「OWNDAYS」クエリは0件)のため yolp_keyword で対応。ただし公開ローカルサーチ API のデータセット自体に OWNDAYS がほぼ無い(吉祥寺2kmのメガネ系28件に競合全社ありでオンデーズ0件・東京20kmで3店。Yahoo!マップ本体では出る=非公開の新しいデータ。2026-08 実測)ため、対象店でも地図に出ないことが多い。補完として store_list_url で公式の対象30店舗一覧へ誘導(お店タブの名前検索は可)"
+      ],
+      "merchant_rules": [
+        { "merchant_id": "mcdonalds", "rate_override": 10.0, "eligible_notes": ["Apple Pay・Google Payでの支払いも対象"], "ineligible_notes": ["モバイルオーダー・マックデリバリー限定(店頭レジでの支払いは対象外)"] },
+        { "merchant_id": "starbucks", "rate_override": 10.0, "ineligible_notes": ["対象はスターバックスカードへのオンライン入金・オートチャージ、Starbucks eGiftの購入、モバイルオーダー(Apple Pay決済)のみ", "店頭での支払い・店頭でのカード入金は対象外", "ポイントアップ登録は3種類(カードへの入金・eGift・モバイルオーダー)に分かれており、利用する種類ごとに登録が必要"] },
+        { "merchant_id": "sukiya", "rate_override": 10.0, "ineligible_notes": ["QUICPay(Apple Pay・Google Pay含む)での支払いはポイント加算の対象外", "商業施設内など一部店舗は対象外"] },
+        { "merchant_id": "yoshinoya", "rate_override": 10.0, "ineligible_notes": ["商業施設内など一部店舗は対象外"] },
+        { "merchant_id": "gusto", "rate_override": 10.0, "ineligible_notes": ["すかいらーくアプリのテーブル決済は対象外", "商業施設内など一部店舗は対象外"] },
+        { "merchant_id": "bamiyan", "rate_override": 10.0, "ineligible_notes": ["すかいらーくアプリのテーブル決済は対象外", "商業施設内など一部店舗は対象外"] },
+        { "merchant_id": "jonathans", "rate_override": 10.0, "ineligible_notes": ["すかいらーくアプリのテーブル決済は対象外", "商業施設内など一部店舗は対象外"] },
+        { "merchant_id": "sanmarc_cafe", "rate_override": 10.0, "ineligible_notes": ["テナント内など一部店舗とオンラインストアは対象外"] },
+        { "merchant_id": "dominos_pizza", "rate_override": 10.0, "eligible_notes": ["公式サイトでのオンライン注文のカード決済も対象"] },
+        { "merchant_id": "jihanpi", "rate_override": 10.0, "ineligible_notes": ["Apple Pay・Google Payなどの第三者決済サービスでの支払いは対象外(ジハンピアプリに登録したカードで支払う)"] },
+        { "merchant_id": "seven_eleven", "rate_override": 1.5, "ineligible_notes": ["ネットショッピング・スマホレジは対象外", "法人向けカード(JCB CARD Biz等)は対象外", "一部店舗は対象外"] },
+        { "merchant_id": "poplar", "rate_override": 2.5, "eligible_notes": ["生活彩家も対象"], "ineligible_notes": ["ローソンポプラやテナント内など一部店舗は対象外"] },
+        { "merchant_id": "aoyama", "rate_override": 2.5, "eligible_notes": ["公式オンラインストアでのカード決済も対象"], "ineligible_notes": ["イトーヨーカドー内の店舗など一部の商業施設内店舗は対象外"], "official_store_list": {"ineligible_stores": ["イトーヨーカドー四つ木", "イトーヨーカドー曳舟", "イトーヨーカドー川崎港町", "イトーヨーカドー綱島", "ららぽーと横浜", "イトーヨーカドー鶴見", "イトーヨーカドー横浜別所", "イトーヨーカドー上永谷", "イトーヨーカドー能見台", "イトーヨーカドー大船", "イトーヨーカドー藤沢", "イトーヨーカドー流山", "イトーヨーカドー船橋", "イトーヨーカドー浦和", "イトーヨーカドー安城", "イトーヨーカドー東大阪", "イトーヨーカドー明石", "イトーヨーカドー加古川", "アリオ札幌", "浅草ROX・3G", "アリオ北砂町", "アピタ戸塚", "イオンタウンおゆみ野", "アリオ川口", "ベニバナウォーク桶川", "レイクウォーク岡谷", "イオンモール桑名", "ヨドバシ梅田", "アリオ仙台泉", "イオンタウン佐沼"], "updated_date": "2026-08-07", "date_is_official": false, "source_url": "https://j-pointpartner.jcb.co.jp/shop/000024"} },
+        { "merchant_id": "aoki", "rate_override": 2.5, "ineligible_notes": ["オンラインショップは対象外", "一部の商業施設内店舗は対象外"], "official_store_list": {"ineligible_stores": ["ミーナ町田", "イトーヨーカドー津久野", "イオンタウン富雄南", "イオンタウン田崎", "テラッソ姫路", "させぼ五番街", "ミーナ天神", "イトーヨーカドー川崎"], "updated_date": "2026-08-07", "date_is_official": false, "source_url": "https://j-pointpartner.jcb.co.jp/shop/000020"} },
+        { "merchant_id": "haruyama", "rate_override": 2.5, "ineligible_notes": ["オンラインストアでのカード決済は対象外(店頭での支払いのみ対象)"], "official_store_list": {"ineligible_stores": ["西友厚別", "イオン三笠"], "updated_date": "2026-08-07", "date_is_official": false, "source_url": "https://j-pointpartner.jcb.co.jp/shop/000336"} },
+        { "merchant_id": "owndays", "rate_override": 1.5, "ineligible_notes": ["オンラインストアでのカード決済は対象外(店頭での支払いのみ対象)"], "store_list_url": "https://j-pointpartner.jcb.co.jp/shop/000028", "official_store_list": {"eligible_stores": ["池袋西口店", "秋津店", "サンエー西原シティ店", "ブルメール舞多聞店", "本厚木店", "豊見城店", "秋葉原ラジオ会館店", "サンエーマチナトシティ店", "サンエー大山シティー店", "サンエー具志川メインシティ店", "心斎橋店", "吉祥寺店", "サンエー八重瀬店", "ザ・ビッグ豊平店", "サンエー石川シティ店", "サンエー那覇メインプレイス店", "京王高幡不動SC店", "くみまちモールあさか店", "赤羽ビビオ店", "渋谷地下街店", "石垣島店", "カインズ前橋吉岡店", "島忠ホームズ所沢店", "久米島店", "ヨリマチFUSHIMI店", "サンエー大湾シティ店", "ビナフロント海老名店", "JR佐賀店", "宮古島店", "HAB@熊本店"], "list_is_exhaustive": true, "updated_date": "2026-08-07", "date_is_official": false, "source_url": "https://j-pointpartner.jcb.co.jp/shop/000028"} }
+      ],
+      "verified_date": "2026-08-08"
     },
     {
       "id": "yuzawa_paypay_2026_07",

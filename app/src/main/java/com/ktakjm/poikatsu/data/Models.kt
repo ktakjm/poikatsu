@@ -59,6 +59,12 @@ data class LocationHint(
     val text: String,
     val label: String,
     val url: String,
+    /**
+     * 案内先のアプリのパッケージ名(任意)。インストール済みならアプリを直接起動し、
+     * 未インストール(または未設定)なら [url] を開く。QR の app_packages と同じく
+     * AndroidManifest の <queries> と対で管理する(宣言が無いと Android 11+ で起動検出できない)
+     */
+    @SerialName("app_package") val appPackage: String? = null,
 )
 
 /**
@@ -275,6 +281,13 @@ data class Campaign(
      */
     @SerialName("ineligible_notes") val ineligibleNotes: List<String> = emptyList(),
     /**
+     * おトクタブのキャンペーン詳細(施策全体のビュー)だけに出す「対象外・注記」(#52)。
+     * お店タブ・地図の店舗判定カードには連結しない: アプリの収録範囲の注記(「低還元率の
+     * お店は表示対象外」等)は施策全体を眺めるときには有用だが、特定のお店の判定を見ている
+     * ユーザーには無関係な情報のため
+     */
+    @SerialName("overview_ineligible_notes") val overviewIneligibleNotes: List<String> = emptyList(),
+    /**
      * 収集時の内部メモ(UI 非表示)。公式との照合台帳・付与時期・集計期間・操作のコツ等、
      * 表示フィールドに行き場の無い事実を残す(旧 conditions)
      */
@@ -340,6 +353,37 @@ data class PointMultiplier(
     @SerialName("applied_note") val appliedNote: String = "",
 )
 
+/**
+ * カードクラス 1 件(同一カード製品内のグレード差。例: JCB CARD W / JCB CARD S)。
+ * どのクラスを持っているかはユーザー設定(CardOverride.cardClass)で、カタログは選択肢だけを持つ。
+ * 並び順は保守側(還元が低い方)を先頭にする(未選択時の既定=先頭。実際より好条件を提示しない方針)。
+ */
+@Serializable
+data class CardClass(
+    val id: String,
+    val label: String,
+    /**
+     * このクラスで店舗別レート(rate_override)と実効率既定値に加算する率(%)。
+     * 例: JCB CARD W はパートナー店で S より +1pt/200円 = +0.5%
+     */
+    @SerialName("rate_bonus") val rateBonus: Double = 0.0,
+)
+
+/**
+ * 1 ポイントの価値設定(使い道で価値が変動するポイント通貨のカード。例: J-POINT は 1pt=0.7〜1円)。
+ * これがあるカードは設定画面に「1ptの価値」入力を出し、実効率・店舗別レートに乗算する。
+ * ポイント通貨の正規化(#39)が入るまでの、カード単位の暫定表現。
+ */
+@Serializable
+data class PointValueConfig(
+    /** 設定行のタイトル(例: "J-POINTの価値") */
+    val label: String,
+    /** 既定の 1pt 価値(円)。カタログの rate は既定値基準で収録する */
+    val default: Double = 1.0,
+    /** 補足(例: "使い道により1pt=0.7〜1円")。設定行の説明に出す */
+    val note: String = "",
+)
+
 @Serializable
 data class PaymentCard(
     /** カードの識別子(例: "smcc")。campaigns.json の card_id と DataStore card_overrides のキーから参照される */
@@ -358,12 +402,23 @@ data class PaymentCard(
     @SerialName("effective_rate_default") val effectiveRateDefault: Double? = null,
     @SerialName("point_multiplier") val pointMultiplier: PointMultiplier? = null,
     /**
+     * カードクラスの選択肢(例: JCB CARD W / S)。空 = クラス概念なし(通常のカード)。
+     * どれを持っているかは CardOverride.cardClass(DataStore)で、未選択は先頭(保守側)扱い。
+     */
+    @SerialName("card_classes") val cardClasses: List<CardClass> = emptyList(),
+    /** 1pt 価値の設定定義。null = 価値変動の概念なし(設定 UI も出さない) */
+    @SerialName("point_value") val pointValueConfig: PointValueConfig? = null,
+    /**
      * 実行時フィールド: 判定に使う実ブランド。VM のマージで CardOverride.brand(なければ brands が
      * 単一のときその値)を設定し JSON には現れない。空文字は「未選択」= どのブランドとも断定しない。
      */
     @Transient val brand: String = "",
     /** 実行時フラグ: ウエル活(×factor)を適用済みか。VM のマージで設定し JSON には現れない */
     @Transient val welcatsuApplied: Boolean = false,
+    /** 実行時: 選択中クラスの加算率(%)。店舗別レート(rate_override)に足す。マージで設定 */
+    @Transient val rateBonus: Double = 0.0,
+    /** 実行時: 店舗別レートに掛かる乗数(1pt価値 × ウエル活倍率)。マージで設定 */
+    @Transient val rateMultiplier: Double = 1.0,
 )
 
 /** 国際ブランド1件(payment_methods.json の card_brands)。name は campaigns.json の card_brand から参照される */

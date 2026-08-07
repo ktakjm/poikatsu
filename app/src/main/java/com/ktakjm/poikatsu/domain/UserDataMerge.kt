@@ -45,10 +45,19 @@ fun mergeUserData(
         val rawRate = ov?.rate ?: card.effectiveRateDefault
         val welcatsuOn = ov?.welcatsu == true && card.pointMultiplier != null
         val factor = if (welcatsuOn) card.pointMultiplier?.factor ?: 1.0 else 1.0
+        // カードクラス(JCB W/S 等): 未選択はカタログ先頭(保守側=加算の小さい方)を既定にする。
+        // 1pt 価値(J-POINT の 0.7〜1円等): 実効率と店舗別レートの両方に掛かる乗数。
+        // クラス加算はポイント数の加算なので、価値の乗算より先に足す: (率 + 加算) × 価値
+        val classBonus = (card.cardClasses.firstOrNull { it.id == ov?.cardClass }
+            ?: card.cardClasses.firstOrNull())?.rateBonus ?: 0.0
+        val pointValue = ov?.pointValue ?: card.pointValueConfig?.default ?: 1.0
+        val multiplier = pointValue * factor
         card.copy(
             brand = ov?.brand ?: card.brands.singleOrNull().orEmpty(),
-            effectiveRateDefault = rawRate?.let { it * factor },
+            effectiveRateDefault = rawRate?.let { (it + classBonus) * multiplier },
             welcatsuApplied = welcatsuOn,
+            rateBonus = classBonus,
+            rateMultiplier = multiplier,
         )
     }
     // カスタムカード(カタログ外)は登録内容をそのまま PaymentCard に写してエンジンへ渡す。

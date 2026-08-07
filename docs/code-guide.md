@@ -144,7 +144,8 @@ erDiagram
     LOCATION_HINT {
         string text "案内文"
         string label "リンクラベル"
-        string url "外部導線URL"
+        string url "外部導線URL(アプリ未インストール時のフォールバック)"
+        string app_package "案内先アプリ(任意。Manifest queries と対で管理)"
     }
     CAMPAIGN {
         string id PK
@@ -172,6 +173,7 @@ erDiagram
         Recurrence recurrence "繰り返し日付条件(days_of_week/days_of_month)"
         string_list eligible_notes "施策全体の対象の言い切り(拡張・明確化。通常ロール表示)"
         string_list ineligible_notes "施策全体の対象外・限定の言い切り(warning面表示)"
+        string_list overview_ineligible_notes "おトクタブのキャンペーン詳細だけに出す注記(店舗判定には連結しない。#52)"
         string_list memo "収集時の内部メモ(UI非表示。照合台帳・付与時期等)"
         string payment_method_id "QR決済ID(カード施策はnull)"
         string detail_url "施策の詳細ページURL"
@@ -211,8 +213,20 @@ erDiagram
         string card_name
         string brand_color "#RRGGBB(施策の色は発行体側で一元管理)"
         string_list brands "選べるブランドの選択肢(実ブランドはユーザー設定)"
-        double effective_rate_default
+        double effective_rate_default "店舗別レート施策では rate_override の最大値と一致(#52)"
         PointMultiplier point_multiplier "ポイント倍率(任意)"
+        CardClass_list card_classes "カードクラスの選択肢(任意。JCB W/S 等。#52)"
+        PointValueConfig point_value "1pt価値の設定定義(任意。#52)"
+    }
+    CARD_CLASS {
+        string id PK "例: w / s"
+        string label "表示名(例: JCB CARD W)"
+        double rate_bonus "店舗別レートと実効率既定値への加算(%。例: W の +0.5)"
+    }
+    POINT_VALUE_CONFIG {
+        string label "設定行の表示名(例: J-POINTの価値)"
+        double default "既定の1pt価値(円)。収録レートはこの基準"
+        string note "補足(例: 使い道により1pt=0.7〜1円)"
     }
     POINT_MULTIPLIER {
         string label "表示名(例: ウエル活)"
@@ -250,6 +264,8 @@ erDiagram
     MERCHANT_RULE ||--o| OFFICIAL_STORE_LIST : "official_store_list(任意)"
     CAMPAIGN }o--o| PAYMENT_CARD : "card_id で参照(1カード:N施策)"
     PAYMENT_CARD ||--o| POINT_MULTIPLIER : "point_multiplier(任意)"
+    PAYMENT_CARD ||--o{ CARD_CLASS : "card_classes[](任意。先頭が未選択時の既定=保守側)"
+    PAYMENT_CARD ||--o| POINT_VALUE_CONFIG : "point_value(任意)"
     YOLP_CONFIG ||--o{ GC_GROUP : "gc_groups[]"
 ```
 
@@ -257,7 +273,7 @@ erDiagram
 
 - `merchants.json` — チェーンの正規化マスタ。**1 merchant = 1 系列**（施策の帰属単位）で、傘下で別の名前を掲げる**看板**（UI 表記は「業態」）は `banners` に入れ子で持つ（#60。merchant 自身の name/reading/aliases は「代表看板」= banner id は merchant.id）。施策側は `merchant_id` を書くだけで傘下看板がすべて対象になり、看板単位の対象/対象外は `merchant_rules[].banner_ids` / `ineligible_banner_ids` で表す。alias（同一看板の略称・表記ゆれ）と banner（別の看板）の線引き・照合制約・運用ルールは data/README.md「系列と看板」参照。検索ヒット率は `reading` / `aliases` の充実度で決まる。トップレベルに `yolp_config`（YOLP 検索の gc グループ定義・密度チューニング用の `max_pages`）を持ち、各 merchant の `yolp_search`（`gc`/`keyword`/`none`）で検索方式を指定する。`YolpClient` はこの設定から `YolpSearchConfig` を動的に構築し、アクティブな施策が参照する merchant だけを検索対象にする（該当 merchant がいない gc_group はスキップ）。位置情報を持たない発行体（自販機など）は `location_hint` で外部導線（Coke ON アプリ等）を案内し、「近くのこのお店を探す」を出さない
 - `campaigns.json` — 汎用的な施策情報のみ。**ユーザー固有の前提を書かない**（規約）。`type` で常設カード（`card_program`）/ キャンペーン（`promotion`。managed=特定チェーン対象、external=全加盟店対象のおトクタブ専用。#44）/ 自治体施策（`municipal`）を区分し、`benefit_type` でポイント還元（`rebate`）/ 即時割引（`discount`）を区分し、定率/定額は `rate_base` / `discount_amount` のどちらが入っているかで導出する。`store_scope` が `managed` ならチェーン検索・地図に表示、`external` ならおトクタブのみ表示（`detail_url`/`store_search_url` で公式ページへリンク）。施策の帰属は `card_id`（カード施策。payment_methods.json の `cards[].id` を参照、1 カード : N 施策）か `payment_method_id`（QR 施策・自治体施策）の**ちょうど一方**を持つ
-- `payment_methods.json` — 決済手段カタログ（カード `cards` + QR 決済 `qr_payments`）。ユーザー固有値は持たず（差分は DataStore）、merchants/campaigns と同様にリモート更新・テストデータ切替の対象。`point_multiplier`（`PointMultiplier`）を持つカードはポイント価値の倍率（例: ウエル活 ×1.5）を設定画面で ON/OFF でき、ON 時は `effectiveRateDefault × factor` が実質還元率になる。`point_multiplier.color` はウエルシアのロゴ色など識別バッジに使う
+- `payment_methods.json` — 決済手段カタログ（カード `cards` + QR 決済 `qr_payments`）。ユーザー固有値は持たず（差分は DataStore）、merchants/campaigns と同様にリモート更新・テストデータ切替の対象。`point_multiplier`（`PointMultiplier`）を持つカードはポイント価値の倍率（例: ウエル活 ×1.5）を設定画面で ON/OFF でき、ON 時は `effectiveRateDefault × factor` が実質還元率になる。`point_multiplier.color` はウエルシアのロゴ色など識別バッジに使う。`card_classes`（同一製品内のグレード差。JCB CARD W/S 等）と `point_value`（1pt 価値が使い道で変動するポイント通貨）を持つカード（#52）は、どのクラスか・1pt をいくらとみなすかをユーザー設定（`CardOverride.cardClass` / `pointValue`）で持ち、マージ時に `(率 + クラス加算) × 1pt価値` で実効率へ合成する（店舗別レート用の `rateBonus` / `rateMultiplier` もマージ後カードに載る。§5.4 参照）
 
 パースは `PoikatsuJson.parse()` に集約。`ignoreUnknownKeys = true` + `coerceInputValues = true` により、スキーマに後からフィールドを追加しても旧アプリが壊れない（前方互換）。
 
@@ -427,6 +443,7 @@ flowchart LR
 ```
 
 - `effectiveRate = card.effectiveRateDefault ?: campaign.rateBase` — ユーザー設定の実効率があればそれを優先
+- **card_program の店舗別レート（#52）**: J-POINT パートナーのように 1 施策内で店舗ごとに率が異なる常設プログラムは、`merchant_rules[].rate_override` に**基準構成（カタログ既定クラス・1pt=既定価値）の絶対%**を全ルールへ収録する（`rate_base` = その最大値。整合性テストで強制）。判定時は `resolveCardCampaignRate` → `scaledStoreRate` が `(rate_override + クラス加算) × (1pt価値 × ウエル活倍率)` でユーザー設定を合成する（加算はポイント数の加算なので乗算より先。JCB CARD W の +0.5% と J-POINT の価値変動 0.7〜1円 を 1 つの式で正確に吸収）。rate_override の無い従来の card_program（SMCC/MUFG）は挙動不変。おトクタブ一覧の「最大○%」はユーザー実効率（`campaignPersonalRates`）を、詳細の対象チェーン列挙は率別グルーピング（`campaignStoreRates` → `campaignTargetLabelGroups`）を使い、低率店が最大率と誤読されないようにする
 - **保有カードのみ対象**: 施策の `card_id` に一致するカードが cards に無い施策はスキップする。設定で「所有」OFF にしたカードは `MainViewModel` のマージ層でカード一覧から外れるため、ここで自然に除外される。
 - **期間フィルタ**: `campaignStatus(campaign, today)` が ACTIVE の施策のみ。期限切れ・未来開始はスキップ。
 - **store_scope フィルタ**: `store_scope == "managed"` のみ。`external` の施策は「お店」「地図」に出さない。

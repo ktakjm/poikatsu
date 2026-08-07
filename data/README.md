@@ -4,9 +4,9 @@
 
 ## ファイル
 
-- `merchants.json` — チェーン店マスタ。1 merchant = 1 系列(施策の帰属単位)で、傘下の看板(店頭の名前。UI 表記は「業態」)は `banners` に持つ(§ 系列と看板 参照)。`reading`(ひらがな読み)と `aliases`(略称・別ブランド名)は検索のヒット率に直結するので、追加時は必ず入れる。位置情報を持たない発行体(自販機など)は `location_hint`(`text`/`label`/`url`)を持たせる。これがあると判定詳細で「近くのこのお店を探す」を出さず、代わりに位置を確認できる外部アプリ/サイトへ案内する(例: コカ・コーラ自販機 → Coke ON 公式アプリ)。`yolp_config` で YOLP 検索の gc グループ設定、各 merchant の `yolp_search`/`yolp_keyword` で検索方式を持つ(§ YOLP 検索設定 参照)。
+- `merchants.json` — チェーン店マスタ。1 merchant = 1 系列(施策の帰属単位)で、傘下の看板(店頭の名前。UI 表記は「業態」)は `banners` に持つ(§ 系列と看板 参照)。`reading`(ひらがな読み)と `aliases`(略称・別ブランド名)は検索のヒット率に直結するので、追加時は必ず入れる。位置情報を持たない発行体(自販機など)は `location_hint`(`text`/`label`/`url`/`app_package`(任意))を持たせる。これがあると判定詳細で「近くのこのお店を探す」を出さず、代わりに位置を確認できる外部アプリ/サイトへ案内する(例: コカ・コーラ自販機 → Coke ON 公式アプリ)。`app_package` を書くとインストール済みのアプリを直接起動し、未インストールなら `url` へフォールバックする(**パッケージ名は app の AndroidManifest `<queries>` と対で管理**。qr_payments の app_packages と同じ制約)。アプリ内に店舗マップがある確証が無い発行体は `url`(公式 Web マップ等)だけにする(例: ジハンピ → サントリー公式設置マップ)。`yolp_config` で YOLP 検索の gc グループ設定、各 merchant の `yolp_search`/`yolp_keyword` で検索方式を持つ(§ YOLP 検索設定 参照)。
 - `campaigns.json` — 還元施策。`merchant_rules[].merchant_id` は merchants.json の `id`、`card_id` は payment_methods.json の `cards[].id` を参照する。**ユーザー固有の前提はここに書かず、汎用的な施策情報のみを持つ。** 常設施策(`card_program`)・期間限定施策(`promotion`)・自治体施策(`municipal`) の 3 種類をサポート。
-- `payment_methods.json` — 決済手段(カード + QR 決済)の**カタログ(マスタ)**。`cards` は現状: 三井住友(`smcc`、7%、`point_multiplier` でウエル活×1.5)、三菱UFJ(`mufg`、基準7%)。`brands` はそのカード製品で**選べるブランドの選択肢**で、実際に持っているブランドはユーザー設定(`CardOverride.brand`)に分離する(カタログにユーザー属性を混ぜない)。**設定画面でカード所有・還元率・ブランド・ウエル活を編集でき、差分はカード id をキーに DataStore に保存して起動時にこのカタログへ重ねる(payment_methods.json 自体は書き換えない)**。判定エンジンは**所有カードのみ**を対象とし、実ブランドが `ineligible_brands` に一致(または未選択でその除外ブランドを取りうる)ならその店を除外・リストに無いブランドなら無視、`effective_rate_default` を実効還元率として用いる。`qr_payments` に QR 決済サービスのカタログを持つ。
+- `payment_methods.json` — 決済手段(カード + QR 決済)の**カタログ(マスタ)**。`cards` は現状: 三井住友(`smcc`、7%、`point_multiplier` でウエル活×1.5)、三菱UFJ(`mufg`、基準7%)、JCBオリジナルシリーズ(`jcb_original`、最大10%、`card_classes` で W/S・`point_value` で J-POINT の 1pt 価値を設定)。`brands` はそのカード製品で**選べるブランドの選択肢**で、実際に持っているブランドはユーザー設定(`CardOverride.brand`)に分離する(カタログにユーザー属性を混ぜない)。**設定画面でカード所有・還元率・ブランド・ウエル活を編集でき、差分はカード id をキーに DataStore に保存して起動時にこのカタログへ重ねる(payment_methods.json 自体は書き換えない)**。判定エンジンは**所有カードのみ**を対象とし、実ブランドが `ineligible_brands` に一致(または未選択でその除外ブランドを取りうる)ならその店を除外・リストに無いブランドなら無視、`effective_rate_default` を実効還元率として用いる。`qr_payments` に QR 決済サービスのカタログを持つ。
 - `municipalities.json` — 全国自治体マスタ(47 都道府県・1,741 市区町村・自治体グループ)。設定画面で居住地・行動圏を登録する際のピッカーデータと、おトクタブの地域フィルタ(グループ→自治体の展開)に使う。`scripts/generate_municipalities.py` が気象庁の予報区データから自動生成する(§ municipalities.json 参照)。
 
 ## スキーマの要点
@@ -58,16 +58,19 @@
   - `ineligible_notes` = 対象外の言い切り + **対象範囲の限定**。限定は対象外リスクが伝わる形で登録する(例: 「対象店舗はキャンペーンツール掲出店」→「キャンペーンツール掲出店以外は対象外」。ただし「一部店舗のみ対象」のように公式表現がそれ自体でリスクを伝えるならそのまま使い、冗長な言い換えをしない)。参加店舗限定の記載がある施策は `store_search_url` で店舗検索へ誘導する
   - `eligible_notes` = 対象の**拡張・追加・明確化のみ**(「〜も含む」「県内在住・在勤を問わず対象」)。見落としても損しない安心情報。既定値どおりの事実(「事前エントリー不要」等)は書かない
   - 店舗ごとに実態・呼び名が異なる情報は、似た文言でも `merchant_rules` 側に店舗別で持つ(集約しすぎない)。**単一チェーン promotion のチャネル限定は施策レベルに書く**(merchant 側だとおトクタブ詳細で見えない)
+- `overview_ineligible_notes` — **おトクタブのキャンペーン詳細(施策全体のビュー)だけに出す**「対象外・注記」(#52)。お店タブ・地図の店舗判定カードには連結されない。アプリの収録範囲の注記(「還元率が低いお店は表示対象外」等)のように、施策全体を眺めるときは有用だが特定のお店の判定を見ているユーザーには無関係な情報に使う。公式の対象外の言い切りは従来どおり `ineligible_notes` へ(こちらは両方に出る)
 - `memo` — 収集時の内部メモ(`[String]`。**UI 非表示**)。付与時期・集計期間・還元通貨・操作のコツ等、表示フィールドに行き場の無い事実を残し、収集スキルの照合台帳を兼ねる(旧 `conditions`)。対象外/のみ対象の言い切りは置かない(整合性テストで検証。別フィールドに反映済みの総括文だけは「〜に反映済み」注記付きで可)。数値フィールドと重複する文章も書かない
 - `may_end_early` — 予算到達次第の早期終了があり得るか(省略時 false)。true なら判定詳細・おトクタブに「早期終了の可能性」注記を出し、「残り○日」が断定に見えないようにする。**自治体系はほぼ全件 true にする**(標準条項のため)
-- `recurrence` — 繰り返し日付条件。`{ "days_of_week": ["FRI", "SAT"] }`(毎週金土)または `{ "days_of_month": [20, 30] }`(毎月20・30日)の**どちらか一方**(併用は実在確認できるまで未対応)。`period_start/end`(外枠の開催期間)と併用し、「お店」「地図」の判定は期間内かつ**今日が対象日**のときだけ出す。おトクタブは期間内なら非対象日でも「開催中」に出し「次の対象日: ○/○」を案内する
+- `recurrence` — 繰り返し日付条件。`{ "days_of_week": ["FRI", "SAT"] }`(毎週金土)または `{ "days_of_month": [20, 30] }`(毎月20・30日)の**どちらか一方**(併用は実在確認できるまで未対応)。`period_start/end`(外枠の開催期間)と併用し、「お店」「地図」の判定は期間内かつ**今日が対象日**のときだけ出す。おトクタブは期間内なら非対象日でも一覧に出し(「期間限定（本日対象外）」セクション)「次の対象日: ○/○」を案内する
 - `region` — 自治体施策用。`{ name, prefecture }`。名称は municipalities.json の自治体名と一致させる(おトクタブの地域フィルタが (都道府県名, 自治体名) で突合するため。不一致でも施策は消えず全表示側に倒れる)。グループ所属はマスタ側(municipalities.json の groups)が持つので施策側には書かない
   - **県全域施策**(かながわトクトクキャンペーン等)は `name` に都道府県名をそのまま入れる(例: `{ "name": "神奈川県", "prefecture": "神奈川県" }`)。`name == prefecture` が県全域のマーカー(`Region.isPrefectureWide`)で、地域フィルタ・お知らせバナーは「その県の自治体を1つでも登録していれば表示」、地図タブのピルは「地点がその県内なら表示」になる
   - 政令指定都市はマスタが市単位のため `name` は市名で入れる(例: 横浜市)。行政区名(例: 金沢区)でも登録自体は可能で、地図タブのピルはその区でのみ出るが、マスタに区が無いため登録地域との突合(バナー・地域フィルタ)は効かない(フィルタは防御的全通し=全員に表示)
 - `detail_url` — 施策の詳細ページ URL（全タイプ共通。ユーザーに「詳細はこちら」として案内する先）
 - `store_search_url` — 対象店舗検索ページ URL(PayPay 等の公式)
 - `period_start` / `period_end` — 施策期間(ISO 8601 日付)。null = 常設
-- `merchant_rules[].rate_override` — その店だけ還元率が異なる場合の上書き値(%)。非 null ならその merchant では `rate_base` の代わりに使う(自治体系の「中小20%/大手10%」、Visa 系の「基礎+特定店で追加」等)。判定と一覧の「最良特典」計算に反映され、おトクタブのサマリーは rate_base と rate_override の最大値を「最大○%」として出す。card_program ではユーザー設定の実効率が優先されるため事実上 promotion / QR 施策用。
+- `merchant_rules[].rate_override` — その店だけ還元率が異なる場合の上書き値(%)。非 null ならその merchant では `rate_base` の代わりに使う(自治体系の「中小20%/大手10%」、Visa 系の「基礎+特定店で追加」等)。判定と一覧の「最良特典」計算に反映され、おトクタブのサマリーは rate_base と rate_override の最大値を「最大○%」として出す。
+  - **card_program の店舗別レート(#52)**: J-POINT パートナーのように 1 施策内で店舗ごとに率が異なる常設プログラムでは、**基準構成(カタログ既定クラス・1pt=既定価値)の絶対%を全ルールに収録**し(1 つでも rate_override を使うなら省略不可)、`rate_base` と発行体カタログの `effective_rate_default` を**その最大値**にする(整合性テストで強制)。判定時にアプリが `(rate_override + クラス加算) × 1pt価値` でユーザー設定(`card_classes` / `point_value`)を合成する。rate_override の無い従来の card_program(SMCC/MUFG)は従来どおりユーザー実効率の単一値
+  - 施策詳細の対象チェーン列挙は、rate_override の率が 2 種類以上あると**率別グルーピング**(「10%: マクドナルド・ガスト / 1.5%: セブン-イレブン」)で表示される
 - `merchant_rules[].eligible_notes` — その店固有の「対象」の言い切り(`[String]`。例: 「ナチュラルローソン・ローソンストア100含む」)。施策レベルの `eligible_notes` と連結して表示される。
 - `merchant_rules[].ineligible_notes` — その店固有の「対象外・限定」の言い切り(`[String]`。例: 「スマホレジは対象外」)。「〜のみ対象」型の限定もこちらに言い換えて入れる(線引きは施策レベルと同じ)。**公式が店舗単位で対象/対象外を言い切っていない情報(「例: ○○店」レベルの例示)はここに文章で書くにとどめ、`official_store_list` には入れない**。
 - `merchant_rules[].store_list_url` — 「一部店舗のみ対象」のチェーン(サイゼリヤ・KFC等)で、公式の対象店舗一覧へのリンク。判定詳細から開ける。
@@ -98,6 +101,9 @@
 - `cards` — カードのカタログ。`{ id, card_name, brand_color, brands, effective_rate_default, point_multiplier }`。`id`(例: `"smcc"`)は campaigns.json の `card_id` と DataStore のカード差分キーから参照される
 - `brands` — そのカード製品で**選べるブランドの選択肢**(カタログの事実。例: 三菱UFJカードは Visa/Mastercard/JCB/Amex)。**ユーザーが実際に持っているブランドはカタログに置かず** `CardOverride.brand`(DataStore)で持つ。`brands` が単一なら自動確定、複数なら未選択(空)から設定画面で選ぶ。未選択の間は**好条件側に倒さない**: `card_brand` 施策には一致せず(特典を出さない)、`ineligible_brands` はそのカードが除外ブランドを取りうる限り除外側に倒す。加えて、ブランドが判定に効くカードは有効化時にブランド選択を必須にしている
 - `point_multiplier`(任意) — ポイント価値の倍率。`{ label, factor, color }`。設定画面で「ウエル活利用時の還元率を表示」チェックを出し、ON で `factor` 倍した実効還元率を表示する。`color` はバッジ色(ウエルシアのロゴ色 #RRGGBB)。三井住友(Vポイント)に設定。
+- `card_classes`(任意) — 同一カード製品内の**グレード差の選択肢**(#52)。`[{ id, label, rate_bonus }]`。`rate_bonus` は店舗別レート(rate_override)と実効率既定値に**加算**する率(%。例: JCB CARD W はパートナー店で S より +1pt/200円 = +0.5)。どのクラスを持っているかはユーザー設定(`CardOverride.cardClass`)で、未選択は**先頭**が既定になるため**保守側(加算の小さい方)を先頭に置く**。JCBオリジナルシリーズ(S / W)に設定
+- `point_value`(任意) — **1pt 価値の設定定義**(#52)。`{ label, default, note }`。使い道で 1pt の価値が変動するポイント通貨(J-POINT は 0.7〜1円)のカードに置くと、設定画面に「1ptの価値」入力が出て、実効率・店舗別レートに乗算される(`CardOverride.pointValue`。null なら `default`)。収録レートは `default` 基準で書く。ポイント通貨マスタ(#39)が入るまでのカード単位の暫定表現
+  - クラス/1pt価値を持つカードの設定画面の還元率は導出値(手入力不可)になる: `(effective_rate_default + rate_bonus) × 1pt価値`
 - `qr_payments` — 利用中の QR 決済サービスのカタログ。`{ id, name, brand_color, app_packages, store_search_label, enabled_default }`。設定画面でチェックした QR 決済が判定エンジンのフィルタに使われる。DataStore に差分保存。
   - `app_packages` — そのサービスで決済できるアプリのリスト `[{ package, label }]`(優先順)。1 サービスを複数アプリが担える(AEON Pay = 単独アプリ / iAEON の 2 本立て)ため 1:N で持ち、判定詳細の起動リンクは候補全部をボタンで出す。`label` は起動先アプリの実名(サービス名と一致するとは限らない。メルペイ → メルカリ)。**パッケージ名は app の AndroidManifest `<queries>` と対で管理**(宣言が無いと Android 11+ でインストール済みでも起動 Intent が取れず Play ストア送りになる。リモート JSON で追加してもアプリ更新が要る)
 
@@ -185,7 +191,8 @@
 
 | ID | 検証対象 | 安定性 |
 |----|---------|--------|
-| `test_card_program` | 常設 rebate+rate(7%)、Amex 除外(`test_super`)、`official_store_list` 3 状態、`store_list_url`、`location_hint`(`test_vending`)、`cap_note`、`eligible_wallets`(ウォレット起動リンク)、**両階層の対象/対象外**(campaign 直下+merchant_rules の `eligible_notes`/`ineligible_notes` 連結。SMCC/MUFG 相当)、`memo`(UI 非表示) | 常時安定 |
+| `test_card_program` | 常設 rebate+rate(7%)、Amex 除外(`test_super`)、`official_store_list` 3 状態、`store_list_url`、`location_hint`(`test_vending`。`app_package` は Coke ON を指しており、インストール済み端末ではアプリ起動・未インストールでは URL フォールバックを確認できる)、`cap_note`、`eligible_wallets`(ウォレット起動リンク)、**両階層の対象/対象外**(campaign 直下+merchant_rules の `eligible_notes`/`ineligible_notes` 連結。SMCC/MUFG 相当)、`memo`(UI 非表示) | 常時安定 |
+| `test_store_rate_program` | **card_program の店舗別レート**(#52。J-POINT パートナー相当): `rate_override` がテストバーガー 10%・テストコンビニ 1.5%。カード `test_card_jcb` の**カードクラス**(テストW=+0.5%)と **1pt価値**(既定1円)を設定画面で変えると判定・詳細の率別グルーピングがスケールする。`requires_entry`、`overview_ineligible_notes`(おトクタブのキャンペーン詳細だけに出る注記。店舗判定カードには出ない) | 常時安定 |
 | `test_promotion` | 期間限定 rebate+rate(10%)、`rate_override`(15%)、`may_end_early`、`ineligible_wallets`(Google Pay 対象外警告) | 常時安定 |
 | `test_brand_promotion` | `card_brand`(Visa)、即時定率 discount+rate(30% OFF)、`per_transaction_cap`、`ineligible_wallets` 両ウォレット対象外(付記なし警告) | 常時安定 |
 | `test_recurrence_weekly` | `recurrence` 曜日型(毎週金土) | 検証日依存 |
@@ -203,8 +210,8 @@
 
 #### 複数施策競合の確認
 
-- **テストコンビニ**: test_card_program(7%)・test_promotion(10%)・test_recurrence_weekly(20% 金土)・test_lottery(抽選)・test_rebate_fixed(500 円還元 PayPay)・test_upcoming(25% 未開始)・test_ending_soon(15% 終了間近)
-- **テストバーガー**: test_card_program(7%)・test_promotion(15% override)・test_brand_promotion(Visa 30% OFF)・test_recurrence_monthly(12% 5・20・30 日)・test_discount_fixed(300 円引き PayPay)・test_upcoming(25% 未開始)
+- **テストコンビニ**: test_card_program(7%)・test_store_rate_program(1.5% テストJCB)・test_promotion(10%)・test_recurrence_weekly(20% 金土)・test_lottery(抽選)・test_rebate_fixed(500 円還元 PayPay)・test_upcoming(25% 未開始)・test_ending_soon(15% 終了間近)
+- **テストバーガー**: test_card_program(7%)・test_store_rate_program(10% テストJCB)・test_promotion(15% override)・test_brand_promotion(Visa 30% OFF)・test_recurrence_monthly(12% 5・20・30 日)・test_discount_fixed(300 円引き PayPay)・test_upcoming(25% 未開始)
 - **テストスーパー**: test_card_program(7%・Amex 除外)・test_product_scope(30% 対象商品限定 PayPay)。無条件の 7% と商品限定 30% が並んでも最大おトク率が 7% のまま(商品限定を最良比較に載せない)ことを確認できる
 - **テストドラッグ**: test_product_scope(30% 対象商品限定 PayPay)のみ。商品限定施策しか無いチェーンの一覧ラベル「30% 還元(対象商品)」の確認用。実在ドラッグストア 6 チェーンを **banners**(テストドラッググループの業態)として持ち、gc グループ `0202001` で地図表示・業態レンズ・グループ束ね UI の実機確認ができる。施策側は `ineligible_banner_ids: ["test_sundrug"]` の使用例を兼ね、**サンドラッグの実店舗ピンだけ地図から消える**(看板スコープの実機確認用。#60)
 

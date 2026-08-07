@@ -606,6 +606,7 @@ private fun RecurrenceRow(judgment: CampaignJudgment) {
 @Composable
 private fun LocationHintNote(hint: LocationHint) {
     val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
     Row(verticalAlignment = Alignment.Top) {
         Icon(
             Icons.Default.Info,
@@ -625,7 +626,13 @@ private fun LocationHintNote(hint: LocationHint) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            ExternalLinkButton(hint.label) { uriHandler.openUri(hint.url) }
+            // アプリ指定(app_package)があればインストール済みのアプリを直接起動し、
+            // 未インストール・未指定は url へ(appLinks と同じフォールバック。Coke ON で
+            // 「Play ストアが開くだけ」にならないように)
+            ExternalLinkButton(hint.label) {
+                val intent = hint.appPackage?.let { context.packageManager.getLaunchIntentForPackage(it) }
+                if (intent != null) context.startActivity(intent) else uriHandler.openUri(hint.url)
+            }
         }
     }
 }

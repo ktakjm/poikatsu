@@ -39,6 +39,8 @@ class SettingsBackupTest {
         cardOverrides = mapOf(
             "olive" to CardOverride(owned = false),
             "epos_gold" to CardOverride(rate = 1.5, brand = "Visa", welcatsu = true),
+            // カードクラス・1pt価値(#52。JCB W/S 等)も機種変更で失われないこと
+            "jcb_original" to CardOverride(cardClass = "w", pointValue = 0.7),
         ),
         enabledQrPaymentIds = setOf("paypay", "rakuten_pay"),
         ownedBrands = setOf("Amex"),
@@ -176,7 +178,7 @@ class SettingsBackupTest {
     fun `確認ダイアログの要約は登録のある種別だけ並べる`() {
         val backup = settings.toBackup("2026-07-27T10:00:00", "0.9.0")
         assertEquals(
-            "マイカードの設定2件・カスタムカード1枚・国際ブランド1件・コード決済2件・マイエリア1件・" +
+            "マイカードの設定3件・カスタムカード1枚・国際ブランド1件・コード決済2件・マイエリア1件・" +
                 "自分で登録したキャンペーン1件・対象外に登録したお店1件",
             backupContentSummary(backup),
         )
