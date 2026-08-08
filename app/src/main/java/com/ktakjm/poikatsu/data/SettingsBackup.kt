@@ -20,7 +20,9 @@ const val SETTINGS_BACKUP_SCHEMA_VERSION = 1
  * - 含める: 表示・通知・マイカード差分・国際ブランド・コード決済・マイエリア・カスタムカード/キャンペーン
  * - 含めない: 開発者向け設定(dataCommitRef / useTestData / useBundledData / developerMode)と
  *   通知済みキー。前者は端末ごとの検証用の一時状態で、引き継ぐと実データとの取り違えを招く。
- *   後者は設定値ではなく通知ジョブの内部状態
+ *   後者は設定値ではなく通知ジョブの内部状態。テストデータ側のカスタムキャンペーン
+ *   ([AppSettings.customCampaignsTest]。#65)・対象外ペア([AppSettings.excludedStorePairsTest]。#68)も
+ *   検証用の一時データなので同様に含めない
  *
  * キー名は同梱データの JSON(snake_case)ではなく camelCase。埋め込む [CustomCampaign] 等は
  * DataStore に camelCase で保存済みのモデルをそのまま使い回すため、ファイル全体で表記を揃える。

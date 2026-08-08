@@ -396,14 +396,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val qrPaymentSettings: List<QrPaymentSetting> = emptyList(),
         /** 設定画面「マイカード」に出すカスタムカード(カタログ外。DataStore 由来) */
         val customCards: List<CustomCard> = emptyList(),
-        /** カスタムキャンペーンの登録内容(DataStore 由来)。おトクタブの編集ダイアログが参照する */
+        /**
+         * カスタムキャンペーンの登録内容(DataStore 由来)。おトクタブの編集ダイアログが参照する。
+         * 現在のデータモード(useTestData)側のリストのみ(#65。通常/テストで保存が分かれる)。
+         */
         val customCampaigns: List<CustomCampaign> = emptyList(),
         /**
          * 終了日を過ぎたカスタムキャンペーン(Campaign 変換済み)。期限切れの同梱施策は一覧から
          * 消えるだけでよいが、カスタムは消えると編集・削除の入口を失うため専用セクションに出す。
          */
         val expiredCustomCampaigns: List<Campaign> = emptyList(),
-        /** ユーザー登録の対象外 (施策, 店舗) ペア(#63。DataStore 由来)。設定画面の管理一覧が参照する */
+        /**
+         * ユーザー登録の対象外 (施策, 店舗) ペア(#63。DataStore 由来)。設定画面の管理一覧が参照する。
+         * 現在のデータモード(useTestData)側のリストのみ(#68。通常/テストで保存が分かれる)。
+         */
         val excludedStorePairs: List<ExcludedStorePair> = emptyList(),
         /**
          * 統合データの全施策(期限切れ・非アクティブ含む)の id → 名前。対象外ペア管理一覧の
@@ -677,7 +683,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // 網羅リストの店舗対象外(#64)を適用する。チェーン視点(お店タブの検索ヒット)は
         // 店舗が特定できないため適用しない
         val excludedIds = displayName
-            ?.let { excludedCampaignIdsFor(merchant, it, lastSettings.excludedStorePairs) }
+            ?.let { excludedCampaignIdsFor(merchant, it, lastSettings.activeExcludedStorePairs) }
             ?: emptySet()
         val ineligibleIds = displayName
             ?.let { exhaustiveListIneligibleCampaignIds(merchant, it) }
@@ -736,7 +742,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             cardOverrides = settings.cardOverrides,
             ownedBrands = settings.ownedBrands,
             customCards = settings.customCards,
-            customCampaigns = settings.customCampaigns,
+            customCampaigns = settings.activeCustomCampaigns,
         )
         val newEngine = JudgmentEngine(merged.engineData)
         engine = newEngine
@@ -881,9 +887,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 brandSettings = brandSettings,
                 qrPaymentSettings = qrPaymentSettings,
                 customCards = settings.customCards,
-                customCampaigns = settings.customCampaigns,
+                customCampaigns = settings.activeCustomCampaigns,
                 expiredCustomCampaigns = expiredCustomCampaigns,
-                excludedStorePairs = settings.excludedStorePairs,
+                excludedStorePairs = settings.activeExcludedStorePairs,
                 allCampaignNames = merged.engineData.campaigns.associate { c -> c.id to c.name },
                 expiredCampaignIds = merged.engineData.campaigns
                     .filter { c -> newEngine.campaignStatus(c, today) == CampaignStatus.EXPIRED }
@@ -1132,7 +1138,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // ユーザー登録の対象外ペア(#63)と網羅リストの店舗対象外(#64)も店舗単位でここで間引く
                 // (該当施策だけ判定から外れ、全施策が間引かれた店は下の判定なしと同じ扱いで消える)
                 val excludedIds =
-                    engine.excludedCampaignIdsFor(merchant, poi.name, lastSettings.excludedStorePairs)
+                    engine.excludedCampaignIdsFor(merchant, poi.name, lastSettings.activeExcludedStorePairs)
                 val ineligibleIds = engine.exhaustiveListIneligibleCampaignIds(merchant, poi.name)
                 val result = engine.judgeAll(merchant, today, qrIds, match.bannerId, excludedIds, ineligibleIds)
                 // 判定なしは通常出さないが、チェーン絞り込み中(ブリッジ由来)の merchant は
@@ -1207,7 +1213,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val places = nearby.places.mapNotNull { place ->
             val merchant = place.merchant ?: return@mapNotNull place
             val excludedIds =
-                engine.excludedCampaignIdsFor(merchant, place.name, settings.excludedStorePairs)
+                engine.excludedCampaignIdsFor(merchant, place.name, settings.activeExcludedStorePairs)
             val ineligibleIds = engine.exhaustiveListIneligibleCampaignIds(merchant, place.name)
             val result = engine.judgeAll(merchant, today, qrIds, place.bannerId, excludedIds, ineligibleIds)
             if (result.judgments.isEmpty() && merchant.id !in filterIds) return@mapNotNull null
@@ -2099,7 +2105,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val engine = engine ?: return
         val sel = _state.value.selection ?: return
         val storeName = sel.displayName ?: return
-        val pairs = engine.excludedPairsFor(sel.merchant, storeName, lastSettings.excludedStorePairs)
+        val pairs = engine.excludedPairsFor(sel.merchant, storeName, lastSettings.activeExcludedStorePairs)
             .filter { it.campaignId == campaignId }
         if (pairs.isEmpty()) return
         viewModelScope.launch { settingsRepo.removeExcludedStorePairs(pairs) }
@@ -2116,7 +2122,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun onRemoveStaleExcludedStorePairs() {
         val st = _state.value
-        val stale = lastSettings.excludedStorePairs.filter {
+        val stale = lastSettings.activeExcludedStorePairs.filter {
             it.campaignId !in st.allCampaignNames || it.campaignId in st.expiredCampaignIds
         }
         if (stale.isEmpty()) return

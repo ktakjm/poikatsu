@@ -241,11 +241,33 @@ data class AppSettings(
     val registeredAreas: List<RegisteredArea> = emptyList(),
     /** カタログ外のカスタムカード(登録順) */
     val customCards: List<CustomCard> = emptyList(),
-    /** ユーザー登録のカスタムキャンペーン(登録順) */
+    /**
+     * ユーザー登録のカスタムキャンペーン(登録順)。通常データ(data/)前提の本体。
+     * 参照する ID 体系(payment_methods / merchants)がテストデータとは異なるため、
+     * テストデータ利用中の登録は [customCampaignsTest] に分けて保持する(#65)。
+     * 表示・判定には現在のモード側を返す [activeCustomCampaigns] を使う。
+     */
     val customCampaigns: List<CustomCampaign> = emptyList(),
-    /** ユーザーが対象外として登録した (施策, 店舗) ペア(#63。登録順) */
+    /** テストデータ(data-test/)前提のカスタムキャンペーン(#65)。バックアップには含めない */
+    val customCampaignsTest: List<CustomCampaign> = emptyList(),
+    /**
+     * ユーザーが対象外として登録した (施策, 店舗) ペア(#63。登録順)。通常データ(data/)前提の本体。
+     * campaignId / merchantId でデータセットの ID を参照するため、カスタムキャンペーン(#65)と同様に
+     * テストデータ利用中の登録は [excludedStorePairsTest] に分けて保持する(#68)。
+     * 表示・判定には現在のモード側を返す [activeExcludedStorePairs] を使う。
+     */
     val excludedStorePairs: List<ExcludedStorePair> = emptyList(),
-)
+    /** テストデータ(data-test/)前提の対象外ペア(#68)。バックアップには含めない */
+    val excludedStorePairsTest: List<ExcludedStorePair> = emptyList(),
+) {
+    /** 現在のデータモード(useTestData)に対応するカスタムキャンペーン。表示・判定・通知はこちらを使う(#65) */
+    val activeCustomCampaigns: List<CustomCampaign>
+        get() = if (useTestData) customCampaignsTest else customCampaigns
+
+    /** 現在のデータモード(useTestData)に対応する対象外ペア。表示・判定はこちらを使う(#68) */
+    val activeExcludedStorePairs: List<ExcludedStorePair>
+        get() = if (useTestData) excludedStorePairsTest else excludedStorePairs
+}
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore("settings")
 
@@ -279,7 +301,13 @@ class SettingsRepository(private val context: Context) {
         val REGISTERED_AREAS = stringPreferencesKey("registered_areas")
         val CUSTOM_CARDS = stringPreferencesKey("custom_cards")
         val CUSTOM_CAMPAIGNS = stringPreferencesKey("custom_campaigns")
+
+        /** テストデータ利用中(useTestData)のカスタムキャンペーン(#65)。通常側とはリストごと分離する */
+        val CUSTOM_CAMPAIGNS_TEST = stringPreferencesKey("custom_campaigns_test")
         val EXCLUDED_STORE_PAIRS = stringPreferencesKey("excluded_store_pairs")
+
+        /** テストデータ利用中(useTestData)の対象外ペア(#68)。通常側とはリストごと分離する */
+        val EXCLUDED_STORE_PAIRS_TEST = stringPreferencesKey("excluded_store_pairs_test")
     }
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -300,8 +328,10 @@ class SettingsRepository(private val context: Context) {
             ownedBrands = prefs.decodeOwnedBrands(),
             registeredAreas = prefs.decodeRegisteredAreas(),
             customCards = prefs.decodeCustomCards(),
-            customCampaigns = prefs.decodeCustomCampaigns(),
-            excludedStorePairs = prefs.decodeExcludedStorePairs(),
+            customCampaigns = prefs.decodeCustomCampaigns(Keys.CUSTOM_CAMPAIGNS),
+            customCampaignsTest = prefs.decodeCustomCampaigns(Keys.CUSTOM_CAMPAIGNS_TEST),
+            excludedStorePairs = prefs.decodeExcludedStorePairs(Keys.EXCLUDED_STORE_PAIRS),
+            excludedStorePairsTest = prefs.decodeExcludedStorePairs(Keys.EXCLUDED_STORE_PAIRS_TEST),
         )
     }
 
@@ -326,7 +356,11 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.OWNED_BRANDS] = json.encodeToString(settings.ownedBrands)
             prefs[Keys.REGISTERED_AREAS] = json.encodeToString(settings.registeredAreas)
             prefs[Keys.CUSTOM_CARDS] = json.encodeToString(settings.customCards)
+            // カスタムキャンペーンは通常データ側のみ復元する。テスト側(CUSTOM_CAMPAIGNS_TEST)は
+            // 端末ごとの検証用の一時データでバックアップに含まれないため、触らず現状維持(#65)
             prefs[Keys.CUSTOM_CAMPAIGNS] = json.encodeToString(settings.customCampaigns)
+            // 対象外ペアも通常データ側のみ復元する。テスト側(EXCLUDED_STORE_PAIRS_TEST)は
+            // 端末ごとの検証用の一時データでバックアップに含まれないため、触らず現状維持(#68)
             prefs[Keys.EXCLUDED_STORE_PAIRS] = json.encodeToString(settings.excludedStorePairs)
         }
     }
@@ -488,32 +522,48 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    /**
+     * カスタムキャンペーンの読み書き先キー。現在のデータモード(useTestData)側を返す(#65)。
+     * 通常/テストで参照する ID 体系(payment_methods / merchants)が異なるためリストごと分離し、
+     * モード判定は同じトランザクション内の値で行う(トグル直後の書き込みと競合しない)。
+     */
+    private fun Preferences.customCampaignsKey() =
+        if (this[Keys.USE_TEST_DATA] == true) Keys.CUSTOM_CAMPAIGNS_TEST else Keys.CUSTOM_CAMPAIGNS
+
     suspend fun addCustomCampaign(campaign: CustomCampaign) {
         context.settingsDataStore.edit { prefs ->
-            prefs[Keys.CUSTOM_CAMPAIGNS] = json.encodeToString(prefs.decodeCustomCampaigns() + campaign)
+            val key = prefs.customCampaignsKey()
+            prefs[key] = json.encodeToString(prefs.decodeCustomCampaigns(key) + campaign)
         }
     }
 
     suspend fun updateCustomCampaign(campaign: CustomCampaign) {
         context.settingsDataStore.edit { prefs ->
-            val updated = prefs.decodeCustomCampaigns().map { if (it.id == campaign.id) campaign else it }
-            prefs[Keys.CUSTOM_CAMPAIGNS] = json.encodeToString(updated)
+            val key = prefs.customCampaignsKey()
+            val updated = prefs.decodeCustomCampaigns(key).map { if (it.id == campaign.id) campaign else it }
+            prefs[key] = json.encodeToString(updated)
         }
     }
 
     suspend fun removeCustomCampaign(id: String) {
         context.settingsDataStore.edit { prefs ->
-            val updated = prefs.decodeCustomCampaigns().filterNot { it.id == id }
-            prefs[Keys.CUSTOM_CAMPAIGNS] = json.encodeToString(updated)
+            val key = prefs.customCampaignsKey()
+            val updated = prefs.decodeCustomCampaigns(key).filterNot { it.id == id }
+            prefs[key] = json.encodeToString(updated)
         }
     }
+
+    /** 対象外ペアの読み書き先キー。カスタムキャンペーンと同じモード分離(#68。[customCampaignsKey] 参照) */
+    private fun Preferences.excludedStorePairsKey() =
+        if (this[Keys.USE_TEST_DATA] == true) Keys.EXCLUDED_STORE_PAIRS_TEST else Keys.EXCLUDED_STORE_PAIRS
 
     /** 対象外ペアの登録。同じ (施策, 店舗名) の再登録は無視する */
     suspend fun addExcludedStorePair(pair: ExcludedStorePair) {
         context.settingsDataStore.edit { prefs ->
-            val current = prefs.decodeExcludedStorePairs()
+            val key = prefs.excludedStorePairsKey()
+            val current = prefs.decodeExcludedStorePairs(key)
             if (current.none { it.sameTarget(pair) }) {
-                prefs[Keys.EXCLUDED_STORE_PAIRS] = json.encodeToString(current + pair)
+                prefs[key] = json.encodeToString(current + pair)
             }
         }
     }
@@ -521,9 +571,10 @@ class SettingsRepository(private val context: Context) {
     suspend fun removeExcludedStorePairs(pairs: Collection<ExcludedStorePair>) {
         if (pairs.isEmpty()) return
         context.settingsDataStore.edit { prefs ->
-            val updated = prefs.decodeExcludedStorePairs()
+            val key = prefs.excludedStorePairsKey()
+            val updated = prefs.decodeExcludedStorePairs(key)
                 .filterNot { current -> pairs.any { it.sameTarget(current) } }
-            prefs[Keys.EXCLUDED_STORE_PAIRS] = json.encodeToString(updated)
+            prefs[key] = json.encodeToString(updated)
         }
     }
 
@@ -552,14 +603,14 @@ class SettingsRepository(private val context: Context) {
             ?.let { runCatching { json.decodeFromString<List<CustomCard>>(it) }.getOrNull() }
             ?: emptyList()
 
-    private fun Preferences.decodeCustomCampaigns(): List<CustomCampaign> =
-        this[Keys.CUSTOM_CAMPAIGNS]
+    private fun Preferences.decodeCustomCampaigns(key: Preferences.Key<String>): List<CustomCampaign> =
+        this[key]
             ?.let { runCatching { json.decodeFromString<List<CustomCampaign>>(it) }.getOrNull() }
             ?.map { it.normalized() }
             ?: emptyList()
 
-    private fun Preferences.decodeExcludedStorePairs(): List<ExcludedStorePair> =
-        this[Keys.EXCLUDED_STORE_PAIRS]
+    private fun Preferences.decodeExcludedStorePairs(key: Preferences.Key<String>): List<ExcludedStorePair> =
+        this[key]
             ?.let { runCatching { json.decodeFromString<List<ExcludedStorePair>>(it) }.getOrNull() }
             ?: emptyList()
 

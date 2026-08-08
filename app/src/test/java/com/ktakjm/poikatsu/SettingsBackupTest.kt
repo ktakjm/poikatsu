@@ -161,6 +161,26 @@ class SettingsBackupTest {
         assertEquals(1, restored.excludedStorePairs.size)
     }
 
+    // カスタムキャンペーン(#65)・対象外ペア(#68)は useTestData で保存が分かれる。テスト側は
+    // 端末ごとの検証用の一時データなので、開発者向け設定と同様にバックアップへ書き出さない
+    @Test
+    fun `テストデータ側のカスタムキャンペーンと対象外ペアは書き出さない`() {
+        val withTest = settings.copy(
+            customCampaignsTest = listOf(CustomCampaign(id = "custom:test-1", name = "テスト側の登録")),
+            excludedStorePairsTest = listOf(
+                ExcludedStorePair("test_campaign", "test_merchant", "テスト店 与野店", "2026-08-09"),
+            ),
+        )
+        val text = encodeSettingsBackup(withTest.toBackup("2026-07-27T10:00:00", "0.9.0"))
+        assertTrue("テスト側の登録が JSON に混ざっている", !text.contains("custom:test-1"))
+        assertTrue("テスト側の対象外ペアが JSON に混ざっている", !text.contains("test_merchant"))
+        val restored = decodeSettingsBackup(text)!!.toSettings()
+        assertEquals(settings.customCampaigns, restored.customCampaigns)
+        assertEquals(settings.excludedStorePairs, restored.excludedStorePairs)
+        assertTrue(restored.customCampaignsTest.isEmpty())
+        assertTrue(restored.excludedStorePairsTest.isEmpty())
+    }
+
     // 旧スキーマ(単一 cardId)の登録も、読み込み時に payments へ折り畳まれた形で復元される
     @Test
     fun `旧スキーマのカスタムキャンペーンは payments へ正規化される`() {

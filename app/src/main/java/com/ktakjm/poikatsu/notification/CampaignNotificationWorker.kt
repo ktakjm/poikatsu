@@ -89,7 +89,7 @@ class CampaignNotificationWorker(
             cardOverrides = settings.cardOverrides,
             ownedBrands = settings.ownedBrands,
             customCards = settings.customCards,
-            customCampaigns = settings.customCampaigns,
+            customCampaigns = settings.activeCustomCampaigns,
         )
         val targets = notificationTargets(
             campaigns = merged.engineData.campaigns,
