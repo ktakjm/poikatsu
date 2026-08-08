@@ -21,13 +21,15 @@ description: 還元施策(キャンペーン・クーポン)の収集とメン�
 /collect-campaigns paypay|aupay|dpay|aeon|merpay|card|amex|municipal   # ソース限定
 /collect-campaigns maintenance              # 既存データのメンテのみ
 /collect-campaigns municipal 関東           # 自治体を地域ブロック限定で(北海道・東北/関東/中部/近畿/中国・四国/九州・沖縄)
-/collect-campaigns rakuten: くら寿司 サンマルクカフェ   # 楽天ヒント(このヒントがある時だけ楽天ペイを収集)
+/collect-campaigns rakuten: くら寿司 サンマルクカフェ   # ヒント(楽天ペイはこのヒントがある時だけ収集)
+/collect-campaigns aupay: コジマ            # ヒントは全ソース共通の構文(指定チェーン起点で優先探索)
 ```
 
 - `card` = 三井住友カード(半手動)+三菱UFJニコス
 - `aeon` = AEON Pay(自治体クロスチェック+PR TIMES/加盟店側。イオン系ドメインには行かない。必要時のみ半手動。sources.md 参照)
 - `merpay` = メルペイ(PR TIMES・加盟店側から収集。メルカリ側ドメインには行かない。sources.md 参照)
-- 楽天ペイは **`rakuten:` ヒントが与えられた場合のみ**対象(自治体クロスチェックでの検出は除く。§ 自治体クロスチェック)
+- **ヒント構文は全ソース共通**: `<ソース>: <チェーン名…>`(「今◯◯でやってるはず」等のユーザー持ち込み情報の正規の入口)。指定があると、そのソースの通常巡回に加えて指定チェーン起点の探索(sources.md「店舗限定・タイアップ型施策の発見(共通)」)を優先的に行う。ガードレールは通常どおり適用(禁止ドメインのヒントでも加盟店側・公式記事側から取る)
+- 楽天ペイだけは **`rakuten:` ヒントが与えられた場合のみ**対象(ヒントが唯一の発見経路。自治体クロスチェックでの検出は除く。§ 自治体クロスチェック)
 - 複数指定可(例: `/collect-campaigns paypay municipal 関東`)
 
 ## ガードレール(違反禁止。docs/coupon-collection-tos.md の共通原則を実行ルール化したもの)
@@ -69,7 +71,7 @@ sources.md のソースごとの手順で入口を巡回し、未収録の施策
 
 ### Phase 3 — フィルタと下書き
 
-1. **収録基準**(data/README.md): 還元率 5% 以上(自治体・カード会社期間限定)。クーポンは割引率 5% 以上 OR 割引額 100 円以上 AND 全員配布 AND 主要チェーン対象
+1. **収録基準**(data/README.md): 還元率 5% 以上(自治体・カード会社期間限定)。クーポンは割引率 5% 以上 OR 割引額 100 円以上 AND 全員配布 AND 主要チェーン対象。**「主要チェーン対象」は特定複数店舗限定でも、公式が対象店舗を言い切る網羅リストがあれば満たす**(`official_store_list.list_is_exhaustive: true` 付きで収録。mapping.md 参照。コジマ×ビックカメラ型を基準解釈で見送らない)
 2. 基準内 → mapping.md の変換規則で `data/campaigns.json` に追記する(working tree に直接編集。git diff がレビュー画面になる)。`updated_at` も更新する
 3. 対象チェーンが merchants.json に無い場合は merchant エントリの下書きも作る(`reading`・`aliases` 必須。`category`・`yolp_search` は判断根拠が無ければ要確認マークを付けて報告)
 4. 基準外・収録不能 → **見送り一覧**へ(理由付き: 基準未満/ネット限定/会員限定・要ログイン/アプリ内限定/断定不能 等)。ネット限定施策(d曜日等)は現時点ではスキーマに区別が無いため一律見送り

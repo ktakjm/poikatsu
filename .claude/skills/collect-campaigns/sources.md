@@ -2,6 +2,19 @@
 
 collect-campaigns スキルが巡回する入口と、ソース別のアクセス方式・読み方。規約上の判断根拠は docs/coupon-collection-tos.md(正本)を参照。入口 URL が死んでいたら Web 検索で後継ページを探し、見つけたらこのファイルの更新も下書きに含める。
 
+## 店舗限定・タイアップ型施策の発見(共通)
+
+特定チェーン・特定複数店舗限定のクーポン/タイアップ施策(例: コジマ×ビックカメラの au PAY 割引クーポン。#64/#66)は、各社のキャンペーン一覧に載らないことが多く、ソース別の定常入口だけでは発見できない。どの決済手段でも起こりうるため、以下の 4 経路を共通の型として使う(ガードレール・規約確認は通常どおり適用):
+
+1. **公式メディア/記事ドメインの site: 検索**: 各ソースのセクションに記載の記事ドメインを Web 検索で探索する(例: 「au PAY クーポン site:media.aupay.wallet.auone.jp」)。一覧が SPA で読めないソースでも、個別記事は静的公開ページであることが多い。フル実行・該当ソース指定時に巡回する(月次目安)
+2. **PR TIMES 横断検索**: 「{決済名} 還元 クーポン site:prtimes.jp」等。d払い・メルペイの既存経路もこの型
+3. **加盟店側の告知**: チェーン公式のニュースページ等(初出ドメインはガードレール 6 で規約確認)
+4. **ユーザーヒント**: `<ソース>: <チェーン名…>` 引数(SKILL.md 参照)。指定チェーン名+決済名で Web 検索し、公式記事または加盟店側告知に到達する
+
+発見した施策が特定複数店舗限定でも、公式の網羅リストがあれば収録基準を満たす(`list_is_exhaustive` 付きで収録。SKILL.md Phase 3 / mapping.md / data/README.md 参照)。**アプリ内限定のクーポン(PayPay coupon-corner、au PAY / d払いのアプリ内クーポン)は引き続き対象外**(ガードレール 4。公開ページに事実が揃うものだけ収録する)。
+
+> 試運転(#66): この経路での収集初回は `/collect-campaigns aupay` 等の小スコープで実行し、`list_is_exhaustive` 付き下書きが正しく出ることを git diff で確認してから通常運用に戻す(mapping.md の試運転ルール準用)。確認できたらこの注記を消す。
+
 ## PayPay — 直接閲覧可
 
 | 入口 | URL |
@@ -21,8 +34,10 @@ collect-campaigns スキルが巡回する入口と、ソース別のアクセ�
 | 自治体キャンペーン一覧 | https://media.aupay.wallet.auone.jp/dominant/ |
 | 月次報道発表 | https://www.au.com/information/topic/auwallet/ 配下 |
 | たぬきの吉日 常設 LP | https://aupay.auone.jp/contents/lp/tanukichi/index.html |
+| 店舗限定クーポン記事の探索 | Web 検索「au PAY クーポン site:media.aupay.wallet.auone.jp」(記事は `/articles/…` 配下) |
 
-- `aupay.wallet.auone.jp/campaign/`(一覧)は Nuxt SPA で静的取得不可。上記 3 入口で代替する
+- `aupay.wallet.auone.jp/campaign/`(一覧)は Nuxt SPA で静的取得不可。上記入口で代替する
+- **記事ドメイン**は `media.aupay.wallet.auone.jp`(§ 店舗限定・タイアップ型施策の発見)。店舗限定クーポン(コジマ×ビックカメラ等。#64/#66)の公式記事はここの `/articles/…` に載る。robots.txt 実質全許可・規約確認済み(docs/coupon-collection-tos.md)で直接閲覧可
 - 自治体一覧は自治体名・期間まで。率・上限は各詳細 LP(`media.aupay.wallet.auone.jp/dominant/lp/...` または `/articles/...`)か au.com 月次発表で補完
 - たぬきの吉日: 2026-06-30 で au/UQ ユーザー特典(要エントリー)は終了。「たぬきの抽選会」(だれでも対象・200 円以上・抽選)は継続 → 収録するなら `lottery` + `recurrence`(毎月 5・8・15・25 日)ベース。ページで現行構成を必ず確認する
 - camp.auone.jp は robots.txt に個別 Disallow パスあり。フェッチ前確認を怠らない
