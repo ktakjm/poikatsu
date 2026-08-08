@@ -26,19 +26,31 @@ const val STARTED_LOOKBACK_DAYS = 1
 enum class NotificationKind { STARTED, ENDS_SOON }
 
 data class CampaignNotification(
-    val campaign: Campaign,
+    /**
+     * 1キャンペーン分の施策。campaigns.json は (施策 × 決済手段) 単位なので、決済手段ごとに
+     * 分かれたエントリがここに束ねて入る([notificationGroupKey])。名前と期間はグループ内で
+     * 揃っている前提で、先頭を代表として扱う。
+     */
+    val campaigns: List<Campaign>,
     val kind: NotificationKind,
     /** STARTED: 開始からの経過日数(0=今日開始)。ENDS_SOON: 残り日数(0=今日で終了) */
     val days: Int,
 ) {
+    /** 名前・期間の取り出しに使う代表の施策 */
+    val campaign: Campaign get() = campaigns.first()
+
     /**
      * 再通知抑止キー(通知済みとして DataStore に記録する)。期間の日付を含めることで、
      * 施策が延長・改定されたら別キーになり改めて通知される。
+     *
+     * 施策 id でなくグループキーで持つ(#67)。決済手段ごとに分かれたエントリで別々に記録すると、
+     * 後から決済手段が1つ増えただけでキャンペーン全体が再通知されてしまうため。期間はグループの
+     * 全メンバーで揃っている([notificationGroupKey])ので代表の日付をそのまま使える。
      */
     val dedupKey: String
         get() = when (kind) {
-            NotificationKind.STARTED -> "start:${campaign.id}:${campaign.periodStart}"
-            NotificationKind.ENDS_SOON -> "end:${campaign.id}:${campaign.periodEnd}"
+            NotificationKind.STARTED -> "start:${campaignGroupKey(campaign)}:${campaign.periodStart}"
+            NotificationKind.ENDS_SOON -> "end:${campaignGroupKey(campaign)}:${campaign.periodEnd}"
         }
 }
 
@@ -79,12 +91,23 @@ private fun backedByUserPayments(
 }
 
 /**
- * targets のうち今日通知すべきものを返す。開始と終了間近が同時に該当する短期施策は
- * 開始のみ(1施策1行)。period_start の無い施策は「開始済み扱い」なので開始通知は出ない。
- * may_end_early で period_end 未定の施策は終了日が分からないため終了間近も出ない(#6 追記)。
+ * 通知を1件に畳む単位。表示グループ([campaignGroupKey])に期間を足したもの——決済手段によって
+ * 期間が違うキャンペーンをグループの最早/最遅へ丸めると、後から始まる決済手段の開始を
+ * 取りこぼすため、期間が違えば別の通知にする(現データは全グループで期間が揃っており実質1件)。
+ */
+private fun notificationGroupKey(campaign: Campaign): String =
+    "${campaignGroupKey(campaign)}|${campaign.periodStart}|${campaign.periodEnd}"
+
+/**
+ * targets のうち今日通知すべきものを返す。まず [notificationGroupKey] でキャンペーン単位に
+ * 畳んでから判定するので、決済手段ごとに分かれた施策も1行になる(#67)。開始と終了間近が
+ * 同時に該当する短期施策は開始のみ(1キャンペーン1行)。period_start の無い施策は「開始済み扱い」
+ * なので開始通知は出ない。may_end_early で period_end 未定の施策は終了日が分からないため
+ * 終了間近も出ない(#6 追記)。
  */
 fun planCampaignNotifications(targets: List<Campaign>, today: LocalDate): List<CampaignNotification> =
-    targets.mapNotNull { campaign ->
+    targets.groupBy(::notificationGroupKey).values.mapNotNull { group ->
+        val campaign = group.first()
         val start = campaign.periodStart?.let { JudgmentEngine.parseDate(it) }
         val end = campaign.periodEnd?.let { JudgmentEngine.parseDate(it) }
         if (start != null && today < start) return@mapNotNull null // 開始前
@@ -93,9 +116,9 @@ fun planCampaignNotifications(targets: List<Campaign>, today: LocalDate): List<C
         val remaining = end?.let { ChronoUnit.DAYS.between(today, it).toInt() }
         when {
             sinceStart != null && sinceStart <= STARTED_LOOKBACK_DAYS ->
-                CampaignNotification(campaign, NotificationKind.STARTED, sinceStart)
+                CampaignNotification(group, NotificationKind.STARTED, sinceStart)
             remaining != null && remaining <= ENDS_SOON_DAYS ->
-                CampaignNotification(campaign, NotificationKind.ENDS_SOON, remaining)
+                CampaignNotification(group, NotificationKind.ENDS_SOON, remaining)
             else -> null
         }
     }
@@ -103,10 +126,10 @@ fun planCampaignNotifications(targets: List<Campaign>, today: LocalDate): List<C
 /** 通知本文の1行分。タイトルはおトクタブと同じ略記優先(display_name → name) */
 fun notificationLine(notification: CampaignNotification): String {
     val title = notification.campaign.displayName ?: notification.campaign.name
-    return when (notification.kind) {
+    val body = when (notification.kind) {
         NotificationKind.STARTED -> {
             // 終了日を併記する。開始と終了間近が同日に重なる短期施策は開始通知しか出ない
-            // (1施策1行で開始優先)ため、これが無いと終了時期が通知から読めない。
+            // (1キャンペーン1行で開始優先)ため、これが無いと終了時期が通知から読めない。
             // 年は formatPeriodDate と同じく省略しない(年跨ぎ期間が読めなくなるため)
             val until = notification.campaign.periodEnd?.let { "(〜${it.replace('-', '/')})" } ?: ""
             if (notification.days == 0) "「$title」が今日から開始$until" else "「$title」が開始しました$until"
@@ -114,6 +137,17 @@ fun notificationLine(notification: CampaignNotification): String {
         NotificationKind.ENDS_SOON ->
             if (notification.days == 0) "「$title」は今日で終了" else "「$title」は残り${notification.days}日"
     }
+    return body + paymentsSuffix(notification.campaigns)
+}
+
+/**
+ * まとめた決済手段の添え書き(「 PayPay ほか4件」)。おトクタブの一覧カードが決済手段を見せて
+ * いるのに対し、通知は1行に畳むため代表+件数で示す。1つだけのときは何も足さない。
+ * 名前は施策の operator(自治体施策は決済事業者名、カスタムキャンペーンは登録した決済手段名)。
+ */
+private fun paymentsSuffix(campaigns: List<Campaign>): String {
+    val operators = campaigns.map { it.operator }.filter { it.isNotBlank() }.distinct()
+    return if (operators.size < 2) "" else " ${operators.first()} ほか${operators.size - 1}件"
 }
 
 /** 通知タイトル。1件ならその内容をそのまま、複数なら種別ごとの件数のまとめ */

@@ -49,6 +49,7 @@ import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.domain.CampaignType
+import com.ktakjm.poikatsu.domain.campaignGroupKey
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.customCampaignBaseId
 import com.ktakjm.poikatsu.domain.formatBenefit
@@ -772,17 +773,15 @@ private fun daysInfo(status: CampaignStatus, today: LocalDate, earliestStart: Lo
         else -> null
     }
 
+/**
+ * 一覧カードの単位に畳む。畳み方(自治体は地域単位・カスタムは登録単位・同梱施策は id がユニーク
+ * なので実質1件グループ)は通知(#67)と共有する——[campaignGroupKey]。
+ * 自治体グループを先に並べるため、キーで畳む前に partition する。
+ */
 private fun groupCampaignsForDisplay(campaigns: List<Campaign>): List<List<Campaign>> {
     val (municipal, others) = campaigns.partition { it.campaignType == CampaignType.MUNICIPAL }
-    val municipalGroups = municipal
-        .groupBy { it.region?.name ?: it.id }
-        .values.toList()
-    // カスタムは登録単位でまとめる(複数決済の登録は決済ごとの Campaign に展開されているため)。
-    // 同梱施策は id がユニークなので実質1件グループのまま
-    val otherGroups = others
-        .groupBy { if (it.isCustom) customCampaignBaseId(it.id) else it.id }
-        .values.toList()
-    return municipalGroups + otherGroups
+    return municipal.groupBy(::campaignGroupKey).values.toList() +
+        others.groupBy(::campaignGroupKey).values.toList()
 }
 
 private fun campaignFilterLabel(filter: CampaignFilter): String = when (filter) {
