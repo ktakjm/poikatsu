@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -22,6 +24,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 
 /** 遅延テスト通知の待ち時間(秒)。押してから画面を消すのに要る程度の短さ */
@@ -41,6 +45,8 @@ internal fun DeveloperSettingsPage(
     dataCommitSha: String?,
     useTestData: Boolean,
     useBundledData: Boolean,
+    /** 地図タブで最後に記録した生 POI の件数(#70。開発者モード ON の検索時だけ記録される) */
+    nearbyPoiCount: Int,
     onBack: () -> Unit,
     onDeveloperModeChange: (Boolean) -> Unit,
     onDataCommitRefChange: (String) -> Unit,
@@ -48,6 +54,7 @@ internal fun DeveloperSettingsPage(
     onUseBundledDataChange: (Boolean) -> Unit,
     onTestNotification: (Long) -> Unit,
     onClearNotifiedCampaigns: () -> Unit,
+    onOpenNearbyPois: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
 
@@ -116,6 +123,20 @@ internal fun DeveloperSettingsPage(
                 },
             )
 
+            // 地図の取得データの実測(#70)。YOLP の生 POI と照合・間引き結果を確認する
+            // (alias 補完の要否判断・yolp_coverage_note の実測根拠の材料)
+            SettingsSectionHeader("地図")
+            ListItem(
+                headlineContent = { Text("取得した地図データ") },
+                supportingContent = {
+                    Text(
+                        if (nearbyPoiCount > 0) "最後の検索で取得した${nearbyPoiCount}件と照合結果"
+                        else "地図タブでお店を検索すると記録されます",
+                    )
+                },
+                modifier = Modifier.clickable(onClick = onOpenNearbyPois),
+            )
+
             // 通知(#6)のテスト。日次ジョブの発火時刻を待たずに本番と同じ判定・通知経路を通す
             SettingsSectionHeader("通知のテスト")
             ListItem(
@@ -160,6 +181,75 @@ internal fun DeveloperSettingsPage(
                 TextButton(onClick = { developerModeDialogTarget = null }) { Text("キャンセル") }
             },
         )
+    }
+}
+
+/**
+ * 「取得した地図データ」ページ(#70。開発者向け配下の 2 階層目)。地図タブで最後に取得した
+ * YOLP の生 POI と照合・間引き結果の一覧。重複集約の前なので同一店舗の重複登録もそのまま並ぶ。
+ * TSV コピーは collect-campaigns の alias 補完判断・yolp_coverage_note の実測根拠に渡す用。
+ */
+@Composable
+internal fun DeveloperPoisPage(
+    pois: List<MainViewModel.DebugPoi>,
+    onBack: () -> Unit,
+) {
+    BackHandler(onBack = onBack)
+    if (pois.isEmpty()) {
+        Text(
+            "記録がありません。開発者モードをオンにした状態で、地図タブでお店を検索すると記録されます。",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(16.dp),
+        )
+        return
+    }
+    val clipboard = LocalClipboardManager.current
+    val matched = pois.count { it.matchLabel != null }
+    val shown = pois.count { it.status == MainViewModel.DebugPoiStatus.SHOWN }
+    LazyColumn(Modifier.fillMaxSize()) {
+        item(key = "__summary") {
+            Text(
+                "取得${pois.size}件・照合${matched}件・表示${shown}件",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+        item(key = "__copy") {
+            ListItem(
+                headlineContent = { Text("一覧をコピー") },
+                supportingContent = { Text("TSV 形式でクリップボードにコピーします") },
+                modifier = Modifier.clickable { clipboard.setText(AnnotatedString(buildPoiTsv(pois))) },
+            )
+        }
+        itemsIndexed(pois) { index, poi ->
+            ListItem(
+                headlineContent = { Text(poi.name) },
+                supportingContent = {
+                    Text(
+                        "%.4f, %.4f・照合: %s".format(poi.lat, poi.lon, poi.matchLabel ?: "一致なし"),
+                    )
+                },
+                trailingContent = {
+                    Text(
+                        poi.status.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (poi.status == MainViewModel.DebugPoiStatus.SHOWN) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                },
+            )
+        }
+    }
+}
+
+private fun buildPoiTsv(pois: List<MainViewModel.DebugPoi>): String = buildString {
+    appendLine("poi_name\tlat\tlon\tmatch\tstatus")
+    pois.forEach { p ->
+        appendLine("${p.name}\t${p.lat}\t${p.lon}\t${p.matchLabel.orEmpty()}\t${p.status.label}")
     }
 }
 

@@ -138,6 +138,9 @@ enum class SettingsSubpage(val title: String) {
 
     /** このアプリ配下の 2 階層目(#48)。戻る操作は [MainViewModel.onCloseSettingsSubpage] が ABOUT へ戻す */
     LICENSES("オープンソースライセンス"),
+
+    /** 開発者向け配下の 2 階層目(#70)。戻る操作は DEVELOPER へ戻す */
+    DEVELOPER_POIS("取得した地図データ"),
 }
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -212,6 +215,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     )
 
     /**
+     * 開発者向け「取得した地図データ」の 1 行(#70)。YOLP の生 POI と照合・間引きの結果。
+     * 重複集約の前なので YOLP の同一店舗の重複登録もそのまま並ぶ(それ自体が実測情報)。
+     * 収集運用での alias 補完の要否判断・yolp_coverage_note の実測根拠に使う。
+     */
+    data class DebugPoi(
+        val name: String,
+        val lat: Double,
+        val lon: Double,
+        /** matchStore の照合結果(系列名。看板ヒットは「系列名(看板名)」)。null = 一致なし */
+        val matchLabel: String?,
+        val status: DebugPoiStatus,
+    )
+
+    /** [DebugPoi] の表示可否と間引き理由 */
+    enum class DebugPoiStatus(val label: String) {
+        SHOWN("表示"),
+        NO_MATCH("一致なし"),
+        FACILITY_TENANT("テナント除外"),
+        OFFICIALLY_EXCLUDED("公式対象外"),
+        EXHAUSTIVE_INELIGIBLE("網羅リスト外"),
+        NO_JUDGMENT("判定なし"),
+    }
+
+    /**
      * 「地図」の絞り込みレンズ 1 件。bannerId = null は系列(グループ)全体、
      * 非 null はその看板(業態)だけに絞る。等価判定は (merchant.id, bannerId) で行う
      * (Merchant はデータ更新で別インスタンスになり得るため)。
@@ -276,6 +303,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          * 「この範囲に無い」でなく「対象のお店ではないため表示していない」と案内するために持つ。
          */
         val ineligibleHiddenCount: Int = 0,
+        /** YOLP 取得の生件数(照合・重複集約の前。#70)。空状態の取得サマリの出し分けに使う */
+        val rawPoiCount: Int = 0,
         /** 検索の中心(=地図カメラ中心)。距離計算の起点。取得前は null */
         val centerLat: Double? = null,
         val centerLon: Double? = null,
@@ -443,6 +472,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val developerMode: Boolean = false,
         /** 表示中の設定サブページ(設定タブ上のオーバーレイ)。null ならトップページ */
         val settingsSubpage: SettingsSubpage? = null,
+        /**
+         * 開発者向け「取得した地図データ」の生 POI 一覧(#70)。開発者モード ON の検索時だけ
+         * 記録される。設定画面から見るため、nearby と違い**地図タブを離れても保持**する
+         * (検索のたびに上書き。開発者モード OFF で消去)。
+         */
+        val nearbyDebugPois: List<DebugPoi> = emptyList(),
         /**
          * 読み込み済みで、まだ適用していないバックアップ(#50)。非 null の間だけ復元の確認
          * ダイアログを出す。中身の要約を確認してから上書きさせるため、選択と適用を分ける。
@@ -933,6 +968,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 useTestData = settings.useTestData,
                 useBundledData = settings.useBundledData,
                 developerMode = settings.developerMode,
+                // 開発者モード OFF は開発者向け設定の一括リセット。生 POI 記録もここで消す
+                nearbyDebugPois = if (settings.developerMode) it.nearbyDebugPois else emptyList(),
                 campaignsActive = campaignsActive,
                 campaignsUpcoming = campaignsUpcoming,
                 campaignPersonalRates = campaignPersonalRates,
@@ -1160,12 +1197,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // ブリッジ中チェーンの網羅リスト対象外で間引いた店(0 件表示の案内の出し分け用。#70)。
         // YOLP の同一店舗の重複登録を二重に数えないよう、重複排除と同じ「チェーン+支店名」で数える
         val ineligibleHidden = mutableSetOf<String>()
+        // 開発者モード中だけ生 POI と照合・間引き結果を記録する(#70。設定→開発者向け→
+        // 「取得した地図データ」で表示。OFF 時は記録しない=オーバーヘッドなし)
+        val debugPois = if (lastSettings.developerMode) mutableListOf<DebugPoi>() else null
         val places = pois
             .mapNotNull { poi ->
-                val match = engine.matchStore(poi.name) ?: return@mapNotNull null
+                fun record(matchLabel: String?, status: DebugPoiStatus) {
+                    debugPois?.add(DebugPoi(poi.name, poi.lat, poi.lon, matchLabel, status))
+                }
+                val match = engine.matchStore(poi.name)
+                if (match == null) {
+                    record(null, DebugPoiStatus.NO_MATCH)
+                    return@mapNotNull null
+                }
                 val merchant = match.merchant
-                if (engine.isFacilityTenant(match.bannerName, poi.name)) return@mapNotNull null
-                if (engine.isExcludedStore(merchant, poi.name)) return@mapNotNull null
+                val matchLabel = merchant.name +
+                    if (match.bannerId != merchant.id) "(${match.bannerName})" else ""
+                if (engine.isFacilityTenant(match.bannerName, poi.name)) {
+                    record(matchLabel, DebugPoiStatus.FACILITY_TENANT)
+                    return@mapNotNull null
+                }
+                if (engine.isExcludedStore(merchant, poi.name)) {
+                    record(matchLabel, DebugPoiStatus.OFFICIALLY_EXCLUDED)
+                    return@mapNotNull null
+                }
                 // POI は具体的な看板(業態)なので看板スコープで判定する(対象外業態はここで判定なしになり消える)。
                 // ユーザー登録の対象外ペア(#63)と網羅リストの店舗対象外(#64)も店舗単位でここで間引く
                 // (該当施策だけ判定から外れ、全施策が間引かれた店は下の判定なしと同じ扱いで消える)
@@ -1182,8 +1237,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     if (merchant.id in filterIds && ineligibleIds.isNotEmpty()) {
                         ineligibleHidden += "${merchant.id}:${engine.normalizedBranch(merchant, poi.name)}"
                     }
+                    record(
+                        matchLabel,
+                        if (ineligibleIds.isNotEmpty()) DebugPoiStatus.EXHAUSTIVE_INELIGIBLE
+                        else DebugPoiStatus.NO_JUDGMENT,
+                    )
                     return@mapNotNull null
                 }
+                record(matchLabel, DebugPoiStatus.SHOWN)
                 val allCampaigns = result.judgments.map { it.campaign }
                 NearbyPlace(
                     name = poi.name,
@@ -1223,6 +1284,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             NearbyUi(
                 places = places,
                 ineligibleHiddenCount = ineligibleHidden.size,
+                rawPoiCount = pois.size,
                 centerLat = centerLat,
                 centerLon = centerLon,
                 userLat = userLat,
@@ -1230,6 +1292,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 zoom = effectiveZoom,
                 searchStamp = gen,
             ),
+            debugPois,
         )
         resolveMunicipalNotice(gen, centerLat, centerLon)
     }
@@ -1329,8 +1392,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** 進行中の近隣取得が最新世代(タブ移動・再取得で破棄されていない)のときだけ結果を反映する */
-    private fun applyNearbyIfCurrent(gen: Int, nearby: NearbyUi) {
-        _state.update { if (gen == nearbyGeneration) it.copy(nearby = nearby) else it }
+    /** debugPois は非 null のときだけ更新する(null = 開発者モード OFF で未記録 → 既存を維持) */
+    private fun applyNearbyIfCurrent(gen: Int, nearby: NearbyUi, debugPois: List<DebugPoi>? = null) {
+        _state.update {
+            if (gen != nearbyGeneration) return@update it
+            it.copy(nearby = nearby, nearbyDebugPois = debugPois ?: it.nearbyDebugPois)
+        }
     }
 
     /**
@@ -2071,10 +2138,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(settingsSubpage = page) }
     }
 
-    // ライセンス一覧だけ「このアプリ」配下の 2 階層目なので、戻る操作は親サブページへ戻す
+    // 2 階層目のサブページ(ライセンス一覧・取得した地図データ)は、戻る操作で親サブページへ戻す
     fun onCloseSettingsSubpage() {
         _state.update {
-            val parent = if (it.settingsSubpage == SettingsSubpage.LICENSES) SettingsSubpage.ABOUT else null
+            val parent = when (it.settingsSubpage) {
+                SettingsSubpage.LICENSES -> SettingsSubpage.ABOUT
+                SettingsSubpage.DEVELOPER_POIS -> SettingsSubpage.DEVELOPER
+                else -> null
+            }
             it.copy(settingsSubpage = parent)
         }
     }

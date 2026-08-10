@@ -557,6 +557,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             dataCommitSha = state.dataCommitSha,
                             useTestData = state.useTestData,
                             useBundledData = state.useBundledData,
+                            nearbyPoiCount = state.nearbyDebugPois.size,
                             onBack = viewModel::onCloseSettingsSubpage,
                             onDeveloperModeChange = viewModel::onSetDeveloperMode,
                             onDataCommitRefChange = viewModel::onSetDataCommitRef,
@@ -564,6 +565,14 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             onUseBundledDataChange = viewModel::onSetUseBundledData,
                             onTestNotification = viewModel::onTestNotification,
                             onClearNotifiedCampaigns = viewModel::onClearNotifiedCampaigns,
+                            onOpenNearbyPois = {
+                                viewModel.onOpenSettingsSubpage(SettingsSubpage.DEVELOPER_POIS)
+                            },
+                        )
+                        // onCloseSettingsSubpage が DEVELOPER へ戻す(2 階層目。#70)
+                        SettingsSubpage.DEVELOPER_POIS -> DeveloperPoisPage(
+                            pois = state.nearbyDebugPois,
+                            onBack = viewModel::onCloseSettingsSubpage,
                         )
                         SettingsSubpage.ABOUT -> AboutSettingsPage(
                             onBack = viewModel::onCloseSettingsSubpage,
@@ -1851,8 +1860,13 @@ private fun NearbySheetContent(
                             merchantFilters.isNotEmpty() ->
                                 merchantFilters.joinToString("") { "「${it.label}」" } +
                                     "はこの範囲にありません。地図を動かすか、絞り込みを解除してください。"
+                            // 取得サマリで 0 件の意味を切り分ける(#70): 取得自体が 0 件(提供データが
+                            // 薄いエリア等)と、取得はできたが対象チェーンが無かったを区別する
+                            nearby.places.isEmpty() && nearby.rawPoiCount == 0 ->
+                                "この付近のお店情報を取得できませんでした。別のエリアで試してください。"
                             nearby.places.isEmpty() ->
-                                "この範囲に対象キャンペーンのあるお店が見つかりませんでした。地図を動かして探してください。"
+                                "周辺のお店情報${nearby.rawPoiCount}件のうち、対象キャンペーンのある" +
+                                    "お店は見つかりませんでした。地図を動かして探してください。"
                             else -> "選択中のジャンルに該当する周辺のお店がありません。"
                         },
                         style = MaterialTheme.typography.bodyMedium,
