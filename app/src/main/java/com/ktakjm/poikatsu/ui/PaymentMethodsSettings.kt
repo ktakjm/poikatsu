@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -31,8 +33,10 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -50,7 +54,8 @@ import com.ktakjm.poikatsu.data.CardClass
 import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.PointValueConfig
 import com.ktakjm.poikatsu.domain.trimRate
-import com.ktakjm.poikatsu.ui.theme.warningColor
+import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
+import com.ktakjm.poikatsu.ui.theme.warningContainerColor
 
 /**
  * お支払い方法サブページ(#47)。マイカード / 国際ブランド / コード決済の 3 セクションを統合する
@@ -91,47 +96,59 @@ internal fun PaymentMethodsSettingsPage(
             color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
-        cards.forEach { card ->
-            CardSettingItem(
-                card = card,
-                onOwnedChange = { onCardOwnedChange(card.cardId, it) },
-                onRateChange = { onCardRateChange(card.cardId, it) },
-                onBrandChange = { onCardBrandChange(card.cardId, it) },
-                onWelcatsuChange = { onCardWelcatsuChange(card.cardId, it) },
-                onClassChange = { onCardClassChange(card.cardId, it) },
-                onPointValueChange = { onCardPointValueChange(card.cardId, it) },
-            )
-        }
-        // カタログ外のカスタムカード。識別はロゴでなく色(方針どおり)なので、色スウォッチを先頭に出す
-        customCards.forEach { card ->
-            ListItem(
-                headlineContent = { Text(card.name) },
-                supportingContent = {
-                    Text(
-                        if (card.brand.isBlank()) "カスタムカード"
-                        else "カスタムカード・${card.brand}"
+        // カード1枚=面1つ。所有カードは設定行が下に膨らんで次のカードと地続きに見えるため、
+        // 面の切れ目でグループ境界を示す(グループ化の背景は SettingsGroupSurface の KDoc)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            cards.forEach { card ->
+                SettingsGroupSurface {
+                    CardSettingItem(
+                        card = card,
+                        onOwnedChange = { onCardOwnedChange(card.cardId, it) },
+                        onRateChange = { onCardRateChange(card.cardId, it) },
+                        onBrandChange = { onCardBrandChange(card.cardId, it) },
+                        onWelcatsuChange = { onCardWelcatsuChange(card.cardId, it) },
+                        onClassChange = { onCardClassChange(card.cardId, it) },
+                        onPointValueChange = { onCardPointValueChange(card.cardId, it) },
                     )
-                },
-                leadingContent = { CustomCardColorDot(card.color) },
-                trailingContent = {
-                    IconButton(onClick = { deletingCustomCard = card }) {
-                        Icon(Icons.Default.Close, contentDescription = "削除")
-                    }
-                },
-                modifier = Modifier.clickable { editingCustomCard = card },
-            )
-        }
-        ListItem(
-            headlineContent = { Text("カードを追加") },
-            leadingContent = {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                }
+            }
+            // カタログ外のカスタムカード。識別はロゴでなく色(方針どおり)なので、色スウォッチを先頭に出す
+            customCards.forEach { card ->
+                SettingsGroupSurface {
+                    ListItem(
+                        headlineContent = { Text(card.name) },
+                        supportingContent = {
+                            Text(
+                                if (card.brand.isBlank()) "カスタムカード"
+                                else "カスタムカード・${card.brand}"
+                            )
+                        },
+                        leadingContent = { CustomCardColorDot(card.color) },
+                        trailingContent = {
+                            IconButton(onClick = { deletingCustomCard = card }) {
+                                Icon(Icons.Default.Close, contentDescription = "削除")
+                            }
+                        },
+                        colors = transparentListItemColors(),
+                        modifier = Modifier.clickable { editingCustomCard = card },
+                    )
+                }
+            }
+            SettingsGroupSurface {
+                ListItem(
+                    headlineContent = { Text("カードを追加") },
+                    leadingContent = {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    },
+                    colors = transparentListItemColors(),
+                    modifier = Modifier.clickable { editingCustomCard = NEW_CUSTOM_CARD },
                 )
-            },
-            modifier = Modifier.clickable { editingCustomCard = NEW_CUSTOM_CARD },
-        )
+            }
+        }
 
         // --- 国際ブランド(イシュアー不問のブランド施策向け。事前登録できるよう常時出す) ---
         if (brands.isNotEmpty()) {
@@ -142,6 +159,8 @@ internal fun PaymentMethodsSettingsPage(
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
+            // 1行×N の均質なチェックリストで境界問題は起きないため、面にはしない
+            // (面は「複数行に膨らむ設定グループの境界」=マイカード限定。SettingsGroupSurface の KDoc 参照)
             brands.forEach { b ->
                 ListItem(
                     headlineContent = { NameWithColorDot(b.brand, b.color) },
@@ -226,6 +245,50 @@ internal fun PaymentMethodsSettingsPage(
 
 /** カスタムカード追加ダイアログを新規モードで開くためのセンチネル(id 空)。 */
 private val NEW_CUSTOM_CARD = CustomCard(id = "", name = "")
+
+/**
+ * 設定グループ1つ分のトーナル面。所有カードは設定行が下に膨らみ、フラットなリストでは
+ * 次のカード行と地続きに見えてグループ境界が読めないため、面の切れ目で境界を示す。
+ * 用途は「複数行に膨らむ可変高グループの境界」に限る(マイカードのカード1枚=面1つ)。
+ * 1行×N の均質なチェックリスト(国際ブランド/コード決済)や他の設定ページには使わない
+ * ——スタイルとして広げ始めると設定タブ全体を grouped 化しないと一貫しなくなるため。
+ * 色は surfaceContainer 固定: #78(詳細ペインの surfaceContainerLow 化)が入っても
+ * 1段差が残り、縦画面(素の surface)でも差が付くよう、背景+1段のロールを選んでいる。
+ * 角丸はペイン想定の 16dp より1段小さい 12dp(入れ子の M3 定石)。
+ */
+@Composable
+private fun SettingsGroupSurface(content: @Composable ColumnScope.() -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+    ) {
+        Column(content = content)
+    }
+}
+
+/**
+ * グループ面の上に置く ListItem 用の colors。ListItem は既定で自前の containerColor(surface)を
+ * 塗り、グループの面を打ち消して穴が開いたように見えるため透明にする。
+ */
+@Composable
+private fun transparentListItemColors() = ListItemDefaults.colors(containerColor = Color.Transparent)
+
+/**
+ * カード設定行の警告文。以前は warningColor() の色文字だったが、グループ化でグレーの
+ * surfaceContainer 地に乗るようになったため、規約どおり container 対の面で見せる
+ * (色文字を直接グレー地に乗せない)。インデントは設定行(start=24dp)に合わせる。
+ */
+@Composable
+private fun CardSettingWarning(text: String) {
+    Box(Modifier.padding(start = 24.dp, end = 16.dp, bottom = 8.dp)) {
+        NoticeRow(
+            text = text,
+            containerColor = warningContainerColor(),
+            contentColor = onWarningContainerColor(),
+        )
+    }
+}
 
 /** カスタムカードの色パレット(Material 系の定番12色)。これ以外はカラーコード入力で指定する */
 private val CUSTOM_CARD_PALETTE = listOf(
@@ -440,6 +503,7 @@ private fun CardSettingItem(
     ListItem(
         headlineContent = { NameWithColorDot(card.cardName, card.brandColor) },
         leadingContent = { Checkbox(checked = card.owned, onCheckedChange = requestOwnedChange) },
+        colors = transparentListItemColors(),
         modifier = Modifier.clickable { requestOwnedChange(!card.owned) },
     )
     if (card.owned) {
@@ -449,6 +513,7 @@ private fun CardSettingItem(
                 trailingContent = {
                     BrandDropdown(brand = card.brand, options = card.brands, onChange = onBrandChange)
                 },
+                colors = transparentListItemColors(),
                 modifier = Modifier.padding(start = 24.dp),
             )
             if (card.brand.isBlank()) {
@@ -459,20 +524,10 @@ private fun CardSettingItem(
                 } else {
                     "ブランド未選択のため、ブランド限定のキャンペーンは判定に出ません。お持ちのブランドを選ぶと正確に判定されます"
                 }
-                Text(
-                    unselectedNote,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = warningColor(),
-                    modifier = Modifier.padding(start = 24.dp, end = 16.dp, bottom = 8.dp),
-                )
+                CardSettingWarning(unselectedNote)
             }
             if (card.ineligibleBrands.any { it.equals(card.brand, ignoreCase = true) }) {
-                Text(
-                    "${card.brand} は一部のお店が優遇対象外になります",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = warningColor(),
-                    modifier = Modifier.padding(start = 24.dp, end = 16.dp, bottom = 8.dp),
-                )
+                CardSettingWarning("${card.brand} は一部のお店が優遇対象外になります")
             }
         }
         // カードクラス(JCB CARD W/S 等)。持っている種類で還元率が変わるカードだけ出す
@@ -486,6 +541,7 @@ private fun CardSettingItem(
                         onChange = onClassChange,
                     )
                 },
+                colors = transparentListItemColors(),
                 modifier = Modifier.padding(start = 24.dp),
             )
         }
@@ -497,6 +553,7 @@ private fun CardSettingItem(
                 trailingContent = {
                     Text("1pt=${trimRate(card.pointValue)}円", style = MaterialTheme.typography.titleMedium)
                 },
+                colors = transparentListItemColors(),
                 modifier = Modifier.padding(start = 24.dp).clickable { showPointValueDialog = true },
             )
         }
@@ -513,6 +570,7 @@ private fun CardSettingItem(
             trailingContent = {
                 Text("${trimRate(card.rate)}%", style = MaterialTheme.typography.titleMedium)
             },
+            colors = transparentListItemColors(),
             modifier = Modifier.padding(start = 24.dp)
                 .then(if (rateDerived) Modifier else Modifier.clickable { showRateDialog = true }),
         )
@@ -526,6 +584,7 @@ private fun CardSettingItem(
                 headlineContent = { Text(pm.label) },
                 leadingContent = { Checkbox(checked = card.welcatsu, onCheckedChange = onWelcatsuChange) },
                 supportingContent = welcatsuNote,
+                colors = transparentListItemColors(),
                 modifier = Modifier.padding(start = 24.dp).clickable { onWelcatsuChange(!card.welcatsu) },
             )
         }
