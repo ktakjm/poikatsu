@@ -13,18 +13,18 @@ collect-campaigns スキルが巡回する入口と、ソース別のアクセ�
 
 発見した施策が特定複数店舗限定でも、公式の網羅リストがあれば収録基準を満たす(`list_is_exhaustive` 付きで収録。SKILL.md Phase 3 / mapping.md / data/README.md 参照)。**アプリ内限定のクーポン(PayPay coupon-corner、au PAY / d払いのアプリ内クーポン)は引き続き対象外**(ガードレール 4。公開ページに事実が揃うものだけ収録する)。
 
-> 試運転(#66): この経路での収集初回は `/collect-campaigns aupay` 等の小スコープで実行し、`list_is_exhaustive` 付き下書きが正しく出ることを git diff で確認してから通常運用に戻す(mapping.md の試運転ルール準用)。確認できたらこの注記を消す。
-
 ## PayPay — 直接閲覧可
 
 | 入口 | URL |
 |---|---|
 | キャンペーン一覧 | https://paypay.ne.jp/event/ |
 | 自治体キャンペーン一覧 | https://paypay.ne.jp/event/support-local |
+| 自治体施策の月次お知らせ | https://paypay.ne.jp/notice/{YYYYMMDD}/cp-jichitai/ (Web 検索「PayPay 自治体キャンペーン {月}以降 お知らせ」で最新号を探す) |
 
 - 一覧は「開催中/開催予定/開催終了」区分の静的ページ。詳細は `/event/<slug>/`(slug は `都道府県-市名-日付` 形式が多く、id 命名の参考になる)
 - 自治体一覧は地域ブロック→都道府県別。期間・種別(ポイント還元/商品券)は一覧で取れ、率・上限は詳細ページで補完する。**商品券型は収録対象外**(ポイント還元型のみ)
-- 大型の全員配布クーポン(スーパーPayPayクーポン・ジャンボ等)は `/event/` 配下に公開ページがある。**アプリ内の個別店舗クーポン(coupon-corner)は対象外**
+- **新規自治体の発見は月次お知らせ(`/notice/{YYYYMMDD}/cp-jichitai/`)が最も早く構造化されている**(率・期間・1回/期間の付与上限が表で載る。専用ページ公開前の施策もここに出る)。上限の単位が「期間あたり」でなく「**1カ月あたり**」の自治体が混ざる(2026-08 の遠野市)ので、ラベルまで読むこと
+- **スーパーPayPayクーポンは全員配布ではない**(ソフトバンク/ワイモバイル等の対象ユーザー+スマートログイン設定が条件。2026-08-09 確認)→ 収録対象外。`/event/jumbo-coupon/` は 2022 年時点のアーカイブで現行施策なし。**アプリ内の個別店舗クーポン(coupon-corner)も対象外**
 - サイト内検索(`/search/`、`?s=`)は robots.txt で Disallow。使わない
 
 ## au PAY — 直接閲覧可(一覧 SPA は読めないので下記の静的入口を使う)
@@ -33,13 +33,13 @@ collect-campaigns スキルが巡回する入口と、ソース別のアクセ�
 |---|---|
 | 自治体キャンペーン一覧 | https://media.aupay.wallet.auone.jp/dominant/ |
 | 月次報道発表 | https://www.au.com/information/topic/auwallet/ 配下 |
-| たぬきの吉日 常設 LP | https://aupay.auone.jp/contents/lp/tanukichi/index.html |
+| たぬきの抽選会 常設 LP | https://aupay.auone.jp/contents/lp/tanuki-lottery/index.html |
 | 店舗限定クーポン記事の探索 | Web 検索「au PAY クーポン site:media.aupay.wallet.auone.jp」(記事は `/articles/…` 配下) |
 
 - `aupay.wallet.auone.jp/campaign/`(一覧)は Nuxt SPA で静的取得不可。上記入口で代替する
 - **記事ドメイン**は `media.aupay.wallet.auone.jp`(§ 店舗限定・タイアップ型施策の発見)。店舗限定クーポン(コジマ×ビックカメラ等。#64/#66)の公式記事はここの `/articles/…` に載る。robots.txt 実質全許可・規約確認済み(docs/coupon-collection-tos.md)で直接閲覧可
 - 自治体一覧は自治体名・期間まで。率・上限は各詳細 LP(`media.aupay.wallet.auone.jp/dominant/lp/...` または `/articles/...`)か au.com 月次発表で補完
-- たぬきの吉日: 2026-06-30 で au/UQ ユーザー特典(要エントリー)は終了。「たぬきの抽選会」(だれでも対象・200 円以上・抽選)は継続 → 収録するなら `lottery` + `recurrence`(毎月 5・8・15・25 日)ベース。ページで現行構成を必ず確認する
+- たぬきの吉日: 2026-06-30 で au/UQ ユーザー特典(要エントリー)は終了。「たぬきの抽選会」(だれでも対象・200 円以上・抽選)は継続 → 収録するなら `lottery` + `recurrence`(毎月 5・8・15・25 日)ベース。ページで現行構成を必ず確認する。**LP の URL は `tanukichi` → `tanuki-lottery` に移行済み**(2026-08-09 確認。旧 URL はリダイレクトのみのスタブで内容が読めない)
 - camp.auone.jp は robots.txt に個別 Disallow パスあり。フェッチ前確認を怠らない
 
 ## d払い — 直接閲覧可(一覧 API は叩かない)
@@ -49,9 +49,12 @@ collect-campaigns スキルが巡回する入口と、ソース別のアクセ�
 | d曜日 常設ページ | https://service.smt.docomo.ne.jp/keitai_payment/campaign/dp/cpn_dp5_sat.html |
 | 街のお店の抽選(d曜日実店舗版・**終了済み**) | https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_lottery/ |
 | 自治体キャンペーン個別ページ | https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/ 配下 |
-| 月次プレスリリース | PR TIMES のドコモ発表(Web 検索: 「d払い 自治体キャンペーン {月}」) |
+| 月次プレスリリース(自治体) | PR TIMES ドコモ社(company_id `118641`)の「{月}開始の『dポイント』『d払い』自治体キャンペーン」 |
+| 月次プレスリリース(エリア) | PR TIMES(company_id `141840`)の「{月}開始の『d払い』エリアキャンペーン」 |
 
 - キャンペーン一覧(`/keitai_payment/campaign/`)は JSONP API による JS 描画で読めない。**API 直叩きは robots.txt(`/api/` Disallow)の趣旨に反するため禁止**
+- 月次リリースは**自治体系とエリア系の 2 系統**。リリース番号は時系列に増えるので、検索で古い年のリリースを掴まないよう発表日を必ず確認する(同じタイトルが毎年出る)
+- **エリアキャンペーン**(商店街・地域団体主催)は 1等100%/2等50%/3等10%/4等1% の抽選型・エントリー不要・上限 30,000pt が定型。対象が特定商店街の加盟店に限られ公式の店舗一覧も無いため、`region` を市で登録すると市内全域が対象に見えてしまう。**現時点では見送り**(自治体系リリース側に載る定率施策は収録する)
 - **d曜日はネットのお店限定** → 現時点では見送り一覧へ(実店舗判定アプリのため。スキーマにネット/実店舗の区別が入ったら再検討)。実店舗版の抽選施策(dpay_lottery)は 2021 年施策で**終了済み**(2026-07-16 確認。後継が始まったら `lottery` として収録候補)
 - 自治体は dpay_ouen ポータルの一覧部分が JS 描画のため、発見は月次プレスリリースと自治体クロスチェック経由が主。個別ページ(`dpay_ouen/<slug>/`)は静的で読める
 

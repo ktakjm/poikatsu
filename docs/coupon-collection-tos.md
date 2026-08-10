@@ -181,6 +181,13 @@
 - 判定: 共通原則 5(403 等の拒否応答は回避しない)+ SMCC の前例に従い、**このドメインにはツールでアクセスしない**。robots が読めない状態でのフェッチは共通原則 2(フェッチ前に robots.txt を確認)を満たせないため
 - 運用: かなトクの事実確認は**決済会社側の公開ページ**(PayPay `/event/kanagawa-pref/`・au PAY `dominant/lp/202606_kanagawa/`)と Web 検索で行う(2026-07-31 の実行ではこの経路で「終了日は未定・予算上限到達次第終了」を確認できた)。`detail_url` として収録済みの URL はユーザーがブラウザで見る分には問題ないため維持する
 
+### いわて県民応援プレミアムポイント還元キャンペーン特設サイト(iwate-premiumpoint.pref.iwate.jp)— 確認日 2026-08-09・**ツール不アクセス**
+
+- 位置づけ: 岩手県のキャンペーン特設サイト(`pref.iwate.jp` サブドメイン)。既収録の `iwate_pref_*` 4 件の `detail_url` に使用中
+- robots.txt: **WebFetch に対し HTTP 403**(robots.txt 自体が取得できず、Disallow の有無を確認できない)
+- 判定: かなトク特設サイトと同じく、共通原則 5(403 等の拒否応答は回避しない)+ 共通原則 2(フェッチ前に robots.txt を確認)を満たせないため、**このドメインにはツールでアクセスしない**
+- 運用: 事実確認は**岩手県公式ページ**(https://www.pref.iwate.jp/sangyoukoyou/sangyoushinkou/chiiki/1100074.html。robots.txt は `/cgi-*` 4 パスのみ Disallow)で行う(2026-08-09 の実行では率・上限・対象決済 4 サービス・県外在住者も対象を確認できた)。`detail_url` として収録済みの URL はユーザーがブラウザで見る分には問題ないため維持する
+
 ### 大田市キャッシュレスキャンペーン特設サイト(oda-cashless-campaign.com)— 確認日 2026-07-18
 
 - 運営: キャンペーン実行委員会系の民間ドメイン(共通原則 7 の「加盟店扱い」区分。大田市公式ページが最新情報の確認先として案内している特設サイト)
@@ -196,7 +203,7 @@
 | PayPay 自治体一覧 | https://paypay.ne.jp/event/support-local | 静的一覧 → 詳細 |
 | au PAY 自治体一覧 | https://media.aupay.wallet.auone.jp/dominant/ | 静的一覧 → 詳細 LP |
 | au PAY 月次発表 | https://www.au.com/information/topic/auwallet/ 配下 | 月次記事 |
-| au PAY たぬきの吉日 | https://aupay.auone.jp/contents/lp/tanukichi/index.html | 常設 LP |
+| au PAY たぬきの抽選会 | https://aupay.auone.jp/contents/lp/tanuki-lottery/index.html | 常設 LP(旧 `tanukichi` はここへリダイレクト) |
 | d払い d曜日 | https://service.smt.docomo.ne.jp/keitai_payment/campaign/dp/cpn_dp5_sat.html | 常設ページ(ネット限定) |
 | d払い 自治体個別 | https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/ 配下 | 個別ページ(一覧は JS) |
 | d払い 月次発表 | PR TIMES(ドコモ) | 月次記事 |
