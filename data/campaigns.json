@@ -1,6 +1,6 @@
 {
   "schema_version": 11,
-  "updated_at": "2026-08-08",
+  "updated_at": "2026-08-09",
   "campaigns": [
     {
       "id": "smcc_combini_restaurant",
@@ -138,7 +138,7 @@
         { "merchant_id": "akachan_honpo", "eligible_notes": ["Online Shop含む"], "ineligible_notes": ["Amexは店頭決済のみ対象外(Online Shopは対象)"], "ineligible_brands": ["Amex"], "official_store_list": {"eligible_stores": ["シーナシーナ屯田", "新さっぽろアークシティ", "アリオ札幌", "シーナシーナ青森", "仙台泉", "ヨークパーク郡山", "トナリエつくば", "ニューポートひたちなか", "ベルモール", "高崎", "スマーク伊勢崎", "ステラタウン大宮", "アリオ川口", "エミテラス所沢", "アリオ深谷", "アリオ上尾", "ALCo越谷", "和光イトーヨーカドー", "アリオ鷲宮", "テラスモール松戸", "アリオ柏", "アリオ市原", "四街道イトーヨーカドー", "アリオ北砂", "ウィラ大井", "池袋東武", "セブンタウン小豆沢", "アリオ西新井", "アリオ亀有", "アリオ葛西", "セレオ八王子", "昭島イトーヨーカドー", "武蔵小金井イトーヨーカドー", "東久留米イトーヨーカドー", "横浜別所イトーヨーカドー", "港南台バーズ", "グランツリー武蔵小杉", "溝口", "古淵イトーヨーカドー", "アリオ橋本", "テラスモール湘南", "大和鶴間イトーヨーカドー", "新潟亀田アピタ", "リバーサイド千秋", "ファボーレ", "アピタタウン金沢ベイ", "アルプラザ小松", "福井", "甲府昭和イトーヨーカドー", "アリオ上田", "アイシティ２１", "カラフルタウン岐阜", "静岡イトーヨーカドー", "浜松プラザ", "アクロスプラザ春日井", "リーフウォーク稲沢", "プライムツリー赤池", "ビバシティ彦根", "エイスクエア草津", "洛北阪急スクエア", "MOMOテラス", "精華台", "あべのイトーヨーカドー", "京阪シティモール", "大阪本町", "高槻阪急スクエア", "くずはモール", "アリオ八尾", "ホームズ寝屋川", "スマイル御影クラッセ", "ブルメール舞多聞", "カナート西神戸", "ゆめタウン姫路", "MEGAドン・キホーテ姫路広畑", "つかしん", "明石イトーヨーカドー", "トナリエ大和高田", "イズミヤ和歌山", "ゆめタウン出雲", "ハピータウン岡南", "ブランチ北長瀬", "フジグラン緑井", "ゆめタウンみゆき", "ゆめタウン福山", "ゆめタウン廿日市", "イオンタウン防府", "ゆめタウン徳島", "瓦町FLAG", "エミフルMASAKI", "リバーウォーク北九州", "福岡マリナタウン", "ガーデンズ千早", "ゆめタウン飯塚", "ゆめタウン筑紫野", "ゆめタウン佐賀", "ゆめタウンはません", "ゆめタウン光の森", "パークプレイス大分", "ニトリモール宮崎", "オプシアミスミ", "浦添西海岸パルコシティ", "ハンビータウン", "西原シティ"], "ineligible_stores": ["ララガーデン長町", "ララガーデン川口", "ララガーデン春日部", "ららぽーと富士見", "ららぽーと新三郷", "幕張イトーヨーカドー", "ららぽーとTOKYO-BAY", "ららぽーと柏の葉", "アルカキット錦糸町", "ららぽーと豊洲", "ららぽーと立川立飛", "ららぽーと横浜", "立場イトーヨーカドー", "ラゾーナ川崎", "ららぽーと湘南平塚", "ららぽーと海老名", "ららぽーと沼津", "ららぽーと磐田", "ららぽーと名古屋みなとアクルス", "ららぽーと安城", "ららぽーと愛知東郷", "ららぽーと堺", "ららぽーとEXPOCITY", "ららぽーと和泉", "ららぽーと門真", "ららぽーと甲子園"], "updated_date": "2026-06-15", "date_is_official": false, "source_url": "https://www.akachan.jp/topics/mufgCPlist/"} },
         { "merchant_id": "curves", "eligible_notes": ["入会金・月会費が対象"], "ineligible_brands": [] }
       ],
-      "verified_date": "2026-07-18"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "jcb_jpoint_partner",
@@ -225,7 +225,7 @@
         "自動販売機/券売機・PayPay商品券での支払いは対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "yuzawa_aupay_2026_07",
@@ -256,7 +256,7 @@
         "還元はau PAY残高(税抜相当額基準)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "yuzawa_dpay_2026_07",
@@ -288,7 +288,7 @@
         "還元はdポイント(期間・用途限定)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-18"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "yuzawa_rakuten_pay_2026_07",
@@ -377,7 +377,7 @@
         "タバコ・自動販売機/券売機・PayPay商品券での支払いは対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "oda_aupay_2026_07",
@@ -410,7 +410,7 @@
         "還元はau PAY残高(不課税)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "oda_dpay_2026_07",
@@ -444,7 +444,7 @@
         "還元はdポイント(期間・用途限定。発行から6か月有効)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-18"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "oda_rakuten_pay_2026_07",
@@ -572,7 +572,7 @@
         { "merchant_id": "cocokara_fine" }
       ],
       "detail_url": "https://paypay.ne.jp/event/retail-naturelab-20260801/",
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "aupay_sushiro_takeout_2026_07",
@@ -601,7 +601,7 @@
         { "merchant_id": "sushiro", "ineligible_notes": ["スシロー秋葉原中央通り店(イートイン専門)は対象外"] }
       ],
       "detail_url": "https://media.aupay.wallet.auone.jp/articles/5157",
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "aupay_kojima_shutoken_2026_08a",
@@ -645,7 +645,7 @@
         }
       ],
       "detail_url": "https://media.aupay.wallet.auone.jp/articles/5167",
-      "verified_date": "2026-08-06"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "aupay_kojima_shutoken_2026_08b",
@@ -689,7 +689,7 @@
         }
       ],
       "detail_url": "https://media.aupay.wallet.auone.jp/articles/5167",
-      "verified_date": "2026-08-06"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "aupay_kojima_chiba_2026_08",
@@ -731,7 +731,548 @@
         }
       ],
       "detail_url": "https://media.aupay.wallet.auone.jp/articles/5196",
-      "verified_date": "2026-08-06"
+      "verified_date": "2026-08-09"
+    },
+    {
+      "id": "aupay_matsuya_night_2026_08",
+      "type": "promotion",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "松屋 × au PAY お盆ナイト限定ポイント還元祭(時間限定最大15%Pontaポイント還元)",
+      "payment_instruction": "15:00〜22:59に松弁ネット・松屋モバイルオーダー・松弁デリバリー・松屋ミニアプリからau PAY(ネット支払い)で事前決済する",
+      "rate_base": 15.0,
+      "period_start": "2026-08-08",
+      "period_end": "2026-08-23",
+      "min_purchase": 600,
+      "per_transaction_cap": 200,
+      "period_total_cap": 1000,
+      "requires_entry": true,
+      "eligible_notes": [
+        "松太郎・ステーキ定食＆丼 松牛・トゥックン²・麦のトリコも対象(アプリ未収録のためお店検索・地図には出ない)"
+      ],
+      "ineligible_notes": [
+        "15:00〜22:59以外の時間帯の注文は対象外",
+        "店頭(券売機・セルフレジ)でのau PAY決済は対象外(対象はネット注文・モバイルオーダーでの事前決済のみ)",
+        "パーキングエリア内の店舗などは対象外"
+      ],
+      "memo": [
+        "還元はPontaポイント(2026年10月末頃までに付与。基本ポイント0.5%を含む200円ごと30ポイント)",
+        "公式の対象ブランド10種のうち松太郎・松牛・トゥックン²・麦のトリコはmerchants.json未収録のため rule を持てない。対象である事実は eligible_notes に反映済み"
+      ],
+      "merchant_rules": [
+        { "merchant_id": "matsuya" },
+        { "merchant_id": "matsunoya" },
+        { "merchant_id": "mycurry_shokudo" },
+        { "merchant_id": "steakya_matsu" },
+        { "merchant_id": "matsuken_chuka" },
+        { "merchant_id": "sushi_matsu" }
+      ],
+      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5174",
+      "verified_date": "2026-08-09"
+    },
+    {
+      "id": "aupay_haruyama_2026_08",
+      "type": "promotion",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "はるやまの対象店舗でau PAYを使うと最大10%のPontaポイントを還元",
+      "payment_instruction": "au PAYのコード支払いで支払う",
+      "rate_base": 10.0,
+      "period_start": "2026-08-01",
+      "period_end": "2026-08-16",
+      "min_purchase": 3000,
+      "period_total_cap": 1000,
+      "memo": [
+        "還元はPontaポイント(2026年9月末頃までに付与。基本ポイント0.5%を含む200円ごと20ポイント)"
+      ],
+      "merchant_rules": [
+        {
+          "merchant_id": "haruyama",
+          "ineligible_notes": [
+            "はるやまオンラインストアは対象外"
+          ],
+          "official_store_list": {
+            "ineligible_stores": [
+              "アリオ八尾店",
+              "アリオ葛西店",
+              "ファイテンショップ"
+            ],
+            "updated_date": "2026-08-09",
+            "date_is_official": false,
+            "source_url": "https://media.aupay.wallet.auone.jp/articles/5166"
+          }
+        }
+      ],
+      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5166",
+      "verified_date": "2026-08-09"
+    },
+    {
+      "id": "aupay_sanyodo_2026_08",
+      "type": "promotion",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "三洋堂書店の対象店舗でau PAYを使うと最大10%のPontaポイントを還元",
+      "payment_instruction": "au PAYのコード支払いで支払う",
+      "rate_base": 10.0,
+      "period_start": "2026-08-01",
+      "period_end": "2026-08-31",
+      "min_purchase": 2000,
+      "per_transaction_cap": 500,
+      "period_total_cap": 1000,
+      "requires_entry": true,
+      "memo": [
+        "還元はPontaポイント(2026年10月末頃までに付与。基本ポイント0.5%を含む200円ごと20ポイント)"
+      ],
+      "merchant_rules": [
+        {
+          "merchant_id": "sanyodo_shoten",
+          "eligible_notes": [
+            "系列のホビープラネットイオンモール常滑店・三洋堂トレカ館四日市店・駿河屋7店(名古屋新開橋/香久山/江南/桑名/津白塚/四日市/奈良大安寺)も対象(アプリ未収録のためお店検索・地図には出ない)"
+          ],
+          "official_store_list": {
+            "eligible_stores": [
+              "三洋堂トレカ館四日市店"
+            ],
+            "ineligible_stores": [
+              "トレカ館ららぽーと愛知東郷"
+            ],
+            "updated_date": "2026-08-09",
+            "date_is_official": false,
+            "source_url": "https://media.aupay.wallet.auone.jp/articles/5160"
+          }
+        }
+      ],
+      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5160",
+      "verified_date": "2026-08-09"
+    },
+    {
+      "id": "aupay_fukutaro_coupon_2026_08",
+      "type": "promotion",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "くすりの福太郎の対象店舗で使える au PAY 最大5%割引クーポン",
+      "payment_instruction": "au PAYアプリで事前にクーポンを獲得し、コード支払いで支払う",
+      "rate_base": 5.0,
+      "period_start": "2026-08-07",
+      "period_end": "2026-08-30",
+      "min_purchase": 2500,
+      "per_transaction_cap": 500,
+      "usage_limit": 2,
+      "ineligible_notes": [
+        "事前にクーポンの獲得が必要(支払い後のクーポン利用は不可)",
+        "金券類・処方箋医薬品・たばこ等は対象外"
+      ],
+      "memo": [
+        "割引はクーポン適用による会計時の即時割引(割引上限500円/回)",
+        "公式に開始日の記載が無いため period_start は記事公開日(2026-08-07)を採用"
+      ],
+      "merchant_rules": [
+        {
+          "merchant_id": "tsuruha",
+          "banner_ids": ["fukutaro"],
+          "ineligible_notes": [
+            "一部店舗ではクーポン割引を利用できない場合あり"
+          ],
+          "official_store_list": {
+            "ineligible_stores": [
+              "ららぽーとTOKYO-BAY店"
+            ],
+            "updated_date": "2026-08-09",
+            "date_is_official": false,
+            "source_url": "https://media.aupay.wallet.auone.jp/articles/5201"
+          }
+        }
+      ],
+      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5201",
+      "verified_date": "2026-08-09"
+    },
+    {
+      "id": "aupay_chiyoda_okinawa_coupon_2026_08",
+      "type": "promotion",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "東京靴流通センター、シュープラザ 沖縄県の対象16店舗限定 au PAY最大20%割引クーポン",
+      "display_name": "東京靴流通センター/シュープラザ",
+      "payment_instruction": "au PAYアプリで事前にクーポンを獲得し、コード支払いで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-07",
+      "period_end": "2026-08-31",
+      "min_purchase": 6000,
+      "per_transaction_cap": 3000,
+      "usage_limit": 1,
+      "ineligible_notes": [
+        "事前にクーポンの獲得が必要(支払い後のクーポン利用は不可)",
+        "金券類・処方箋医薬品・たばこ等は対象外"
+      ],
+      "memo": [
+        "割引はクーポン適用による会計時の即時割引(割引上限3,000円/回)",
+        "公式に開始日の記載が無いため period_start は記事公開日(2026-08-07)を採用",
+        "公式は「本クーポンは、沖縄県所在の店舗が対象となります」と明記し全16店舗を列挙(list_is_exhaustive)"
+      ],
+      "merchant_rules": [
+        {
+          "merchant_id": "tokyo_kutsu_ryutsu_center",
+          "official_store_list": {
+            "eligible_stores": [
+              "泡瀬店",
+              "具志川店",
+              "名護店",
+              "沖縄美里店",
+              "宜野湾店",
+              "石川店",
+              "那覇小禄店",
+              "イオンタウン豊見城店",
+              "宮古島店",
+              "石垣島店"
+            ],
+            "list_is_exhaustive": true,
+            "updated_date": "2026-08-09",
+            "date_is_official": false,
+            "source_url": "https://media.aupay.wallet.auone.jp/articles/5198"
+          }
+        },
+        {
+          "merchant_id": "shoe_plaza",
+          "official_store_list": {
+            "eligible_stores": [
+              "那覇国場店",
+              "那覇新都心店",
+              "宜野湾店",
+              "浦添SC店",
+              "豊崎とみとん店",
+              "あがり浜マリンプラザ店"
+            ],
+            "list_is_exhaustive": true,
+            "updated_date": "2026-08-09",
+            "date_is_official": false,
+            "source_url": "https://media.aupay.wallet.auone.jp/articles/5198"
+          }
+        }
+      ],
+      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5198",
+      "verified_date": "2026-08-09"
+    },
+    {
+      "id": "aupay_biccamera_coupon_2026_08b",
+      "type": "promotion",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "ビックカメラの対象店舗で使える au PAY 1,000円割引クーポン(第2期)",
+      "payment_instruction": "au PAYアプリで事前にクーポンを獲得し、コード支払いで支払う",
+      "discount_amount": 1000,
+      "period_start": "2026-08-07",
+      "period_end": "2026-08-12",
+      "min_purchase": 10000,
+      "ineligible_notes": [
+        "事前にクーポンの獲得が必要(支払い後のクーポン利用は不可)",
+        "金券類など一部対象外の商品あり"
+      ],
+      "memo": [
+        "5期間に分けて対象店舗を入れ替えて開催(第1期8/1〜8/3は開始済みのため未収録)。期ごとに1エントリ",
+        "利用回数の上限なし",
+        "公式は「その他の店舗および『ビックカメラ・ドットコム』ではご利用いただけません」と明記(list_is_exhaustive)"
+      ],
+      "merchant_rules": [
+        {
+          "merchant_id": "biccamera",
+          "official_store_list": {
+            "eligible_stores": [
+              "新宿東口店",
+              "大宮西口そごう店",
+              "相模大野駅店",
+              "松本店",
+              "浜松店",
+              "ららぽーと愛知東郷店",
+              "名古屋駅西店"
+            ],
+            "list_is_exhaustive": true,
+            "updated_date": "2026-08-09",
+            "date_is_official": false,
+            "source_url": "https://media.aupay.wallet.auone.jp/articles/5178"
+          }
+        }
+      ],
+      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5178",
+      "verified_date": "2026-08-09"
+    },
+    {
+      "id": "aupay_biccamera_coupon_2026_08c",
+      "type": "promotion",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "ビックカメラの対象店舗で使える au PAY 1,000円割引クーポン(第3期)",
+      "payment_instruction": "au PAYアプリで事前にクーポンを獲得し、コード支払いで支払う",
+      "discount_amount": 1000,
+      "period_start": "2026-08-14",
+      "period_end": "2026-08-17",
+      "min_purchase": 10000,
+      "ineligible_notes": [
+        "事前にクーポンの獲得が必要(支払い後のクーポン利用は不可)",
+        "金券類など一部対象外の商品あり"
+      ],
+      "memo": [
+        "利用回数の上限なし",
+        "対象店舗は第2期(aupay_biccamera_coupon_2026_08b)と入れ替わる"
+      ],
+      "merchant_rules": [
+        {
+          "merchant_id": "biccamera",
+          "official_store_list": {
+            "eligible_stores": [
+              "池袋本店",
+              "赤坂見附駅店",
+              "相模大野駅店",
+              "名古屋JRゲートタワー店",
+              "岡山駅前店"
+            ],
+            "list_is_exhaustive": true,
+            "updated_date": "2026-08-09",
+            "date_is_official": false,
+            "source_url": "https://media.aupay.wallet.auone.jp/articles/5178"
+          }
+        }
+      ],
+      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5178",
+      "verified_date": "2026-08-09"
+    },
+    {
+      "id": "aupay_biccamera_coupon_2026_08d",
+      "type": "promotion",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "ビックカメラの対象店舗で使える au PAY 1,000円割引クーポン(第4期)",
+      "payment_instruction": "au PAYアプリで事前にクーポンを獲得し、コード支払いで支払う",
+      "discount_amount": 1000,
+      "period_start": "2026-08-21",
+      "period_end": "2026-08-24",
+      "min_purchase": 10000,
+      "ineligible_notes": [
+        "事前にクーポンの獲得が必要(支払い後のクーポン利用は不可)",
+        "金券類など一部対象外の商品あり"
+      ],
+      "memo": [
+        "利用回数の上限なし",
+        "対象店舗は第3期(aupay_biccamera_coupon_2026_08c)と入れ替わる"
+      ],
+      "merchant_rules": [
+        {
+          "merchant_id": "biccamera",
+          "official_store_list": {
+            "eligible_stores": [
+              "池袋本店",
+              "新宿東口店",
+              "新宿西口店",
+              "AKIBA",
+              "千葉駅前店",
+              "相模大野駅店",
+              "広島駅前店"
+            ],
+            "list_is_exhaustive": true,
+            "updated_date": "2026-08-09",
+            "date_is_official": false,
+            "source_url": "https://media.aupay.wallet.auone.jp/articles/5178"
+          }
+        }
+      ],
+      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5178",
+      "verified_date": "2026-08-09"
+    },
+    {
+      "id": "aupay_biccamera_coupon_2026_08e",
+      "type": "promotion",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "ビックカメラの対象店舗で使える au PAY 1,000円割引クーポン(第5期)",
+      "payment_instruction": "au PAYアプリで事前にクーポンを獲得し、コード支払いで支払う",
+      "discount_amount": 1000,
+      "period_start": "2026-08-28",
+      "period_end": "2026-08-31",
+      "min_purchase": 10000,
+      "ineligible_notes": [
+        "事前にクーポンの獲得が必要(支払い後のクーポン利用は不可)",
+        "金券類など一部対象外の商品あり"
+      ],
+      "memo": [
+        "利用回数の上限なし",
+        "対象店舗は第4期(aupay_biccamera_coupon_2026_08d)と入れ替わる"
+      ],
+      "merchant_rules": [
+        {
+          "merchant_id": "biccamera",
+          "official_store_list": {
+            "eligible_stores": [
+              "AKIBA",
+              "相模大野駅店"
+            ],
+            "list_is_exhaustive": true,
+            "updated_date": "2026-08-09",
+            "date_is_official": false,
+            "source_url": "https://media.aupay.wallet.auone.jp/articles/5178"
+          }
+        }
+      ],
+      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5178",
+      "verified_date": "2026-08-09"
+    },
+    {
+      "id": "aupay_ksdenki_coupon_2026_08",
+      "type": "promotion",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "ケーズデンキの対象店舗で使える au PAY 1,000円割引クーポン(8月分)",
+      "payment_instruction": "au PAYアプリで事前にクーポンを獲得し、コード支払いで支払う",
+      "discount_amount": 1000,
+      "period_start": "2026-08-11",
+      "period_end": "2026-08-16",
+      "min_purchase": 20000,
+      "usage_limit": 1,
+      "ineligible_notes": [
+        "事前にクーポンの獲得が必要(支払い後のクーポン利用は不可)",
+        "POSAカード・金券類は対象外"
+      ],
+      "memo": [
+        "同一クーポンの9月分は aupay_ksdenki_coupon_2026_09(9/19〜9/23)",
+        "利用は1au IDあたり1回まで"
+      ],
+      "merchant_rules": [
+        { "merchant_id": "ksdenki" }
+      ],
+      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5150",
+      "verified_date": "2026-08-09"
+    },
+    {
+      "id": "aupay_ksdenki_coupon_2026_09",
+      "type": "promotion",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "ケーズデンキの対象店舗で使える au PAY 1,000円割引クーポン(9月分)",
+      "payment_instruction": "au PAYアプリで事前にクーポンを獲得し、コード支払いで支払う",
+      "discount_amount": 1000,
+      "period_start": "2026-09-19",
+      "period_end": "2026-09-23",
+      "min_purchase": 20000,
+      "usage_limit": 1,
+      "ineligible_notes": [
+        "事前にクーポンの獲得が必要(支払い後のクーポン利用は不可)",
+        "POSAカード・金券類は対象外"
+      ],
+      "memo": [
+        "同一クーポンの8月分は aupay_ksdenki_coupon_2026_08(8/11〜8/16)",
+        "利用は1au IDあたり1回まで"
+      ],
+      "merchant_rules": [
+        { "merchant_id": "ksdenki" }
+      ],
+      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5150",
+      "verified_date": "2026-08-09"
+    },
+    {
+      "id": "aupay_ksdenki_quick_2026_08",
+      "type": "promotion",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "ケーズデンキの対象5店舗でau PAYを使うと1,000Pontaポイントがその場でもらえるクイックチャンス(8月分)",
+      "payment_instruction": "au PAYのコード支払いで支払う",
+      "discount_amount": 1000,
+      "period_start": "2026-08-29",
+      "period_end": "2026-08-30",
+      "min_purchase": 10000,
+      "usage_limit": 1,
+      "ineligible_notes": [
+        "POSAカード・金券類は対象外"
+      ],
+      "memo": [
+        "抽選ではなく条件を満たせばその場で全員に付与(公式「1,000Pontaポイントがその場でもらえます」)",
+        "同一施策の9月分は aupay_ksdenki_quick_2026_09(9/12〜9/13)。7/25〜7/26の回は終了済み",
+        "公式は対象5店舗を列挙(list_is_exhaustive)"
+      ],
+      "merchant_rules": [
+        {
+          "merchant_id": "ksdenki",
+          "official_store_list": {
+            "eligible_stores": [
+              "インターパーク宇都宮",
+              "つくば研究学園店",
+              "湘南藤沢店",
+              "山形本店",
+              "山形北店"
+            ],
+            "list_is_exhaustive": true,
+            "updated_date": "2026-08-09",
+            "date_is_official": false,
+            "source_url": "https://media.aupay.wallet.auone.jp/articles/5150"
+          }
+        }
+      ],
+      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5150",
+      "verified_date": "2026-08-09"
+    },
+    {
+      "id": "aupay_ksdenki_quick_2026_09",
+      "type": "promotion",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "name": "ケーズデンキの対象5店舗でau PAYを使うと1,000Pontaポイントがその場でもらえるクイックチャンス(9月分)",
+      "payment_instruction": "au PAYのコード支払いで支払う",
+      "discount_amount": 1000,
+      "period_start": "2026-09-12",
+      "period_end": "2026-09-13",
+      "min_purchase": 10000,
+      "usage_limit": 1,
+      "ineligible_notes": [
+        "POSAカード・金券類は対象外"
+      ],
+      "memo": [
+        "抽選ではなく条件を満たせばその場で全員に付与(公式「1,000Pontaポイントがその場でもらえます」)",
+        "同一施策の8月分は aupay_ksdenki_quick_2026_08(8/29〜8/30)",
+        "公式は対象5店舗を列挙(list_is_exhaustive)"
+      ],
+      "merchant_rules": [
+        {
+          "merchant_id": "ksdenki",
+          "official_store_list": {
+            "eligible_stores": [
+              "インターパーク宇都宮",
+              "つくば研究学園店",
+              "湘南藤沢店",
+              "山形本店",
+              "山形北店"
+            ],
+            "list_is_exhaustive": true,
+            "updated_date": "2026-08-09",
+            "date_is_official": false,
+            "source_url": "https://media.aupay.wallet.auone.jp/articles/5150"
+          }
+        }
+      ],
+      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5150",
+      "verified_date": "2026-08-09"
     },
     {
       "id": "aupay_tanuki_lottery",
@@ -755,8 +1296,8 @@
         "当選ポイント数は抽選(当選確率の公表なし)",
         "au/UQ mobileユーザー向けの上乗せ特典(要エントリー)は2026-06-30で終了済み"
       ],
-      "detail_url": "https://aupay.auone.jp/contents/lp/tanukichi/index.html",
-      "verified_date": "2026-07-29"
+      "detail_url": "https://aupay.auone.jp/contents/lp/tanuki-lottery/index.html",
+      "verified_date": "2026-08-09"
     },
     {
       "id": "suginami_paypay_2026_06",
@@ -817,7 +1358,7 @@
         "コンビニ・行政機関・金融機関・医療機関/調剤薬局・タクシー・駐車場等は対象外店舗"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "kanagawa_kanatoku_aupay_2026_06",
@@ -850,10 +1391,11 @@
         "コンビニ・行政機関・金融機関・医療機関/調剤薬局・タクシー・駐車場等は対象外店舗"
       ],
       "memo": [
-        "還元はau PAY残高(不課税)"
+        "還元はau PAY残高(不課税)",
+        "au PAYの自治体一覧では終了日を2026/9/6と表示(2026-08-09確認)。神奈川県公式・au PAY詳細LP・PayPay側はいずれも「予算上限に達するまで」で終了日の記載が無いため period_end は null のまま。要再確認"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "kanagawa_kanatoku_dpay_2026_06",
@@ -890,7 +1432,7 @@
         "還元はdポイント(期間・用途限定)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-18"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "kanagawa_kanatoku_rakuten_pay_2026_06",
@@ -926,7 +1468,7 @@
         "還元は楽天ポイント(通常ポイント。2026年11月末日までに付与)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-18"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "kanagawa_kanatoku_aeon_pay_2026_06",
@@ -962,7 +1504,7 @@
         "還元はAEON Pay残高(有効期限なし・キャンペーン終了後翌々月末までに付与)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-18"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "kanagawa_kanatoku_merpay_2026_06",
@@ -998,7 +1540,7 @@
         "還元はメルカリポイント(有効期限180日・キャンペーン終了後翌月末までに付与)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-18"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "chiba_pref_paypay_2026_08",
@@ -1012,7 +1554,7 @@
       "rate_base": 10.0,
       "period_start": "2026-08-07",
       "period_end": "2026-08-30",
-      "per_transaction_cap": null,
+      "per_transaction_cap": 3000,
       "period_total_cap": 3000,
       "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
@@ -1031,7 +1573,7 @@
         "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "chiba_pref_aupay_2026_08",
@@ -1045,7 +1587,7 @@
       "rate_base": 10.0,
       "period_start": "2026-08-07",
       "period_end": "2026-08-30",
-      "per_transaction_cap": null,
+      "per_transaction_cap": 3000,
       "period_total_cap": 3000,
       "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
@@ -1066,7 +1608,7 @@
         "還元はau PAY残高(不課税)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "chiba_pref_dpay_2026_08",
@@ -1080,7 +1622,7 @@
       "rate_base": 10.0,
       "period_start": "2026-08-07",
       "period_end": "2026-08-30",
-      "per_transaction_cap": null,
+      "per_transaction_cap": 3000,
       "period_total_cap": 3000,
       "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
@@ -1098,7 +1640,7 @@
         "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "chiba_pref_rakuten_pay_2026_08",
@@ -1112,7 +1654,7 @@
       "rate_base": 10.0,
       "period_start": "2026-08-07",
       "period_end": "2026-08-30",
-      "per_transaction_cap": null,
+      "per_transaction_cap": 3000,
       "period_total_cap": 3000,
       "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
@@ -1144,7 +1686,7 @@
       "rate_base": 10.0,
       "period_start": "2026-08-07",
       "period_end": "2026-08-30",
-      "per_transaction_cap": null,
+      "per_transaction_cap": 3000,
       "period_total_cap": 3000,
       "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
@@ -1196,7 +1738,7 @@
         "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "chiba_city_aupay_2026_08",
@@ -1227,7 +1769,7 @@
         "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "chiba_city_dpay_2026_08",
@@ -1258,7 +1800,7 @@
         "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "chiba_city_rakuten_pay_2026_08",
@@ -1355,7 +1897,7 @@
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "gifu_aupay_2026_08",
@@ -1388,7 +1930,7 @@
         "還元はau PAY残高(不課税)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "gifu_dpay_2026_08",
@@ -1422,7 +1964,7 @@
         "還元はdポイント(利用決済月の翌月末頃に付与)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "gifu_rakuten_pay_2026_08",
@@ -1518,7 +2060,7 @@
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "kakogawa_paypay_2026_08",
@@ -1547,7 +2089,7 @@
         "たばこ・金券・電子マネーチャージ・公共料金・金融商品等は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "takehara_paypay_2026_08",
@@ -1575,7 +2117,7 @@
         "コンビニ・病院/医院・調剤薬局・介護施設・保険代理店・公共料金・金券・プリペイドカード・たばこ・市指定ごみ袋等は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "tsukumi_paypay_2026_08",
@@ -1603,7 +2145,7 @@
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "iwate_pref_paypay_2026_08",
@@ -1635,7 +2177,7 @@
         "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "iwate_pref_aupay_2026_08",
@@ -1666,8 +2208,11 @@
         "コンビニ・医療機関・調剤薬局・デリバリー専門店等は対象外店舗",
         "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
       ],
+      "memo": [
+        "特設サイト(iwate-premiumpoint.pref.iwate.jp)はrobots.txtが403のためツール不アクセス。事実は岩手県公式ページ(www.pref.iwate.jp/sangyoukoyou/sangyoushinkou/chiiki/1100074.html)で照合"
+      ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "iwate_pref_dpay_2026_08",
@@ -1699,7 +2244,7 @@
         "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "iwate_pref_rakuten_pay_2026_08",
@@ -1731,7 +2276,7 @@
         "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-16"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "yurihonjo_paypay_2026_09",
@@ -1763,7 +2308,7 @@
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "asaka_paypay_2026_09",
@@ -1791,7 +2336,7 @@
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "ama_paypay_2026_09",
@@ -1819,7 +2364,7 @@
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "kimino_paypay_2026_09",
@@ -1847,7 +2392,7 @@
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "makurazaki_paypay_2026_09",
@@ -1875,7 +2420,7 @@
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
     },
     {
       "id": "erimo_dpay_2026_08",
@@ -1907,7 +2452,74 @@
         "施策名は日高山脈襟裳十勝国立公園を冠するが、公式は対象を「北海道えりも町の対象店舗にて」と明記(2026-07-31確認)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-07-31"
+      "verified_date": "2026-08-09"
+    },
+    {
+      "id": "toyota_dpay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "d払い",
+      "payment_method_id": "dpay",
+      "name": "豊田まちなか d払い最大20%還元キャンペーン",
+      "payment_instruction": "d払いのコード決済で支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-07",
+      "period_end": "2026-10-25",
+      "per_transaction_cap": 2000,
+      "period_total_cap": 10000,
+      "may_end_early": true,
+      "region": {
+        "name": "豊田市",
+        "prefecture": "愛知県"
+      },
+      "detail_url": "https://prtimes.jp/main/html/rd/p/000000863.000118641.html",
+      "store_search_url": null,
+      "ineligible_notes": [
+        "豊田市中心市街地(まちなかエリア)の対象店舗以外は対象外"
+      ],
+      "memo": [
+        "主催は豊田市中心市街地まちなか宣伝会議(商店街組織)。市全域ではなく中心市街地限定だが、店舗一覧が公表されておらず店舗特定ができないため municipal + external で収録(分類はレビュー対象)",
+        "還元はdポイント(期間・用途限定)",
+        "出典はドコモの2026-07-17プレスリリース(8月開始のdポイント/d払い自治体キャンペーン)。専用キャンペーンページが公開されたら detail_url を差し替える"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-08-09"
+    },
+    {
+      "id": "tono_paypay_2026_10",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "PayPay",
+      "payment_method_id": "paypay",
+      "name": "くらし応援！遠野市PayPayポイントキャンペーン（第2弾）",
+      "payment_instruction": "PayPayのコード支払いで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-10-01",
+      "period_end": "2026-11-30",
+      "per_transaction_cap": 2000,
+      "period_total_cap": 10000,
+      "cap_note": "上限は1か月ごとに適用(1か月あたり5,000円相当)",
+      "may_end_early": true,
+      "region": {
+        "name": "遠野市",
+        "prefecture": "岩手県"
+      },
+      "detail_url": "https://paypay.ne.jp/notice/20260807/cp-jichitai/",
+      "store_search_url": null,
+      "ineligible_notes": [
+        "遠野市とPayPayが対象店舗として指定する市内加盟店以外は対象外"
+      ],
+      "memo": [
+        "公式の上限表記は他自治体の「期間あたり」と異なり「1カ月あたり5,000ポイント」。2か月開催のため period_total_cap は 10,000 とし、月ごと適用を cap_note に記載",
+        "第1弾(2026-06-01〜07-31・最大20%)は2026-06-26で早期終了",
+        "対象決済手段はPayPayのみ公表(遠野市公式の第2弾ページは未公開。他サービスの参画有無は要確認)",
+        "還元はPayPayポイント(支払日から30日後を目安に付与)",
+        "専用キャンペーンページが公開されたら detail_url を差し替える"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-08-09"
     }
   ]
 }
