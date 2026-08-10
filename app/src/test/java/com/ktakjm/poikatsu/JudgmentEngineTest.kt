@@ -187,6 +187,17 @@ class JudgmentEngineTest {
     }
 
     @Test
+    fun `検索は施策の有無に関係なくマスタ全体にヒットする`() {
+        // 名前検索の 0 件 =「マスタ未収録」と言い切る前提(#70 の施策1)。施策を 1 件も持たない
+        // データでも search はヒットする(施策でのフィルタは ViewModel の searchRewarded 側)
+        val merchant = Merchant(id = "m1", name = "テスト店", reading = "てすとてん")
+        val noCampaigns = JudgmentEngine(
+            PoikatsuData(merchants = listOf(merchant), campaigns = emptyList(), cards = emptyList(), updatedAt = "2026-06-01"),
+        )
+        assertEquals("m1", noCampaigns.search("テスト").single().merchant.id)
+    }
+
+    @Test
     fun `カテゴリ一覧がデータから取れる`() {
         assertTrue(engine.categories.containsAll(listOf("コンビニ", "ファストフード", "ファミレス", "カフェ", "回転寿司", "スーパー", "その他")))
     }
@@ -240,9 +251,10 @@ class JudgmentEngineTest {
         assertTrue(withList.canCheckStore(mWith))
         val (without, mWithout) = storeCheckEngine(hasList = false)
         assertFalse(without.canCheckStore(mWithout))
-        // 網羅リストだけのチェーンは対象店しか表示されないため、調べる導線を出さない(#64)
+        // 網羅リストだけのチェーンも調べる導線を出す(#70。#64 では「対象店しか表示されない
+        // ため不要」としたが、掲載のない店が理由なく消えたように見えるため方針を変更した)
         val (exhaustiveOnly, mExhaustive) = storeCheckEngine(eligible = listOf("浦和店"), exhaustive = true)
-        assertFalse(exhaustiveOnly.canCheckStore(mExhaustive))
+        assertTrue(exhaustiveOnly.canCheckStore(mExhaustive))
     }
 
     @Test
@@ -1455,9 +1467,8 @@ class JudgmentEngineRealDataTest {
             c.merchantRules.any { it.merchantId == "kojima" && it.officialStoreList?.listIsExhaustive == true }
         }
         if (exhaustiveCampaigns.isEmpty()) return
-        // 網羅リストだけのチェーンなので「このお店が対象か調べる」導線は出さない
-        // (対象店だけが地図・判定に出るため。#64)
-        assertFalse(engine.canCheckStore(merchant))
+        // 網羅リストだけのチェーンでも「このお店が対象か調べる」導線を出す(#70)
+        assertTrue(engine.canCheckStore(merchant))
         // 実 POI 名の照合: 正式名・別名(コジマ単独表記)ともチェーンに一致する。
         // かな3文字キー(こじま)+かな始まり支店名(ららぽーと等)は境界判定の既知の制限で
         // 照合不可のため(#60)、別名の検証は漢字始まりの支店名で行う
@@ -1646,8 +1657,8 @@ class JudgmentEngineRealDataTest {
     @Test
     fun `実データ_OWNDAYSは網羅リストで掲載店だけ対象になる`() {
         val owndays = data.merchants.first { it.id == "owndays" }
-        // 網羅リストのみのチェーンは「このお店が対象か調べる」導線を出さない(#64)
-        assertFalse(engine.canCheckStore(owndays))
+        // 網羅リストのみのチェーンでも「このお店が対象か調べる」導線を出す(#70)
+        assertTrue(engine.canCheckStore(owndays))
         assertEquals(
             StoreEligibility.ELIGIBLE,
             engine.checkStore(owndays, "OWNDAYS 池袋西口店").single().eligibility,
@@ -1673,6 +1684,27 @@ class JudgmentEngineRealDataTest {
         assertEquals(
             setOf("jcb_jpoint_partner"),
             engine.exhaustiveListIneligibleCampaignIds(owndays, "株式会社オンデーズ"),
+        )
+    }
+
+    /**
+     * 東京靴流通センターの沖縄県限定網羅リスト施策(#70 で「近くの対象のお店を探す」に本土の
+     * 非対象店が並んだバグの再現データ)。施策が期限切れ削除されたら検証対象なしで抜ける。
+     */
+    @Test
+    fun `実データ_東京靴流通センターの沖縄網羅リストは未掲載店で施策単位に間引かれる`() {
+        val campaign = data.campaigns.firstOrNull { it.id == "aupay_chiyoda_okinawa_coupon_2026_08" } ?: return
+        val merchant = data.merchants.first { it.id == "tokyo_kutsu_ryutsu_center" }
+        // 沖縄の掲載店は対象
+        assertEquals(
+            StoreEligibility.ELIGIBLE,
+            engine.checkStore(merchant, "東京靴流通センター 泡瀬店").single().eligibility,
+        )
+        // 本土の店は掲載なし=対象外と断定され、施策単位で間引かれる
+        // (地図はブリッジ(チェーン絞り込み)中でもこの店を出さない)
+        assertEquals(
+            setOf(campaign.id),
+            engine.exhaustiveListIneligibleCampaignIds(merchant, "東京靴流通センター 王子店"),
         )
     }
 

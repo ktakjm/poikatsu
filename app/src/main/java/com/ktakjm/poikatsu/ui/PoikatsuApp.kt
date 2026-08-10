@@ -47,6 +47,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -694,6 +695,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                                 categories = state.categories,
                                 selectedCategories = state.selectedCategories,
                                 results = state.results,
+                                unrewardedNames = state.unrewardedNames,
                                 dataStatus = dataStatusLabel(
                                     state.dataUpdatedAt,
                                     state.dataSource,
@@ -710,6 +712,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                                 onSelect = viewModel::onSelect,
                                 onRefresh = viewModel::onManualRefresh,
                                 onOpenMunicipalCampaigns = viewModel::onOpenMunicipalCampaigns,
+                                onRegisterCampaign = { editingCustomCampaign = NEW_CUSTOM_CAMPAIGN },
                             )
                         }
                         if (searchTwoPane) {
@@ -814,6 +817,7 @@ private fun SearchPane(
     categories: List<String>,
     selectedCategories: Set<String>,
     results: List<MainViewModel.SearchResult>,
+    unrewardedNames: List<String>,
     dataStatus: String,
     refreshing: Boolean,
     municipalAreaNames: List<String>,
@@ -825,6 +829,7 @@ private fun SearchPane(
     onSelect: (MainViewModel.SearchResult) -> Unit,
     onRefresh: () -> Unit,
     onOpenMunicipalCampaigns: () -> Unit,
+    onRegisterCampaign: () -> Unit,
 ) {
     // 検索窓は横画面(1ペイン)では TopAppBar の SearchBarRow 側にあるため本文には置かない
     // (searchInHeader。二ペインはペイン幅の全幅フィールドをここに置く)。横画面(compact)は
@@ -884,11 +889,35 @@ private fun SearchPane(
                 )
             }
         }
-        results.isEmpty() -> Text(
-            if (query.isBlank()) "選択中のカテゴリにお店がありません。"
-            else "「$query」に一致するお店が見つかりませんでした。登録済みの高還元キャンペーンの対象外の可能性があります。",
+        // 0 件の案内は原因で出し分ける(#70): カテゴリのみ / 収録済みだが今出せるキャンペーンが無い /
+        // アプリ未収録。未収録のときはカスタムキャンペーン登録の導線を出す(未収録≠対象外なので、
+        // 旧文言「対象外の可能性があります」のような判定していない断定はしない)
+        results.isEmpty() && query.isBlank() -> Text(
+            "選択中のカテゴリにお店がありません。",
             style = MaterialTheme.typography.bodyMedium,
         )
+        results.isEmpty() && unrewardedNames.isNotEmpty() -> Text(
+            "「${unrewardedNames.joinToString("・")}」は登録されていますが、いま利用できるキャンペーンがありません。",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        results.isEmpty() -> Column {
+            Text(
+                "「$query」はまだこのアプリに登録されていないお店のようです。",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "キャンペーンをご存じなら、自分で登録して判定に使えます。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.outline,
+            )
+            Spacer(Modifier.height(12.dp))
+            FilledTonalButton(onClick = onRegisterCampaign) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("キャンペーンを自分で登録")
+            }
+        }
         else -> LazyColumn(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -1813,6 +1842,12 @@ private fun NearbySheetContent(
                 } else {
                     Text(
                         when {
+                            // 網羅リストの対象外店を間引いた結果の 0 件は「無い」でなく理由を言う(#70。
+                            // 目の前に店があるのに「この範囲にありません」では嘘になるため)
+                            merchantFilters.isNotEmpty() && nearby.ineligibleHiddenCount > 0 ->
+                                "この範囲の" + merchantFilters.joinToString("") { "「${it.label}」" } +
+                                    "はこのキャンペーンの対象のお店ではないため表示していません。" +
+                                    "対象のお店があるエリアへ地図を動かしてください。"
                             merchantFilters.isNotEmpty() ->
                                 merchantFilters.joinToString("") { "「${it.label}」" } +
                                     "はこの範囲にありません。地図を動かすか、絞り込みを解除してください。"

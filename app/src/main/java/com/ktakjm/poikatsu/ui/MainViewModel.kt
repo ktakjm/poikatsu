@@ -270,6 +270,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val loadingPhase: NearbyLoadPhase = NearbyLoadPhase.SEARCHING,
         val error: String? = null,
         val places: List<NearbyPlace> = emptyList(),
+        /**
+         * ブリッジ(チェーン絞り込み)中のチェーンだが、網羅リストで対象外と確定して間引いた
+         * 店舗の数(#70。重複排除と同じ「チェーン+支店名」単位)。0 件表示のとき
+         * 「この範囲に無い」でなく「対象のお店ではないため表示していない」と案内するために持つ。
+         */
+        val ineligibleHiddenCount: Int = 0,
         /** 検索の中心(=地図カメラ中心)。距離計算の起点。取得前は null */
         val centerLat: Double? = null,
         val centerLon: Double? = null,
@@ -307,6 +313,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val categories: List<String> = emptyList(),
         val selectedCategories: Set<String> = emptySet(),
         val results: List<SearchResult> = emptyList(),
+        /** 検索にヒットしたが判定 0 件で一覧から落としたチェーンの表示名(0 件時の案内の出し分け用。#70) */
+        val unrewardedNames: List<String> = emptyList(),
         val selection: Selection? = null,
         val storeCheck: StoreCheckState? = null,
         val dataUpdatedAt: String = "",
@@ -701,15 +709,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    /** 検索結果のうち、所有カードで対象になる施策が1つ以上あるチェーンだけ残す(reward 無しは一覧に出さない) */
-    private fun JudgmentEngine.searchRewarded(query: String, categories: Set<String>): List<SearchResult> =
-        search(query, categories).mapNotNull { hit ->
-            val today = LocalDate.now()
+    /** [searchRewarded] の結果。表示する結果と、ヒットしたが判定 0 件で一覧から落としたチェーンの表示名 */
+    data class SearchOutcome(
+        val results: List<SearchResult> = emptyList(),
+        val unrewardedNames: List<String> = emptyList(),
+    )
+
+    /**
+     * 検索結果のうち、所有カードで対象になる施策が1つ以上あるチェーンだけ残す(reward 無しは一覧に出さない)。
+     * 落としたヒットの表示名は unrewardedNames として別枠で返す — 検索 0 件時に
+     * 「アプリ未収録」と「収録済みだが今出せるキャンペーンが無い」を区別して案内するため(#70)
+     */
+    private fun JudgmentEngine.searchRewarded(query: String, categories: Set<String>): SearchOutcome {
+        val today = LocalDate.now()
+        val results = mutableListOf<SearchResult>()
+        val unrewarded = mutableListOf<String>()
+        search(query, categories).forEach { hit ->
             // 業態ヒットはその業態としての判定(看板スコープ外の施策は数えない)
             val result = judgeAll(hit.merchant, today, enabledQrIds(), hit.bannerId)
-            if (result.judgments.isEmpty()) return@mapNotNull null
+            if (result.judgments.isEmpty()) {
+                unrewarded += hit.bannerName ?: hit.merchant.name
+                return@forEach
+            }
             val allCampaigns = result.judgments.map { it.campaign }
-            SearchResult(
+            results += SearchResult(
                 merchant = hit.merchant,
                 bannerId = hit.bannerId,
                 bannerName = hit.bannerName,
@@ -719,6 +742,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 hasTimeLimited = allCampaigns.any { it.isTimeLimited },
             )
         }
+        return SearchOutcome(results, unrewarded)
+    }
 
     private fun applyData(loaded: LoadedData) {
         lastLoaded = loaded
@@ -861,6 +886,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         _state.update {
+            val searchOutcome = newEngine.searchRewarded(it.query, it.selectedCategories)
             it.copy(
                 loading = false,
                 error = null,
@@ -868,7 +894,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 dataSource = loaded.source,
                 dataCommitSha = loaded.commitSha,
                 categories = newEngine.categories,
-                results = newEngine.searchRewarded(it.query, it.selectedCategories),
+                results = searchOutcome.results,
+                unrewardedNames = searchOutcome.unrewardedNames,
                 selection = it.selection?.let { sel ->
                     newDisplayData.merchants.firstOrNull { m -> m.id == sel.merchant.id }
                         ?.let { m -> newEngine.selectionFor(m, sel.storeNameHint, sel.displayName, sel.bannerId) }
@@ -923,9 +950,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onQueryChange(query: String) {
         _state.update {
+            val outcome = engine?.searchRewarded(query, it.selectedCategories) ?: SearchOutcome()
             it.copy(
                 query = query,
-                results = engine?.searchRewarded(query, it.selectedCategories).orEmpty(),
+                results = outcome.results,
+                unrewardedNames = outcome.unrewardedNames,
                 selection = null,
                 storeCheck = null,
             )
@@ -1128,6 +1157,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         val today = LocalDate.now()
         val qrIds = enabledQrIds()
+        // ブリッジ中チェーンの網羅リスト対象外で間引いた店(0 件表示の案内の出し分け用。#70)。
+        // YOLP の同一店舗の重複登録を二重に数えないよう、重複排除と同じ「チェーン+支店名」で数える
+        val ineligibleHidden = mutableSetOf<String>()
         val places = pois
             .mapNotNull { poi ->
                 val match = engine.matchStore(poi.name) ?: return@mapNotNull null
@@ -1142,8 +1174,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val ineligibleIds = engine.exhaustiveListIneligibleCampaignIds(merchant, poi.name)
                 val result = engine.judgeAll(merchant, today, qrIds, match.bannerId, excludedIds, ineligibleIds)
                 // 判定なしは通常出さないが、チェーン絞り込み中(ブリッジ由来)の merchant は
-                // 非対象日の場所確認用に残す(bestBenefit なし=還元率ラベルなしで表示)
-                if (result.judgments.isEmpty() && merchant.id !in filterIds) return@mapNotNull null
+                // 非対象日の場所確認用に残す(bestBenefit なし=還元率ラベルなしで表示)。
+                // ただし網羅リストで対象外と確定した店(ineligibleIds に間引かれた店。#64)は
+                // 下見の意味が無いため、明示対象外(isExcludedStore)と同様ブリッジ中でも出さない
+                // (施策詳細から「近くの対象のお店を探す」と全国の非対象店が並んでしまう。#70)
+                if (result.judgments.isEmpty() && (merchant.id !in filterIds || ineligibleIds.isNotEmpty())) {
+                    if (merchant.id in filterIds && ineligibleIds.isNotEmpty()) {
+                        ineligibleHidden += "${merchant.id}:${engine.normalizedBranch(merchant, poi.name)}"
+                    }
+                    return@mapNotNull null
+                }
                 val allCampaigns = result.judgments.map { it.campaign }
                 NearbyPlace(
                     name = poi.name,
@@ -1182,6 +1222,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             gen,
             NearbyUi(
                 places = places,
+                ineligibleHiddenCount = ineligibleHidden.size,
                 centerLat = centerLat,
                 centerLon = centerLon,
                 userLat = userLat,
@@ -1210,13 +1251,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val today = LocalDate.now()
         val qrIds = settings.enabledQrPaymentIds
         val filterIds = filters.map { it.merchant.id }.toSet()
+        // 検索時(loadNearbyAround)に間引いた分に、この再計算で新たに間引いた分を積む
+        // (places はメモリ内の残存分だけなので検索時の分は数え直せない。次の検索でリセットされる)
+        var ineligibleHidden = nearby.ineligibleHiddenCount
         val places = nearby.places.mapNotNull { place ->
             val merchant = place.merchant ?: return@mapNotNull place
             val excludedIds =
                 engine.excludedCampaignIdsFor(merchant, place.name, settings.activeExcludedStorePairs)
             val ineligibleIds = engine.exhaustiveListIneligibleCampaignIds(merchant, place.name)
             val result = engine.judgeAll(merchant, today, qrIds, place.bannerId, excludedIds, ineligibleIds)
-            if (result.judgments.isEmpty() && merchant.id !in filterIds) return@mapNotNull null
+            // 網羅リストの対象外店はブリッジ中でも残さない(loadNearbyAround と同基準。#70)
+            if (result.judgments.isEmpty() && (merchant.id !in filterIds || ineligibleIds.isNotEmpty())) {
+                if (merchant.id in filterIds && ineligibleIds.isNotEmpty()) ineligibleHidden++
+                return@mapNotNull null
+            }
             place.copy(
                 bestBenefit = result.bestBenefitLabel(),
                 brandColors = result.judgments.mapNotNull { it.brandColor }.distinct(),
@@ -1227,7 +1275,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val selected = nearby.selectedPlace?.let { sp ->
             places.firstOrNull { it.name == sp.name && it.lat == sp.lat && it.lon == sp.lon }
         }
-        return nearby.copy(places = places, selectedPlace = selected)
+        return nearby.copy(places = places, selectedPlace = selected, ineligibleHiddenCount = ineligibleHidden)
     }
 
     /**
@@ -1446,9 +1494,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } else {
                 it.selectedCategories + category
             }
+            val outcome = engine?.searchRewarded(it.query, selected) ?: SearchOutcome()
             it.copy(
                 selectedCategories = selected,
-                results = engine?.searchRewarded(it.query, selected).orEmpty(),
+                results = outcome.results,
+                unrewardedNames = outcome.unrewardedNames,
                 selection = null,
                 storeCheck = null,
             )

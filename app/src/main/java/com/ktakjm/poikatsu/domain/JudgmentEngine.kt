@@ -830,11 +830,12 @@ class JudgmentEngine(private val data: PoikatsuData) {
     /**
      * 公式が対象/対象外を言い切っている店舗リスト(official_store_list)を持つ施策が
      * 1 つでもあれば、店舗単位の対象判定画面に遷移できる。
-     * 網羅リスト(list_is_exhaustive)だけのチェーンは対象外(#64): 対象店だけが地図・判定に
-     * 出る(掲載なしは自動で間引かれる)ため、手動で調べる導線は不要。
+     * 網羅リスト(list_is_exhaustive)だけのチェーンも対象(#70): #64 では「対象店しか
+     * 表示されないため導線不要」としたが、掲載のない店が理由なく消えたように見えて
+     * 原因(公式に対象外)をユーザーが確かめる手段が無かったため、意図的に方針を変更した。
      */
     fun canCheckStore(merchant: Merchant): Boolean =
-        data.campaigns.any { it.ruleFor(merchant)?.officialStoreList?.listIsExhaustive == false }
+        data.campaigns.any { it.ruleFor(merchant)?.officialStoreList != null }
 
     /**
      * 特定店舗の判定を、公式リストを持つ施策ごとに返す。
