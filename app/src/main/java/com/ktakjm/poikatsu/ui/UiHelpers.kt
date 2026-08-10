@@ -62,6 +62,7 @@ import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.CampaignType
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.formatBenefit
+import com.ktakjm.poikatsu.domain.isPrefectureWide
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningContainerColor
 import java.time.LocalDate
@@ -720,6 +721,30 @@ internal fun campaignTargetLabelGroups(
  * 複数チェーンは「{先頭チェーン} 他Nチェーン」(→ merchant_rules が無ければ campaign.name)。
  * 多チェーン施策が先頭 merchant 名だけで「1チェーンの施策」に見えないようにする。
  */
+/**
+ * 自治体施策の併催グループ(県全域+市区町村の同時開催)の地域併記ラベル。
+ * 全施策が自治体施策で地域名が複数あるときだけ「千葉県・千葉市」(県全域は県名が region.name。
+ * 県→市区町村の順)を返し、それ以外(単独・自治体以外を含む)は null。
+ * 地図のお知らせピルと施策詳細タイトルで共用し、ピル「千葉市」/タイトル「千葉県」のように
+ * 同じグループの文言が食い違わないようにする。
+ */
+internal fun municipalRegionsLabel(campaigns: List<Campaign>): String? {
+    if (campaigns.isEmpty() || !campaigns.all { it.campaignType == CampaignType.MUNICIPAL }) return null
+    val regions = campaigns.mapNotNull { it.region }
+    val names = (regions.filter { it.isPrefectureWide } + regions.filterNot { it.isPrefectureWide })
+        .map { it.name }
+        .distinct()
+    return if (names.size >= 2) names.joinToString("・") else null
+}
+
+/**
+ * 施策グループ(同一カード/詳細にまとめて出す施策列)の表示タイトル。
+ * 自治体の併催グループ(地図のお知らせピル発)は地域併記([municipalRegionsLabel])、
+ * それ以外は先頭施策のタイトル(単数版の [campaignGroupDisplayTitle])。
+ */
+internal fun campaignGroupDisplayTitle(group: List<Campaign>, merchants: Map<String, Merchant>): String =
+    municipalRegionsLabel(group) ?: campaignGroupDisplayTitle(group.first(), merchants)
+
 internal fun campaignGroupDisplayTitle(first: Campaign, merchants: Map<String, Merchant>): String =
     if (first.campaignType == CampaignType.MUNICIPAL) {
         val prefecture = first.region?.prefecture ?: ""

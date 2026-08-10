@@ -6,7 +6,9 @@ import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.Region
 import com.ktakjm.poikatsu.ui.campaignGroupDisplayTitle
+import com.ktakjm.poikatsu.ui.municipalRegionsLabel
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -171,5 +173,50 @@ class CampaignDisplayTitleTest {
             region = Region(name = "杉並区", prefecture = "東京都"),
         )
         assertEquals("東京都 杉並区", campaignGroupDisplayTitle(c, merchants))
+    }
+
+    private fun municipal(id: String, name: String, prefecture: String) = Campaign(
+        id = id,
+        operator = "テストPay",
+        name = "${name}で最大20%戻ってくる",
+        type = "municipal",
+        region = Region(name = name, prefecture = prefecture),
+    )
+
+    @Test
+    fun `自治体の併催グループは県と市区町村を併記する`() {
+        // 県全域(region.name == prefecture)+市の同時開催(地図のお知らせピル発のグループ)。
+        // データ順に依らず県→市区町村の順に並ぶ
+        val group = listOf(
+            municipal("m-city", "千葉市", "千葉県"),
+            municipal("m-pref", "千葉県", "千葉県"),
+        )
+        assertEquals("千葉県・千葉市", municipalRegionsLabel(group))
+        assertEquals("千葉県・千葉市", campaignGroupDisplayTitle(group, merchants))
+    }
+
+    @Test
+    fun `自治体施策が単独のグループは併記せず従来のタイトル`() {
+        val single = listOf(municipal("m-city", "杉並区", "東京都"))
+        assertNull(municipalRegionsLabel(single))
+        assertEquals("東京都 杉並区", campaignGroupDisplayTitle(single, merchants))
+    }
+
+    @Test
+    fun `同一自治体の複数施策は併記しない`() {
+        // 同じ市で複数の施策が併催されても地域名は1つ(distinct)なので従来タイトル
+        val group = listOf(
+            municipal("m1", "千葉市", "千葉県"),
+            municipal("m2", "千葉市", "千葉県"),
+        )
+        assertNull(municipalRegionsLabel(group))
+        assertEquals("千葉県 千葉市", campaignGroupDisplayTitle(group, merchants))
+    }
+
+    @Test
+    fun `自治体以外のグループは併記対象外で先頭施策のタイトル`() {
+        val group = listOf(promotion(merchantIds = listOf("welcia")))
+        assertNull(municipalRegionsLabel(group))
+        assertEquals("ウエルシア", campaignGroupDisplayTitle(group, merchants))
     }
 }

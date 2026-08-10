@@ -326,7 +326,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     // おトクタブの二ペイン時は overlayCampaignGroup が null になりここを素通りする(#55)
                     overlayCampaignGroup != null -> {
                         val group = overlayCampaignGroup
-                        val title = campaignGroupDisplayTitle(group.first().campaign, state.merchantsById)
+                        val title = campaignGroupDisplayTitle(group.map { it.campaign }, state.merchantsById)
                         TopAppBar(
                             title = { Text(title) },
                             navigationIcon = {
@@ -1200,7 +1200,7 @@ private fun CampaignsListDetail(
                 if (selectedGroup != null) {
                     PaddedColumn(PaddingValues(end = 16.dp)) {
                         PaneHeader(
-                            title = campaignGroupDisplayTitle(selectedGroup.first().campaign, merchants),
+                            title = campaignGroupDisplayTitle(selectedGroup.map { it.campaign }, merchants),
                             trailing = {
                                 IconButton(onClick = onBack) {
                                     Icon(Icons.Default.Close, contentDescription = "詳細を閉じる")
@@ -1847,7 +1847,7 @@ private fun NearbyDetailSideSheet(
                 }
                 campaignGroup != null -> {
                     PaneHeader(
-                        title = campaignGroupDisplayTitle(campaignGroup.first().campaign, merchants),
+                        title = campaignGroupDisplayTitle(campaignGroup.map { it.campaign }, merchants),
                         trailing = {
                             IconButton(onClick = onCloseCampaignDetail) {
                                 Icon(Icons.Default.Close, contentDescription = "詳細を閉じる")

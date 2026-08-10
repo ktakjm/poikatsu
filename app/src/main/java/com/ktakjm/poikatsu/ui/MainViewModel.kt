@@ -1367,9 +1367,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 municipal, prefecture, listOfNotNull(addr.locality, addr.subLocality),
             )
             if (matched.isEmpty()) return@launch
-            // ピルの文言はより狭い単位を優先(市区町村があればそれ、県全域施策だけなら県名)
-            val label = matched.mapNotNull { it.region }
-                .firstOrNull { !it.isPrefectureWide }?.name ?: prefecture
+            // ピルの文言: 県全域+市区町村の併催は「千葉県・千葉市」と併記(municipalRegionsLabel。
+            // 施策詳細のタイトルと共用し、ピル「千葉市」/タイトル「千葉県」の食い違いを防ぐ)。
+            // 単独ならより狭い単位を優先(市区町村があればそれ、県全域施策だけなら県名)
+            val label = municipalRegionsLabel(matched)
+                ?: matched.mapNotNull { it.region }.firstOrNull { !it.isPrefectureWide }?.name
+                ?: prefecture
             _state.update { st ->
                 if (gen != nearbyGeneration) return@update st
                 val nearby = st.nearby ?: return@update st
