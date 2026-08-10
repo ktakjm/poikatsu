@@ -225,12 +225,24 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
     // 地図タブから開いたときは従来どおり全画面オーバーレイが自然)
     val campaignsTwoPane = selectedTab == AppTab.CAMPAIGNS && paneDirective.maxHorizontalPartitions > 1
 
-    // 全画面オーバーレイとして扱う店舗判定・判定詳細・施策詳細。二ペイン時は詳細ペイン内の表示なので
-    // null になり、topBar・本文のオーバーレイ分岐と baseTabsVisible を素通りして
-    // SearchListDetail / CampaignsListDetail が受ける
-    val overlayStoreCheck = state.storeCheck?.takeUnless { searchTwoPane }
-    val overlaySelection = state.selection?.takeUnless { searchTwoPane }
-    val overlayCampaignGroup = state.selectedCampaignGroup?.takeUnless { campaignsTwoPane }
+    // 横画面では下部タブを左端の NavigationRail に置き換え、縦方向の占有をなくす(#4)。
+    // M3 の定石(横長・中幅以上は Rail)。判定は WindowSizeClass でなく window の向きで足りる
+    // (回転で Activity が再生成されるため、その場の Configuration を見ればよい)
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    // 地図タブの横画面では判定詳細・店舗判定・施策詳細(お知らせピル発)を全画面オーバーレイでなく、
+    // 地図の上に浮くサイドシート(右端・全高・400dp)に出す(#57)。タップしたピンと周辺の位置関係を
+    // 保ったまま詳細を読めるようにするため。nearby が無い間(初回ロード/エラー)は地図が無く
+    // シートの置き場もないため、従来どおり全画面オーバーレイに倒す。縦画面は無変更
+    // (ボトムシートに詳細を収める高さはない)
+    val nearbySideSheet = selectedTab == AppTab.NEARBY && isLandscape && state.nearby != null
+
+    // 全画面オーバーレイとして扱う店舗判定・判定詳細・施策詳細。二ペイン時は詳細ペイン内、
+    // 地図タブ横画面はサイドシートの表示なので null になり、topBar・本文のオーバーレイ分岐と
+    // baseTabsVisible を素通りして SearchListDetail / CampaignsListDetail / NearbyDetailSideSheet が受ける
+    val overlayStoreCheck = state.storeCheck?.takeUnless { searchTwoPane || nearbySideSheet }
+    val overlaySelection = state.selection?.takeUnless { searchTwoPane || nearbySideSheet }
+    val overlayCampaignGroup = state.selectedCampaignGroup?.takeUnless { campaignsTwoPane || nearbySideSheet }
 
     // 下位画面(詳細/店舗判定/キャンペーン詳細/カスタムキャンペーン編集/設定サブページ)や
     // ロード・エラーに重なっていないベースのタブ表示状態。下部ナビ・FAB の表示条件。
@@ -252,11 +264,6 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
             if (tab == AppTab.NEARBY) onNearbyClick()
         }
     }
-
-    // 横画面では下部タブを左端の NavigationRail に置き換え、縦方向の占有をなくす(#4)。
-    // M3 の定石(横長・中幅以上は Rail)。判定は WindowSizeClass でなく window の向きで足りる
-    // (回転で Activity が再生成されるため、その場の Configuration を見ればよい)
-    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     // 検索窓を TopAppBar 側(SearchBarRow)に出すモード(横画面の1ペインのみ)。
     // topBar の分岐と SearchPane(本文の検索窓を隠す)で同じ判断を共有する
@@ -603,6 +610,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                                 onPreviewPlace = viewModel::onPreviewNearby,
                                 onClearPreview = viewModel::onClearNearbyPreview,
                                 onOpenDetail = viewModel::onSelectNearby,
+                                onCloseDetail = viewModel::onCloseNearbyDetail,
                                 onSearchHere = viewModel::searchHere,
                                 onGeocode = viewModel::onGeocode,
                                 onSelectCandidate = viewModel::onSelectGeocodedPlace,
@@ -611,6 +619,28 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                                 onOpenMunicipalGroup = viewModel::onSelectCampaignGroup,
                                 topInset = innerPadding.calculateTopPadding(),
                             )
+                            if (nearbySideSheet) {
+                                NearbyDetailSideSheet(
+                                    storeCheck = state.storeCheck,
+                                    selection = state.selection,
+                                    campaignGroup = state.selectedCampaignGroup,
+                                    merchants = state.merchantsById,
+                                    storeRates = state.campaignStoreRates,
+                                    topInset = innerPadding.calculateTopPadding(),
+                                    onBack = viewModel::onBack,
+                                    onOpenStoreCheck = viewModel::onOpenStoreCheck,
+                                    onCloseStoreCheck = viewModel::onCloseStoreCheck,
+                                    onStoreNameChange = viewModel::onStoreNameChange,
+                                    onExcludeStore = viewModel::onExcludeStore,
+                                    onRestoreExcludedStore = viewModel::onRestoreExcludedStore,
+                                    onCloseCampaignDetail = viewModel::onCloseCampaignDetail,
+                                    onFindChains = { ids ->
+                                        viewModel.onFindNearbyByIds(ids)
+                                        onNearbyClick()
+                                    },
+                                    modifier = Modifier.align(Alignment.CenterEnd),
+                                )
+                            }
                         } else {
                             Centered { CircularProgressIndicator() }
                         }
@@ -1426,6 +1456,12 @@ private fun NearbyPane(
     onPreviewPlace: (MainViewModel.NearbyPlace) -> Unit,
     onClearPreview: () -> Unit,
     onOpenDetail: (MainViewModel.NearbyPlace) -> Unit,
+    /**
+     * 詳細サイドシート(#57)を閉じる。クラスタ/複合ピンのタップでグループリストを出すとき、
+     * シートが上に残るとグループリストが隠れて見えないため、開くのと同時に閉じる。
+     * 縦画面では詳細表示中に地図は触れない(全画面オーバーレイ)ので実質no-op。
+     */
+    onCloseDetail: () -> Unit,
     onSearchHere: (Double, Double, Int, Double) -> Unit,
     onGeocode: (String) -> Unit,
     onSelectCandidate: (MainViewModel.GeocodedPlace) -> Unit,
@@ -1550,6 +1586,7 @@ private fun NearbyPane(
                     selected = group.any { it == selectedPlace },
                     onClick = {
                         onClearPreview()
+                        onCloseDetail()
                         // 並び順はクラスタタップ時と同じ「起点からの距離」(各行の距離ラベルと一致)
                         placeGroup = PlaceGroupSheet(group.sortedBy { it.distanceMeters }, sameSpot = true)
                     },
@@ -1591,6 +1628,7 @@ private fun NearbyPane(
                     .sortedBy { it.distanceMeters }
                 if (places.isNotEmpty()) {
                     onClearPreview()
+                    onCloseDetail()
                     placeGroup = PlaceGroupSheet(places, sameSpot)
                 }
             },
@@ -1725,6 +1763,111 @@ private fun NearbyPane(
 
 /** 横画面の右ペイン(お店リスト)の幅。残りが地図(中央・全高)の取り分になる。 */
 private val NEARBY_PANE_WIDTH = 320.dp
+
+/** 地図タブ横画面の詳細サイドシートの幅(#57)。M3 side sheet の上限幅に合わせる。 */
+private val NEARBY_SIDE_SHEET_WIDTH = 400.dp
+
+/**
+ * 地図タブ横画面の詳細サイドシート(#57)。判定詳細(selection)・店舗判定(storeCheck)・
+ * 施策詳細(お知らせピル発の campaignGroup)を、地図の上に浮く右端・全高のパネルで表示する。
+ * M3 の side sheet 相当(非モーダル・スクリムなし)で、下の地図・右ペイン(320dp)はサイズ不変のまま
+ * 上に重ねる(ペイン幅を可変にすると GoogleMap の再レイアウトが開閉のたびに走るため採らない)。
+ * 全画面時に TopAppBar が担うタイトルと閉じる/戻るは PaneHeader がシート内で肩代わりし、
+ * 店舗判定はシート内で判定詳細と置き換わる(←で判定詳細へ。二ペインの詳細ペインと同じ)。
+ * 分岐順(storeCheck → selection → campaignGroup)は全画面オーバーレイの when と揃える
+ * (回転で全画面オーバーレイに切り替わっても同じ画面が最前面になるように)。
+ * 表示するものが無ければ何も出さない。
+ */
+@Composable
+private fun NearbyDetailSideSheet(
+    storeCheck: MainViewModel.StoreCheckState?,
+    selection: MainViewModel.Selection?,
+    campaignGroup: List<CampaignJudgment>?,
+    merchants: Map<String, Merchant>,
+    storeRates: Map<String, Map<String, Double>>,
+    topInset: Dp,
+    onBack: () -> Unit,
+    onOpenStoreCheck: () -> Unit,
+    onCloseStoreCheck: () -> Unit,
+    onStoreNameChange: (String) -> Unit,
+    onExcludeStore: (campaignId: String, storeName: String) -> Unit,
+    onRestoreExcludedStore: (campaignId: String) -> Unit,
+    onCloseCampaignDetail: () -> Unit,
+    onFindChains: (List<String>) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (storeCheck == null && selection == null && campaignGroup == null) return
+    Surface(
+        modifier = modifier.fillMaxHeight().width(NEARBY_SIDE_SHEET_WIDTH),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        // 右ペインと同色のためシートの浮きは影で出す。角丸は画面端に接しない左側だけ(M3 side sheet)
+        shape = RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp),
+        shadowElevation = 2.dp,
+    ) {
+        // full-bleed でステータスバー裏まで届くため、内容だけ topInset で避ける(右ペインと同じ)
+        Column(Modifier.padding(top = topInset).padding(horizontal = 16.dp)) {
+            when {
+                storeCheck != null -> {
+                    PaneHeader(
+                        title = storeCheckTitle(storeCheck),
+                        leading = {
+                            IconButton(onClick = onCloseStoreCheck) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "判定詳細に戻る",
+                                )
+                            }
+                        },
+                    )
+                    StoreCheckScreen(
+                        storeCheck = storeCheck,
+                        onBack = onCloseStoreCheck,
+                        onStoreNameChange = onStoreNameChange,
+                    )
+                }
+                selection != null -> {
+                    PaneHeader(
+                        title = selectionTitle(selection),
+                        trailing = {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.Default.Close, contentDescription = "詳細を閉じる")
+                            }
+                        },
+                    )
+                    JudgmentDetail(
+                        selection = selection,
+                        onBack = onBack,
+                        onOpenStoreCheck = onOpenStoreCheck,
+                        // 地図発の判定詳細は店舗特定済み(displayName あり)のため「近くのこのお店を
+                        // 探す」は描画されず、この導線は呼ばれない
+                        onFindNearby = {},
+                        onExcludeStore = onExcludeStore,
+                        onRestoreExcludedStore = onRestoreExcludedStore,
+                    )
+                }
+                campaignGroup != null -> {
+                    PaneHeader(
+                        title = campaignGroupDisplayTitle(campaignGroup.first().campaign, merchants),
+                        trailing = {
+                            IconButton(onClick = onCloseCampaignDetail) {
+                                Icon(Icons.Default.Close, contentDescription = "詳細を閉じる")
+                            }
+                        },
+                    )
+                    // お知らせピル発は自治体施策のみでカスタムキャンペーンは来ないため、
+                    // 編集・削除(onEditCustom/onDeleteCustom)は出さない
+                    CampaignDetail(
+                        judgments = campaignGroup,
+                        merchants = merchants,
+                        storeRates = storeRates,
+                        onBack = onCloseCampaignDetail,
+                        onFindChains = onFindChains,
+                    )
+                }
+            }
+        }
+    }
+}
 
 /**
  * 地図タブの店舗パネルの中身(一覧 / プレビュー / グループの 3 状態)。

@@ -1530,7 +1530,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onPreviewNearby(place: NearbyPlace) {
         _state.update { st ->
             val nearby = st.nearby ?: return@update st
-            st.copy(nearby = nearby.copy(selectedPlace = place))
+            var s = st.copy(nearby = nearby.copy(selectedPlace = place))
+            // 詳細サイドシート(#57)表示中のピンタップは、プレビューだけ差し替えるとシートの詳細と
+            // 地図の選択が食い違うため、シートの詳細ごとその店に差し替える。縦画面では詳細表示中に
+            // ピンは押せない(全画面オーバーレイが地図を覆う)ので、この分岐は横画面のシートでしか効かない
+            val detailOpen = st.selection != null || st.storeCheck != null ||
+                st.selectedCampaignGroup != null
+            val merchant = place.merchant
+            if (detailOpen && merchant != null) {
+                engine?.let { e ->
+                    s = s.withSelection(
+                        e.selectionFor(merchant, place.name, displayName = place.name, bannerId = place.bannerId),
+                    )
+                }
+            }
+            s
+        }
+    }
+
+    /**
+     * 地図タブの詳細サイドシート(#57)を閉じる。クラスタ/複合ピンのタップでグループリストを
+     * 右ペインに出すとき、シートが上に残ると隠れて見えないため UI 側から呼ばれる。
+     */
+    fun onCloseNearbyDetail() {
+        _state.update {
+            it.copy(selection = null, storeCheck = null, selectedCampaignGroup = null)
         }
     }
 
@@ -1959,7 +1983,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 nextTargetDate = if (todayIsTarget) null else nextTargetDay(campaign, today),
             )
         }
-        _state.update { it.copy(selectedCampaignGroup = judgments) }
+        // 地図タブ横画面のお知らせピルは、判定詳細のサイドシート表示中も押せる(非モーダル。#57)。
+        // 開いていた判定詳細・店舗判定は施策詳細に置き換える(残すと全画面オーバーレイ・サイドシート
+        // とも when の優先順で判定詳細側が最前面になり、開いたはずの施策詳細が見えないため)
+        _state.update { it.copy(selectedCampaignGroup = judgments, selection = null, storeCheck = null) }
     }
 
     fun onCloseCampaignDetail() {
