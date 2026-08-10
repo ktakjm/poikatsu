@@ -1659,6 +1659,8 @@ class JudgmentEngineRealDataTest {
         val owndays = data.merchants.first { it.id == "owndays" }
         // 網羅リストのみのチェーンでも「このお店が対象か調べる」導線を出す(#70)
         assertTrue(engine.canCheckStore(owndays))
+        // YOLP のデータセット自体に OWNDAYS がほぼ無い実測(#52)に基づく地図注記(#70 施策3)
+        assertFalse(owndays.yolpCoverageNote.isNullOrBlank())
         assertEquals(
             StoreEligibility.ELIGIBLE,
             engine.checkStore(owndays, "OWNDAYS 池袋西口店").single().eligibility,

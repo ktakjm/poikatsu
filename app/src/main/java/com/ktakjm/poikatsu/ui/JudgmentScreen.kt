@@ -126,6 +126,8 @@ internal fun JudgmentDetail(
                                 Spacer(Modifier.width(8.dp))
                                 Text("近くのこのお店を探す")
                             }
+                            // 地図に出にくいチェーンの注記(#70)。地図で探す直前に目に入る位置に出す
+                            selection.merchant.yolpCoverageNote?.let { YolpCoverageNote(it) }
                         } else {
                             LocationHintNote(locationHint)
                         }
@@ -602,6 +604,28 @@ private fun RecurrenceRow(judgment: CampaignJudgment) {
 }
 
 // ---- 位置情報ヒント ----
+
+/**
+ * 地図に出にくいチェーンの注記(merchants.json の yolp_coverage_note。#70)。
+ * YOLP の提供データ側の不備は対象外の意味ではないため、warning ロールでなく通常の補足で出す。
+ */
+@Composable
+private fun YolpCoverageNote(note: String) {
+    Row(verticalAlignment = Alignment.Top) {
+        Icon(
+            Icons.Default.Info,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp).padding(top = 2.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            note,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
 
 @Composable
 private fun LocationHintNote(hint: LocationHint) {

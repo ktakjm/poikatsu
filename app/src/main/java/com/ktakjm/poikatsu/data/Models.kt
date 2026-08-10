@@ -29,6 +29,12 @@ data class Merchant(
     @SerialName("location_hint") val locationHint: LocationHint? = null,
     @SerialName("yolp_search") val yolpSearch: String = "gc",
     @SerialName("yolp_keyword") val yolpKeyword: String? = null,
+    /**
+     * YOLP(地図)の提供データにこのチェーンの店舗がほぼ無いなど、地図に出にくい事実の注記
+     * (表示文をそのまま持つ)。実測の根拠がある場合だけ書く(#70。推測で書かない)。
+     * 対象外の警告ではないため、判定詳細で通常の補足として表示する。
+     */
+    @SerialName("yolp_coverage_note") val yolpCoverageNote: String? = null,
 ) {
     /** 看板 id → 表示名。代表看板(merchant.id)は merchant 名。未知の id は null */
     fun bannerName(bannerId: String): String? = when {

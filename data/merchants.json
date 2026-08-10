@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-08-08",
+  "updated_at": "2026-08-10",
 
   "yolp_config": {
     "gc_groups": [
@@ -149,7 +149,8 @@
     { "id": "haruyama", "name": "はるやま", "reading": "はるやま", "aliases": ["はるやまチェーン"], "category": "ファッション", "yolp_search": "keyword" },
     { "id": "tokyo_kutsu_ryutsu_center", "name": "東京靴流通センター", "reading": "とうきょうくつりゅうつうせんたー", "aliases": [], "category": "ファッション", "yolp_search": "keyword" },
     { "id": "shoe_plaza", "name": "シュープラザ", "reading": "しゅーぷらざ", "aliases": ["SHOE PLAZA"], "category": "ファッション", "yolp_search": "keyword" },
-    { "id": "owndays", "name": "OWNDAYS", "reading": "おんでーず", "aliases": ["オンデーズ"], "category": "ファッション", "yolp_search": "keyword", "yolp_keyword": "オンデーズ" },
+    { "id": "owndays", "name": "OWNDAYS", "reading": "おんでーず", "aliases": ["オンデーズ"], "category": "ファッション", "yolp_search": "keyword", "yolp_keyword": "オンデーズ",
+      "yolp_coverage_note": "地図には出にくいお店です。場所は公式の店舗一覧で確認してください" },
     { "id": "welcia", "name": "ウエルシア", "reading": "うえるしあ", "aliases": ["ウエルシア薬局", "welcia"], "category": "ドラッグストア",
       "group_label": "ウエルシアグループ",
       "banners": [
