@@ -141,6 +141,19 @@ enum class SettingsSubpage(val title: String) {
 
     /** 開発者向け配下の 2 階層目(#70)。戻る操作は DEVELOPER へ戻す */
     DEVELOPER_POIS("取得した地図データ"),
+    ;
+
+    /**
+     * 2 階層目のサブページの親カテゴリ(1 階層目は null)。戻る操作
+     * ([MainViewModel.onCloseSettingsSubpage])と、二ペイン時に一覧側でハイライトする行の算出
+     * (2 階層目を開いている間は親カテゴリの行を選択中として見せる。#56)で共用する。
+     */
+    val parent: SettingsSubpage?
+        get() = when (this) {
+            LICENSES -> ABOUT
+            DEVELOPER_POIS -> DEVELOPER
+            else -> null
+        }
 }
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -1486,6 +1499,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 selectedCampaignGroup = null,
                 campaignBridgeReturn = null,
                 selectionBridgeReturn = null,
+                // 二ペイン(#56)ではサブページを開いたまま Rail で他タブへ移れるため、離脱時に閉じる。
+                // 残すと他タブの上に設定サブページが全画面オーバーレイで出てしまう
+                // (一ペインではサブページ表示中はナビが隠れて移動できないので挙動は変わらない)
+                settingsSubpage = null,
             )
             if (prev == AppTab.NEARBY) {
                 s = s.copy(
@@ -2170,14 +2187,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // 2 階層目のサブページ(ライセンス一覧・取得した地図データ)は、戻る操作で親サブページへ戻す
     fun onCloseSettingsSubpage() {
-        _state.update {
-            val parent = when (it.settingsSubpage) {
-                SettingsSubpage.LICENSES -> SettingsSubpage.ABOUT
-                SettingsSubpage.DEVELOPER_POIS -> SettingsSubpage.DEVELOPER
-                else -> null
-            }
-            it.copy(settingsSubpage = parent)
-        }
+        _state.update { it.copy(settingsSubpage = it.settingsSubpage?.parent) }
     }
 
     fun onSetCardOwned(cardId: String, owned: Boolean) =

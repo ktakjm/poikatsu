@@ -76,6 +76,9 @@ private const val NOTIFY_TIME_STEP_MINUTES = 15
  * キャンペーンデータ/開発者向け/このアプリ)のみを置き、項目本体は各サブページ
  * ([SettingsSubpage]。設定タブ上のオーバーレイ+戻る)へ移す(#47)。各行には畳んだ現在値のサマリ(UiHelpers の純関数で生成)を出し、
  * 遷移せずに状態を一望できるようにする。
+ *
+ * 二ペイン時(#56)は一覧ペインとして使い、[selectedPage] の行を `secondaryContainer` で
+ * ハイライトする(M3 list-detail の定石)。一ペイン(全画面)では常に null。
  */
 @Composable
 internal fun SettingsScreen(
@@ -86,25 +89,28 @@ internal fun SettingsScreen(
     dataSummary: String,
     excludedStoresSummary: String,
     developerSummary: String,
+    selectedPage: SettingsSubpage?,
     onOpenSubpage: (SettingsSubpage) -> Unit,
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        SettingsCategoryRow(SettingsSubpage.DISPLAY, displaySummary, onOpenSubpage)
-        SettingsCategoryRow(SettingsSubpage.PAYMENT_METHODS, paymentSummary, onOpenSubpage)
-        SettingsCategoryRow(SettingsSubpage.MUNICIPALITIES, municipalitySummary, onOpenSubpage)
-        SettingsCategoryRow(SettingsSubpage.NOTIFICATIONS, notificationSummary, onOpenSubpage)
-        SettingsCategoryRow(SettingsSubpage.DATA, dataSummary, onOpenSubpage)
-        SettingsCategoryRow(SettingsSubpage.EXCLUDED_STORES, excludedStoresSummary, onOpenSubpage)
+        SettingsCategoryRow(SettingsSubpage.DISPLAY, displaySummary, selectedPage, onOpenSubpage)
+        SettingsCategoryRow(SettingsSubpage.PAYMENT_METHODS, paymentSummary, selectedPage, onOpenSubpage)
+        SettingsCategoryRow(SettingsSubpage.MUNICIPALITIES, municipalitySummary, selectedPage, onOpenSubpage)
+        SettingsCategoryRow(SettingsSubpage.NOTIFICATIONS, notificationSummary, selectedPage, onOpenSubpage)
+        SettingsCategoryRow(SettingsSubpage.DATA, dataSummary, selectedPage, onOpenSubpage)
+        SettingsCategoryRow(SettingsSubpage.EXCLUDED_STORES, excludedStoresSummary, selectedPage, onOpenSubpage)
         // バックアップは状態を持たない操作の入口なので、サマリは現在値でなく用途を出す
         SettingsCategoryRow(
             SettingsSubpage.BACKUP,
             "機種変更・再インストールに備えて設定をファイルに保存",
+            selectedPage,
             onOpenSubpage,
         )
-        SettingsCategoryRow(SettingsSubpage.DEVELOPER, developerSummary, onOpenSubpage)
+        SettingsCategoryRow(SettingsSubpage.DEVELOPER, developerSummary, selectedPage, onOpenSubpage)
         SettingsCategoryRow(
             SettingsSubpage.ABOUT,
             "バージョン ${BuildConfig.VERSION_NAME}",
+            selectedPage,
             onOpenSubpage,
         )
         Spacer(Modifier.height(24.dp))
@@ -115,13 +121,20 @@ internal fun SettingsScreen(
 private fun SettingsCategoryRow(
     page: SettingsSubpage,
     summary: String,
+    selectedPage: SettingsSubpage?,
     onOpen: (SettingsSubpage) -> Unit,
 ) {
+    val selected = page == selectedPage
     ListItem(
         headlineContent = { Text(page.title) },
         supportingContent = { Text(summary) },
         trailingContent = {
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+        },
+        colors = if (selected) {
+            ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        } else {
+            ListItemDefaults.colors()
         },
         modifier = Modifier.clickable { onOpen(page) },
     )

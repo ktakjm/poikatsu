@@ -224,6 +224,9 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
     // 「おトクタブ表示中に開いたときだけ」右ペインに出す(selectedTab で出し分け。
     // 地図タブから開いたときは従来どおり全画面オーバーレイが自然)
     val campaignsTwoPane = selectedTab == AppTab.CAMPAIGNS && paneDirective.maxHorizontalPartitions > 1
+    // 設定タブも同じ基準でカテゴリ一覧(左)+サブページ内容(右)の二ペインにする(#56)。
+    // サブページは設定タブ専用のオーバーレイなので、施策詳細(#55)のような出し分けは不要
+    val settingsTwoPane = selectedTab == AppTab.SETTINGS && paneDirective.maxHorizontalPartitions > 1
 
     // 横画面では下部タブを左端の NavigationRail に置き換え、縦方向の占有をなくす(#4)。
     // M3 の定石(横長・中幅以上は Rail)。判定は WindowSizeClass でなく window の向きで足りる
@@ -243,12 +246,14 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
     val overlayStoreCheck = state.storeCheck?.takeUnless { searchTwoPane || nearbySideSheet }
     val overlaySelection = state.selection?.takeUnless { searchTwoPane || nearbySideSheet }
     val overlayCampaignGroup = state.selectedCampaignGroup?.takeUnless { campaignsTwoPane || nearbySideSheet }
+    // 設定サブページも同様。二ペイン時は SettingsListDetail の詳細ペイン内表示になる(#56)
+    val overlaySettingsSubpage = state.settingsSubpage?.takeUnless { settingsTwoPane }
 
     // 下位画面(詳細/店舗判定/キャンペーン詳細/カスタムキャンペーン編集/設定サブページ)や
     // ロード・エラーに重なっていないベースのタブ表示状態。下部ナビ・FAB の表示条件。
     val baseTabsVisible = !state.loading && state.error == null &&
         overlaySelection == null && overlayStoreCheck == null &&
-        overlayCampaignGroup == null && state.settingsSubpage == null &&
+        overlayCampaignGroup == null && overlaySettingsSubpage == null &&
         editingCustomCampaign == null
 
     // 下部ナビ/NavigationRail 共通のタブ定義とタブ切替。地図タブは選択時に位置権限の確認・取得も走らせる
@@ -336,8 +341,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             },
                         )
                     }
-                    state.settingsSubpage != null -> TopAppBar(
-                        title = { Text(state.settingsSubpage!!.title) },
+                    overlaySettingsSubpage != null -> TopAppBar(
+                        title = { Text(overlaySettingsSubpage.title) },
                         navigationIcon = {
                             IconButton(onClick = viewModel::onCloseSettingsSubpage) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
@@ -351,6 +356,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     searchTwoPane -> Unit
                     // おトクタブの二ペインも同様(タイトル行は一覧ペイン先頭の PaneHeader が担う。#55)
                     campaignsTwoPane -> Unit
+                    // 設定タブの二ペインも同様(#56)
+                    settingsTwoPane -> Unit
                     // 横画面(1ペイン)は検索窓+再取得をタイトル直後に左詰めで同居させ、本文側の検索窓の
                     // 行(約64dp)を節約する(#54)。actions(右寄せ)に置くと直下のカテゴリチップ行と分断
                     // されるため title スロットに Row で置く
@@ -410,6 +417,116 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
             val stableOriginName = remember { mutableStateOf(state.nearbyOrigin?.name) }
             if (state.nearby?.loading != true) {
                 stableOriginName.value = state.nearbyOrigin?.name
+            }
+            // 設定サブページの中身(#47)。全画面オーバーレイ(一ペイン)と二ペインの詳細ペイン(#56)の
+            // どちらからも同じものを描くため、state/viewModel を掴んだローカルの Composable ラムダに
+            // まとめる(お店・おトクタブの searchPane/campaignPane と同じ作法。引数で state と
+            // コールバックを全部渡し直す関数抽出はシグネチャが 40 個近くになるため採らない)
+            val settingsSubpageContent: @Composable (SettingsSubpage) -> Unit = { page ->
+                when (page) {
+                    SettingsSubpage.DISPLAY -> DisplaySettingsPage(
+                        themeMode = state.themeMode,
+                        dynamicColor = state.dynamicColor,
+                        onBack = viewModel::onCloseSettingsSubpage,
+                        onThemeModeChange = viewModel::onSetThemeMode,
+                        onDynamicColorChange = viewModel::onSetDynamicColor,
+                    )
+                    SettingsSubpage.PAYMENT_METHODS -> PaymentMethodsSettingsPage(
+                        cards = state.cardSettings,
+                        customCards = state.customCards,
+                        brands = state.brandSettings,
+                        qrPayments = state.qrPaymentSettings,
+                        onBack = viewModel::onCloseSettingsSubpage,
+                        onCardOwnedChange = viewModel::onSetCardOwned,
+                        onCardRateChange = viewModel::onSetCardRate,
+                        onCardBrandChange = viewModel::onSetCardBrand,
+                        onCardWelcatsuChange = viewModel::onSetCardWelcatsu,
+                        onCardClassChange = viewModel::onSetCardClass,
+                        onCardPointValueChange = viewModel::onSetCardPointValue,
+                        onAddCustomCard = viewModel::onAddCustomCard,
+                        onUpdateCustomCard = viewModel::onUpdateCustomCard,
+                        onRemoveCustomCard = viewModel::onRemoveCustomCard,
+                        onBrandOwnedChange = viewModel::onSetBrandOwned,
+                        onQrEnabledChange = viewModel::onSetQrEnabled,
+                    )
+                    SettingsSubpage.MUNICIPALITIES -> MunicipalitySettingsPage(
+                        registeredAreas = state.registeredAreas,
+                        municipalityMaster = state.municipalityMaster,
+                        snackbarHostState = snackbarHostState,
+                        onBack = viewModel::onCloseSettingsSubpage,
+                        onAdd = viewModel::onAddRegisteredArea,
+                        onRemove = viewModel::onRemoveRegisteredArea,
+                    )
+                    SettingsSubpage.NOTIFICATIONS -> NotificationSettingsPage(
+                        enabled = state.notificationsEnabled,
+                        notifyTimeMinutes = state.notificationTimeMinutes,
+                        onBack = viewModel::onCloseSettingsSubpage,
+                        onEnabledChange = viewModel::onSetNotificationsEnabled,
+                        onTimeChange = viewModel::onSetNotificationTime,
+                    )
+                    SettingsSubpage.DATA -> DataSettingsPage(
+                        dataStatus = dataStatusLabel(
+                            state.dataUpdatedAt,
+                            state.dataSource,
+                            state.useTestData,
+                            state.useBundledData,
+                        ),
+                        autoRefresh = state.autoRefresh,
+                        refreshing = state.refreshing,
+                        useBundledData = state.useBundledData,
+                        onBack = viewModel::onCloseSettingsSubpage,
+                        onAutoRefreshChange = viewModel::onSetAutoRefresh,
+                        onRefresh = viewModel::onManualRefresh,
+                    )
+                    SettingsSubpage.EXCLUDED_STORES -> ExcludedStoresSettingsPage(
+                        pairs = state.excludedStorePairs,
+                        campaignNames = state.allCampaignNames,
+                        expiredCampaignIds = state.expiredCampaignIds,
+                        merchantNames = state.merchantNames,
+                        onBack = viewModel::onCloseSettingsSubpage,
+                        onRemove = viewModel::onRemoveExcludedStorePair,
+                        onRemoveStale = viewModel::onRemoveStaleExcludedStorePairs,
+                    )
+                    SettingsSubpage.BACKUP -> BackupSettingsPage(
+                        pendingImport = state.pendingSettingsImport,
+                        onBack = viewModel::onCloseSettingsSubpage,
+                        onExport = viewModel::onExportSettings,
+                        onPickImport = viewModel::onPickSettingsImport,
+                        onConfirmImport = viewModel::onConfirmSettingsImport,
+                        onCancelImport = viewModel::onCancelSettingsImport,
+                    )
+                    SettingsSubpage.DEVELOPER -> DeveloperSettingsPage(
+                        developerMode = state.developerMode,
+                        dataCommitRef = state.dataCommitRef,
+                        dataCommitSha = state.dataCommitSha,
+                        useTestData = state.useTestData,
+                        useBundledData = state.useBundledData,
+                        nearbyPoiCount = state.nearbyDebugPois.size,
+                        onBack = viewModel::onCloseSettingsSubpage,
+                        onDeveloperModeChange = viewModel::onSetDeveloperMode,
+                        onDataCommitRefChange = viewModel::onSetDataCommitRef,
+                        onUseTestDataChange = viewModel::onSetUseTestData,
+                        onUseBundledDataChange = viewModel::onSetUseBundledData,
+                        onTestNotification = viewModel::onTestNotification,
+                        onClearNotifiedCampaigns = viewModel::onClearNotifiedCampaigns,
+                        onOpenNearbyPois = {
+                            viewModel.onOpenSettingsSubpage(SettingsSubpage.DEVELOPER_POIS)
+                        },
+                    )
+                    // onCloseSettingsSubpage が DEVELOPER へ戻す(2 階層目。#70)
+                    SettingsSubpage.DEVELOPER_POIS -> DeveloperPoisPage(
+                        pois = state.nearbyDebugPois,
+                        onBack = viewModel::onCloseSettingsSubpage,
+                    )
+                    SettingsSubpage.ABOUT -> AboutSettingsPage(
+                        onBack = viewModel::onCloseSettingsSubpage,
+                        onOpenLicenses = { viewModel.onOpenSettingsSubpage(SettingsSubpage.LICENSES) },
+                    )
+                    // onCloseSettingsSubpage が ABOUT へ戻す(2 階層目)
+                    SettingsSubpage.LICENSES -> LicensesPage(
+                        onBack = viewModel::onCloseSettingsSubpage,
+                    )
+                }
             }
             Box(Modifier.fillMaxSize().padding(contentPadding)) {
                 when {
@@ -486,110 +603,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             onDeleteCustom = customSource?.let { { deletingCustomCampaign = it } },
                         )
                     }
-                    state.settingsSubpage != null -> when (state.settingsSubpage!!) {
-                        SettingsSubpage.DISPLAY -> DisplaySettingsPage(
-                            themeMode = state.themeMode,
-                            dynamicColor = state.dynamicColor,
-                            onBack = viewModel::onCloseSettingsSubpage,
-                            onThemeModeChange = viewModel::onSetThemeMode,
-                            onDynamicColorChange = viewModel::onSetDynamicColor,
-                        )
-                        SettingsSubpage.PAYMENT_METHODS -> PaymentMethodsSettingsPage(
-                            cards = state.cardSettings,
-                            customCards = state.customCards,
-                            brands = state.brandSettings,
-                            qrPayments = state.qrPaymentSettings,
-                            onBack = viewModel::onCloseSettingsSubpage,
-                            onCardOwnedChange = viewModel::onSetCardOwned,
-                            onCardRateChange = viewModel::onSetCardRate,
-                            onCardBrandChange = viewModel::onSetCardBrand,
-                            onCardWelcatsuChange = viewModel::onSetCardWelcatsu,
-                            onCardClassChange = viewModel::onSetCardClass,
-                            onCardPointValueChange = viewModel::onSetCardPointValue,
-                            onAddCustomCard = viewModel::onAddCustomCard,
-                            onUpdateCustomCard = viewModel::onUpdateCustomCard,
-                            onRemoveCustomCard = viewModel::onRemoveCustomCard,
-                            onBrandOwnedChange = viewModel::onSetBrandOwned,
-                            onQrEnabledChange = viewModel::onSetQrEnabled,
-                        )
-                        SettingsSubpage.MUNICIPALITIES -> MunicipalitySettingsPage(
-                            registeredAreas = state.registeredAreas,
-                            municipalityMaster = state.municipalityMaster,
-                            snackbarHostState = snackbarHostState,
-                            onBack = viewModel::onCloseSettingsSubpage,
-                            onAdd = viewModel::onAddRegisteredArea,
-                            onRemove = viewModel::onRemoveRegisteredArea,
-                        )
-                        SettingsSubpage.NOTIFICATIONS -> NotificationSettingsPage(
-                            enabled = state.notificationsEnabled,
-                            notifyTimeMinutes = state.notificationTimeMinutes,
-                            onBack = viewModel::onCloseSettingsSubpage,
-                            onEnabledChange = viewModel::onSetNotificationsEnabled,
-                            onTimeChange = viewModel::onSetNotificationTime,
-                        )
-                        SettingsSubpage.DATA -> DataSettingsPage(
-                            dataStatus = dataStatusLabel(
-                                state.dataUpdatedAt,
-                                state.dataSource,
-                                state.useTestData,
-                                state.useBundledData,
-                            ),
-                            autoRefresh = state.autoRefresh,
-                            refreshing = state.refreshing,
-                            useBundledData = state.useBundledData,
-                            onBack = viewModel::onCloseSettingsSubpage,
-                            onAutoRefreshChange = viewModel::onSetAutoRefresh,
-                            onRefresh = viewModel::onManualRefresh,
-                        )
-                        SettingsSubpage.EXCLUDED_STORES -> ExcludedStoresSettingsPage(
-                            pairs = state.excludedStorePairs,
-                            campaignNames = state.allCampaignNames,
-                            expiredCampaignIds = state.expiredCampaignIds,
-                            merchantNames = state.merchantNames,
-                            onBack = viewModel::onCloseSettingsSubpage,
-                            onRemove = viewModel::onRemoveExcludedStorePair,
-                            onRemoveStale = viewModel::onRemoveStaleExcludedStorePairs,
-                        )
-                        SettingsSubpage.BACKUP -> BackupSettingsPage(
-                            pendingImport = state.pendingSettingsImport,
-                            onBack = viewModel::onCloseSettingsSubpage,
-                            onExport = viewModel::onExportSettings,
-                            onPickImport = viewModel::onPickSettingsImport,
-                            onConfirmImport = viewModel::onConfirmSettingsImport,
-                            onCancelImport = viewModel::onCancelSettingsImport,
-                        )
-                        SettingsSubpage.DEVELOPER -> DeveloperSettingsPage(
-                            developerMode = state.developerMode,
-                            dataCommitRef = state.dataCommitRef,
-                            dataCommitSha = state.dataCommitSha,
-                            useTestData = state.useTestData,
-                            useBundledData = state.useBundledData,
-                            nearbyPoiCount = state.nearbyDebugPois.size,
-                            onBack = viewModel::onCloseSettingsSubpage,
-                            onDeveloperModeChange = viewModel::onSetDeveloperMode,
-                            onDataCommitRefChange = viewModel::onSetDataCommitRef,
-                            onUseTestDataChange = viewModel::onSetUseTestData,
-                            onUseBundledDataChange = viewModel::onSetUseBundledData,
-                            onTestNotification = viewModel::onTestNotification,
-                            onClearNotifiedCampaigns = viewModel::onClearNotifiedCampaigns,
-                            onOpenNearbyPois = {
-                                viewModel.onOpenSettingsSubpage(SettingsSubpage.DEVELOPER_POIS)
-                            },
-                        )
-                        // onCloseSettingsSubpage が DEVELOPER へ戻す(2 階層目。#70)
-                        SettingsSubpage.DEVELOPER_POIS -> DeveloperPoisPage(
-                            pois = state.nearbyDebugPois,
-                            onBack = viewModel::onCloseSettingsSubpage,
-                        )
-                        SettingsSubpage.ABOUT -> AboutSettingsPage(
-                            onBack = viewModel::onCloseSettingsSubpage,
-                            onOpenLicenses = { viewModel.onOpenSettingsSubpage(SettingsSubpage.LICENSES) },
-                        )
-                        // onCloseSettingsSubpage が ABOUT へ戻す(2 階層目)
-                        SettingsSubpage.LICENSES -> LicensesPage(
-                            onBack = viewModel::onCloseSettingsSubpage,
-                        )
-                    }
+                    overlaySettingsSubpage != null -> settingsSubpageContent(overlaySettingsSubpage)
                     selectedTab == AppTab.NEARBY -> {
                         val nearby = state.nearby
                         if (nearby != null) {
@@ -694,37 +708,60 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             PaddedColumn { campaignPane() }
                         }
                     }
-                    selectedTab == AppTab.SETTINGS -> SettingsScreen(
-                        displaySummary = displaySettingsSummary(
-                            state.themeMode,
-                            state.dynamicColor,
-                            dynamicSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
-                        ),
-                        paymentSummary = paymentMethodsSummary(
-                            cardCount = state.cardSettings.count { it.owned } + state.customCards.size,
-                            brandCount = state.brandSettings.count { it.owned },
-                            qrCount = state.qrPaymentSettings.count { it.enabled },
-                        ),
-                        municipalitySummary = municipalitySummary(state.registeredAreas),
-                        notificationSummary = notificationSummary(
-                            state.notificationsEnabled,
-                            state.notificationTimeMinutes,
-                        ),
-                        dataSummary = dataRowSummary(
-                            state.dataUpdatedAt,
-                            state.dataSource,
-                            state.useTestData,
-                            state.useBundledData,
-                        ),
-                        excludedStoresSummary = excludedStoresSummary(state.excludedStorePairs.size),
-                        developerSummary = developerRowSummary(
-                            state.developerMode,
-                            state.dataCommitRef,
-                            state.useTestData,
-                            state.useBundledData,
-                        ),
-                        onOpenSubpage = viewModel::onOpenSettingsSubpage,
-                    )
+                    selectedTab == AppTab.SETTINGS -> {
+                        // 設定タブ。二ペイン相当の窓ならカテゴリ一覧(左)+サブページ内容(右)の
+                        // list-detail(#56)、一ペインなら従来どおりカテゴリ一覧のみ
+                        // (サブページは上の全画面オーバーレイ分岐が受ける)
+                        val settingsPane: @Composable () -> Unit = {
+                            SettingsScreen(
+                                displaySummary = displaySettingsSummary(
+                                    state.themeMode,
+                                    state.dynamicColor,
+                                    dynamicSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
+                                ),
+                                paymentSummary = paymentMethodsSummary(
+                                    cardCount = state.cardSettings.count { it.owned } + state.customCards.size,
+                                    brandCount = state.brandSettings.count { it.owned },
+                                    qrCount = state.qrPaymentSettings.count { it.enabled },
+                                ),
+                                municipalitySummary = municipalitySummary(state.registeredAreas),
+                                notificationSummary = notificationSummary(
+                                    state.notificationsEnabled,
+                                    state.notificationTimeMinutes,
+                                ),
+                                dataSummary = dataRowSummary(
+                                    state.dataUpdatedAt,
+                                    state.dataSource,
+                                    state.useTestData,
+                                    state.useBundledData,
+                                ),
+                                excludedStoresSummary = excludedStoresSummary(state.excludedStorePairs.size),
+                                developerSummary = developerRowSummary(
+                                    state.developerMode,
+                                    state.dataCommitRef,
+                                    state.useTestData,
+                                    state.useBundledData,
+                                ),
+                                // 2 階層目(ライセンス・取得した地図データ)を開いている間は親カテゴリの
+                                // 行をハイライトしたままにする(一覧に無い行を選択中にはできない)
+                                selectedPage = state.settingsSubpage
+                                    ?.let { it.parent ?: it }
+                                    ?.takeIf { settingsTwoPane },
+                                onOpenSubpage = viewModel::onOpenSettingsSubpage,
+                            )
+                        }
+                        if (settingsTwoPane) {
+                            SettingsListDetail(
+                                subpage = state.settingsSubpage,
+                                directive = paneDirective,
+                                listPane = settingsPane,
+                                onClose = viewModel::onCloseSettingsSubpage,
+                                subpageContent = settingsSubpageContent,
+                            )
+                        } else {
+                            settingsPane()
+                        }
+                    }
                     else -> {
                         // お店タブ。二ペイン相当の窓なら一覧(左)+判定詳細(右)の list-detail、
                         // 一ペインなら従来どおり一覧のみ(詳細は上の全画面オーバーレイ分岐が受ける)
@@ -1247,20 +1284,102 @@ private fun customCampaignSource(
     ?.let { c -> customCampaigns.firstOrNull { it.id == customCampaignBaseId(c.id) } }
 
 /**
+ * 設定タブのカテゴリ一覧+サブページ内容の二ペイン(M3 canonical layout の list-detail。#56)。
+ * 骨格・分割判断は お店タブの [SearchListDetail] と同じで、右の詳細ペインに設定サブページ
+ * ([subpageContent])を出す。ペイン内容は ListItem が自前で 16dp の余白を持つため
+ * [PaddedColumn] は使わず、見出し行だけ画面端・ListItem のテキスト位置に合わせて寄せる。
+ * 1 階層目のサブページは右端の✕で選択解除(未選択のプレースホルダに戻る)、2 階層目
+ * (ライセンス・取得した地図データ)は左端の←で親カテゴリへ戻る(ペイン内置換)。
+ */
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
+@Composable
+private fun SettingsListDetail(
+    subpage: SettingsSubpage?,
+    directive: PaneScaffoldDirective,
+    listPane: @Composable () -> Unit,
+    onClose: () -> Unit,
+    subpageContent: @Composable (SettingsSubpage) -> Unit,
+) {
+    ListDetailPaneScaffold(
+        directive = directive,
+        value = calculateThreePaneScaffoldValue(
+            maxHorizontalPartitions = directive.maxHorizontalPartitions,
+            adaptStrategies = ListDetailPaneScaffoldDefaults.adaptStrategies(),
+            // 二ペイン時にしか呼ばれず List/Detail とも常時 Expanded になるため destination は固定
+            // でよい(SearchListDetail と同じ理由)
+            currentDestination = ThreePaneScaffoldDestinationItem<Nothing>(ListDetailPaneScaffoldRole.Detail),
+        ),
+        listPane = {
+            AnimatedPane {
+                Column(Modifier.fillMaxSize()) {
+                    PaneHeader(title = "設定", modifier = Modifier.padding(start = 16.dp))
+                    listPane()
+                }
+            }
+        },
+        detailPane = {
+            AnimatedPane {
+                if (subpage != null) {
+                    Column(Modifier.fillMaxSize()) {
+                        // 2 階層目は親カテゴリへ戻る←(TopAppBar 様式)、1 階層目は選択解除の✕
+                        // (カード様式)。全画面時に TopAppBar が担っていた操作の置き換え
+                        if (subpage.parent != null) {
+                            PaneHeader(
+                                title = subpage.title,
+                                modifier = Modifier.padding(start = 4.dp),
+                                leading = {
+                                    IconButton(onClick = onClose) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = "${subpage.parent!!.title}に戻る",
+                                        )
+                                    }
+                                },
+                            )
+                        } else {
+                            PaneHeader(
+                                title = subpage.title,
+                                modifier = Modifier.padding(start = 16.dp, end = 4.dp),
+                                trailing = {
+                                    IconButton(onClick = onClose) {
+                                        Icon(Icons.Default.Close, contentDescription = "閉じる")
+                                    }
+                                },
+                            )
+                        }
+                        subpageContent(subpage)
+                    }
+                } else {
+                    Centered {
+                        Text(
+                            "設定したい項目を選ぶと、ここに表示します。",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
+                }
+            }
+        },
+    )
+}
+
+/**
  * ペインの見出し行(#54)。全画面時に TopAppBar が担うタイトルと操作をペイン内で置き換える。
  * 一覧ペインはタイトル+再取得(trailing)、判定詳細は右端の✕(ペインを閉じる=カード様式)、
  * 店舗判定は左端の←(1 段深い画面から判定詳細へ戻る=TopAppBar 様式)。
+ * [modifier] は [PaddedColumn] に入れない設定タブ(#56)が端の余白を自分で当てるためのもの。
  */
 @Composable
 private fun PaneHeader(
     title: String,
+    modifier: Modifier = Modifier,
     leading: @Composable () -> Unit = {},
     trailing: @Composable () -> Unit = {},
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
     ) {
         leading()
         Text(
