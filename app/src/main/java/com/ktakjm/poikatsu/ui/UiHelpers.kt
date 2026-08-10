@@ -649,15 +649,6 @@ internal fun MinPurchaseRow(minPurchase: Int?, scope: String = MIN_PURCHASE_SCOP
 }
 
 /**
- * キャンペーングループの表示タイトル。
- * 自治体: "都道府県名 自治体名"(県全域施策は県名のみ。「神奈川県 神奈川県」にしない)、
- * card_program: display_name → campaign.name(常設プログラムは固有名で呼ぶ。多チェーンでも
- * 「{先頭チェーン} 他Nチェーン」にしない)、
- * それ以外はフォールバック連鎖: display_name → 単一チェーンは merchant 名 →
- * 複数チェーンは「{先頭チェーン} 他Nチェーン」(→ merchant_rules が無ければ campaign.name)。
- * 多チェーン施策が先頭 merchant 名だけで「1チェーンの施策」に見えないようにする。
- */
-/**
  * merchant のグループ名(未設定なら「{代表看板}グループ」)。検索結果の従属表示・
  * 地図の束ね見出し・判定詳細の業態行・施策詳細の対象ラベルで共用する。
  */
@@ -720,7 +711,16 @@ internal fun campaignTargetLabelGroups(
         unrated.map { TargetLabelGroup(null, it.value.map { p -> p.first }.distinct()) }
 }
 
-internal fun campaignGroupDisplayTitle(first: Campaign, merchantNames: Map<String, String>): String =
+/**
+ * キャンペーングループの表示タイトル。
+ * 自治体: "都道府県名 自治体名"(県全域施策は県名のみ。「神奈川県 神奈川県」にしない)、
+ * card_program: display_name → campaign.name(常設プログラムは固有名で呼ぶ。多チェーンでも
+ * 「{先頭チェーン} 他Nチェーン」にしない)、
+ * それ以外はフォールバック連鎖: display_name → 単一チェーンは看板名/merchant 名([singleMerchantTitle]) →
+ * 複数チェーンは「{先頭チェーン} 他Nチェーン」(→ merchant_rules が無ければ campaign.name)。
+ * 多チェーン施策が先頭 merchant 名だけで「1チェーンの施策」に見えないようにする。
+ */
+internal fun campaignGroupDisplayTitle(first: Campaign, merchants: Map<String, Merchant>): String =
     if (first.campaignType == CampaignType.MUNICIPAL) {
         val prefecture = first.region?.prefecture ?: ""
         val name = first.region?.name ?: first.name
@@ -730,14 +730,26 @@ internal fun campaignGroupDisplayTitle(first: Campaign, merchantNames: Map<Strin
     } else {
         first.displayName ?: run {
             val chainIds = first.merchantRules.map { it.merchantId }.distinct()
-            val head = chainIds.firstOrNull()?.let { merchantNames[it] }
+            val head = chainIds.firstOrNull()?.let { merchants[it] }
             when {
                 head == null -> first.name
-                chainIds.size == 1 -> head
-                else -> "$head 他${chainIds.size - 1}チェーン"
+                chainIds.size == 1 -> singleMerchantTitle(first, head)
+                else -> "${head.name} 他${chainIds.size - 1}チェーン"
             }
         }
     }
+
+/**
+ * 単一チェーン施策のタイトル。看板スコープ(#69): 全ルールが `banner_ids` 持ちで対象看板が
+ * 1 つに絞られていれば**その看板名**(福太郎限定クーポンを系列代表の「ツルハドラッグ」と
+ * 出さない)。看板 2 つ以上・全看板(banner_ids 未指定)・一部除外は従来どおり merchant 名。
+ * 判定詳細の「対象:」([ruleTargetLabels])が業態名で出すのと表記を揃える。
+ */
+private fun singleMerchantTitle(first: Campaign, merchant: Merchant): String {
+    if (first.merchantRules.any { it.bannerIds.isEmpty() }) return merchant.name
+    val bannerId = first.merchantRules.flatMap { it.bannerIds }.distinct().singleOrNull()
+    return bannerId?.let { merchant.bannerName(it) } ?: merchant.name
+}
 
 @Composable
 internal fun VerifiedDateRow(verifiedDate: String) {

@@ -75,7 +75,7 @@ internal fun CampaignPane(
     upcomingCampaigns: List<Campaign>,
     /** 終了日を過ぎたカスタムキャンペーン。編集・削除の入口を残すため専用セクションに出す */
     expiredCustomCampaigns: List<Campaign>,
-    merchantNames: Map<String, String>,
+    merchants: Map<String, Merchant>,
     campaignColors: Map<String, String>,
     /** 施策 id → ユーザー実効率(所有カードの card_program のみ。お店タブと同じ基準の表示レート上書き) */
     personalRates: Map<String, Double>,
@@ -181,7 +181,7 @@ internal fun CampaignPane(
                 )
             }
             items(activeGroups, key = { it.first().id }) { group ->
-                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, personalRates, selected = group.first().id == selectedGroupId, onClick = { onSelectGroup(group) })
+                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchants, campaignColors, personalRates, selected = group.first().id == selectedGroupId, onClick = { onSelectGroup(group) })
             }
         }
         if (permanentGroups.isNotEmpty()) {
@@ -194,7 +194,7 @@ internal fun CampaignPane(
                 )
             }
             items(permanentGroups, key = { "permanent_${it.first().id}" }) { group ->
-                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, personalRates, selected = group.first().id == selectedGroupId, onClick = { onSelectGroup(group) })
+                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchants, campaignColors, personalRates, selected = group.first().id == selectedGroupId, onClick = { onSelectGroup(group) })
             }
         }
         if (offDayGroups.isNotEmpty()) {
@@ -207,7 +207,7 @@ internal fun CampaignPane(
                 )
             }
             items(offDayGroups, key = { "offday_${it.first().id}" }) { group ->
-                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, personalRates, selected = group.first().id == selectedGroupId, onClick = { onSelectGroup(group) })
+                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchants, campaignColors, personalRates, selected = group.first().id == selectedGroupId, onClick = { onSelectGroup(group) })
             }
         }
         if (permanentOffDayGroups.isNotEmpty()) {
@@ -220,7 +220,7 @@ internal fun CampaignPane(
                 )
             }
             items(permanentOffDayGroups, key = { "permanent_offday_${it.first().id}" }) { group ->
-                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchantNames, campaignColors, personalRates, selected = group.first().id == selectedGroupId, onClick = { onSelectGroup(group) })
+                CampaignSummaryCard(group, CampaignStatus.ACTIVE, merchants, campaignColors, personalRates, selected = group.first().id == selectedGroupId, onClick = { onSelectGroup(group) })
             }
         }
         if (upcomingGroups.isNotEmpty()) {
@@ -233,7 +233,7 @@ internal fun CampaignPane(
                 )
             }
             items(upcomingGroups, key = { "upcoming_${it.first().id}" }) { group ->
-                CampaignSummaryCard(group, CampaignStatus.UPCOMING, merchantNames, campaignColors, personalRates, selected = group.first().id == selectedGroupId, onClick = { onSelectGroup(group) })
+                CampaignSummaryCard(group, CampaignStatus.UPCOMING, merchants, campaignColors, personalRates, selected = group.first().id == selectedGroupId, onClick = { onSelectGroup(group) })
             }
         }
         if (allActiveGroups.isEmpty() && upcomingGroups.isEmpty()) {
@@ -267,7 +267,7 @@ internal fun CampaignPane(
                 CampaignSummaryCard(
                     group,
                     CampaignStatus.EXPIRED,
-                    merchantNames,
+                    merchants,
                     campaignColors,
                     personalRates,
                     selected = group.first().id == selectedGroupId,
@@ -288,7 +288,7 @@ internal fun CampaignPane(
 private fun CampaignSummaryCard(
     campaigns: List<Campaign>,
     status: CampaignStatus,
-    merchantNames: Map<String, String>,
+    merchants: Map<String, Merchant>,
     campaignColors: Map<String, String>,
     personalRates: Map<String, Double>,
     selected: Boolean,
@@ -296,7 +296,7 @@ private fun CampaignSummaryCard(
 ) {
     val today = LocalDate.now()
     val first = campaigns.first()
-    val title = campaignGroupDisplayTitle(first, merchantNames)
+    val title = campaignGroupDisplayTitle(first, merchants)
     val hasTimeLimited = campaigns.any { it.isTimeLimited }
     val maxBenefit = campaignGroupMaxBenefit(campaigns, personalRates)
 

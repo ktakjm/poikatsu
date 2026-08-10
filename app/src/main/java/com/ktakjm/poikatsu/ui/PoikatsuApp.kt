@@ -318,7 +318,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     // おトクタブの二ペイン時は overlayCampaignGroup が null になりここを素通りする(#55)
                     overlayCampaignGroup != null -> {
                         val group = overlayCampaignGroup
-                        val title = campaignGroupDisplayTitle(group.first().campaign, state.merchantNames)
+                        val title = campaignGroupDisplayTitle(group.first().campaign, state.merchantsById)
                         TopAppBar(
                             title = { Text(title) },
                             navigationIcon = {
@@ -613,7 +613,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                                 activeCampaigns = state.campaignsActive,
                                 upcomingCampaigns = state.campaignsUpcoming,
                                 expiredCustomCampaigns = state.expiredCustomCampaigns,
-                                merchantNames = state.merchantNames,
+                                merchants = state.merchantsById,
                                 campaignColors = state.campaignBrandColors,
                                 personalRates = state.campaignPersonalRates,
                                 filter = state.campaignFilter,
@@ -633,7 +633,6 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                                 ?.let { customCampaignSource(it, state.customCampaigns) }
                             CampaignsListDetail(
                                 selectedGroup = state.selectedCampaignGroup,
-                                merchantNames = state.merchantNames,
                                 merchants = state.merchantsById,
                                 storeRates = state.campaignStoreRates,
                                 directive = paneDirective,
@@ -1105,7 +1104,6 @@ private fun SearchListDetail(
 @Composable
 private fun CampaignsListDetail(
     selectedGroup: List<CampaignJudgment>?,
-    merchantNames: Map<String, String>,
     merchants: Map<String, Merchant>,
     storeRates: Map<String, Map<String, Double>>,
     directive: PaneScaffoldDirective,
@@ -1134,7 +1132,7 @@ private fun CampaignsListDetail(
                 if (selectedGroup != null) {
                     PaddedColumn(PaddingValues(end = 16.dp)) {
                         PaneHeader(
-                            title = campaignGroupDisplayTitle(selectedGroup.first().campaign, merchantNames),
+                            title = campaignGroupDisplayTitle(selectedGroup.first().campaign, merchants),
                             trailing = {
                                 IconButton(onClick = onBack) {
                                     Icon(Icons.Default.Close, contentDescription = "詳細を閉じる")
