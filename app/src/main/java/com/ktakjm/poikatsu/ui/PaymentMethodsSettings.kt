@@ -33,7 +33,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -171,6 +170,7 @@ internal fun PaymentMethodsSettingsPage(
                         )
                     },
                     modifier = Modifier.clickable { onBrandOwnedChange(b.brand, !b.owned) },
+                    colors = transparentListItemColors(),
                 )
             }
         }
@@ -201,6 +201,7 @@ internal fun PaymentMethodsSettingsPage(
                         )
                     },
                     modifier = Modifier.clickable { onQrEnabledChange(qr.id, !qr.enabled) },
+                    colors = transparentListItemColors(),
                 )
             }
         }
@@ -252,27 +253,21 @@ private val NEW_CUSTOM_CARD = CustomCard(id = "", name = "")
  * 用途は「複数行に膨らむ可変高グループの境界」に限る(マイカードのカード1枚=面1つ)。
  * 1行×N の均質なチェックリスト(国際ブランド/コード決済)や他の設定ページには使わない
  * ——スタイルとして広げ始めると設定タブ全体を grouped 化しないと一貫しなくなるため。
- * 色は surfaceContainer 固定: #78(詳細ペインの surfaceContainerLow 化)が入っても
- * 1段差が残り、縦画面(素の surface)でも差が付くよう、背景+1段のロールを選んでいる。
+ * 色は surfaceContainerHigh 固定: 横画面の詳細ペイン(#78 で surfaceContainerLow 化)の上でも
+ * 2段差、縦画面(素の surface)では3段差が付く。当初は背景+1段の surfaceContainer だったが、
+ * ペイン上の1段差はライト/ダークとも実機で読めなかったため1段上げた(2026-08-13)。
  * 角丸はペイン想定の 16dp より1段小さい 12dp(入れ子の M3 定石)。
  */
 @Composable
 private fun SettingsGroupSurface(content: @Composable ColumnScope.() -> Unit) {
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
     ) {
         Column(content = content)
     }
 }
-
-/**
- * グループ面の上に置く ListItem 用の colors。ListItem は既定で自前の containerColor(surface)を
- * 塗り、グループの面を打ち消して穴が開いたように見えるため透明にする。
- */
-@Composable
-private fun transparentListItemColors() = ListItemDefaults.colors(containerColor = Color.Transparent)
 
 /**
  * カード設定行の警告文。以前は warningColor() の色文字だったが、グループ化でグレーの

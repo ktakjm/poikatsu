@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -448,6 +449,15 @@ internal fun YolpAttribution(modifier: Modifier = Modifier) {
 internal fun Centered(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
 }
+
+/**
+ * surfaceContainer 系の面の上に置く ListItem 用の colors。ListItem は既定で自前の
+ * containerColor(surface)を塗り、下の面を打ち消して白いブロックに見えるため透明にする。
+ * 縦画面の全画面表示(素の surface 上)では background == surface のため、透明化しても
+ * 見た目は変わらない(縦横で同じ Composable を共用できる)。
+ */
+@Composable
+internal fun transparentListItemColors() = ListItemDefaults.colors(containerColor = Color.Transparent)
 
 /**
  * 地図以外の画面共通の縦並びコンテナ。従来ルートにあった横16dpパディングをここに移譲。

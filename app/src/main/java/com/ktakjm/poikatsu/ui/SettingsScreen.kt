@@ -47,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
@@ -54,8 +55,10 @@ import androidx.core.app.ActivityCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.mikepenz.aboutlibraries.ui.compose.LibraryDefaults
 import com.mikepenz.aboutlibraries.ui.compose.android.produceLibraries
 import com.mikepenz.aboutlibraries.ui.compose.m3.LibrariesContainer
+import com.mikepenz.aboutlibraries.ui.compose.m3.libraryColors
 import com.ktakjm.poikatsu.BuildConfig
 import com.ktakjm.poikatsu.R
 import com.ktakjm.poikatsu.data.ExcludedStorePair
@@ -167,6 +170,7 @@ internal fun DisplaySettingsPage(
                     enabled = dynamicSupported,
                 )
             },
+            colors = transparentListItemColors(),
         )
     }
 }
@@ -263,6 +267,7 @@ internal fun NotificationSettingsPage(
                     },
                 )
             },
+            colors = transparentListItemColors(),
         )
         ListItem(
             headlineContent = { Text("通知時刻") },
@@ -270,6 +275,7 @@ internal fun NotificationSettingsPage(
             supportingContent = { Text("省電力の状況により数分ずれることがあります") },
             trailingContent = { Text(notifyTimeLabel(notifyTimeMinutes), style = MaterialTheme.typography.bodyLarge) },
             modifier = Modifier.clickable { showTimePicker = true },
+            colors = transparentListItemColors(),
         )
         // 通知が届かない状態の 2 パターン。どちらも「許可する」ボタンでその場から権限要求まで
         // 完結させる(要求ダイアログを出せない状態なら端末の通知設定へ送る)。
@@ -418,14 +424,17 @@ internal fun DataSettingsPage(
         ListItem(
             headlineContent = { Text("データの状態") },
             supportingContent = { Text(dataStatus) },
+            colors = transparentListItemColors(),
         )
         ListItem(
             headlineContent = { Text("自動更新") },
             supportingContent = { Text("起動・復帰時に最新データを取得(1時間に1回まで)") },
             trailingContent = { Switch(checked = autoRefresh, onCheckedChange = onAutoRefreshChange) },
+            colors = transparentListItemColors(),
         )
         // 同梱モード中はリモート取得を止めるため手動更新もグレーアウトする(無言 no-op にしない)
         val disabledColors = ListItemDefaults.colors(
+            containerColor = Color.Transparent,
             headlineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
             supportingColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
             trailingIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
@@ -444,7 +453,7 @@ internal fun DataSettingsPage(
                     Icon(Icons.Default.Refresh, contentDescription = null)
                 }
             },
-            colors = if (useBundledData) disabledColors else ListItemDefaults.colors(),
+            colors = if (useBundledData) disabledColors else transparentListItemColors(),
             modifier = Modifier.clickable(enabled = !refreshing && !useBundledData, onClick = onRefresh),
         )
     }
@@ -524,6 +533,7 @@ internal fun ExcludedStoresSettingsPage(
                         Icon(Icons.Default.Close, contentDescription = "この登録を削除")
                     }
                 },
+                colors = transparentListItemColors(),
             )
         }
         Spacer(Modifier.height(24.dp))
@@ -591,6 +601,7 @@ internal fun AboutSettingsPage(onBack: () -> Unit, onOpenLicenses: () -> Unit) {
         ListItem(
             headlineContent = { Text("バージョン") },
             trailingContent = { Text(BuildConfig.VERSION_NAME) },
+            colors = transparentListItemColors(),
         )
         ListItem(
             headlineContent = { Text("ソースコード(GitHub)") },
@@ -598,6 +609,7 @@ internal fun AboutSettingsPage(onBack: () -> Unit, onOpenLicenses: () -> Unit) {
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
             },
             modifier = Modifier.clickable { uriHandler.openUri("https://github.com/ktakjm/poikatsu") },
+            colors = transparentListItemColors(),
         )
         ListItem(
             headlineContent = { Text("オープンソースライセンス") },
@@ -605,6 +617,7 @@ internal fun AboutSettingsPage(onBack: () -> Unit, onOpenLicenses: () -> Unit) {
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
             },
             modifier = Modifier.clickable(onClick = onOpenLicenses),
+            colors = transparentListItemColors(),
         )
     }
 }
@@ -619,7 +632,17 @@ internal fun AboutSettingsPage(onBack: () -> Unit, onOpenLicenses: () -> Unit) {
 internal fun LicensesPage(onBack: () -> Unit) {
     BackHandler(onBack = onBack)
     val libraries by produceLibraries(R.raw.aboutlibraries)
-    LibrariesContainer(libraries, Modifier.fillMaxSize())
+    LibrariesContainer(
+        libraries,
+        Modifier.fillMaxSize(),
+        // 既定は colorScheme.background の全面塗りで、詳細ペインの面(#78)を打ち消してしまう
+        // ため透明にする(縦画面は background == surface なので見た目不変)。ダイアログの背景は
+        // 既定で libraryBackgroundColor に連動する=透明のままだと本文が透けるため明示する
+        colors = LibraryDefaults.libraryColors(
+            libraryBackgroundColor = Color.Transparent,
+            dialogBackgroundColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ),
+    )
 }
 
 /** サブページ内のセクション見出し(お支払い方法サブページの マイカード/国際ブランド/コード決済 等) */

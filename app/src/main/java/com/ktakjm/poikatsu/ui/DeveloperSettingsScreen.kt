@@ -24,6 +24,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
@@ -72,6 +73,7 @@ internal fun DeveloperSettingsPage(
                     onCheckedChange = { enabled -> developerModeDialogTarget = enabled },
                 )
             },
+            colors = transparentListItemColors(),
         )
         if (developerMode) {
             Text(
@@ -84,11 +86,13 @@ internal fun DeveloperSettingsPage(
                 headlineContent = { Text("テストデータを使う") },
                 supportingContent = { Text("data-test/ のショーケースデータに切り替えます") },
                 trailingContent = { Switch(checked = useTestData, onCheckedChange = onUseTestDataChange) },
+                colors = transparentListItemColors(),
             )
             ListItem(
                 headlineContent = { Text("同梱データを使う") },
                 supportingContent = { Text("APK 同梱の JSON を直接表示します(リモート取得を停止)。push せずにデータ変更を実機検証する用") },
                 trailingContent = { Switch(checked = useBundledData, onCheckedChange = onUseBundledDataChange) },
+                colors = transparentListItemColors(),
             )
             // 同梱モード中はリモートを見ないため commit 指定は無意味 → グレーアウト
             CommitRefRow(value = dataCommitRef, onChange = onDataCommitRefChange, enabled = !useBundledData)
@@ -114,12 +118,13 @@ internal fun DeveloperSettingsPage(
                 },
                 colors = if (useBundledData) {
                     ListItemDefaults.colors(
+                        containerColor = Color.Transparent,
                         headlineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
                         supportingColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
                         trailingIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
                     )
                 } else {
-                    ListItemDefaults.colors()
+                    transparentListItemColors()
                 },
             )
 
@@ -135,6 +140,7 @@ internal fun DeveloperSettingsPage(
                     )
                 },
                 modifier = Modifier.clickable(onClick = onOpenNearbyPois),
+                colors = transparentListItemColors(),
             )
 
             // 通知(#6)のテスト。日次ジョブの発火時刻を待たずに本番と同じ判定・通知経路を通す
@@ -143,16 +149,19 @@ internal fun DeveloperSettingsPage(
                 headlineContent = { Text("今すぐテスト通知") },
                 supportingContent = { Text("その日の対象を判定して通知します(端末の通知許可が必要)") },
                 modifier = Modifier.clickable { onTestNotification(0) },
+                colors = transparentListItemColors(),
             )
             ListItem(
                 headlineContent = { Text("${TEST_NOTIFICATION_DELAY_SECONDS}秒後にテスト通知") },
                 supportingContent = { Text("押したあと画面を消して、消灯中の鳴り方を確認する用") },
                 modifier = Modifier.clickable { onTestNotification(TEST_NOTIFICATION_DELAY_SECONDS) },
+                colors = transparentListItemColors(),
             )
             ListItem(
                 headlineContent = { Text("通知済み履歴を消す") },
                 supportingContent = { Text("同じキャンペーンをもう一度通知させたいときに使います") },
                 modifier = Modifier.clickable(onClick = onClearNotifiedCampaigns),
+                colors = transparentListItemColors(),
             )
         }
     }
@@ -220,6 +229,7 @@ internal fun DeveloperPoisPage(
                 headlineContent = { Text("一覧をコピー") },
                 supportingContent = { Text("TSV 形式でクリップボードにコピーします") },
                 modifier = Modifier.clickable { clipboard.setText(AnnotatedString(buildPoiTsv(pois))) },
+                colors = transparentListItemColors(),
             )
         }
         itemsIndexed(pois) { index, poi ->
@@ -241,6 +251,7 @@ internal fun DeveloperPoisPage(
                         },
                     )
                 },
+                colors = transparentListItemColors(),
             )
         }
     }
@@ -275,9 +286,10 @@ private fun CommitRefRow(value: String, onChange: (String) -> Unit, enabled: Boo
             ) { Text("適用") }
         },
         colors = if (enabled) {
-            ListItemDefaults.colors()
+            transparentListItemColors()
         } else {
             ListItemDefaults.colors(
+                containerColor = Color.Transparent,
                 headlineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
             )
         },

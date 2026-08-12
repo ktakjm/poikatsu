@@ -28,7 +28,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarDuration
@@ -45,7 +44,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.ktakjm.poikatsu.data.MunicipalityMaster
@@ -112,6 +110,7 @@ internal fun MunicipalitySettingsPage(
                         Icon(Icons.Default.Close, contentDescription = "削除")
                     }
                 },
+                colors = transparentListItemColors(),
             )
         }
         ListItem(
@@ -124,6 +123,7 @@ internal fun MunicipalitySettingsPage(
                 )
             },
             modifier = Modifier.clickable { showMunicipalityPicker = true },
+            colors = transparentListItemColors(),
         )
     }
 
@@ -222,7 +222,7 @@ private fun MunicipalityPickerDialog(
                             items(master.prefectures) { pref ->
                                 ListItem(
                                     headlineContent = { Text(pref.name) },
-                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                    colors = transparentListItemColors(),
                                     modifier = Modifier.clickable { selectedPrefecture = pref },
                                 )
                             }
@@ -398,7 +398,7 @@ private fun AreaPickerRow(
                 }
             }
         },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        colors = transparentListItemColors(),
         modifier = Modifier.toggleable(
             value = checked,
             role = Role.Checkbox,

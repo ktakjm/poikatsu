@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -1147,49 +1148,51 @@ private fun SearchListDetail(
         },
         detailPane = {
             AnimatedPane {
-                when {
-                    storeCheck != null -> PaddedColumn(PaddingValues(end = 16.dp)) {
-                        PaneHeader(
-                            title = storeCheckTitle(storeCheck),
-                            leading = {
-                                IconButton(onClick = onCloseStoreCheck) {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = "判定詳細に戻る",
-                                    )
-                                }
-                            },
-                        )
-                        StoreCheckScreen(
-                            storeCheck = storeCheck,
-                            onBack = onCloseStoreCheck,
-                            onStoreNameChange = onStoreNameChange,
-                        )
-                    }
-                    selection != null -> PaddedColumn(PaddingValues(end = 16.dp)) {
-                        PaneHeader(
-                            title = selectionTitle(selection),
-                            trailing = {
-                                IconButton(onClick = onBack) {
-                                    Icon(Icons.Default.Close, contentDescription = "詳細を閉じる")
-                                }
-                            },
-                        )
-                        JudgmentDetail(
-                            selection = selection,
-                            onBack = onBack,
-                            onOpenStoreCheck = onOpenStoreCheck,
-                            onFindNearby = onFindNearby,
-                            onExcludeStore = onExcludeStore,
-                            onRestoreExcludedStore = onRestoreExcludedStore,
-                        )
-                    }
-                    else -> Centered {
-                        Text(
-                            "お店を選ぶと、おトクな支払い方法をここに表示します。",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
+                DetailPaneSurface {
+                    when {
+                        storeCheck != null -> {
+                            PaneHeader(
+                                title = storeCheckTitle(storeCheck),
+                                leading = {
+                                    IconButton(onClick = onCloseStoreCheck) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = "判定詳細に戻る",
+                                        )
+                                    }
+                                },
+                            )
+                            StoreCheckScreen(
+                                storeCheck = storeCheck,
+                                onBack = onCloseStoreCheck,
+                                onStoreNameChange = onStoreNameChange,
+                            )
+                        }
+                        selection != null -> {
+                            PaneHeader(
+                                title = selectionTitle(selection),
+                                trailing = {
+                                    IconButton(onClick = onBack) {
+                                        Icon(Icons.Default.Close, contentDescription = "詳細を閉じる")
+                                    }
+                                },
+                            )
+                            JudgmentDetail(
+                                selection = selection,
+                                onBack = onBack,
+                                onOpenStoreCheck = onOpenStoreCheck,
+                                onFindNearby = onFindNearby,
+                                onExcludeStore = onExcludeStore,
+                                onRestoreExcludedStore = onRestoreExcludedStore,
+                            )
+                        }
+                        else -> Centered {
+                            Text(
+                                "お店を選ぶと、おトクな支払い方法をここに表示します。",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        }
                     }
                 }
             }
@@ -1234,8 +1237,8 @@ private fun CampaignsListDetail(
         },
         detailPane = {
             AnimatedPane {
-                if (selectedGroup != null) {
-                    PaddedColumn(PaddingValues(end = 16.dp)) {
+                DetailPaneSurface {
+                    if (selectedGroup != null) {
                         PaneHeader(
                             title = campaignGroupDisplayTitle(selectedGroup.map { it.campaign }, merchants),
                             trailing = {
@@ -1256,14 +1259,14 @@ private fun CampaignsListDetail(
                             // ため、末尾まで送っても FAB に隠れない高さを空ける(一覧側と同じ 88dp)
                             contentPadding = PaddingValues(bottom = 88.dp),
                         )
-                    }
-                } else {
-                    Centered {
-                        Text(
-                            "キャンペーンを選ぶと、詳細をここに表示します。",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
+                    } else {
+                        Centered {
+                            Text(
+                                "キャンペーンを選ぶと、詳細をここに表示します。",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        }
                     }
                 }
             }
@@ -1319,8 +1322,10 @@ private fun SettingsListDetail(
         },
         detailPane = {
             AnimatedPane {
-                if (subpage != null) {
-                    Column(Modifier.fillMaxSize()) {
+                // ListItem が自前で 16dp の余白を持つため、面の内側パディングは 0 にして
+                // 見出し行だけ ListItem のテキスト位置に合わせて寄せる(縦画面と同じ扱い)
+                DetailPaneSurface(contentPadding = PaddingValues()) {
+                    if (subpage != null) {
                         // 2 階層目は親カテゴリへ戻る←(TopAppBar 様式)、1 階層目は選択解除の✕
                         // (カード様式)。全画面時に TopAppBar が担っていた操作の置き換え
                         if (subpage.parent != null) {
@@ -1348,19 +1353,46 @@ private fun SettingsListDetail(
                             )
                         }
                         subpageContent(subpage)
-                    }
-                } else {
-                    Centered {
-                        Text(
-                            "設定したい項目を選ぶと、ここに表示します。",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
+                    } else {
+                        Centered {
+                            Text(
+                                "設定したい項目を選ぶと、ここに表示します。",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        }
                     }
                 }
             }
         },
     )
+}
+
+/**
+ * 二ペインの詳細ペインの面(#78)。両ペインが同じ surface 上に乗ると左右境界が見えないため、
+ * 詳細ペインだけを surfaceContainerLow+全周 16dp 角丸の常設面として立てる(詳細だけが
+ * container を持つ M3 canonical list-detail の形。[NearbyDetailSideSheet] と同系の塗り)。
+ * 影は付けない: サイドシートは「地図の上に浮く」ため影 2dp を持つが、ペインは背景上の
+ * 常設面なのでトーン差だけで示す(地図タブの右ペイン 320dp と同じ扱い)。ダークテーマで
+ * surface とのトーン差が弱ければ、ここに outlineVariant の 1dp 枠を足せば 3 タブ一括で効く。
+ * 従来ペイン内側にあった画面端側 16dp は面の外のマージンに移す(端に接すると角丸が切れて
+ * 境界表現にならない)。ペイン間はライブラリの gutter(24dp)がそのまま空ける。
+ * [contentPadding] は面の内側の余白で、既定は従来の [PaddedColumn] 相当の横 16dp。
+ * 設定タブは ListItem が自前で 16dp を持つため 0 を渡す。未選択プレースホルダも面の中に
+ * 入れる(空の面が常時見えて二ペイン構造が読める)。
+ */
+@Composable
+private fun DetailPaneSurface(
+    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp),
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxSize().padding(end = 16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(Modifier.fillMaxSize().padding(contentPadding), content = content)
+    }
 }
 
 /**

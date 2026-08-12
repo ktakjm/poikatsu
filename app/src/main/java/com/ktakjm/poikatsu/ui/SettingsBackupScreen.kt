@@ -85,6 +85,7 @@ internal fun BackupSettingsPage(
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
             },
             modifier = Modifier.clickable { exportLauncher.launch(backupFileName(LocalDate.now())) },
+            colors = transparentListItemColors(),
         )
         ListItem(
             headlineContent = { Text("ファイルから設定を復元") },
@@ -93,6 +94,7 @@ internal fun BackupSettingsPage(
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
             },
             modifier = Modifier.clickable { importLauncher.launch(BACKUP_OPEN_MIME_TYPES) },
+            colors = transparentListItemColors(),
         )
         // 自動バックアップとの関係の説明。選べる項目ではないので ListItem にせず、
         // 通知サブページと同じく末尾の説明段落として出す
