@@ -560,6 +560,29 @@ internal fun ProductScopeBadge(modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * 特定店舗限定(網羅リスト list_is_exhaustive。#64)バッジ。「対象のお店のみ」=対象店が
+ * 確定列挙されていて掲載外は対象外、の意味。「対象外のお店あり」系のネガティブ表現に
+ * しないこと(対象外店舗があり得るのは全キャンペーン共通で、バッジの無い施策には対象外が
+ * 無いという誤読を誘発する)。「チェーンの全店には効かない」スコープ注意なので
+ * 商品限定と同じ warning 系。
+ */
+@Composable
+internal fun ExhaustiveStoreListBadge(modifier: Modifier = Modifier) {
+    Surface(
+        color = warningContainerColor(),
+        contentColor = onWarningContainerColor(),
+        shape = RoundedCornerShape(4.dp),
+        modifier = modifier,
+    ) {
+        Text(
+            "対象のお店のみ",
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+    }
+}
+
 // ---- 共通カード部品 ----
 
 /** カード左端のブランドカラーストライプ(単色 or 斜め分割マルチカラー) */

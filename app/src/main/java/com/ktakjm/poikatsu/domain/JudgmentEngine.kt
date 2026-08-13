@@ -49,6 +49,12 @@ data class CampaignJudgment(
     val todayIsTarget: Boolean = true,
     /** recurrence 施策で今日が非対象日のときの次の対象日。対象日当日・recurrence 無しは null */
     val nextTargetDate: LocalDate? = null,
+    /**
+     * 「対象のお店のみ」(網羅リスト #64)バッジ・注記を出すか。お店タブ(チェーン文脈あり)は
+     * そのチェーンの rule の網羅性、おトクタブの施策詳細(チェーン非依存)は施策単位
+     * ([allStoreListsExhaustive])で呼び出し側が設定する
+     */
+    val exhaustiveStoreList: Boolean = false,
 )
 
 /**
@@ -116,6 +122,17 @@ val Campaign.campaignType: CampaignType get() = CampaignType.fromString(type)
  * おトクタブの「常設」セクションへの振り分けにもこの値を使う。
  */
 val Campaign.isTimeLimited: Boolean get() = periodEnd != null || mayEndEarly
+
+/**
+ * 施策全体が「対象のお店のみ」(特定店舗限定)バッジの対象か。全 merchant_rule が網羅リスト
+ * (list_is_exhaustive。#64)のときだけ true にする。any でなく all なのは、J-POINTパートナーの
+ * ように一部チェーンだけが網羅リストの施策に施策単位でバッジを付けると、他チェーンでは
+ * 全店対象なのに「対象のお店のみ」と過剰に読めてしまうため。チェーン単位の表示
+ * (お店タブの判定カード)はこの値でなく、そのチェーンの rule 側の網羅性で判定する。
+ */
+val Campaign.allStoreListsExhaustive: Boolean
+    get() = merchantRules.isNotEmpty() &&
+        merchantRules.all { it.officialStoreList?.listIsExhaustive == true }
 
 /** [resolveCardCampaignRate] の結果。usesCardRate はウエル活注記の表示条件(カードの率を実際に出したか)に使う */
 data class ResolvedCardRate(
@@ -653,6 +670,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
             mayEndEarly = campaign.mayEndEarly,
             todayIsTarget = todayIsTarget,
             nextTargetDate = if (todayIsTarget) null else nextTargetDay(campaign, today),
+            exhaustiveStoreList = rule?.officialStoreList?.listIsExhaustive == true,
         )
     }
 

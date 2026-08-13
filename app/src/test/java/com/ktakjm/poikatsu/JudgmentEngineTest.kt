@@ -26,6 +26,7 @@ import com.ktakjm.poikatsu.domain.CampaignType
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.StoreEligibility
 import com.ktakjm.poikatsu.domain.WALLET_APP_LABEL
+import com.ktakjm.poikatsu.domain.allStoreListsExhaustive
 import com.ktakjm.poikatsu.domain.WALLET_APP_PACKAGE
 import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
@@ -321,6 +322,37 @@ class JudgmentEngineTest {
         assertTrue(result.excludedJudgments.isEmpty())
         // 掲載店では通常どおり判定に出る
         assertEquals(listOf("c1"), eng.judgeAll(m, today).judgments.map { it.campaign.id })
+    }
+
+    @Test
+    fun `網羅リストの施策は判定カードにexhaustiveStoreListフラグが立つ`() {
+        val (eng, m) = storeCheckEngine(eligible = listOf("浦和店"), exhaustive = true)
+        assertTrue(eng.judgeAll(m, today).judgments.single().exhaustiveStoreList)
+        // 非網羅リスト・リスト無しでは立たない
+        val (engNonEx, m2) = storeCheckEngine(eligible = listOf("浦和店"))
+        assertFalse(engNonEx.judgeAll(m2, today).judgments.single().exhaustiveStoreList)
+        val (engNoList, m3) = storeCheckEngine(hasList = false)
+        assertFalse(engNoList.judgeAll(m3, today).judgments.single().exhaustiveStoreList)
+    }
+
+    @Test
+    fun `施策単位の網羅性は全ルールが網羅リストのときだけtrue`() {
+        fun rule(id: String, exhaustive: Boolean?) = MerchantRule(
+            merchantId = id,
+            officialStoreList = exhaustive?.let {
+                OfficialStoreList(eligibleStores = listOf("浦和店"), listIsExhaustive = it, updatedDate = "2026-05-01")
+            },
+        )
+        fun campaignWith(rules: List<MerchantRule>) = Campaign(
+            id = "c1", operator = "test", name = "テスト施策", merchantRules = rules,
+        )
+        // 全ルール網羅 → true(コジマ×ビックカメラ型)
+        assertTrue(campaignWith(listOf(rule("m1", true), rule("m2", true))).allStoreListsExhaustive)
+        // 一部ルールだけ網羅 → false(J-POINTパートナー型。施策単位でバッジを付けない)
+        assertFalse(campaignWith(listOf(rule("m1", true), rule("m2", false))).allStoreListsExhaustive)
+        assertFalse(campaignWith(listOf(rule("m1", true), rule("m2", null))).allStoreListsExhaustive)
+        // ルール無し(自治体施策等) → false
+        assertFalse(campaignWith(emptyList()).allStoreListsExhaustive)
     }
 
     // ---- ユーザー登録の対象外ペア(#63) ----

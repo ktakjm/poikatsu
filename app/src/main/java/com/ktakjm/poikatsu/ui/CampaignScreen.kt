@@ -49,6 +49,7 @@ import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.domain.CampaignType
+import com.ktakjm.poikatsu.domain.allStoreListsExhaustive
 import com.ktakjm.poikatsu.domain.campaignGroupKey
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.customCampaignBaseId
@@ -354,6 +355,9 @@ private fun CampaignSummaryCard(
                         }
                         if (campaigns.any { it.productScope != null }) {
                             ProductScopeBadge()
+                        }
+                        if (campaigns.any { it.allStoreListsExhaustive }) {
+                            ExhaustiveStoreListBadge()
                         }
                     }
                     if (periodLabel != null || daysInfo != null) {

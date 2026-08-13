@@ -46,6 +46,7 @@ import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.domain.CampaignType
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.StoreVerdict
+import com.ktakjm.poikatsu.domain.allStoreListsExhaustive
 import com.ktakjm.poikatsu.domain.appLinks
 import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
@@ -2001,6 +2002,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 mayEndEarly = campaign.mayEndEarly,
                 todayIsTarget = todayIsTarget,
                 nextTargetDate = if (todayIsTarget) null else nextTargetDay(campaign, today),
+                // チェーン非依存のビューなので施策単位の網羅性(全ルール網羅)で判定する
+                exhaustiveStoreList = campaign.allStoreListsExhaustive,
             )
         }
         // 地図タブ横画面のお知らせピルは、判定詳細のサイドシート表示中も押せる(非モーダル。#57)。

@@ -391,6 +391,9 @@ private fun CampaignJudgmentCardBody(
                     if (campaign.productScope != null) {
                         ProductScopeBadge()
                     }
+                    if (judgment.exhaustiveStoreList) {
+                        ExhaustiveStoreListBadge()
+                    }
                 }
                 Text(
                     campaign.name,
@@ -410,6 +413,14 @@ private fun CampaignJudgmentCardBody(
             NoticeRow(it, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
         }
         NoticeList(judgment.ineligibleNotes, warningContainerColor(), onWarningContainerColor())
+        // 特定店舗限定(網羅リスト #64)。「掲載外=対象外と断定」はバッジだけでは伝わらないため一行で補足する
+        if (judgment.exhaustiveStoreList) {
+            NoticeRow(
+                "対象のお店が決まっているキャンペーンです。対象の一覧にないお店は対象外です",
+                warningContainerColor(),
+                onWarningContainerColor(),
+            )
+        }
         // 対象商品限定(メーカー縛り)。全商品に効く率と誤認させない(最良比較からも分離済み。#43)
         judgment.campaign.productScope?.let {
             NoticeRow("対象商品限定：${it.label}", warningContainerColor(), onWarningContainerColor())
@@ -721,14 +732,14 @@ private fun StoreVerdictCard(verdict: StoreVerdict) {
         }
     }
     val reason = when {
-        verdict.eligibility == StoreEligibility.ELIGIBLE -> "「${verdict.matched}」は公式の対象のお店です"
+        verdict.eligibility == StoreEligibility.ELIGIBLE -> "「${verdict.matched}」は対象のお店です"
         verdict.eligibility == StoreEligibility.INELIGIBLE && verdict.matched != null ->
-            "「${verdict.matched}」は公式の対象外のお店です"
+            "「${verdict.matched}」は対象外のお店です"
         // 網羅リスト(#64): 掲載が無いこと自体が対象外の根拠(「対象は次のお店のみ」型)
         verdict.eligibility == StoreEligibility.INELIGIBLE ->
-            "公式の対象のお店リストに掲載がないお店です。このキャンペーンは対象のお店が限定されています"
+            "対象のお店リストに掲載がないお店です。このキャンペーンは対象のお店が限定されています"
         else ->
-            "公式の対象/対象外リストに掲載がないお店です。一部対象外のお店があるため、店頭・公式サイトでご確認ください"
+            "対象/対象外リストに掲載がないお店です。一部対象外のお店があるため、店頭・公式サイトでご確認ください"
     }
     Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -758,7 +769,7 @@ private fun StoreVerdictCard(verdict: StoreVerdict) {
             }
             verdict.sourceUrl?.let { url ->
                 val uriHandler = LocalUriHandler.current
-                ExternalLinkButton("公式のお店情報を開く") { uriHandler.openUri(url) }
+                ExternalLinkButton("対象のお店情報を開く") { uriHandler.openUri(url) }
             }
         }
     }
