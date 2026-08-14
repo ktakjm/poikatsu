@@ -34,6 +34,13 @@
         { "id": "w", "label": "JCB CARD W / W plus L", "rate_bonus": 0.5 }
       ],
       "point_value": { "label": "J-POINTの価値", "default": 1.0, "note": "使い道により1pt=0.7〜1円。ポイントの使い道に合わせて調整できます" }
+    },
+    {
+      "id": "dcard",
+      "card_name": "dカード",
+      "brand_color": "#E60033",
+      "brands": ["Visa", "Mastercard"],
+      "effective_rate_default": 4.0
     }
   ],
   "qr_payments": [

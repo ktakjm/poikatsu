@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-08-10",
+  "updated_at": "2026-08-15",
 
   "yolp_config": {
     "gc_groups": [
@@ -143,6 +143,7 @@
     { "id": "biccamera", "name": "ビックカメラ", "reading": "びっくかめら", "aliases": [], "category": "家電量販店", "yolp_search": "keyword" },
     { "id": "ksdenki", "name": "ケーズデンキ", "reading": "けーずでんき", "aliases": ["ケーズ電気"], "category": "家電量販店", "yolp_search": "keyword" },
     { "id": "curves", "name": "カーブス", "reading": "かーぶす", "aliases": ["Curves"], "category": "その他", "yolp_search": "keyword" },
+    { "id": "tower_records", "name": "タワーレコード", "reading": "たわーれこーど", "aliases": ["タワレコ", "TOWER RECORDS"], "category": "その他", "yolp_search": "keyword" },
     { "id": "sanyodo_shoten", "name": "三洋堂書店", "reading": "さんようどうしょてん", "aliases": ["三洋堂"], "category": "書店", "yolp_search": "keyword" },
     { "id": "aoyama", "name": "洋服の青山", "reading": "ようふくのあおやま", "aliases": [], "category": "ファッション", "yolp_search": "keyword" },
     { "id": "aoki", "name": "AOKI", "reading": "あおき", "aliases": [], "category": "ファッション", "yolp_search": "keyword" },

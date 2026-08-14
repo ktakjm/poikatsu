@@ -47,6 +47,7 @@ import com.ktakjm.poikatsu.domain.CampaignType
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.StoreVerdict
 import com.ktakjm.poikatsu.domain.allStoreListsExhaustive
+import com.ktakjm.poikatsu.domain.allowsManualRate
 import com.ktakjm.poikatsu.domain.appLinks
 import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
@@ -531,10 +532,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val brandColor: String?,
         val owned: Boolean,
         /**
-         * 表示・編集する還元率(上書きがあれば上書き値、無ければ既定)。
-         * クラス/1pt価値を持つカードではクラス加算・価値乗算を反映した導出値(手入力不可)
+         * 表示・編集する還元率(手入力可のカードは上書きがあれば上書き値、無ければ既定)。
+         * ウエル活チェックの「○% で表示中」注記と手入力ダイアログの初期値に使う
          */
         val rate: Double,
+        /**
+         * 還元率を手入力できるカードか(単一率プログラム=SMCC/MUFG のみ true。allowsManualRate)。
+         * false のカードは設定の余地が無いため還元率行自体を出さない
+         */
+        val rateEditable: Boolean,
         /** 実ブランド(ユーザー設定。単一ブランド製品は自動確定)。空文字は未選択 */
         val brand: String,
         /** この製品で選べるブランドの選択肢(カタログ) */
@@ -885,17 +891,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 .distinct()
             val brandAffectsJudgment = ineligibleBrands.isNotEmpty() || hasBrandCampaign
             // クラス/1pt価値を持つカード(JCB W/S 等)の表示レートは UserDataMerge と同じ式で導出する:
-            // (率 + クラス加算) × 1pt価値。持たないカードは従来どおり(加算0・乗数1で同値)
+            // (率 + クラス加算) × 1pt価値。持たないカードは従来どおり(加算0・乗数1で同値)。
+            // 手入力レートは単一率プログラムのカードだけに効く(UserDataMerge と同じガード)
             val selectedClass = card.cardClasses.firstOrNull { it.id == ov?.cardClass }
                 ?: card.cardClasses.firstOrNull()
             val pointValue = ov?.pointValue ?: card.pointValueConfig?.default ?: 1.0
+            val rateEditable = card.allowsManualRate(loaded.data.campaigns)
+            val manualRate = ov?.rate?.takeIf { rateEditable }
             CardSetting(
                 cardId = card.id,
                 cardName = card.cardName,
                 brandColor = card.brandColor,
                 owned = ov?.owned ?: true,
-                rate = ((ov?.rate ?: card.effectiveRateDefault ?: 0.0) +
+                rate = ((manualRate ?: card.effectiveRateDefault ?: 0.0) +
                     (selectedClass?.rateBonus ?: 0.0)) * pointValue,
+                rateEditable = rateEditable,
                 brand = ov?.brand ?: card.brands.singleOrNull().orEmpty(),
                 brands = card.brands,
                 // ブランドが判定に効き(ブランド除外 or ブランド施策あり)、かつ製品として選択肢が複数

@@ -552,23 +552,20 @@ private fun CardSettingItem(
                 modifier = Modifier.padding(start = 24.dp).clickable { showPointValueDialog = true },
             )
         }
-        // クラス/1pt価値を持つカードの還元率は上の設定からの導出値(手入力させると二重管理になる)
-        val rateDerived = card.cardClasses.isNotEmpty() || card.pointValueConfig != null
-        ListItem(
-            headlineContent = { Text(if (rateDerived) "還元率(最大)" else "還元率") },
-            supportingContent = {
-                Text(
-                    if (rateDerived) "上の設定から自動計算。お店ごとの率は判定に表示されます"
-                    else "公式アプリに表示される還元率を入力"
-                )
-            },
-            trailingContent = {
-                Text("${trimRate(card.rate)}%", style = MaterialTheme.typography.titleMedium)
-            },
-            colors = transparentListItemColors(),
-            modifier = Modifier.padding(start = 24.dp)
-                .then(if (rateDerived) Modifier else Modifier.clickable { showRateDialog = true }),
-        )
+        // 還元率行は手入力に意味があるカード(単一率プログラム=SMCC/MUFG)だけ出す。
+        // クラス/1pt価値のカード(JCB)や店舗別レートのカード(dカード)は率が導出値・収録値で
+        // 決まり設定の余地が無いため、行自体を出さない(この画面はユーザーが設定するものだけを置く)
+        if (card.rateEditable) {
+            ListItem(
+                headlineContent = { Text("還元率") },
+                supportingContent = { Text("公式アプリに表示される還元率を入力") },
+                trailingContent = {
+                    Text("${trimRate(card.rate)}%", style = MaterialTheme.typography.titleMedium)
+                },
+                colors = transparentListItemColors(),
+                modifier = Modifier.padding(start = 24.dp).clickable { showRateDialog = true },
+            )
+        }
         card.pointMultiplier?.let { pm ->
             val welcatsuNote: (@Composable () -> Unit)? = if (card.welcatsu) {
                 ({ Text("${trimRate(card.rate * pm.factor)}% で表示中") })

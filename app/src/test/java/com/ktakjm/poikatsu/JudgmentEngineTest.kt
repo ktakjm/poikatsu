@@ -2358,6 +2358,47 @@ class CardClassMergeTest {
         assertEquals(1.0, card.rateMultiplier, 0.0)
         assertEquals(7.0, card.effectiveRateDefault!!, 0.0)
     }
+
+    @Test
+    fun `手入力レートは単一率プログラムのカードだけに効く`() {
+        // 手入力に意味があるのは「単一率でユーザーごとに実際の率が違う」プログラム(SMCC/MUFG)だけ。
+        // 店舗別レートプログラム(dカード #58)のカードとクラス/1pt価値のカード(JCB)は率が
+        // 収録値・導出値で決まるため、保存済みの手入力値が残っていても無視する
+        val plainCard = PaymentCard(id = "plain", cardName = "単一率", effectiveRateDefault = 7.0)
+        val storeRateCard = PaymentCard(id = "dcard_like", cardName = "店舗別レート", effectiveRateDefault = 4.0)
+        val storeRateCampaign = Campaign(
+            id = "prog",
+            operator = "テスト",
+            cardId = "dcard_like",
+            name = "店舗別レートプログラム",
+            paymentInstruction = "カードで支払う",
+            rateBase = 4.0,
+            merchantRules = listOf(MerchantRule(merchantId = "m1", rateOverride = 4.0)),
+        )
+        val cards = mergeUserData(
+            PoikatsuData(
+                merchants = emptyList(),
+                campaigns = listOf(storeRateCampaign),
+                cards = listOf(plainCard, storeRateCard),
+                updatedAt = "",
+            ),
+            cardOverrides = mapOf(
+                "plain" to CardOverride(rate = 5.5),
+                "dcard_like" to CardOverride(rate = 1.0),
+            ),
+            ownedBrands = emptySet(),
+            customCards = emptyList(),
+            customCampaigns = emptyList(),
+        ).engineData.cards.associateBy { it.id }
+        assertEquals(5.5, cards.getValue("plain").effectiveRateDefault!!, 0.0)
+        assertEquals(4.0, cards.getValue("dcard_like").effectiveRateDefault!!, 0.0)
+    }
+
+    @Test
+    fun `クラス持ちカードの手入力レートも無視される`() {
+        val card = merged(mapOf("jcb" to CardOverride(rate = 1.0)))
+        assertEquals(10.0, card.effectiveRateDefault!!, 0.0)
+    }
 }
 
 class JapaneseTextTest {

@@ -182,6 +182,19 @@ fun resolveCardCampaignRate(
 fun scaledStoreRate(rateOverride: Double, card: PaymentCard): Double =
     (rateOverride + card.rateBonus) * card.rateMultiplier
 
+/**
+ * 設定画面で還元率を手入力できるカードか。手入力に意味があるのは「単一率でユーザーごとに
+ * 実際の率が違う」プログラム(SMCC/MUFG)だけ。クラス/1pt価値を持つカード(JCB)は率が設定からの
+ * 導出値、店舗別レートプログラム(rate_override。JCB/dカード #52/#58)のカードは率が店舗ごとの
+ * 収録値で決まり、どちらも設定の余地が無い——UI は還元率行自体を出さず、
+ * マージ(UserDataMerge)も保存済みの手入力値を無視する。
+ */
+fun PaymentCard.allowsManualRate(campaigns: List<Campaign>): Boolean =
+    cardClasses.isEmpty() && pointValueConfig == null && campaigns.none { c ->
+        c.cardId == id && c.campaignType == CampaignType.CARD_PROGRAM &&
+            c.merchantRules.any { it.rateOverride != null }
+    }
+
 // ---- ウォレット(スマホのタッチ決済)対応 ----
 // eligible_wallets / ineligible_wallets は「公式がウォレット単位で対象/対象外を言い切っている」
 // 事実だけを持つ(未掲載は不明の3状態)。Android 固有の消費(Google Pay → ウォレットアプリ起動)は

@@ -307,7 +307,8 @@ class YolpSearchConfigRealDataTest {
     fun `実データ_configは旧ハードコードと同じgcグループを使う`() {
         val activeMerchantIds = engine.activeManagedMerchantIds(today)
         val config = YolpSearchConfig.build(data.yolpConfig!!, data.merchants, activeMerchantIds)
-        assertEquals(listOf("0123,0115,0101013", "0205"), config.gcGroups.map { it.gc })
+        // 0202001(ドラッグストア)は dカード特約店(#58。常設)がマツキヨ・ココカラを参照するため常にアクティブ
+        assertEquals(listOf("0123,0115,0101013", "0205", "0202001"), config.gcGroups.map { it.gc })
     }
 
     @Test
@@ -319,6 +320,8 @@ class YolpSearchConfigRealDataTest {
             // J-POINT パートナー(#52)で追加された keyword チェーン(常設のため常にアクティブ)。
             // OWNDAYS は YOLP 上「オンデーズ」表記のため yolp_keyword で検索する(2026-08 実測)
             "ドミノ・ピザ", "洋服の青山", "AOKI", "はるやま", "オンデーズ",
+            // dカード特約店(#58。常設)で追加された keyword チェーン
+            "タワーレコード",
         )
         assertEquals(expected, config.keywordQueries.toSet())
     }

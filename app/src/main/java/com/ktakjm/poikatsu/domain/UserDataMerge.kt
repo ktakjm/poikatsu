@@ -42,7 +42,10 @@ fun mergeUserData(
     val mergedCards = baseCards.mapNotNull { card ->
         val ov = cardOverrides[card.id]
         if (ov?.owned == false) return@mapNotNull null
-        val rawRate = ov?.rate ?: card.effectiveRateDefault
+        // 手入力レートは単一率プログラムのカード(SMCC/MUFG)だけに効く。導出値・店舗別レートの
+        // カードは保存済みの手入力値が残っていても無視する(allowsManualRate 参照)
+        val manualRate = ov?.rate?.takeIf { card.allowsManualRate(base.campaigns) }
+        val rawRate = manualRate ?: card.effectiveRateDefault
         val welcatsuOn = ov?.welcatsu == true && card.pointMultiplier != null
         val factor = if (welcatsuOn) card.pointMultiplier?.factor ?: 1.0 else 1.0
         // カードクラス(JCB W/S 等): 未選択はカタログ先頭(保守側=加算の小さい方)を既定にする。
