@@ -127,6 +127,11 @@ data class CustomCampaign(
     val discountAmount: Int? = null,
     /** 対象商品限定のラベル(例: "対象の化粧品のみ")。非空なら最良比較から分離+商品限定バッジ */
     val productScope: String? = null,
+    /**
+     * 提示のみで受けられる特典か(campaigns.json の presentation_only と同じ意味。#80)。
+     * true なら最良比較から分離+「提示のみ」バッジ+支払いは別でも対象の注記
+     */
+    val presentationOnly: Boolean = false,
     /** 対象・特典のメモ(判定カードの「対象」に表示)。改行区切りで複数項目 */
     val note: String = "",
     /** 対象外・注意のメモ(warning 面で表示)。改行区切りで複数項目 */

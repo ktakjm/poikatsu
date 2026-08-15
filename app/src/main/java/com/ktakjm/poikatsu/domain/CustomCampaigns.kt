@@ -105,6 +105,7 @@ fun CustomCampaign.toCampaigns(operatorFor: (CustomPayment) -> String): List<Cam
             rateBase = rate,
             discountAmount = discountAmount,
             productScope = productScope?.trim()?.takeIf { it.isNotEmpty() }?.let { ProductScope(it) },
+            presentationOnly = presentationOnly,
             periodStart = startDate,
             periodEnd = endDate,
             mayEndEarly = mayEndEarly,

@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItemDefaults
@@ -253,6 +254,8 @@ internal fun developerRowSummary(
  * 警告・注意のトーナル面表示(アイコン + 文)。container/content の対で error(致命) / warning(注意) を出し分ける。
  * グレーのカード地に色文字を直接乗せるとコントラストが不足するため、専用の淡い面の上に濃い文字で出す。
  * アイコン/文字の色は Surface の contentColor から自動で引き継ぐ。
+ * 注意でない案内(提示のみ注記等の secondary 面)に使うときは [icon] を Info に差し替える
+ * (⚠のままだと面の色を利点用にしても警告に読めてしまう)。
  *
  * 解決手段がある注意([actionLabel] + [onAction])は面の下に右寄せのボタンで出す(M3 の banner の型)。
  * 面全体をタップ領域にはしない——注意文の面はタップできるように見えず、押しても何が起きるか読めないため。
@@ -264,6 +267,7 @@ internal fun NoticeRow(
     contentColor: Color,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
+    icon: ImageVector = Icons.Default.Warning,
 ) {
     val hasAction = actionLabel != null && onAction != null
     Surface(
@@ -286,7 +290,7 @@ internal fun NoticeRow(
                 verticalAlignment = Alignment.Top,
             ) {
                 Icon(
-                    Icons.Default.Warning,
+                    icon,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp).padding(top = 2.dp),
                 )
@@ -534,6 +538,26 @@ internal fun CustomCampaignBadge(modifier: Modifier = Modifier) {
     ) {
         Text(
             "自作",
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+    }
+}
+
+/**
+ * 提示のみ(presentation_only。#80)バッジ。「支払わなくても提示だけで OK」という利点の表示で
+ * 注意の意味ではないため warning 系にしない(自作バッジと同じ secondary 系)。
+ */
+@Composable
+internal fun PresentationOnlyBadge(modifier: Modifier = Modifier) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        shape = RoundedCornerShape(4.dp),
+        modifier = modifier,
+    ) {
+        Text(
+            "提示のみ",
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
         )

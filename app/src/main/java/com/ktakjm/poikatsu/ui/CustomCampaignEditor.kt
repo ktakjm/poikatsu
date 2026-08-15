@@ -164,6 +164,7 @@ internal fun CustomCampaignEditorScreen(
     // --- 詳細条件(2段階目)。初期値が1つでも入っていれば開いた状態で始める ---
     var ineligibleNote by remember { mutableStateOf(initial?.ineligibleNote.orEmpty()) }
     var productScope by remember { mutableStateOf(initial?.productScope.orEmpty()) }
+    var presentationOnly by remember { mutableStateOf(initial?.presentationOnly == true) }
     var minPurchaseText by remember { mutableStateOf(initial?.minPurchase?.toString().orEmpty()) }
     var minPurchasePeriodTotal by remember {
         mutableStateOf(initial?.minPurchaseScope == MIN_PURCHASE_SCOPE_PERIOD_TOTAL)
@@ -177,6 +178,7 @@ internal fun CustomCampaignEditorScreen(
         mutableStateOf(
             initial != null && (
                 initial.ineligibleNote.isNotBlank() || initial.productScope != null ||
+                    initial.presentationOnly ||
                     initial.minPurchase != null || initial.usageLimit != null ||
                     initial.perTransactionCap != null || initial.periodTotalCap != null ||
                     initial.capNote != null || initial.detailUrl != null
@@ -250,6 +252,7 @@ internal fun CustomCampaignEditorScreen(
             rate = rate.takeUnless { isLottery },
             discountAmount = discount.takeUnless { isLottery },
             productScope = productScope.trim().takeIf { it.isNotEmpty() },
+            presentationOnly = presentationOnly,
             note = note.trim(),
             ineligibleNote = ineligibleNote.trim(),
             startDate = startDate?.toString(),
@@ -657,6 +660,23 @@ internal fun CustomCampaignEditorScreen(
                 supportingText = { Text("お店の全商品に効かない特典。「商品限定」バッジが付き、最大おトク率の比較から外れます") },
                 modifier = Modifier.fillMaxWidth(),
             )
+            // 提示のみフラグ(campaigns.json の presentation_only と同じ意味。#80)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { presentationOnly = !presentationOnly },
+            ) {
+                Checkbox(checked = presentationOnly, onCheckedChange = { presentationOnly = it })
+                Column {
+                    Text("提示のみで受けられる特典", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "カードなどの提示だけが条件で、支払いは別の支払い方法でもよい特典にチェックします。「提示のみ」バッジが付き、最大おトク率の比較から外れます",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                }
+            }
             OutlinedTextField(
                 value = minPurchaseText,
                 onValueChange = { minPurchaseText = it },

@@ -318,6 +318,14 @@ data class Campaign(
     @SerialName("product_scope") val productScope: ProductScope? = null,
     /** 事前エントリーしないと還元されない施策(楽天ペイ×花王等)。判定詳細に警告を出す */
     @SerialName("requires_entry") val requiresEntry: Boolean = false,
+    /**
+     * カード現物の「提示のみ」で受けられる特典(エポス優待等。#80)。支払いは別の決済手段でも
+     * 対象のため、最良比較(bestOption)から分離し「提示のみ」バッジ+注記を出す。帰属(card_id)は
+     * 「提示にはカード現物の所有が必要」の意味でそのまま維持する。ポイントプログラム会員の
+     * 提示(dポイントカード等。所有と無関係)はここでは表現できない(#39 が受け皿)。
+     * 提示分と決済分は別施策として分離して起こす(mapping.md「提示と決済の分離」)
+     */
+    @SerialName("presentation_only") val presentationOnly: Boolean = false,
     @SerialName("usage_limit") val usageLimit: Int? = null,
     @SerialName("usage_limit_note") val usageLimitNote: String? = null,
     /** 予算到達次第の早期終了があり得るか(自治体系はほぼ全件 true)。判定詳細・おトクタブに注記を出す */

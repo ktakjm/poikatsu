@@ -388,6 +388,9 @@ private fun CampaignJudgmentCardBody(
                     if (campaign.isTimeLimited) {
                         TimeLimitedBadge()
                     }
+                    if (campaign.presentationOnly) {
+                        PresentationOnlyBadge()
+                    }
                     if (campaign.productScope != null) {
                         ProductScopeBadge()
                     }
@@ -419,6 +422,16 @@ private fun CampaignJudgmentCardBody(
                 "対象のお店が決まっているキャンペーンです。対象の一覧にないお店は対象外です",
                 warningContainerColor(),
                 onWarningContainerColor(),
+            )
+        }
+        // 提示のみ(#80)。「この決済で払え」と誤読させない(最良比較からも分離済み)。
+        // 利点の案内なので warning 系でなくバッジと同じ secondary 系+Info アイコン(⚠だと警告に読める)
+        if (judgment.campaign.presentationOnly) {
+            NoticeRow(
+                "提示だけで受けられる特典です。支払いは別の支払い方法でも対象です",
+                MaterialTheme.colorScheme.secondaryContainer,
+                MaterialTheme.colorScheme.onSecondaryContainer,
+                icon = Icons.Default.Info,
             )
         }
         // 対象商品限定(メーカー縛り)。全商品に効く率と誤認させない(最良比較からも分離済み。#43)

@@ -1116,6 +1116,56 @@ class JudgmentEngineTest {
         assertEquals("30% 還元(対象商品)", result.bestBenefitLabel().toString())
     }
 
+    // ---- presentation_only(カード現物提示型の優待。#80)のテスト ----
+
+    @Test
+    fun `bestOptionは提示のみ施策を除外する`() {
+        val unconditional = campaignWithPeriod(rateBase = 7.0).copy(id = "base")
+        val presentation = campaignWithPeriod(
+            benefitType = BenefitType.DISCOUNT,
+            rateBase = 10.0,
+        ).copy(id = "teiji10", presentationOnly = true)
+        val engine = JudgmentEngine(
+            PoikatsuData(
+                merchants = listOf(testMerchant),
+                campaigns = listOf(unconditional, presentation),
+                cards = listOf(testCard.copy(effectiveRateDefault = 7.0)),
+                updatedAt = "2026-06-01",
+            ),
+        )
+        val result = engine.judgeAll(testMerchant, today)
+        // 判定カードには両方出るが、「最良」は決済で受けられる7%。提示のみ10% OFFを最良にすると
+        // 「このカードで払え」に読め、実際の最適解(提示しつつ別の高還元手段で払う)と矛盾する
+        assertEquals(2, result.judgments.size)
+        assertEquals(7.0, result.bestOption!!.rate!!, 0.001)
+        assertEquals("7% 還元", result.bestBenefitLabel().toString())
+    }
+
+    @Test
+    fun `bestBenefitLabel_提示のみ施策しか無いチェーンは提示のみの付記つきラベル`() {
+        val presentation = campaignWithPeriod(
+            benefitType = BenefitType.DISCOUNT,
+            rateBase = 10.0,
+        ).copy(presentationOnly = true)
+        val engine = periodTestEngine(presentation)
+        val result = engine.judgeAll(testMerchant, today)
+        assertNull(result.bestOption)
+        assertEquals("10% OFF(提示のみ)", result.bestBenefitLabel().toString())
+    }
+
+    @Test
+    fun `resolveCardCampaignRate_提示のみのcard_programは施策側の率を使う`() {
+        // 常設 card_program はカードの通常還元率を採るのが既定だが、提示のみ施策で
+        // それをやると「エポスの通常還元0.5%」が出て提示特典10%OFFが消える
+        val presentation = campaignWithPeriod(
+            benefitType = BenefitType.DISCOUNT,
+            rateBase = 10.0,
+        ).copy(presentationOnly = true)
+        val resolved = resolveCardCampaignRate(presentation, testCard.copy(effectiveRateDefault = 0.5))
+        assertEquals(10.0, resolved.effectiveRate!!, 0.001)
+        assertFalse(resolved.usesCardRate)
+    }
+
     @Test
     fun `bestBenefitLabel_定額同士は金額が大きいものを出す`() {
         val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
@@ -2149,6 +2199,17 @@ class TestDataIntegrityTest {
         assertEquals(MIN_PURCHASE_SCOPE_PERIOD_TOTAL, showcase.minPurchaseScope)
         assertNotNull(showcase.minPurchase)
         assertTrue("requires_entry のショーケースが必要", showcase.requiresEntry)
+    }
+
+    @Test
+    fun `テストデータ_presentation_onlyのショーケースを含む`() {
+        val showcase = data.campaigns.first { it.id == "test_presentation_only" }
+        assertTrue("presentation_only ショーケースが必要", showcase.presentationOnly)
+        // エポス優待相当(常設 card_program のカード現物提示型)を再現する:
+        // resolveCardCampaignRate の提示分岐(カードの通常率でなく施策側の率)を実機で確認できる形
+        assertEquals(CampaignType.CARD_PROGRAM, showcase.campaignType)
+        assertNull("常設(期間なし)で安定させる", showcase.periodEnd)
+        assertNotNull("提示特典の率が必要(定率でないと率分岐を検証できない)", showcase.rateBase)
     }
 
     @Test

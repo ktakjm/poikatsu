@@ -1,6 +1,6 @@
 {
   "schema_version": 11,
-  "updated_at": "2026-08-07",
+  "updated_at": "2026-08-16",
   "campaigns": [
     {
       "id": "test_store_rate_program",
@@ -256,6 +256,24 @@
       "verified_date": "2026-07-13",
       "merchant_rules": [
         { "merchant_id": "test_drugstore", "ineligible_banner_ids": ["test_sundrug"] },
+        { "merchant_id": "test_super" }
+      ]
+    },
+    {
+      "id": "test_presentation_only",
+      "type": "card_program",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "テストカード発行会社",
+      "card_id": "test_card",
+      "name": "テストカード優待（カード提示で10%OFF・提示のみ）",
+      "payment_instruction": "テストカードを提示(支払いは任意の支払い方法でOK)",
+      "rate_base": 10.0,
+      "presentation_only": true,
+      "detail_url": "https://example.com/presentation-only-campaign",
+      "verified_date": "2026-08-16",
+      "merchant_rules": [
+        { "merchant_id": "test_depart" },
         { "merchant_id": "test_super" }
       ]
     },

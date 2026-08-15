@@ -353,6 +353,9 @@ private fun CampaignSummaryCard(
                         if (hasTimeLimited) {
                             TimeLimitedBadge()
                         }
+                        if (campaigns.any { it.presentationOnly }) {
+                            PresentationOnlyBadge()
+                        }
                         if (campaigns.any { it.productScope != null }) {
                             ProductScopeBadge()
                         }

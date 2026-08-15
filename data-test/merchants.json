@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-08-01",
+  "updated_at": "2026-08-16",
 
   "yolp_config": {
     "gc_groups": [
@@ -63,6 +63,15 @@
         { "id": "test_sundrug", "name": "サンドラッグ", "reading": "さんどらっぐ" },
         { "id": "test_cocokara", "name": "ココカラファイン", "reading": "ここからふぁいん" }
       ]
+    },
+    {
+      "id": "test_depart",
+      "name": "テストデパート",
+      "reading": "てすとでぱーと",
+      "aliases": ["マルイ", "丸井"],
+      "category": "デパート",
+      "yolp_search": "keyword",
+      "yolp_keyword": "マルイ"
     },
     {
       "id": "test_vending",

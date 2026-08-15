@@ -183,6 +183,7 @@ class CustomCampaignTest {
             benefitType = "discount",
             discountAmount = 500,
             productScope = "対象の化粧品のみ",
+            presentationOnly = true,
             note = "クーポン提示で適用\n アプリ会員限定 ",
             ineligibleNote = "セール品は対象外",
             startDate = "2026-08-01",
@@ -199,6 +200,7 @@ class CustomCampaignTest {
         assertEquals(BenefitType.DISCOUNT, BenefitType.fromString(campaign.benefitType))
         assertEquals(500, campaign.discountAmount)
         assertEquals("対象の化粧品のみ", campaign.productScope?.label)
+        assertTrue(campaign.presentationOnly)
         // 改行区切りメモは1行=1項目(空白トリム)
         assertEquals(listOf("クーポン提示で適用", "アプリ会員限定"), campaign.eligibleNotes)
         assertEquals(listOf("セール品は対象外"), campaign.ineligibleNotes)

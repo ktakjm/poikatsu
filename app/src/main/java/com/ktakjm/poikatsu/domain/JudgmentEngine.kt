@@ -146,6 +146,8 @@ data class ResolvedCardRate(
  * (MainViewModel)で共有し、率の優先基準がずれないようにする(店舗非依存。店舗別の
  * rate_override は呼び出し側が [rateOverride] で渡す):
  * - promotion で施策に率がある → 施策の率(逆にするとカードの常設7%が期間限定10%を上書きする)
+ * - 提示のみ施策(presentation_only。#80)で施策に率がある → 施策の率。常設 card_program でも
+ *   カードの通常還元率を採らない(エポス優待でカードの0.5%が出て提示特典10%OFFが消えるため)
  * - card_program で店舗別レート(rate_override)がある → [scaledStoreRate](店舗別レートに
  *   ユーザー設定のクラス加算・1pt価値を合成した値)。JCB J-POINTパートナーのような
  *   「1施策内で店舗ごとに率が異なる」常設プログラム用(#52)
@@ -160,9 +162,10 @@ fun resolveCardCampaignRate(
     rateOverride: Double? = null,
 ): ResolvedCardRate {
     val campaignRate = rateOverride ?: campaign.rateBase
-    val usesCampaignRate = campaign.campaignType == CampaignType.PROMOTION && campaignRate != null
+    val usesCampaignRate = campaignRate != null &&
+        (campaign.campaignType == CampaignType.PROMOTION || campaign.presentationOnly)
     val usesCardRate = !usesCampaignRate && campaign.discountAmount == null &&
-        campaign.campaignType != CampaignType.PROMOTION
+        campaign.campaignType != CampaignType.PROMOTION && !campaign.presentationOnly
     val effectiveRate = when {
         usesCampaignRate -> campaignRate
         usesCardRate && card != null && rateOverride != null -> scaledStoreRate(rateOverride, card)
@@ -331,17 +334,22 @@ data class JudgmentResult(
  * (judgeAll のソートで定額同士は金額降順)の特典を整形する。
  * 定額は購入額に依存し定率と比較できないため、比較ポリシー(determineBest)は変えず
  * 見せ方だけをラベル化する(定額のみのチェーンが「0%」表示になる問題への対処。#29)。
- * 対象商品限定(product_scope)の特典しか無いチェーンは「(対象商品)」を付記し、
- * 全商品に効く率と誤認されないようにする(#43)。
+ * 対象商品限定(product_scope)・提示のみ(presentation_only)の特典しか無いチェーンは
+ * 「(対象商品)」「(提示のみ)」を付記し、支払うだけで全商品に効く率と誤認されないようにする(#43/#80)。
  */
 fun JudgmentResult.bestBenefitLabel(): BenefitLabel? {
     bestOption?.let { return formatBenefit(it.benefitType, it.rate, it.discountAmount) }
-    judgments.filter { it.campaign.productScope == null }
+    judgments.filter { it.campaign.productScope == null && !it.campaign.presentationOnly }
         .firstNotNullOfOrNull { formatBenefit(it.benefitType, it.effectiveRate, it.discountAmount) }
         ?.let { return it }
-    return judgments.firstNotNullOfOrNull {
-        formatBenefit(it.benefitType, it.effectiveRate, it.discountAmount)
-    }?.let { BenefitLabel(it.value, "${it.suffix}(対象商品)") }
+    // 最良比較から分離した施策しか無いチェーン。judgeAll のソート先頭(率の高い順)を採り、
+    // 付記はその施策のフラグで選ぶ(両立時はより限定の強い「対象商品」を優先)
+    return judgments.firstNotNullOfOrNull { j ->
+        formatBenefit(j.benefitType, j.effectiveRate, j.discountAmount)?.let { it to j.campaign }
+    }?.let { (label, campaign) ->
+        val note = if (campaign.productScope != null) "(対象商品)" else "(提示のみ)"
+        BenefitLabel(label.value, "${label.suffix}$note")
+    }
 }
 
 /**
@@ -841,10 +849,12 @@ class JudgmentEngine(private val data: PoikatsuData) {
     private fun determineBest(judgments: List<CampaignJudgment>): BestPaymentOption? {
         // 抽選は確定還元でないため比較に載せない(buildJudgment で率を null にしているが意図を明示)。
         // 対象商品限定(product_scope)も店の全商品には効かないため載せない(対象商品を買わない人に
-        // 「この店は30%」と誤提示しないため。#43)
+        // 「この店は30%」と誤提示しないため。#43)。提示のみ(presentation_only)も載せない:
+        // 「最大おトク率: エポスカード10% OFF」は「エポスで払え」に読めるが、実際の最適解は
+        // 「提示しつつ別の高還元手段で払う」のため(#80)
         val best = judgments
             .filter { it.benefitType != BenefitType.LOTTERY }
-            .filter { it.campaign.productScope == null }
+            .filter { it.campaign.productScope == null && !it.campaign.presentationOnly }
             .filter { it.effectiveRate != null && it.discountAmount == null }
             .maxByOrNull { it.effectiveRate!! }
             ?: return null

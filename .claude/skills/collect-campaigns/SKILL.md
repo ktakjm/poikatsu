@@ -71,7 +71,7 @@ sources.md のソースごとの手順で入口を巡回し、未収録の施策
 
 ### Phase 3 — フィルタと下書き
 
-1. **収録基準**(data/README.md): 還元率 5% 以上(自治体・カード会社期間限定)。クーポンは割引率 5% 以上 OR 割引額 100 円以上 AND 全員配布 AND 主要チェーン対象。**「主要チェーン対象」は特定複数店舗限定でも、公式が対象店舗を言い切る網羅リストがあれば満たす**(`official_store_list.list_is_exhaustive: true` 付きで収録。mapping.md 参照。コジマ×ビックカメラ型を基準解釈で見送らない)。**常設 `card_program` は別基準: 実効 2% 以上の merchant のみ収録**(実効=最有利カードクラス・1pt=1円換算の絶対%。決済分のみが対象で、提示分は分離して見送り一覧へ。詳細は data/README.md「常設 card_program の収録基準」と mapping.md「提示と決済の分離」。#58)
+1. **収録基準**(data/README.md): 還元率 5% 以上(自治体・カード会社期間限定)。クーポンは割引率 5% 以上 OR 割引額 100 円以上 AND 全員配布 AND 主要チェーン対象。**「主要チェーン対象」は特定複数店舗限定でも、公式が対象店舗を言い切る網羅リストがあれば満たす**(`official_store_list.list_is_exhaustive: true` 付きで収録。mapping.md 参照。コジマ×ビックカメラ型を基準解釈で見送らない)。**常設 `card_program` は別基準: 実効 2% 以上の merchant のみ収録**(実効=最有利カードクラス・1pt=1円換算の絶対%。提示分は決済分と分離して起こし、カード現物提示型は `presentation_only: true` で収録(#80)、ポイントプログラム会員提示型は #39 待ちで見送り一覧へ。閾値 2% は提示施策にも適用。詳細は data/README.md「常設 card_program の収録基準」と mapping.md「提示と決済の分離」。#58)
 2. 基準内 → mapping.md の変換規則で `data/campaigns.json` に追記する(working tree に直接編集。git diff がレビュー画面になる)。`updated_at` も更新する
 3. 対象チェーンが merchants.json に無い場合は merchant エントリの下書きも作る(`reading`・`aliases` 必須。`category`・`yolp_search` は判断根拠が無ければ要確認マークを付けて報告)
 4. 基準外・収録不能 → **見送り一覧**へ(理由付き: 基準未満/ネット限定/会員限定・要ログイン/アプリ内限定/断定不能 等)。ネット限定施策(d曜日等)は現時点ではスキーマに区別が無いため一律見送り
