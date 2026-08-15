@@ -6,7 +6,7 @@
 
 - `merchants.json` — チェーン店マスタ。1 merchant = 1 系列(施策の帰属単位)で、傘下の看板(店頭の名前。UI 表記は「業態」)は `banners` に持つ(§ 系列と看板 参照)。`reading`(ひらがな読み)と `aliases`(略称・別ブランド名)は検索のヒット率に直結するので、追加時は必ず入れる。位置情報を持たない発行体(自販機など)は `location_hint`(`text`/`label`/`url`/`app_package`(任意))を持たせる。これがあると判定詳細で「近くのこのお店を探す」を出さず、代わりに位置を確認できる外部アプリ/サイトへ案内する(例: コカ・コーラ自販機 → Coke ON 公式アプリ)。`app_package` を書くとインストール済みのアプリを直接起動し、未インストールなら `url` へフォールバックする(**パッケージ名は app の AndroidManifest `<queries>` と対で管理**。qr_payments の app_packages と同じ制約)。アプリ内に店舗マップがある確証が無い発行体は `url`(公式 Web マップ等)だけにする(例: ジハンピ → サントリー公式設置マップ)。`yolp_config` で YOLP 検索の gc グループ設定、各 merchant の `yolp_search`/`yolp_keyword` で検索方式を持つ(§ YOLP 検索設定 参照)。YOLP の提供データにそのチェーンの店舗がほぼ無いなど**地図に出にくい事実**は `yolp_coverage_note`(任意。表示文をそのまま持つ)に書き、判定詳細の「近くのこのお店を探す」直下に通常の補足として表示される(#70。対象外の意味ではないので warning にはしない)。**実測の根拠がある場合だけ書く**(推測で書かない)。alias 不足による取りこぼし(alias 補完で直せる)と、データセット自体に無いもの(補完で直せない)を混同しないこと(実例: OWNDAYS。#52 の実測記録参照)。
 - `campaigns.json` — 還元施策。`merchant_rules[].merchant_id` は merchants.json の `id`、`card_id` は payment_methods.json の `cards[].id` を参照する。**ユーザー固有の前提はここに書かず、汎用的な施策情報のみを持つ。** 常設施策(`card_program`)・期間限定施策(`promotion`)・自治体施策(`municipal`) の 3 種類をサポート。
-- `payment_methods.json` — 決済手段(カード + QR 決済)の**カタログ(マスタ)**。`cards` は現状: 三井住友(`smcc`、7%、`point_multiplier` でウエル活×1.5)、三菱UFJ(`mufg`、基準7%)、JCBオリジナルシリーズ(`jcb_original`、最大10%、`card_classes` で W/S・`point_value` で J-POINT の 1pt 価値を設定)。`brands` はそのカード製品で**選べるブランドの選択肢**で、実際に持っているブランドはユーザー設定(`CardOverride.brand`)に分離する(カタログにユーザー属性を混ぜない)。**設定画面でカード所有・還元率・ブランド・ウエル活を編集でき、差分はカード id をキーに DataStore に保存して起動時にこのカタログへ重ねる(payment_methods.json 自体は書き換えない)**。判定エンジンは**所有カードのみ**を対象とし、実ブランドが `ineligible_brands` に一致(または未選択でその除外ブランドを取りうる)ならその店を除外・リストに無いブランドなら無視、`effective_rate_default` を実効還元率として用いる。`qr_payments` に QR 決済サービスのカタログを持つ。
+- `payment_methods.json` — 決済手段(カード + QR 決済)の**カタログ(マスタ)**。`cards` は現状: 三井住友(`smcc`、7%、`point_multiplier` でウエル活×1.5)、三菱UFJ(`mufg`、基準7%)、JCBオリジナルシリーズ(`jcb_original`、最大10%、`card_classes` で W/S・`point_value` で J-POINT の 1pt 価値を設定)、dカード(`dcard`、特約店最大4%)、エポスカード(`epos`、ポイントアップ優待最大2.5%。#59)。`brands` はそのカード製品で**選べるブランドの選択肢**で、実際に持っているブランドはユーザー設定(`CardOverride.brand`)に分離する(カタログにユーザー属性を混ぜない)。**設定画面でカード所有・還元率・ブランド・ウエル活を編集でき、差分はカード id をキーに DataStore に保存して起動時にこのカタログへ重ねる(payment_methods.json 自体は書き換えない)**。判定エンジンは**所有カードのみ**を対象とし、実ブランドが `ineligible_brands` に一致(または未選択でその除外ブランドを取りうる)ならその店を除外・リストに無いブランドなら無視、`effective_rate_default` を実効還元率として用いる。`qr_payments` に QR 決済サービスのカタログを持つ。
 - `municipalities.json` — 全国自治体マスタ(47 都道府県・1,741 市区町村・自治体グループ)。設定画面で居住地・行動圏を登録する際のピッカーデータと、おトクタブの地域フィルタ(グループ→自治体の展開)に使う。`scripts/generate_municipalities.py` が気象庁の予報区データから自動生成する(§ municipalities.json 参照)。
 
 ## スキーマの要点
@@ -96,7 +96,7 @@
 
 - `card_brands` — 登録できる国際ブランドの選択肢(マスタ)。`{ name, color }` で、`name` は campaigns.json の `card_brand` から参照され(整合性テストで強制)、設定画面「国際ブランド」に常時表示する。`color` はブランド施策の識別色
 - **識別色(`brand_color` / `color`)** — 発行体ごとに 1 色をここで一元管理し、施策のストライプ/バッジ/地図ピンは帰属先(カード/ブランド/QR)から解決する。**ロゴ画像は商標・著作権の問題があるため使用しない**(公開リポジトリでの再配布になる)。色には権利が及ばないのでブランドカラーで識別する。
-  - カード: 三井住友=フレッシュグリーン `#00A94F`(SMFG VI にはトラッドグリーン `#004831` もあるが、視認性と従来表示の継続のため明るい方に統一)、三菱UFJ=MUFGレッド `#E60000`、JCB=ティール `#00707C`、dカード=dレッド `#E60033`(d払いと同色。同一発行体グループとして色を統一し、判定・バッジはラベル文字で区別する。#58)
+  - カード: 三井住友=フレッシュグリーン `#00A94F`(SMFG VI にはトラッドグリーン `#004831` もあるが、視認性と従来表示の継続のため明るい方に統一)、三菱UFJ=MUFGレッド `#E60000`、JCB=ティール `#00707C`、dカード=dレッド `#E60033`(d払いと同色。同一発行体グループとして色を統一し、判定・バッジはラベル文字で区別する。#58)、エポス=エポスレッド `#E60012`(MUFG・dカードと近接する赤系だが公式VIを維持し、区別はラベル文字に委ねる。#59)
   - ブランド: Visa `#1A1F71`、Mastercard `#EB001B`、JCB `#005BAC`、Amex `#016FD0`(各社ロゴの近似色)
   - QR 決済: PayPay `#FF0033`、au PAY `#FF5722`、d払い `#E60033`、楽天ペイ `#BF0000`
 - `cards` — カードのカタログ。`{ id, card_name, brand_color, brands, effective_rate_default, point_multiplier }`。`id`(例: `"smcc"`)は campaigns.json の `card_id` と DataStore のカード差分キーから参照される
@@ -204,6 +204,7 @@
 | `test_rebate_fixed` | **後日定額** rebate+`discount_amount`(500 円還元)、`usage_limit`(3 回)、`usage_limit_note`、`period_total_cap` | 常時安定 |
 | `test_product_scope` | **対象商品限定**(`product_scope`。最良比較から分離・「対象商品」冠表示)、`min_purchase_scope: period_total`(期間累計の最低購入額表示)、`requires_entry`(要エントリー警告)、**多チェーン+`display_name`**(カードタイトルの手動略記。`display_name` の無い多チェーンの自動生成「{先頭} 他Nチェーン」は `test_promotion` で確認) | 常時安定 |
 | `test_presentation_only` | **提示のみ**(`presentation_only`。#80): 常設 card_program のカード現物提示型優待(エポス優待相当の 10% OFF)。「提示のみ」バッジ+「支払いは別の支払い方法でも対象」注記、最良比較からの分離(テストスーパーで最大おトク率が 7% のまま)、常設 card_program でもカードの通常率(7%)でなく**施策側の率(10% OFF)**が出ることを確認 | 常時安定 |
+| `test_discount_card_program` | **決済型の即時定率割引** discount+card_program(カラオケ館相当。#59): カード `test_card_epos` の決済条件付き最大30%OFF。`rate_rules`(ルーム30%/フリータイム25%の内訳)+`product_scope`(対象料金限定)+`rate_override`。rebate 施策と混ざったとき「最大30% OFF(対象商品)」表示になり、最良比較から分離される(テストバーガーの最良が変わらない)ことを確認 | 常時安定 |
 | `test_upcoming` | **UPCOMING** 状態(常時未開始)、`requires_entry` | 常時安定 |
 | `test_ending_soon` | **残り 3 日警告**(検証日に `period_end` を手直し) | **要手直し** |
 | `test_municipal` | 自治体施策(`municipal`+`external`)、`region`(北海道札幌市=実在自治体。地域フィルタ・お知らせ表示の実機検証用)、`store_search_url`、施策レベルの `eligible_notes`/`ineligible_notes`(対象/対象外セクション+店舗検索誘導)、`per_transaction_cap`+`period_total_cap`、`may_end_early` | 常時安定 |
@@ -213,7 +214,7 @@
 #### 複数施策競合の確認
 
 - **テストコンビニ**: test_card_program(7%)・test_store_rate_program(1.5% テストJCB)・test_promotion(10%)・test_recurrence_weekly(20% 金土)・test_lottery(抽選)・test_rebate_fixed(500 円還元 PayPay)・test_upcoming(25% 未開始)・test_ending_soon(15% 終了間近)
-- **テストバーガー**: test_card_program(7%)・test_store_rate_program(10% テストJCB)・test_promotion(15% override)・test_brand_promotion(Visa 30% OFF)・test_recurrence_monthly(12% 5・20・30 日)・test_discount_fixed(300 円引き PayPay)・test_upcoming(25% 未開始)
+- **テストバーガー**: test_card_program(7%)・test_store_rate_program(10% テストJCB)・test_promotion(15% override)・test_brand_promotion(Visa 30% OFF)・test_recurrence_monthly(12% 5・20・30 日)・test_discount_fixed(300 円引き PayPay)・test_discount_card_program(最大30% OFF 対象料金限定・テストエポス)・test_upcoming(25% 未開始)
 - **テストスーパー**: test_card_program(7%・Amex 除外)・test_product_scope(30% 対象商品限定 PayPay)・test_presentation_only(10% OFF 提示のみ)。無条件の 7% と商品限定 30%・提示のみ 10% OFF が並んでも最大おトク率が 7% のまま(商品限定・提示のみを最良比較に載せない)ことを確認できる
 - **テストデパート**: test_presentation_only(10% OFF 提示のみ)のみ。提示のみ施策しか無いチェーンの一覧ラベル「10% OFF(提示のみ)」の確認用(エポス優待×マルイ相当。alias「マルイ」+YOLP キーワード「マルイ」で実店舗ピンの実機確認ができる)
 - **テストドラッグ**: test_product_scope(30% 対象商品限定 PayPay)のみ。商品限定施策しか無いチェーンの一覧ラベル「30% 還元(対象商品)」の確認用。実在ドラッグストア 6 チェーンを **banners**(テストドラッググループの業態)として持ち、gc グループ `0202001` で地図表示・業態レンズ・グループ束ね UI の実機確認ができる。施策側は `ineligible_banner_ids: ["test_sundrug"]` の使用例を兼ね、**サンドラッグの実店舗ピンだけ地図から消える**(看板スコープの実機確認用。#60)

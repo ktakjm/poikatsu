@@ -98,6 +98,25 @@ collect-campaigns スキルが巡回する入口と、ソース別のアクセ�
 - まとめページ(約 8 件、入会特典中心)から既存会員向けの店舗還元(要エントリーの期間限定等)を拾い、詳細ページで率・期間・対象店舗を確認する
 - JS 依存が強いページで WebFetch が空になる場合は curl(素の UA のまま)を試し、それでも読めなければ半手動に切り替える(依頼手順は SMCC セクションと同じ **HTML 保存**)
 
+## エポスカード(エポトクプラザ)— 直接閲覧可
+
+`epos_yutai_*`(常設 card_program。#59)のメンテ・新規優待の発見用。ドメインは `eposcard.co.jp` / `epotoku.eposcard.co.jp`(規約確認記録は docs/coupon-collection-tos.md)。
+
+| 入口 | URL |
+|---|---|
+| 注目ご優待TOP30(発見の起点) | https://epotoku.eposcard.co.jp/page/popular-benefits/index.html |
+| チェーン優待ページ(事実の確定先) | https://epotoku.eposcard.co.jp/chain/detail/index.html?csid={csid}(例: 4808=ビッグエコー, 4809=カラオケ館, 4811=ジャンカラ, 4841=KEYUCA) |
+| モンテローザ特集(業態一覧・条件) | https://epotoku.eposcard.co.jp/page/monteroza/index.html |
+| 街のお店の優待まとめ | https://www.eposcard.co.jp/benefit/scene/town/index.html |
+
+- robots.txt: epotoku 側の標準 Disallow は `/epotoku_images/` のみ(`noindex:` 行は非標準のインデックス指示でアクセス制限ではない)。eposcard.co.jp 側は旧ニュース・会員ページ等の個別 Disallow のみ。**実行のたびに再確認**する
+- **優待の型が 3 種類混在**するので必ず切り分ける(#58/#80): (1) カード提示のみ → `presentation_only: true` で収録、(2) エポスカード決済条件付き → 通常の card_program、(3) 提示+決済の複合条件(カラオケ館) → 決済条件付きとして扱う(payment_instruction に両方書く)。同一チェーンに提示割引と決済割引が併存する場合(ビッグエコー)は**別施策に分離**する
+- **率の読み方**: エポス通常ポイントは 200円=1pt(0.5%)。「ポイント◯倍」は `◯×0.5%` の絶対%で収録(5倍=2.5%)。閾値(実効2%以上)未満の倍率優待(2〜3倍)は見送り
+- **個店優待(居酒屋・美容室等の 1,352〜1,926 件規模の検索結果)は収録対象外**。チェーン単位で条件が言い切られているもの(chain/detail ページがあるもの)だけ収録する
+- **クーポン画面(QR)提示が条件の優待**(ジャンカラ)は `requires_entry` を流用せず、`ineligible_notes` に「クーポン画面の提示なしは対象外」を入れる(#59)。クーポンには有効期限があり実質更新制のため、メンテ時に期限・条件を照合する
+- ネット完結優待(たまるマーケット・チケット購入型の映画優待等)、マルイ・モディ店舗優待(自社経済圏)、遊園地等の単一施設優待は見送り(理由は epos_yutai_monteroza の memo に整理済み)
+- サイト内検索は JS 描画のため、新規優待の発見は注目TOP30+Web 検索(`site:epotoku.eposcard.co.jp {チェーン名}`)で行う
+
 ## Amex — 直接閲覧可(全員対象と断定できるもののみ)
 
 | 入口 | URL |

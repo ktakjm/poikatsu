@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-08-15",
+  "updated_at": "2026-08-16",
 
   "yolp_config": {
     "gc_groups": [
@@ -21,6 +21,18 @@
         "categories": ["ドラッグストア"],
         "max_pages": 3,
         "note": "ドラッグストア。密度: 0205の1/2〜1/3(新宿駅0.75kmで94件 vs 229件。2026-07実測)のため3pagesで十分。調剤専門・個人薬局も混ざるがmatchStoreがチェーン名照合で捨てる。0205と分けるのは、混ぜるとコンビニ施策(常時アクティブ)のたびにドラッグストアも取得して結果枠を食い合うため"
+      },
+      {
+        "gc": "0110",
+        "categories": ["居酒屋"],
+        "max_pages": 3,
+        "note": "居酒屋、ビアホール(中分類。和風/洋風/立ち飲み等の小分類を包含)。繁華街では高密度だが個人店が大半で、matchStoreがチェーン名照合で捨てる。エポス優待のモンテローザ系業態用(#59)"
+      },
+      {
+        "gc": "0124002",
+        "categories": ["カラオケ"],
+        "max_pages": 2,
+        "note": "カラオケボックス。密度は低め(繁華街集中)のため2pagesで十分。エポス優待のビッグエコー・ジャンカラ・カラオケ館用(#59)"
       }
     ],
     "max_keyword_sources": 20
@@ -201,6 +213,34 @@
         { "id": "matsukiyo_lab", "name": "matsukiyo LAB", "reading": "まつきよらぼ" },
         { "id": "petit_madoca", "name": "petit madoca", "reading": "ぷちまどか" }
       ] },
+    { "id": "big_echo", "name": "ビッグエコー", "reading": "びっぐえこー", "aliases": ["BIG ECHO"], "category": "カラオケ" },
+    { "id": "jankara", "name": "ジャンカラ", "reading": "じゃんから", "aliases": ["スーパージャンカラ"], "category": "カラオケ" },
+    { "id": "karaoke_kan", "name": "カラオケ館", "reading": "からおけかん", "aliases": [], "category": "カラオケ" },
+    { "id": "uotami", "name": "魚民", "reading": "うおたみ", "aliases": [], "category": "居酒屋" },
+    { "id": "shirokiya", "name": "白木屋", "reading": "しろきや", "aliases": [], "category": "居酒屋" },
+    { "id": "warawara", "name": "笑笑", "reading": "わらわら", "aliases": [], "category": "居酒屋" },
+    { "id": "yamauchi_nojo", "name": "山内農場", "reading": "やまうちのうじょう", "aliases": [], "category": "居酒屋" },
+    { "id": "tanba_kurodori_nojo", "name": "丹波黒どり農場", "reading": "たんばくろどりのうじょう", "aliases": [], "category": "居酒屋" },
+    { "id": "bungotakada_dori_sakaba", "name": "豊後高田どり酒場", "reading": "ぶんごたかだどりさかば", "aliases": [], "category": "居酒屋" },
+    { "id": "sennen_no_utage", "name": "千年の宴", "reading": "せんねんのうたげ", "aliases": [], "category": "居酒屋" },
+    { "id": "fukufukuya", "name": "福福屋", "reading": "ふくふくや", "aliases": [], "category": "居酒屋" },
+    { "id": "tsuki_no_utage", "name": "月の宴", "reading": "つきのうたげ", "aliases": [], "category": "居酒屋" },
+    { "id": "horumon_oideya", "name": "ホルモンおいで屋", "reading": "ほるもんおいでや", "aliases": [], "category": "居酒屋" },
+    { "id": "kuromaru", "name": "くろ○", "reading": "くろまる", "aliases": ["くろまる"], "category": "居酒屋" },
+    { "id": "mekiki_no_ginji", "name": "目利きの銀次", "reading": "めききのぎんじ", "aliases": [], "category": "居酒屋" },
+    { "id": "uoman", "name": "魚萬", "reading": "うおまん", "aliases": [], "category": "居酒屋" },
+    { "id": "medetaya", "name": "めでた家", "reading": "めでたや", "aliases": [], "category": "居酒屋" },
+    { "id": "tori_no_george", "name": "鶏のジョージ", "reading": "とりのじょーじ", "aliases": ["鶏のGeorge"], "category": "居酒屋" },
+    { "id": "mitsuechan", "name": "みつえちゃん", "reading": "みつえちゃん", "aliases": [], "category": "居酒屋" },
+    { "id": "sushizamurai", "name": "すしざむらい", "reading": "すしざむらい", "aliases": [], "category": "居酒屋" },
+    { "id": "taketori_sakamonogatari", "name": "竹取酒物語", "reading": "たけとりさかものがたり", "aliases": [], "category": "居酒屋" },
+    { "id": "ore_no_kushikatsu_kuroda", "name": "俺の串かつ黒田", "reading": "おれのくしかつくろだ", "aliases": [], "category": "居酒屋" },
+    { "id": "kabaya", "name": "かば屋", "reading": "かばや", "aliases": [], "category": "居酒屋" },
+    { "id": "shabutabe", "name": "しゃぶ食べ", "reading": "しゃぶたべ", "aliases": [], "category": "居酒屋" },
+    { "id": "kitanoichiba", "name": "キタノイチバ", "reading": "きたのいちば", "aliases": [], "category": "居酒屋" },
+    { "id": "bariyasu_sakaba", "name": "バリヤス酒場", "reading": "ばりやすさかば", "aliases": [], "category": "居酒屋" },
+    { "id": "kamifusen", "name": "かみふうせん", "reading": "かみふうせん", "aliases": [], "category": "居酒屋" },
+    { "id": "keyuca", "name": "KEYUCA", "reading": "けゆか", "aliases": ["ケユカ"], "category": "生活雑貨", "yolp_search": "keyword", "yolp_keyword": "ケユカ" },
     { "id": "sundrug", "name": "サンドラッグ", "reading": "さんどらっぐ", "aliases": [], "category": "ドラッグストア" },
     { "id": "cocokara_fine", "name": "ココカラファイン", "reading": "ここからふぁいん", "aliases": ["ココカラ"], "category": "ドラッグストア",
       "group_label": "ココカラファイングループ",

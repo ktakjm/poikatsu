@@ -1,6 +1,6 @@
 {
   "schema_version": 8,
-  "updated_at": "2026-08-07",
+  "updated_at": "2026-08-16",
   "card_brands": [
     { "name": "Visa", "color": "#1A1F71" },
     { "name": "Mastercard", "color": "#EB001B" },
@@ -41,6 +41,13 @@
       "brand_color": "#E60033",
       "brands": ["Visa", "Mastercard"],
       "effective_rate_default": 4.0
+    },
+    {
+      "id": "epos",
+      "card_name": "エポスカード",
+      "brand_color": "#E60012",
+      "brands": ["Visa"],
+      "effective_rate_default": 2.5
     }
   ],
   "qr_payments": [

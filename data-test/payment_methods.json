@@ -1,6 +1,6 @@
 {
   "schema_version": 8,
-  "updated_at": "2026-08-07",
+  "updated_at": "2026-08-16",
   "card_brands": [
     { "name": "Visa", "color": "#1A1F71" },
     { "name": "Mastercard", "color": "#EB001B" },
@@ -33,6 +33,13 @@
         { "id": "w", "label": "テストW", "rate_bonus": 0.5 }
       ],
       "point_value": { "label": "テストポイントの価値", "default": 1.0, "note": "使い道により1pt=0.7〜1円(検証用)" }
+    },
+    {
+      "id": "test_card_epos",
+      "card_name": "テストエポスカード",
+      "brand_color": "#E60012",
+      "brands": ["Visa"],
+      "effective_rate_default": 2.5
     }
   ],
   "qr_payments": [

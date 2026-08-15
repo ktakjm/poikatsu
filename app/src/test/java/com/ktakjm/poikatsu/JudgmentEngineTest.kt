@@ -1737,6 +1737,36 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
+    fun `実データ_エポス優待は提示と決済が分離され割引は最良比較から外れる`() {
+        // #59: エポス優待は「提示のみ」と「決済条件付き」を別施策で収録する(#58 の分離ルール)。
+        // 割引はルーム料金等の部分料金に限定されるため product_scope を持ち、bestOption に載らない
+        val eposCampaigns = data.campaigns.filter { it.cardId == "epos" }
+        assertTrue(eposCampaigns.isNotEmpty())
+        eposCampaigns.filter { it.benefitType == "discount" }.forEach { c ->
+            assertNotNull("${c.id}: 部分料金への割引優待は product_scope を持つこと", c.productScope)
+        }
+        // ビッグエコー: 提示30%OFF と決済コース10%OFF が別施策として両方判定に出る
+        val bigEcho = data.merchants.first { it.id == "big_echo" }
+        val judgments = engine.judgeCards(bigEcho, today)
+        val presentation = judgments.first { it.campaign.id == "epos_yutai_presentation" }
+        assertTrue(presentation.campaign.presentationOnly)
+        // 提示施策はカードの実効率(2.5%)でなく施策側の率(rate_override)を出す(#80)
+        assertEquals(30.0, presentation.effectiveRate!!, 0.0)
+        val course = judgments.first { it.campaign.id == "epos_yutai_bigecho_course" }
+        assertFalse(course.campaign.presentationOnly)
+        assertEquals(BenefitType.DISCOUNT, course.benefitType)
+        // 決済型 discount card_program でも rate_override が実効率になる(カードの2.5%が出ない)
+        assertEquals(10.0, course.effectiveRate!!, 0.0)
+        // 施策全体ビュー(おトクタブ。店舗指定なし)でもカードのカタログ既定値(2.5%)でなく
+        // 施策の最大値が出る(#59 実機フィードバック: カラオケ館 30% OFF が 2.5% 表示になっていた)
+        val eposCard = data.cards.first { it.id == "epos" }
+        val karaokekan = data.campaigns.first { it.id == "epos_yutai_karaokekan" }
+        assertEquals(30.0, resolveCardCampaignRate(karaokekan, eposCard).effectiveRate!!, 0.0)
+        val monteroza = data.campaigns.first { it.id == "epos_yutai_monteroza" }
+        assertEquals(2.5, resolveCardCampaignRate(monteroza, eposCard).effectiveRate!!, 0.0)
+    }
+
+    @Test
     fun `実データ_OWNDAYSは網羅リストで掲載店だけ対象になる`() {
         val owndays = data.merchants.first { it.id == "owndays" }
         // 網羅リストのみのチェーンでも「このお店が対象か調べる」導線を出す(#70)
@@ -1994,10 +2024,13 @@ class JudgmentEngineRealDataTest {
     fun `実データ_yolpConfigが読み込めている`() {
         val config = data.yolpConfig
         assertNotNull(config)
-        assertEquals(3, config!!.gcGroups.size)
+        assertEquals(5, config!!.gcGroups.size)
         assertEquals("0123,0115,0101013", config.gcGroups[0].gc)
         assertEquals("0205", config.gcGroups[1].gc)
         assertEquals("0202001", config.gcGroups[2].gc)
+        // エポス優待(#59)で追加した居酒屋(モンテローザ系)とカラオケ
+        assertEquals("0110", config.gcGroups[3].gc)
+        assertEquals("0124002", config.gcGroups[4].gc)
     }
 
     @Test

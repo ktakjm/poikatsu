@@ -1,6 +1,6 @@
 {
   "schema_version": 11,
-  "updated_at": "2026-08-15",
+  "updated_at": "2026-08-16",
   "campaigns": [
     {
       "id": "smcc_combini_restaurant",
@@ -240,6 +240,189 @@
         { "merchant_id": "tower_records", "rate_override": 2.0, "ineligible_notes": ["iDでの支払いのみ対象(Visa/Mastercardでのカード決済は対象外)", "一部対象外の店舗あり", "dカード プリペイドは対象外"] }
       ],
       "verified_date": "2026-08-15"
+    },
+    {
+      "id": "epos_yutai_monteroza",
+      "type": "card_program",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "エポスカード",
+      "card_id": "epos",
+      "name": "エポトクプラザ(モンテローザグループでポイント5倍)",
+      "display_name": "エポスカード モンテローザ優待",
+      "payment_instruction": "エポスカードまたはEPOS PAYで支払う",
+      "rate_base": 2.5,
+      "period_start": null,
+      "period_end": null,
+      "requires_entry": false,
+      "detail_url": "https://epotoku.eposcard.co.jp/page/monteroza/index.html",
+      "ineligible_notes": [
+        "キッチンカー・一部店舗は対象外"
+      ],
+      "overview_ineligible_notes": [
+        "ポイント倍率が低いお店(スターバックス・ノジマ・アパホテルなど)は、このアプリでは表示対象外(エポトクプラザで確認できます)"
+      ],
+      "memo": [
+        "率はエポス通常ポイント込みの絶対%で収録(200円=1pt・1pt=1円が基準。5倍=200円につき5pt=2.5%)",
+        "収録基準(常設 card_program 実効2%以上。#58/#59)の見送り(エポス優待全体の台帳): スターバックス(オンライン入金・オートチャージで2倍=1%。チャージ自体もネット限定)、Starbucks eGift(15倍だが購入がネット限定)、ノジマ(3倍=1.5%)、アパホテル(3倍=1.5%)、駿河屋(2倍=1%)、ビッグエコーの決済ポイント3倍(1.5%。割引優待は epos_yutai_bigecho_course / epos_yutai_presentation に収録)、ネット完結の優待(HIS・日本旅行・エクスペディア・Hulu・コミックシーモア・セシール・アソビュー・ベルトラ・マルイウェブチャネル等)、マルイ・モディの店舗優待(自社経済圏)、遊園地・水族館等の単一施設優待(チェーンでない)、美容室等の個店単位優待(低倍率のお店が非表示である旨は overview_ineligible_notes に反映済み)",
+        "当初は KEYUCA と 1 施策(epos_yutai_pointup)にまとめていたが、施策レベルの注記(キッチンカー等)が KEYUCA の店舗カードに混入したため出典ページ単位で分割(2026-08-16 実機フィードバック)",
+        "FLOWS GRILL BAR(ジ アウトレット湘南平塚)は公式が5倍から除いている(業態自体を未収録のため merchant_rules に非該当)",
+        "組み合わせ看板(白木屋×バリヤス酒場・俺の串かつ黒田×炭火焼鳥めでた家・寿司と居酒屋 魚民)は構成業態名の部分一致で照合されるため個別 merchant にしない",
+        "くろ○ は名称が正規化で2文字(かな)になり POI 照合されないため、地図・判定に出ない可能性が高い(名前検索の取りこぼしは既知の制約)",
+        "業態一覧・条件はエポトクプラザのモンテローザ特集ページで確認(2026-08-16)"
+      ],
+      "merchant_rules": [
+        { "merchant_id": "uotami", "rate_override": 2.5 },
+        { "merchant_id": "shirokiya", "rate_override": 2.5 },
+        { "merchant_id": "warawara", "rate_override": 2.5 },
+        { "merchant_id": "yamauchi_nojo", "rate_override": 2.5 },
+        { "merchant_id": "tanba_kurodori_nojo", "rate_override": 2.5 },
+        { "merchant_id": "bungotakada_dori_sakaba", "rate_override": 2.5 },
+        { "merchant_id": "sennen_no_utage", "rate_override": 2.5 },
+        { "merchant_id": "fukufukuya", "rate_override": 2.5 },
+        { "merchant_id": "tsuki_no_utage", "rate_override": 2.5 },
+        { "merchant_id": "horumon_oideya", "rate_override": 2.5 },
+        { "merchant_id": "kuromaru", "rate_override": 2.5 },
+        { "merchant_id": "mekiki_no_ginji", "rate_override": 2.5, "ineligible_notes": ["MONA新浦安店は毎月第3日曜日はポイント付与の対象外"] },
+        { "merchant_id": "uoman", "rate_override": 2.5 },
+        { "merchant_id": "medetaya", "rate_override": 2.5 },
+        { "merchant_id": "tori_no_george", "rate_override": 2.5 },
+        { "merchant_id": "mitsuechan", "rate_override": 2.5 },
+        { "merchant_id": "sushizamurai", "rate_override": 2.5 },
+        { "merchant_id": "taketori_sakamonogatari", "rate_override": 2.5 },
+        { "merchant_id": "ore_no_kushikatsu_kuroda", "rate_override": 2.5 },
+        { "merchant_id": "kabaya", "rate_override": 2.5 },
+        { "merchant_id": "shabutabe", "rate_override": 2.5 },
+        { "merchant_id": "kitanoichiba", "rate_override": 2.5 },
+        { "merchant_id": "bariyasu_sakaba", "rate_override": 2.5 },
+        { "merchant_id": "kamifusen", "rate_override": 2.5 }
+      ],
+      "verified_date": "2026-08-16"
+    },
+    {
+      "id": "epos_yutai_keyuca",
+      "type": "card_program",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "エポスカード",
+      "card_id": "epos",
+      "name": "エポトクプラザ(KEYUCAでポイント5倍)",
+      "display_name": "エポスカード KEYUCA優待",
+      "payment_instruction": "エポスカードまたはEPOS PAYで支払う",
+      "rate_base": 2.5,
+      "period_start": null,
+      "period_end": null,
+      "requires_entry": false,
+      "detail_url": "https://epotoku.eposcard.co.jp/chain/detail/index.html?csid=4841",
+      "eligible_notes": [
+        "新宿マルイ・北千住マルイ・吉祥寺マルイなどマルイ内の店舗も対象",
+        "公式オンラインショップでの利用も対象"
+      ],
+      "ineligible_notes": [
+        "QUICPay・Apple Pay・Google Pay・Smart Code経由など支払い元をエポスカードにした間接払いは対象外"
+      ],
+      "memo": [
+        "率はエポス通常ポイント込みの絶対%で収録(5倍=200円につき5pt=2.5%)",
+        "毎月8日(EPOS PAY)・25日〜月末にポイント10倍の記載あり。恒常性・条件を断定できないため未収録(要確認)。マルイ内3店舗(新宿・北千住・吉祥寺)はこの10倍(EPOS PAYの日/EPOS WEEK)から公式が除いており、新規会員特典も異なる(※1注記)。基礎の5倍は個店ページ(ssfid=26165 新宿マルイ店)で対象であることを確認済み(2026-08-16)",
+        "エポス優待全体の収録基準見送り台帳は epos_yutai_monteroza の memo 参照",
+        "YOLP 上の実 POI 名は「ケユカ ○○店」表記(Yahoo!ロコ・Yahoo!マップ 2026-08-16 確認)のため yolp_keyword で対応。ローマ字「KEYUCA」クエリは実機で0件だった(2026-08-16 フィードバック)",
+        "yolp_keyword「ケユカ」の実機実測(2026-08-16): 吉祥寺はヒット・新宿マルイ店はヒットせず。Yahoo!マップ本体には新宿マルイ店の POI があるため、OWNDAYS と同じく公開ローカルサーチ API のデータセット側の欠落(商業施設内テナント)で補完不能。お店タブの名前検索・判定は可",
+        "条件はエポトクプラザのチェーンページ(csid=4841)で確認(2026-08-16)"
+      ],
+      "merchant_rules": [
+        { "merchant_id": "keyuca", "rate_override": 2.5 }
+      ],
+      "verified_date": "2026-08-16"
+    },
+    {
+      "id": "epos_yutai_karaokekan",
+      "type": "card_program",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "エポスカード",
+      "card_id": "epos",
+      "name": "エポトクプラザ(カラオケ館 ルーム料金最大30%OFF)",
+      "display_name": "エポスカード カラオケ館優待",
+      "payment_instruction": "入店時にエポスカードを提示し、お会計をエポスカードで支払う",
+      "rate_base": 30.0,
+      "rate_rules": [
+        { "condition": "カラオケルーム料金", "rate": 30.0 },
+        { "condition": "カラオケフリータイム料金", "rate": 25.0 },
+        { "condition": "テレワークルーム料金", "rate": 20.0 }
+      ],
+      "product_scope": { "label": "ルーム料金・フリータイム料金・テレワークルーム料金のみ(飲食代・飲み放題は割引されない)" },
+      "period_start": null,
+      "period_end": null,
+      "detail_url": "https://epotoku.eposcard.co.jp/chain/detail/index.html?csid=4809",
+      "ineligible_notes": [
+        "パーティーコースは対象外",
+        "他の割引券との併用不可",
+        "一部店舗は対象外"
+      ],
+      "memo": [
+        "掲載内容は2026年6月現在の表記。優待は改定が頻繁なためメンテ時にチェーンページ(csid=4809)で照合する",
+        "エポスカード決済も条件のため presentation_only ではない(提示+決済の複合条件。#59)"
+      ],
+      "merchant_rules": [
+        { "merchant_id": "karaoke_kan", "rate_override": 30.0 }
+      ],
+      "verified_date": "2026-08-16"
+    },
+    {
+      "id": "epos_yutai_bigecho_course",
+      "type": "card_program",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "エポスカード",
+      "card_id": "epos",
+      "name": "エポトクプラザ(ビッグエコー ドリンクバー付き・飲み放題コース10%OFF)",
+      "display_name": "エポスカード ビッグエコー優待",
+      "payment_instruction": "お会計時にエポスカードで支払う",
+      "rate_base": 10.0,
+      "product_scope": { "label": "ドリンクバー付き・飲み放題コース利用時のお会計総額のみ" },
+      "period_start": null,
+      "period_end": null,
+      "detail_url": "https://epotoku.eposcard.co.jp/chain/detail/index.html?csid=4808",
+      "ineligible_notes": [
+        "ビッグエコー会員割引・他の割引や特典・キャンペーンとの併用不可(提示のみのルーム料金30%OFF優待とも併用不可)",
+        "パーティーコースは対象外",
+        "一部店舗は対象外"
+      ],
+      "memo": [
+        "掲載内容は2026年5月現在の表記。メンテ時にチェーンページ(csid=4808)で照合する",
+        "同ページのルーム料金30%OFF(提示のみ)は epos_yutai_presentation に分離して収録(#58の分離ルール)。決済ポイント3倍(1.5%)は閾値未満で見送り(epos_yutai_monteroza の memo に整理)"
+      ],
+      "merchant_rules": [
+        { "merchant_id": "big_echo", "rate_override": 10.0 }
+      ],
+      "verified_date": "2026-08-16"
+    },
+    {
+      "id": "epos_yutai_presentation",
+      "type": "card_program",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "エポスカード",
+      "card_id": "epos",
+      "name": "エポトクプラザ(エポスカード提示でカラオケルーム料金割引)",
+      "display_name": "エポスカード 提示優待",
+      "payment_instruction": "エポスカードを提示(支払いは任意の支払い方法でOK)",
+      "rate_base": 30.0,
+      "presentation_only": true,
+      "product_scope": { "label": "カラオケのルーム料金のみ(飲食代等は割引されない)" },
+      "period_start": null,
+      "period_end": null,
+      "detail_url": "https://epotoku.eposcard.co.jp/",
+      "memo": [
+        "提示のみで効く優待を決済条件付きと分離して収録(#80 presentation_only の最初の実データ。#59)",
+        "ジャンカラのクーポン画面には有効期限の記載あり(2026-10-31。実質更新制)。メンテ時にチェーンページ(csid=4811)で期限と条件を照合する",
+        "ビッグエコーは2026年5月現在の表記(csid=4808)。ジャンカラの優待はスーパージャンカラも同条件"
+      ],
+      "merchant_rules": [
+        { "merchant_id": "big_echo", "rate_override": 30.0, "ineligible_notes": ["一般料金からの割引(ビッグエコー会員割引・他の割引や特典・キャンペーンとの併用不可)", "ドリンクバー付き・飲み放題コースの利用時は対象外(コース利用はエポスカード決済で総額10%OFFの優待が対象)", "パーティーコース・テレワークプランは対象外", "一部店舗は対象外"] },
+        { "merchant_id": "jankara", "rate_override": 20.0, "ineligible_notes": ["エポトクプラザのクーポン画面(QRコード)の提示なしは対象外(精算機で読み取り)", "19時より前の入店は対象外", "1名での利用は対象外(2名以上1組が条件)", "他のクーポンとの併用不可"] }
+      ],
+      "verified_date": "2026-08-16"
     },
     {
       "id": "yuzawa_paypay_2026_07",

@@ -150,7 +150,10 @@ data class ResolvedCardRate(
  *   カードの通常還元率を採らない(エポス優待でカードの0.5%が出て提示特典10%OFFが消えるため)
  * - card_program で店舗別レート(rate_override)がある → [scaledStoreRate](店舗別レートに
  *   ユーザー設定のクラス加算・1pt価値を合成した値)。JCB J-POINTパートナーのような
- *   「1施策内で店舗ごとに率が異なる」常設プログラム用(#52)
+ *   「1施策内で店舗ごとに率が異なる」常設プログラム用(#52)。店舗指定のない施策全体ビュー
+ *   (おトクタブ一覧・詳細サマリー)では施策の最大値(rate_base)を同じ式でスケールする——
+ *   カードのカタログ既定値を使うと、エポスのように 1 カードに最大値の異なる店舗別レート施策が
+ *   複数ぶら下がる場合に別施策の率が出てしまう(#59: カラオケ館 30% OFF が 2.5% 表示になる不具合)
  * - card_program 等(rate_override なし) → カードの実効率(ユーザー設定。クラス加算・1pt価値・
  *   ウエル活はマージ時に適用済み)。card が null(未所有カードの施策をおトクタブで見る場合)は
  *   施策側の率へフォールバック
@@ -169,6 +172,10 @@ fun resolveCardCampaignRate(
     val effectiveRate = when {
         usesCampaignRate -> campaignRate
         usesCardRate && card != null && rateOverride != null -> scaledStoreRate(rateOverride, card)
+        // 店舗別レート施策の施策全体ビュー(店舗指定なし): 施策の最大値(rate_base)をスケールする。
+        // 1カード1施策(JCB/dカード)の間は effective_rate_default(=rate_base)と同値
+        usesCardRate && card != null && campaign.merchantRules.any { it.rateOverride != null } ->
+            campaign.rateBase?.let { scaledStoreRate(it, card) } ?: card.effectiveRateDefault
         usesCardRate -> card?.effectiveRateDefault ?: campaignRate ?: 0.0
         else -> null
     }

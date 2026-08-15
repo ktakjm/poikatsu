@@ -260,6 +260,34 @@
       ]
     },
     {
+      "id": "test_discount_card_program",
+      "type": "card_program",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "operator": "テストエポス発行会社",
+      "card_id": "test_card_epos",
+      "name": "テスト決済型割引優待（決済で最大30%OFF・ルーム料金のみ）",
+      "display_name": "テストエポス 決済割引優待",
+      "payment_instruction": "入店時にテストエポスカードを提示し、テストエポスカードで支払う",
+      "rate_base": 30.0,
+      "rate_rules": [
+        { "condition": "テストルーム料金", "rate": 30.0 },
+        { "condition": "テストフリータイム料金", "rate": 25.0 }
+      ],
+      "product_scope": { "label": "テストルーム料金・フリータイム料金のみ(飲食代は割引されない)" },
+      "ineligible_notes": [
+        "他の割引券との併用不可(検証用)"
+      ],
+      "memo": [
+        "決済型 discount card_program の実機確認用(カラオケ館相当。#59): rebate 施策と混ざったとき「最大30% OFF(対象商品)」表示と最良比較からの分離を見る"
+      ],
+      "detail_url": "https://example.com/discount-card-program",
+      "verified_date": "2026-08-16",
+      "merchant_rules": [
+        { "merchant_id": "test_fastfood", "rate_override": 30.0 }
+      ]
+    },
+    {
       "id": "test_presentation_only",
       "type": "card_program",
       "benefit_type": "discount",
