@@ -62,6 +62,7 @@ import com.ktakjm.poikatsu.domain.isTargetDay
 import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.nextTargetDay
 import com.ktakjm.poikatsu.domain.resolveCardCampaignRate
+import com.ktakjm.poikatsu.domain.storeRatesVary
 import com.ktakjm.poikatsu.domain.walletAppLink
 import com.ktakjm.poikatsu.notification.CampaignNotifications
 import com.ktakjm.poikatsu.util.GeoMath
@@ -2014,6 +2015,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 nextTargetDate = if (todayIsTarget) null else nextTargetDay(campaign, today),
                 // チェーン非依存のビューなので施策単位の網羅性(全ルール網羅)で判定する
                 exhaustiveStoreList = campaign.allStoreListsExhaustive,
+                // 施策全体ビューは最大値の率を出すため、店舗別レートがばらつく施策は「最大」を冠する(#81)
+                rateVariesByStore = campaign.storeRatesVary,
             )
         }
         // 地図タブ横画面のお知らせピルは、判定詳細のサイドシート表示中も押せる(非モーダル。#57)。

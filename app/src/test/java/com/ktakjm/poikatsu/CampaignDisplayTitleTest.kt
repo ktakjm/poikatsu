@@ -6,9 +6,13 @@ import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.Region
 import com.ktakjm.poikatsu.ui.campaignGroupDisplayTitle
+import com.ktakjm.poikatsu.ui.cardProgramBundleSubtitle
+import com.ktakjm.poikatsu.ui.isCardProgramBundle
 import com.ktakjm.poikatsu.ui.municipalRegionsLabel
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -218,5 +222,72 @@ class CampaignDisplayTitleTest {
         val group = listOf(promotion(merchantIds = listOf("welcia")))
         assertNull(municipalRegionsLabel(group))
         assertEquals("ウエルシア", campaignGroupDisplayTitle(group, merchants))
+    }
+
+    // ---- 発行体束ね(#81): 同一カードの常設 card_program 複数施策を1カードに ----
+
+    private fun eposProgram(id: String, displayName: String?) = Campaign(
+        id = id,
+        operator = "エポスカード",
+        name = "エポトクプラザ($id)",
+        displayName = displayName,
+        type = "card_program",
+        cardId = "epos",
+    )
+
+    private val eposBundle = listOf(
+        eposProgram("epos_yutai_monteroza", "エポスカード モンテローザ優待"),
+        eposProgram("epos_yutai_keyuca", "エポスカード KEYUCA優待"),
+        eposProgram("epos_yutai_karaokekan", "エポスカード カラオケ館優待"),
+        eposProgram("epos_yutai_bigecho_course", "エポスカード ビッグエコー優待"),
+        eposProgram("epos_yutai_presentation", "エポスカード 提示優待"),
+    )
+
+    @Test
+    fun `発行体束ねグループのタイトルはoperatorと優待特典`() {
+        assertEquals("エポスカード 優待・特典", campaignGroupDisplayTitle(eposBundle, merchants))
+    }
+
+    @Test
+    fun `発行体束ねの判定は同一card_idのcard_programが2件以上`() {
+        assertTrue(isCardProgramBundle(eposBundle))
+        assertFalse(isCardProgramBundle(eposBundle.take(1))) // 1件なら従来表示
+        assertFalse(isCardProgramBundle(listOf(promotion(merchantIds = listOf("welcia")), promotion())))
+    }
+
+    @Test
+    fun `単独のcard_programグループは従来どおりdisplay_name`() {
+        val single = listOf(eposProgram("dcard_tokuyakuten", "dカード特約店"))
+        assertEquals("dカード特約店", campaignGroupDisplayTitle(single, merchants))
+    }
+
+    @Test
+    fun `発行体束ねのサブ行はoperator接頭辞を除いた施策名を3件と残数で出す`() {
+        assertEquals(
+            "モンテローザ優待 / KEYUCA優待 / カラオケ館優待 ほか2件",
+            cardProgramBundleSubtitle(eposBundle),
+        )
+    }
+
+    @Test
+    fun `発行体束ねのサブ行は3件以下なら残数を付けない`() {
+        assertEquals(
+            "モンテローザ優待 / KEYUCA優待",
+            cardProgramBundleSubtitle(eposBundle.take(2)),
+        )
+    }
+
+    @Test
+    fun `発行体束ねのサブ行はdisplay_nameが無ければnameで出す`() {
+        val group = listOf(
+            eposProgram("a", null),
+            eposProgram("b", "エポスカード KEYUCA優待"),
+        )
+        assertEquals("エポトクプラザ(a) / KEYUCA優待", cardProgramBundleSubtitle(group))
+    }
+
+    @Test
+    fun `束ねでないグループのサブ行はnull`() {
+        assertNull(cardProgramBundleSubtitle(eposBundle.take(1)))
     }
 }

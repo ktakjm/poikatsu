@@ -322,11 +322,16 @@ private fun BestOptionBanner(best: BestPaymentOption) {
 
 // ---- 統一判定カード ----
 
-/** onExcludeStore 非 null なら「対象外のお店として登録」の導線を出す(判定詳細を具体的なお店として開いたときのみ。#63) */
+/**
+ * onExcludeStore 非 null なら「対象外のお店として登録」の導線を出す(判定詳細を具体的なお店として開いたときのみ。#63)。
+ * targetGroups はこの施策の「対象:」行(発行体束ね #81 の詳細のみ。束ねでは複数施策の対象を
+ * 最上部で合成せず各施策カード内に出す)。お店タブ・地図の判定カードはお店の文脈が既にあるため空のまま。
+ */
 @Composable
 internal fun CampaignJudgmentCard(
     judgment: CampaignJudgment,
     onExcludeStore: (() -> Unit)? = null,
+    targetGroups: List<TargetLabelGroup> = emptyList(),
 ) {
     val brandColor = parseBrandColor(judgment.brandColor) ?: MaterialTheme.colorScheme.primary
     Card(
@@ -337,7 +342,7 @@ internal fun CampaignJudgmentCard(
         // Row(IntrinsicSize.Min) + fillMaxHeight だと、バッジの FlowRow が折り返したときに
         // 2行目がカード高さからクリップされるため使わない
         Box {
-            CampaignJudgmentCardBody(judgment, brandColor, onExcludeStore)
+            CampaignJudgmentCardBody(judgment, brandColor, onExcludeStore, targetGroups)
             Box(Modifier.matchParentSize()) {
                 Box(
                     Modifier
@@ -356,6 +361,7 @@ private fun CampaignJudgmentCardBody(
     judgment: CampaignJudgment,
     brandColor: Color,
     onExcludeStore: (() -> Unit)? = null,
+    targetGroups: List<TargetLabelGroup> = emptyList(),
 ) {
     val campaign = judgment.campaign
     val uriHandler = LocalUriHandler.current
@@ -411,6 +417,10 @@ private fun CampaignJudgmentCardBody(
         if (campaign.paymentInstruction.isNotBlank()) {
             Text("お支払い方法：${campaign.paymentInstruction}", style = MaterialTheme.typography.bodyMedium)
         }
+        // 発行体束ね(#81)の詳細のみ: この施策の「対象のお店:」(率別グルーピング・折りたたみは
+        // #52 と共通)。行頭を「対象:」にすると eligible_notes の「対象：」と被るため区別し、
+        // 短くても常に枠の面に入れて注記の行に埋もれないようにする
+        TargetGroupLines(targetGroups, noRatePrefix = "対象のお店", alwaysFramed = true)
         EligibleNotesRows(judgment.eligibleNotes)
         judgment.warnings.forEach {
             NoticeRow(it, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
@@ -546,10 +556,15 @@ private fun BenefitDisplay(judgment: CampaignJudgment) {
     val label = formatBenefit(judgment.benefitType, judgment.effectiveRate, judgment.discountAmount) ?: return
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         // 断定に見せない修飾: 段階制(rate_rules)は rate_base = 最大値なので「最大」、
-        // 対象商品限定(product_scope)は全商品に効かないので「対象商品」を冠する
+        // 施策全体ビューで店舗別レートがばらつく施策(rateVariesByStore。#81)も表示は最大値なので
+        // 「最大」(定額表示のときは付けない)、対象商品限定(product_scope)は全商品に効かないので
+        // 「対象商品」を冠する
         val qualifier = listOfNotNull(
             "対象商品".takeIf { judgment.campaign.productScope != null },
-            "最大".takeIf { judgment.campaign.rateRules.isNotEmpty() },
+            "最大".takeIf {
+                judgment.campaign.rateRules.isNotEmpty() ||
+                    (judgment.rateVariesByStore && judgment.effectiveRate != null)
+            },
         ).joinToString("")
         if (qualifier.isNotEmpty()) {
             Text(

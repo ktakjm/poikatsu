@@ -55,6 +55,12 @@ data class CampaignJudgment(
      * ([allStoreListsExhaustive])で呼び出し側が設定する
      */
     val exhaustiveStoreList: Boolean = false,
+    /**
+     * effectiveRate が「店舗によって異なる率の最大値」か。施策全体ビュー(おトクタブの施策詳細)
+     * だけが [Campaign.storeRatesVary] で設定し、率表示に「最大」を冠する(#81)。
+     * お店タブ・地図(その店の実際の率を表示)は false のまま
+     */
+    val rateVariesByStore: Boolean = false,
 )
 
 /**
@@ -133,6 +139,15 @@ val Campaign.isTimeLimited: Boolean get() = periodEnd != null || mayEndEarly
 val Campaign.allStoreListsExhaustive: Boolean
     get() = merchantRules.isNotEmpty() &&
         merchantRules.all { it.officialStoreList?.listIsExhaustive == true }
+
+/**
+ * 店舗別レート(rate_override)が rate_base と併せて2値以上か。施策全体ビュー(おトクタブの
+ * 一覧・詳細)は最大値の率を表示するため、true なら「最大」を冠して一律の率と誤認されない
+ * ようにする(エポス提示優待のビッグエコー30%/ジャンカラ20%等)。お店タブ・地図の判定は
+ * その店の実際の率を出すので使わない。
+ */
+val Campaign.storeRatesVary: Boolean
+    get() = (merchantRules.mapNotNull { it.rateOverride } + listOfNotNull(rateBase)).distinct().size > 1
 
 /** [resolveCardCampaignRate] の結果。usesCardRate はウエル活注記の表示条件(カードの率を実際に出したか)に使う */
 data class ResolvedCardRate(

@@ -18,12 +18,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
@@ -36,16 +33,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.Merchant
-import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.domain.CampaignType
@@ -53,13 +46,11 @@ import com.ktakjm.poikatsu.domain.allStoreListsExhaustive
 import com.ktakjm.poikatsu.domain.campaignGroupKey
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.customCampaignBaseId
-import com.ktakjm.poikatsu.domain.formatBenefit
 import com.ktakjm.poikatsu.domain.isCustom
 import com.ktakjm.poikatsu.domain.isTargetDay
 import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.nextTargetDay
 import com.ktakjm.poikatsu.domain.recurrenceLabel
-import com.ktakjm.poikatsu.domain.trimRate
 import com.ktakjm.poikatsu.ui.theme.AppIcons
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningColor
@@ -296,8 +287,10 @@ private fun CampaignSummaryCard(
     onClick: () -> Unit,
 ) {
     val today = LocalDate.now()
-    val first = campaigns.first()
-    val title = campaignGroupDisplayTitle(first, merchants)
+    // 発行体束ね(#81): 同一カードの常設 card_program 複数施策は「{カード名} 優待・特典 N件」の
+    // 1カードにまとめ、内訳(施策名)はサブ行+タップ先の詳細で見せる
+    val bundle = isCardProgramBundle(campaigns)
+    val title = campaignGroupDisplayTitle(campaigns, merchants)
     val hasTimeLimited = campaigns.any { it.isTimeLimited }
     val maxBenefit = campaignGroupMaxBenefit(campaigns, personalRates)
 
@@ -347,21 +340,40 @@ private fun CampaignSummaryCard(
                             title,
                             style = MaterialTheme.typography.bodyLarge,
                         )
+                        if (bundle) {
+                            Text(
+                                "${campaigns.size}件",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                         if (campaigns.any { it.isCustom }) {
                             CustomCampaignBadge()
                         }
                         if (hasTimeLimited) {
                             TimeLimitedBadge()
                         }
-                        if (campaigns.any { it.presentationOnly }) {
-                            PresentationOnlyBadge()
+                        // 施策単位のバッジは発行体束ねでは出さない(一部の施策にしか当たらない
+                        // バッジをグループに付けると誤解を生む。#59 の注記混入と同種の問題。
+                        // 内訳のタップ先で施策ごとに従来どおり表示される)
+                        if (!bundle) {
+                            if (campaigns.any { it.presentationOnly }) {
+                                PresentationOnlyBadge()
+                            }
+                            if (campaigns.any { it.productScope != null }) {
+                                ProductScopeBadge()
+                            }
+                            if (campaigns.any { it.allStoreListsExhaustive }) {
+                                ExhaustiveStoreListBadge()
+                            }
                         }
-                        if (campaigns.any { it.productScope != null }) {
-                            ProductScopeBadge()
-                        }
-                        if (campaigns.any { it.allStoreListsExhaustive }) {
-                            ExhaustiveStoreListBadge()
-                        }
+                    }
+                    cardProgramBundleSubtitle(campaigns)?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                     if (periodLabel != null || daysInfo != null) {
                         Row(
@@ -447,6 +459,10 @@ internal fun CampaignDetail(
         .filter { it.storeScope == "managed" }
         .flatMap { c -> c.merchantRules.map { it.merchantId } }
         .distinct()
+    // 発行体束ね(#81)の詳細は「対象:」を最上部で合成せず各施策カード内に出す(複数施策の
+    // 対象を率別に混ぜると、どの対象がどの施策のものか読めない。ビッグエコーのように
+    // 同じチェーンが別条件で複数施策に登場すると特に)。最上部は地図ブリッジのボタンだけ残す
+    val bundle = isCardProgramBundle(campaigns)
     // 「対象:」の表示ラベル(業態対応の詳細は campaignTargetLabelGroups)。店舗別レートを持つ
     // 施策(J-POINT パートナー等)は率別にグルーピングして出す(#52。「最大10%」+全店列挙だと
     // 低率店も最大率と誤読されるため)。表示条件:
@@ -461,6 +477,7 @@ internal fun CampaignDetail(
     )
     val allLabelCount = allTargetGroups.sumOf { it.labels.size }
     val targetGroups = when {
+        bundle -> emptyList()
         allLabelCount >= 2 -> allTargetGroups
         campaigns.any { it.isCustom } -> allTargetGroups
         chainIds.singleOrNull()?.let { merchants[it]?.banners?.isNotEmpty() } == true -> allTargetGroups
@@ -504,16 +521,24 @@ internal fun CampaignDetail(
             }
         }
         items(judgments, key = { it.campaign.id }) { judgment ->
-            CampaignJudgmentCard(judgment)
+            CampaignJudgmentCard(
+                judgment,
+                // 束ね時はその施策の merchant_rules だけから「対象:」を作りカード内に出す。
+                // 対象が 1 チェーンでも省く条件(上の allLabelCount 判定)は適用しない——
+                // タイトルが「{カード名} 優待・特典」で対象がどこにも出なくなるため
+                targetGroups = if (bundle) {
+                    campaignTargetLabelGroups(
+                        listOf(judgment.campaign),
+                        merchants,
+                        storeRates[judgment.campaign.id].orEmpty(),
+                    )
+                } else {
+                    emptyList()
+                },
+            )
         }
     }
 }
-
-/** 対象チェーン列挙をこの件数以下ならそのまま全部出す(超えたら折りたたむ) */
-private const val TARGET_CHAINS_COLLAPSE_THRESHOLD = 6
-
-/** 折りたたみ時に見せる先頭チェーン数(残りは「他N」に畳む) */
-private const val TARGET_CHAINS_COLLAPSED_COUNT = 4
 
 /**
  * 対象チェーンの地図ブリッジ。主動線はお店タブと同じ FilledTonalButton(全チェーンで地図へ)。
@@ -545,19 +570,8 @@ private fun TargetChainSection(
             Spacer(Modifier.width(8.dp))
             Text(if (chainIds.size == 1) "近くのこのお店を探す" else "近くの対象のお店を探す")
         }
-        // 表示するグループの選別(単一チェーンの同梱施策では空になる等)は CampaignDetail 側で行う。
-        // 率別グループ(#52)は「{率}%: 」を行頭に付けて率ごとに行を分ける。複数グループのときは
-        // 全グループを 1 つの枠にまとめて一括で畳む(グループ行単位に畳むと、長いグループだけが
-        // 枠付きになり短いグループが枠外に見えて分断されるため)
-        when {
-            targetGroups.size == 1 -> targetGroups.single().let { group ->
-                TargetLabelLine(
-                    prefix = group.rate?.let { "${trimRate(it)}%" } ?: "対象",
-                    names = group.labels,
-                )
-            }
-            targetGroups.isNotEmpty() -> RateGroupedTargetLines(targetGroups)
-        }
+        // 表示するグループの選別(単一チェーンの同梱施策では空になる等)は CampaignDetail 側で行う
+        TargetGroupLines(targetGroups)
         if (!isTarget) {
             val note = if (!started) {
                 "開始前です。地図ではお店の場所のみ確認できます"
@@ -585,156 +599,7 @@ private fun TargetChainSection(
     }
 }
 
-/**
- * 率別グループが複数あるときの対象チェーン列挙(#52)。全グループを 1 つの面にまとめ、
- * どれかのグループが折りたたみ対象なら面全体をタップ可能(chevron 付き)にして一括で展開する。
- * 折りたたみ時も各グループの行と率は必ず見せる(先頭数件+「他N」)。全グループが短ければ
- * ただの面なしテキスト行にする(展開できない枠を出さない)。
- */
-@Composable
-private fun RateGroupedTargetLines(groups: List<TargetLabelGroup>) {
-    val needsFold = groups.any { it.labels.size > TARGET_CHAINS_COLLAPSE_THRESHOLD }
-    var expanded by remember(groups) { mutableStateOf(false) }
-
-    @Composable
-    fun groupTexts() {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            groups.forEach { group ->
-                val prefix = group.rate?.let { "${trimRate(it)}%" } ?: "対象"
-                val names = group.labels
-                val label = if (expanded || names.size <= TARGET_CHAINS_COLLAPSE_THRESHOLD) {
-                    "$prefix: ${names.joinToString("・")}"
-                } else {
-                    "$prefix: ${names.take(TARGET_CHAINS_COLLAPSED_COUNT).joinToString("・")} " +
-                        "他${names.size - TARGET_CHAINS_COLLAPSED_COUNT}"
-                }
-                Text(
-                    label,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-
-    if (!needsFold) {
-        groupTexts()
-        return
-    }
-    Surface(
-        onClick = { expanded = !expanded },
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .heightIn(min = 48.dp)
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-        ) {
-            Box(Modifier.weight(1f)) { groupTexts() }
-            Spacer(Modifier.width(8.dp))
-            Icon(
-                if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                contentDescription = if (expanded) "対象のお店を折りたたむ" else "対象のお店をすべて表示",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-    }
-}
-
-/**
- * 対象チェーン列挙の 1 行(単一グループの「対象: ◯◯・◯◯」)。
- * 多チェーン(SMCC/MUFG の常設プログラム等)は全列挙が長大になるため先頭だけ見せて畳む。
- * 展開できることが伝わるよう行全体をタップ可能な面(chevron 付き)にする。
- */
-@Composable
-private fun TargetLabelLine(prefix: String, names: List<String>) {
-    if (names.isEmpty()) return
-    if (names.size <= TARGET_CHAINS_COLLAPSE_THRESHOLD) {
-        Text(
-            "$prefix: ${names.joinToString("・")}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        return
-    }
-    var expanded by remember(names) { mutableStateOf(false) }
-    val label = if (expanded) {
-        "$prefix: ${names.joinToString("・")}"
-    } else {
-        "$prefix: ${names.take(TARGET_CHAINS_COLLAPSED_COUNT).joinToString("・")} " +
-            "他${names.size - TARGET_CHAINS_COLLAPSED_COUNT}"
-    }
-    Surface(
-        onClick = { expanded = !expanded },
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .heightIn(min = 48.dp)
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-        ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.width(8.dp))
-            Icon(
-                if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                contentDescription = if (expanded) "対象のお店を折りたたむ" else "対象のお店をすべて表示",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-    }
-}
-
 // ==================== 共通ヘルパー ====================
-
-/**
- * グループの最大還元率/特典テキスト(サマリーカード右側用)。抽選は比較に載せず「抽選」と表示する。
- * 表示する数字が「変動する率の最大値」のとき(店舗別 rate_override・条件別 rate_rules・
- * グループ内で率の異なる複数施策)と、対象商品限定(product_scope。全商品には効かない)のときは
- * 「最大」を冠し、一律の率と誤認されないようにする。
- * [personalRates] に載っている施策(所有カードの card_program)は rate_base の代わりに
- * ユーザー実効率(ウエル活込み)で出す(お店タブの判定と同じ値になる)。
- */
-private fun campaignGroupMaxBenefit(
-    campaigns: List<Campaign>,
-    personalRates: Map<String, Double> = emptyMap(),
-): String? {
-    val comparable = campaigns.filter { BenefitType.fromString(it.benefitType) != BenefitType.LOTTERY }
-    if (comparable.isEmpty()) return "抽選"
-    val type = BenefitType.fromString(comparable.first().benefitType)
-    val allRates = comparable.flatMap { c ->
-        // 所有カードの card_program はユーザー実効率が最大値(店舗別 rate_override はカードの
-        // クラス加算・1pt価値でこれ以下にスケールされる。#52)。収録値の rate_override を混ぜると
-        // 1pt価値 < 1円 等の設定時に実際より大きい「最大◯%」が出るため、実効率だけを使う
-        personalRates[c.id]?.let { return@flatMap listOf(it) }
-        c.merchantRules.mapNotNull { it.rateOverride } +
-            c.rateRules.map { it.rate } +
-            listOfNotNull(c.rateBase)
-    }
-    val maxRate = allRates.maxOrNull()
-    val maxDiscount = comparable.mapNotNull { it.discountAmount }.maxOrNull()
-    val label = formatBenefit(type, maxRate, maxDiscount)?.toString() ?: return null
-    // 店舗別レートのばらつきは personalRates で allRates を実効率 1 値に絞った後も検知できるよう
-    // 収録値(rate_override + rate_base)側で判定する
-    val storeRatesVary = comparable.any { c ->
-        (c.merchantRules.mapNotNull { it.rateOverride } + listOfNotNull(c.rateBase)).distinct().size > 1
-    }
-    val ratesVary = allRates.distinct().size > 1 || storeRatesVary ||
-        comparable.any { it.rateRules.isNotEmpty() || it.productScope != null }
-    return if (maxRate != null && ratesVary) "最大$label" else label
-}
 
 /** 一覧カードの期間ラベル。開始・終了とも無ければ「終了日未定」(「〜」だけの表示にしない) */
 private fun buildPeriodLabel(earliestStart: LocalDate?, latestEnd: LocalDate?): String {
