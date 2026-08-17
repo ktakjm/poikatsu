@@ -1,6 +1,6 @@
 {
-  "schema_version": 11,
-  "updated_at": "2026-08-16",
+  "schema_version": 12,
+  "updated_at": "2026-08-18",
   "campaigns": [
     {
       "id": "test_store_rate_program",
@@ -300,6 +300,27 @@
       "presentation_only": true,
       "detail_url": "https://example.com/presentation-only-campaign",
       "verified_date": "2026-08-16",
+      "merchant_rules": [
+        { "merchant_id": "test_depart" },
+        { "merchant_id": "test_super" }
+      ]
+    },
+    {
+      "id": "test_program_presentation",
+      "type": "card_program",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "テストプログラム運営会社",
+      "point_program_id": "test_program",
+      "name": "テストプログラム提示特典（会員証提示で3%還元・提示のみ）",
+      "payment_instruction": "テストプログラムの会員証を提示(支払いは任意の支払い方法でOK)",
+      "rate_base": 3.0,
+      "presentation_only": true,
+      "detail_url": "https://example.com/program-presentation-campaign",
+      "memo": [
+        "dポイント特約店の提示分(#39)相当のショーケース。設定→ポイント→テストプログラムの会員チェックONで並記枠に出る"
+      ],
+      "verified_date": "2026-08-18",
       "merchant_rules": [
         { "merchant_id": "test_depart" },
         { "merchant_id": "test_super" }

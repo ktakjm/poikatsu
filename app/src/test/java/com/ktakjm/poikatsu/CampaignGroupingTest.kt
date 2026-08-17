@@ -3,8 +3,10 @@ package com.ktakjm.poikatsu
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.domain.campaignGroupKey
+import com.ktakjm.poikatsu.ui.isCardProgramBundle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
@@ -73,6 +75,19 @@ class CampaignGroupingTest {
         val bundled = cardProgram("epos_yutai_a", cardId = "epos")
         val plain = cardProgram("epos", cardId = null)
         assertNotEquals(campaignGroupKey(plain), campaignGroupKey(bundled))
+    }
+
+    @Test
+    fun `常設のプログラム提示施策はプログラム単位で束なる`() {
+        // dポイント特約店の提示分(#39)が複数チェーン分に増えても、発行体束ね(#81)と同様に1カードへ畳む
+        fun program(id: String) = cardProgram(id, cardId = null)
+            .copy(pointProgramId = "dpoint", presentationOnly = true)
+        val a = program("dpoint_teiji_a")
+        val b = program("dpoint_teiji_b")
+        assertEquals(campaignGroupKey(a), campaignGroupKey(b))
+        assertNotEquals(campaignGroupKey(a), campaignGroupKey(cardProgram("epos_yutai_a")))
+        // 束ね表示(タイトル・内訳サブ行)もプログラム束ねを発行体束ねと同じ扱いにする
+        assertTrue(isCardProgramBundle(listOf(a, b)))
     }
 }
 

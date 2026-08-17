@@ -50,6 +50,8 @@ import com.ktakjm.poikatsu.domain.allStoreListsExhaustive
 import com.ktakjm.poikatsu.domain.allowsManualRate
 import com.ktakjm.poikatsu.domain.appLinks
 import com.ktakjm.poikatsu.domain.bestBenefitLabel
+import com.ktakjm.poikatsu.domain.boostedCampaignRate
+import com.ktakjm.poikatsu.domain.campaignRateBoosted
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.filterCampaignsByArea
 import com.ktakjm.poikatsu.domain.googlePayIneligibleWarning
@@ -61,6 +63,7 @@ import com.ktakjm.poikatsu.domain.isPrefectureWide
 import com.ktakjm.poikatsu.domain.isTargetDay
 import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.nextTargetDay
+import com.ktakjm.poikatsu.domain.payoutCurrency
 import com.ktakjm.poikatsu.domain.resolveCardCampaignRate
 import com.ktakjm.poikatsu.domain.storeRatesVary
 import com.ktakjm.poikatsu.domain.walletAppLink
@@ -201,6 +204,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          * 畳み表示+解除の導線に使う。
          */
         val excludedJudgments: List<CampaignJudgment> = emptyList(),
+        /**
+         * 提示のみ施策(カード現物提示 #80・プログラム会員提示 #39)。判定リストとは分けて
+         * 「あわせて提示」の並記枠に出す(支払い方法の選択肢ではないため)。
+         */
+        val presentationJudgments: List<CampaignJudgment> = emptyList(),
     )
 
     data class StoreCheckState(
@@ -443,6 +451,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val notificationTimeMinutes: Int = 8 * 60,
         /** 設定画面の「マイカード」用カタログ(未所有カードも含む全候補) */
         val cardSettings: List<CardSetting> = emptyList(),
+        val pointCurrencySettings: List<PointCurrencySetting> = emptyList(),
         /** 設定画面の「国際ブランド」用(カタログの card_brands 由来。常時表示) */
         val brandSettings: List<BrandSetting> = emptyList(),
         /** 設定画面の「QR 決済」用カタログ(payment_methods.json のカタログ + ユーザー差分) */
@@ -525,6 +534,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val enabled: Boolean,
     )
 
+    /**
+     * 設定画面「ポイント」1件分(#39)。会員チェック(membershipProgram の通貨のみ)と
+     * ポイント倍率チェック(pointMultiplier を持つ通貨のみ)を通貨単位で出す。
+     */
+    data class PointCurrencySetting(
+        val id: String,
+        val name: String,
+        /** プログラムの識別色(#RRGGBB)。名前の左のドット表示に使う */
+        val brandColor: String?,
+        /** 会員チェックを出すか(カード/アプリ提示の会員プログラムがある通貨) */
+        val membershipProgram: Boolean,
+        val member: Boolean,
+        /** ポイント倍率チェックの定義(null ならチェックを出さない) */
+        val pointMultiplier: PointMultiplier?,
+        val multiplierEnabled: Boolean,
+        /** 倍率が掛かるカード名(この通貨を稼ぐ所有カード)。有効時の「○○の還元率を×1.5で表示中」注記に使う */
+        val multiplierCardNames: List<String> = emptyList(),
+    )
+
     /** 設定画面のカード1枚分の表示・編集状態(payment_methods カタログ + ユーザー差分のマージ結果) */
     data class CardSetting(
         val cardId: String,
@@ -550,9 +578,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val showBrandPicker: Boolean,
         /** このカードの施策で優遇対象外になり得るブランド(ineligible_brands の全ルール集約)。設定画面の警告文に使う */
         val ineligibleBrands: List<String>,
-        /** ウエル活チェックの定義(null ならチェックを出さない) */
-        val pointMultiplier: PointMultiplier?,
-        val welcatsu: Boolean,
         /** カードクラスの選択肢(カタログ。JCB W/S 等)。空 = クラス概念なし(選択 UI を出さない) */
         val cardClasses: List<CardClass> = emptyList(),
         /** 選択中クラスの id(未選択はカタログ先頭=保守側) */
@@ -752,7 +777,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val ineligibleIds = displayName
             ?.let { exhaustiveListIneligibleCampaignIds(merchant, it) }
             ?: emptySet()
-        val result = judgeAll(merchant, LocalDate.now(), enabledQrIds(), bannerId, excludedIds, ineligibleIds)
+        val result = judgeAll(
+            merchant,
+            LocalDate.now(),
+            enabledQrIds(),
+            bannerId,
+            excludedIds,
+            ineligibleIds,
+            memberships = lastSettings.pointProgramMemberships,
+        )
         return Selection(
             merchant = merchant,
             judgments = result.judgments,
@@ -762,6 +795,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             storeNameHint = storeNameHint,
             displayName = displayName,
             excludedJudgments = result.excludedJudgments,
+            presentationJudgments = result.presentationJudgments,
         )
     }
 
@@ -782,19 +816,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val unrewarded = mutableListOf<String>()
         search(query, categories).forEach { hit ->
             // 業態ヒットはその業態としての判定(看板スコープ外の施策は数えない)
-            val result = judgeAll(hit.merchant, today, enabledQrIds(), hit.bannerId)
-            if (result.judgments.isEmpty()) {
+            val result = judgeAll(
+                hit.merchant,
+                today,
+                enabledQrIds(),
+                hit.bannerId,
+                memberships = lastSettings.pointProgramMemberships,
+            )
+            // 並記枠(提示のみ)しか無いチェーンも「特典あり」として一覧に残す
+            val visible = result.judgments + result.presentationJudgments
+            if (visible.isEmpty()) {
                 unrewarded += hit.bannerName ?: hit.merchant.name
                 return@forEach
             }
-            val allCampaigns = result.judgments.map { it.campaign }
+            val allCampaigns = visible.map { it.campaign }
             results += SearchResult(
                 merchant = hit.merchant,
                 bannerId = hit.bannerId,
                 bannerName = hit.bannerName,
                 bestBenefit = result.bestBenefitLabel(),
                 campaignCount = allCampaigns.distinctBy { it.id }.size,
-                brandColors = result.judgments.mapNotNull { it.brandColor }.distinct().take(3),
+                brandColors = visible.mapNotNull { it.brandColor }.distinct().take(3),
                 hasTimeLimited = allCampaigns.any { it.isTimeLimited },
             )
         }
@@ -824,6 +866,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             ownedBrands = settings.ownedBrands,
             customCards = settings.customCards,
             customCampaigns = settings.activeCustomCampaigns,
+            enabledPointMultipliers = settings.enabledPointMultipliers,
         )
         val newEngine = JudgmentEngine(merged.engineData)
         engine = newEngine
@@ -843,26 +886,45 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val campaignsActive = applyAreaFilter(newEngine.activeCampaigns(today))
         val campaignsUpcoming = applyAreaFilter(newEngine.upcomingCampaigns(today))
         // おトクタブ一覧の表示レートをお店タブと同じ基準(resolveCardCampaignRate)にする:
-        // 所有カードの card_program はユーザー実効率(ウエル活込み)で出す。載らない施策
-        // (promotion・未所有カード・QR/自治体)は従来どおり施策側の率のまま
+        // 所有カードの card_program はユーザー実効率(ウエル活込み)で出す。施策側の率を使う施策も、
+        // 払い出し通貨の倍率が有効なら掛けた値にする(#39。お店タブの judgeCards/judgeQr と同じ基準)。
+        // どちらにも載らない施策(未所有カード・倍率なしの QR/自治体)は従来どおり施策側の率のまま
+        val mergedCurrencies = merged.engineData.pointCurrencies
+        val qrPaymentsById = loaded.data.qrPayments.associateBy { it.id }
+        val payoutCurrencyOf = { c: Campaign ->
+            payoutCurrency(c, mergedCurrencies, c.cardId?.let { newOwnedCardsById[it] }, qrPaymentsById[c.paymentMethodId])
+        }
         val campaignPersonalRates = (campaignsActive + campaignsUpcoming)
-            .filter { it.cardId != null }
             .mapNotNull { c ->
-                val resolved = resolveCardCampaignRate(c, newOwnedCardsById[c.cardId])
-                if (resolved.usesCardRate) c.id to (resolved.effectiveRate ?: 0.0) else null
+                val resolved = if (c.cardId != null) resolveCardCampaignRate(c, newOwnedCardsById[c.cardId]) else null
+                val usesCardRate = resolved?.usesCardRate == true
+                val rate = resolved?.effectiveRate ?: c.rateBase
+                when {
+                    usesCardRate -> c.id to (resolved?.effectiveRate ?: 0.0)
+                    campaignRateBoosted(rate, usesCardRate = false, currency = payoutCurrencyOf(c)) ->
+                        c.id to boostedCampaignRate(rate, usesCardRate = false, currency = payoutCurrencyOf(c))!!
+                    else -> null
+                }
             }
             .toMap()
         // 施策詳細の率別グルーピング用(#52): 店舗別レート(rate_override)を持つ施策の
         // merchant_id → 実効率。お店タブの判定と同じ基準(resolveCardCampaignRate)で解決するため、
         // 所有カードの card_program はクラス加算・1pt価値を合成した値、未所有・QR は収録値そのまま
+        // (施策側の率には払い出し通貨の倍率を合成する。#39)
         val campaignStoreRates = (campaignsActive + campaignsUpcoming)
             .filter { c -> c.storeScope == "managed" && c.merchantRules.any { it.rateOverride != null } }
             .associate { c ->
+                val currency = payoutCurrencyOf(c)
                 c.id to c.merchantRules.mapNotNull { r ->
-                    val rate = if (c.cardId != null) {
-                        resolveCardCampaignRate(c, newOwnedCardsById[c.cardId], r.rateOverride).effectiveRate
+                    val resolved = if (c.cardId != null) {
+                        resolveCardCampaignRate(c, newOwnedCardsById[c.cardId], r.rateOverride)
                     } else {
-                        r.rateOverride ?: c.rateBase
+                        null
+                    }
+                    val rate = if (resolved != null) {
+                        boostedCampaignRate(resolved.effectiveRate, resolved.usesCardRate, currency)
+                    } else {
+                        boostedCampaignRate(r.rateOverride ?: c.rateBase, usesCardRate = false, currency = currency)
                     }
                     rate?.let { r.merchantId to it }
                 }.toMap()
@@ -913,8 +975,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // あるカードだけ選択 UI を出す(単一ブランド製品は固定なので出さない)
                 showBrandPicker = brandAffectsJudgment && card.brands.size > 1,
                 ineligibleBrands = ineligibleBrands,
-                pointMultiplier = card.pointMultiplier,
-                welcatsu = ov?.welcatsu ?: false,
                 cardClasses = card.cardClasses,
                 cardClassId = selectedClass?.id,
                 pointValueConfig = card.pointValueConfig,
@@ -945,6 +1005,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
 
+        // 設定画面「ポイント」(#39): 会員チェック or 倍率チェックのどちらかを出せる通貨だけ並べる
+        // (どちらも無い通貨は設定の余地が無いため行自体を出さない)
+        val pointCurrencySettings = loaded.data.pointCurrencies
+            .filter { it.membershipProgram || it.pointMultiplier != null }
+            .map { currency ->
+                PointCurrencySetting(
+                    id = currency.id,
+                    name = currency.name,
+                    brandColor = currency.brandColor,
+                    membershipProgram = currency.membershipProgram,
+                    member = currency.id in settings.pointProgramMemberships,
+                    pointMultiplier = currency.pointMultiplier,
+                    multiplierEnabled = currency.id in settings.enabledPointMultipliers,
+                    multiplierCardNames = merged.engineData.cards
+                        .filter { it.pointCurrencyId == currency.id }
+                        .map { it.cardName },
+                )
+            }
+
         _state.update {
             val searchOutcome = newEngine.searchRewarded(it.query, it.selectedCategories)
             it.copy(
@@ -971,6 +1050,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 notificationsEnabled = settings.notificationsEnabled,
                 notificationTimeMinutes = settings.notificationTimeMinutes,
                 cardSettings = cardSettings,
+                pointCurrencySettings = pointCurrencySettings,
                 brandSettings = brandSettings,
                 qrPaymentSettings = qrPaymentSettings,
                 customCards = settings.customCards,
@@ -1252,13 +1332,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val excludedIds =
                     engine.excludedCampaignIdsFor(merchant, poi.name, lastSettings.activeExcludedStorePairs)
                 val ineligibleIds = engine.exhaustiveListIneligibleCampaignIds(merchant, poi.name)
-                val result = engine.judgeAll(merchant, today, qrIds, match.bannerId, excludedIds, ineligibleIds)
+                val result = engine.judgeAll(
+                    merchant,
+                    today,
+                    qrIds,
+                    match.bannerId,
+                    excludedIds,
+                    ineligibleIds,
+                    memberships = lastSettings.pointProgramMemberships,
+                )
+                // 並記枠(提示のみ)しか無い店も「特典あり」としてピンを出す
+                val visible = result.judgments + result.presentationJudgments
                 // 判定なしは通常出さないが、チェーン絞り込み中(ブリッジ由来)の merchant は
                 // 非対象日の場所確認用に残す(bestBenefit なし=還元率ラベルなしで表示)。
                 // ただし網羅リストで対象外と確定した店(ineligibleIds に間引かれた店。#64)は
                 // 下見の意味が無いため、明示対象外(isExcludedStore)と同様ブリッジ中でも出さない
                 // (施策詳細から「近くの対象のお店を探す」と全国の非対象店が並んでしまう。#70)
-                if (result.judgments.isEmpty() && (merchant.id !in filterIds || ineligibleIds.isNotEmpty())) {
+                if (visible.isEmpty() && (merchant.id !in filterIds || ineligibleIds.isNotEmpty())) {
                     if (merchant.id in filterIds && ineligibleIds.isNotEmpty()) {
                         ineligibleHidden += "${merchant.id}:${engine.normalizedBranch(merchant, poi.name)}"
                     }
@@ -1270,7 +1360,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     return@mapNotNull null
                 }
                 record(matchLabel, DebugPoiStatus.SHOWN)
-                val allCampaigns = result.judgments.map { it.campaign }
+                val allCampaigns = visible.map { it.campaign }
                 NearbyPlace(
                     name = poi.name,
                     distanceMeters = GeoMath.distanceMeters(originLat, originLon, poi.lat, poi.lon),
@@ -1280,7 +1370,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     bestBenefit = result.bestBenefitLabel(),
                     lat = poi.lat,
                     lon = poi.lon,
-                    brandColors = result.judgments.mapNotNull { it.brandColor }.distinct(),
+                    brandColors = visible.mapNotNull { it.brandColor }.distinct(),
                     hasTimeLimited = allCampaigns.any { it.isTimeLimited },
                 )
             }
@@ -1347,16 +1437,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val excludedIds =
                 engine.excludedCampaignIdsFor(merchant, place.name, settings.activeExcludedStorePairs)
             val ineligibleIds = engine.exhaustiveListIneligibleCampaignIds(merchant, place.name)
-            val result = engine.judgeAll(merchant, today, qrIds, place.bannerId, excludedIds, ineligibleIds)
+            val result = engine.judgeAll(
+                merchant,
+                today,
+                qrIds,
+                place.bannerId,
+                excludedIds,
+                ineligibleIds,
+                memberships = settings.pointProgramMemberships,
+            )
+            val visible = result.judgments + result.presentationJudgments
             // 網羅リストの対象外店はブリッジ中でも残さない(loadNearbyAround と同基準。#70)
-            if (result.judgments.isEmpty() && (merchant.id !in filterIds || ineligibleIds.isNotEmpty())) {
+            if (visible.isEmpty() && (merchant.id !in filterIds || ineligibleIds.isNotEmpty())) {
                 if (merchant.id in filterIds && ineligibleIds.isNotEmpty()) ineligibleHidden++
                 return@mapNotNull null
             }
             place.copy(
                 bestBenefit = result.bestBenefitLabel(),
-                brandColors = result.judgments.mapNotNull { it.brandColor }.distinct(),
-                hasTimeLimited = result.judgments.any { it.campaign.isTimeLimited },
+                brandColors = visible.mapNotNull { it.brandColor }.distinct(),
+                hasTimeLimited = visible.any { it.campaign.isTimeLimited },
             )
         }
         // プレビュー中の店は再計算後のインスタンスへ差し替え、消えた店ならプレビューを閉じる
@@ -1972,14 +2071,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val todayIsTarget = isTargetDay(campaign, today)
             // カード施策の率はお店タブと同じ基準(resolveCardCampaignRate)で解決する:
             // 所有カードの card_program はユーザー実効率(ウエル活込み)、未所有は施策側の率へ
-            // フォールバック。QR・自治体・ブランド施策(cardId 無し)は従来どおり施策側の率
+            // フォールバック。QR・自治体・ブランド施策(cardId 無し)は従来どおり施策側の率。
+            // 施策側の率には払い出し通貨の倍率が有効なら掛ける(#39。judgeCards/judgeQr と同じ基準)
             val ownedCard = campaign.cardId?.let { ownedCardsById[it] }
             val resolved = if (campaign.cardId != null) resolveCardCampaignRate(campaign, ownedCard) else null
-            val effectiveRate = if (resolved != null) resolved.effectiveRate else campaign.rateBase
+            val usesCardRate = resolved?.usesCardRate == true
+            val currency = payoutCurrency(
+                campaign,
+                catalog?.pointCurrencies.orEmpty(),
+                ownedCard,
+                qr,
+            )
+            val effectiveRate = boostedCampaignRate(
+                if (resolved != null) resolved.effectiveRate else campaign.rateBase,
+                usesCardRate,
+                currency,
+            )
+            // 提示施策(point_program_id)のバッジはプログラム名(dポイント等)を出す
+            val programName = campaign.pointProgramId?.let { id ->
+                catalog?.pointCurrencies?.firstOrNull { it.id == id }?.name
+            }
             CampaignJudgment(
                 campaign = campaign,
                 // ブランド施策はイシュアー不問なので、バッジは運営者でなくブランド名を出す
-                badgeLabel = qr?.name ?: campaign.cardBrand ?: campaign.operator,
+                badgeLabel = qr?.name ?: campaign.cardBrand ?: programName ?: campaign.operator,
                 // 未所有カードの施策もおトクタブには出るため、色は全カタログから引く
                 brandColor = catalog?.brandColorOf(campaign),
                 benefitType = benefitType,
@@ -2006,10 +2121,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 storeSearchUrl = if (campaign.storeScope == "external") campaign.storeSearchUrl else null,
                 detailUrl = campaign.detailUrl,
                 appLinks = qr?.appLinks.orEmpty().ifEmpty { listOfNotNull(campaign.walletAppLink) },
-                // judgeCards と同じ条件: 倍率バッジは所有カードなら出す(ブランド施策は cardId が
-                // 無いため自然に出ない)。「実質還元率」注記はカードの実効率を実際に表示したときだけ
-                pointMultiplier = ownedCard?.pointMultiplier,
-                welcatsuApplied = ownedCard?.welcatsuApplied == true && resolved?.usesCardRate == true,
+                // judgeCards/judgeQr と同じ条件(#39): 倍率バッジは払い出し通貨が倍率を持てば出す。
+                // 「実質還元率」注記は倍率が実際に掛かった率を表示したときだけ
+                pointMultiplier = currency?.pointMultiplier,
+                welcatsuApplied = (ownedCard?.welcatsuApplied == true && usesCardRate) ||
+                    campaignRateBoosted(
+                        if (resolved != null) resolved.effectiveRate else campaign.rateBase,
+                        usesCardRate,
+                        currency,
+                    ),
                 mayEndEarly = campaign.mayEndEarly,
                 todayIsTarget = todayIsTarget,
                 nextTargetDate = if (todayIsTarget) null else nextTargetDay(campaign, today),
@@ -2215,8 +2335,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onSetCardBrand(cardId: String, brand: String) =
         viewModelScope.launch { settingsRepo.setBrand(cardId, brand) }
 
-    fun onSetCardWelcatsu(cardId: String, enabled: Boolean) =
-        viewModelScope.launch { settingsRepo.setWelcatsu(cardId, enabled) }
+    fun onSetPointMultiplierEnabled(currencyId: String, enabled: Boolean) =
+        viewModelScope.launch { settingsRepo.setPointMultiplierEnabled(currencyId, enabled) }
+
+    fun onSetPointProgramMembership(currencyId: String, member: Boolean) =
+        viewModelScope.launch { settingsRepo.setPointProgramMembership(currencyId, member) }
 
     fun onSetCardClass(cardId: String, cardClass: String) =
         viewModelScope.launch { settingsRepo.setCardClass(cardId, cardClass) }

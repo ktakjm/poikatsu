@@ -259,8 +259,22 @@ data class Campaign(
     val operator: String,
     /** 紐づくカード(payment_methods.json の cards.id)。card_program / promotion で使い、card_brand / payment_method_id と排他 */
     @SerialName("card_id") val cardId: String? = null,
-    /** ブランド施策(イシュアー不問。例: Amex 30% OFF)の対象ブランド。card_id / payment_method_id と排他 */
+    /** ブランド施策(イシュアー不問。例: Amex 30% OFF)の対象ブランド。card_id / payment_method_id / point_program_id と排他 */
     @SerialName("card_brand") val cardBrand: String? = null,
+    /**
+     * プログラム会員提示型施策(dポイントカード提示 +3% 等。#39)の帰属先プログラム
+     * (point_currencies.id)。カード所有でなく「プログラムの会員かどうか」に紐づく施策の第4の帰属で、
+     * card_id / card_brand / payment_method_id と排他。指定時は presentation_only: true が必須
+     * (提示型専用の帰属。整合性テストで強制)。会員かどうかはユーザー設定(point_program_memberships)
+     */
+    @SerialName("point_program_id") val pointProgramId: String? = null,
+    /**
+     * rebate の払い出し通貨(point_currencies.id。#39)。ポイント倍率(ウエル活等)の適用判定に使う。
+     * 未指定時の解決: card_id 施策はカードの通貨、QR 施策はサービスの通貨、提示型はプログラム自体を
+     * 継承する。card_brand 施策は継承元が無いため明示必須(未指定なら倍率適用なし)。
+     * discount(即時割引)・lottery には通貨の概念が無い
+     */
+    @SerialName("point_currency_id") val pointCurrencyId: String? = null,
     val name: String,
     /**
      * おトクタブのカード表示用の短いタイトル(任意)。実質、多チェーン promotion 専用
@@ -319,10 +333,10 @@ data class Campaign(
     /** 事前エントリーしないと還元されない施策(楽天ペイ×花王等)。判定詳細に警告を出す */
     @SerialName("requires_entry") val requiresEntry: Boolean = false,
     /**
-     * カード現物の「提示のみ」で受けられる特典(エポス優待等。#80)。支払いは別の決済手段でも
-     * 対象のため、最良比較(bestOption)から分離し「提示のみ」バッジ+注記を出す。帰属(card_id)は
-     * 「提示にはカード現物の所有が必要」の意味でそのまま維持する。ポイントプログラム会員の
-     * 提示(dポイントカード等。所有と無関係)はここでは表現できない(#39 が受け皿)。
+     * 「提示のみ」で受けられる特典(#80)。カード現物提示(エポス優待等。帰属は card_id =
+     * 「提示にはカード現物の所有が必要」)と、プログラム会員証の提示(dポイントカード等。#39。
+     * 帰属は point_program_id)の両方で使う。支払いは別の決済手段でも対象のため、判定リストから
+     * 「あわせて提示」の並記枠(presentationJudgments)に分離し、最良比較(bestOption)にも載せない。
      * 提示分と決済分は別施策として分離して起こす(mapping.md「提示と決済の分離」)
      */
     @SerialName("presentation_only") val presentationOnly: Boolean = false,
@@ -353,9 +367,9 @@ data class CampaignsFile(
 )
 
 /**
- * ポイント価値の倍率(例: 三井住友カードの V ポイントはウエル活で 1.5 倍価値)。
- * 設定画面でこのカードに表示するチェック(label)、判定カードに出すバッジ(badgeLabel)・
- * 適用時注記(appliedNote)をデータ側に持たせ、UI に特定施策名をハードコードしない。
+ * ポイント価値の倍率(例: V ポイントはウエル活で 1.5 倍価値)。ポイント通貨([PointCurrency])の
+ * 価値特性としてデータ側に持たせ、UI に特定施策名をハードコードしない。設定画面「ポイント」に
+ * 出すチェック(label)、判定カードに出すバッジ(badgeLabel)・適用時注記(appliedNote)を持つ。
  */
 @Serializable
 data class PointMultiplier(
@@ -398,6 +412,32 @@ data class PointValueConfig(
     val note: String = "",
 )
 
+/**
+ * ポイント通貨・プログラム 1 件(payment_methods.json の point_currencies。#39)。
+ * 「Vポイント」「dポイント」のようなエンティティを、通貨価値(point_multiplier の帰属先)と
+ * 会員プログラム(提示型施策 point_program_id の帰属先)の両面で表す 1 つのマスタ行。
+ * カード・QR は point_currency_id でこの通貨を「稼ぐ手段」として参照する。
+ * ユーザー差分(倍率の有効/無効・会員かどうか)は DataStore に分離する(カタログと同じ構図)。
+ */
+@Serializable
+data class PointCurrency(
+    /** 通貨の識別子(例: "vpoint")。cards/qr_payments/campaigns の各 point_currency_id と campaigns の point_program_id から参照される */
+    val id: String,
+    val name: String,
+    /** プログラムの識別色(#RRGGBB)。提示型施策(point_program_id)のストライプ/バッジ/地図ピンに使う */
+    @SerialName("brand_color") val brandColor: String? = null,
+    /**
+     * カード/アプリ提示の会員プログラムがあるか(dポイント・Ponta 等)。true の通貨だけ
+     * 設定画面「ポイント」に会員チェックを出す(PayPayポイントのように提示の仕組みが無い通貨に
+     * 意味のないトグルを出さない)
+     */
+    @SerialName("membership_program") val membershipProgram: Boolean = false,
+    /** ポイント価値の倍率(ウエル活等)。null = 倍率の概念なし */
+    @SerialName("point_multiplier") val pointMultiplier: PointMultiplier? = null,
+    /** 実行時フラグ: ユーザーがこの通貨の倍率表示を有効にしているか。マージで設定し JSON には現れない */
+    @Transient val multiplierEnabled: Boolean = false,
+)
+
 @Serializable
 data class PaymentCard(
     /** カードの識別子(例: "smcc")。campaigns.json の card_id と DataStore card_overrides のキーから参照される */
@@ -414,7 +454,8 @@ data class PaymentCard(
      */
     val brands: List<String> = emptyList(),
     @SerialName("effective_rate_default") val effectiveRateDefault: Double? = null,
-    @SerialName("point_multiplier") val pointMultiplier: PointMultiplier? = null,
+    /** このカードが稼ぐポイント通貨(point_currencies.id)。null = 通貨マスタ未収録(倍率等の概念なし) */
+    @SerialName("point_currency_id") val pointCurrencyId: String? = null,
     /**
      * カードクラスの選択肢(例: JCB CARD W / S)。空 = クラス概念なし(通常のカード)。
      * どれを持っているかは CardOverride.cardClass(DataStore)で、未選択は先頭(保守側)扱い。
@@ -463,6 +504,8 @@ data class QrPayment(
     @SerialName("app_packages") val appPackages: List<QrAppPackage> = emptyList(),
     @SerialName("store_search_label") val storeSearchLabel: String = "",
     @SerialName("enabled_default") val enabledDefault: Boolean = false,
+    /** このサービスが稼ぐポイント通貨(point_currencies.id)。null = 通貨マスタ未収録 */
+    @SerialName("point_currency_id") val pointCurrencyId: String? = null,
 )
 
 /** 決済手段カタログ(payment_methods.json)。カードと QR 決済のマスタで、ユーザー差分は DataStore に持つ */
@@ -478,6 +521,8 @@ data class PaymentMethodsFile(
      */
     @SerialName("card_brands") val cardBrands: List<CardBrand> = emptyList(),
     @SerialName("qr_payments") val qrPayments: List<QrPayment> = emptyList(),
+    /** ポイント通貨・プログラムのマスタ(#39)。cards/qr_payments の point_currency_id から参照される */
+    @SerialName("point_currencies") val pointCurrencies: List<PointCurrency> = emptyList(),
 )
 
 // ==================== 自治体マスタ(municipalities.json) ====================
@@ -551,12 +596,14 @@ data class PoikatsuData(
     val cards: List<PaymentCard> = emptyList(),
     val cardBrands: List<CardBrand> = emptyList(),
     val qrPayments: List<QrPayment> = emptyList(),
+    val pointCurrencies: List<PointCurrency> = emptyList(),
     val updatedAt: String,
     val yolpConfig: YolpConfig? = null,
 ) {
     /**
-     * 施策の識別色。発行体(カード / ブランド / QR)のカタログから引く。施策側に色を持たせないのは、
-     * 同一発行体の施策間で色がぶれる(例: 三井住友の2種の緑が混在する)のを防ぐため。
+     * 施策の識別色。発行体(カード / ブランド / QR / ポイントプログラム)のカタログから引く。
+     * 施策側に色を持たせないのは、同一発行体の施策間で色がぶれる(例: 三井住友の2種の緑が
+     * 混在する)のを防ぐため。
      */
     fun brandColorOf(campaign: Campaign): String? = when {
         campaign.cardId != null -> cards.firstOrNull { it.id == campaign.cardId }?.brandColor
@@ -564,6 +611,8 @@ data class PoikatsuData(
             cardBrands.firstOrNull { it.name.equals(campaign.cardBrand, ignoreCase = true) }?.color
         campaign.paymentMethodId != null ->
             qrPayments.firstOrNull { it.id == campaign.paymentMethodId }?.brandColor
+        campaign.pointProgramId != null ->
+            pointCurrencies.firstOrNull { it.id == campaign.pointProgramId }?.brandColor
         else -> null
     }
 }
@@ -584,6 +633,7 @@ object PoikatsuJson {
             cards = paymentMethodsFile.cards,
             cardBrands = paymentMethodsFile.cardBrands,
             qrPayments = paymentMethodsFile.qrPayments,
+            pointCurrencies = paymentMethodsFile.pointCurrencies,
             updatedAt = campaignsFile.updatedAt,
             yolpConfig = merchantsFile.yolpConfig,
         )

@@ -90,6 +90,7 @@ class CampaignNotificationWorker(
             ownedBrands = settings.ownedBrands,
             customCards = settings.customCards,
             customCampaigns = settings.activeCustomCampaigns,
+            enabledPointMultipliers = settings.enabledPointMultipliers,
         )
         val targets = notificationTargets(
             campaigns = merged.engineData.campaigns,
@@ -97,6 +98,7 @@ class CampaignNotificationWorker(
             enabledQrIds = settings.enabledQrPaymentIds,
             registeredAreas = settings.registeredAreas,
             master = master,
+            memberships = settings.pointProgramMemberships,
         )
         val notified = settingsRepo.notifiedCampaignKeys()
         val items = planCampaignNotifications(targets, LocalDate.now())

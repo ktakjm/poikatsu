@@ -5,6 +5,7 @@ import com.ktakjm.poikatsu.data.ExcludedStorePair
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.PaymentCard
+import com.ktakjm.poikatsu.data.PointCurrency
 import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.QrPayment
@@ -198,6 +199,48 @@ fun resolveCardCampaignRate(
 }
 
 /**
+ * rebate 施策の払い出し通貨の解決(#39)。優先順:
+ * 1. 施策の明示(point_currency_id)
+ * 2. プログラム帰属(point_program_id。提示施策はプログラム自体が払い出し先)
+ * 3. card_id 施策 → カードの通貨(card_brand 施策で resolveCard がブランド一致で返すカードは
+ *    「支払いに使うカード」であって払い出し元ではないため継承しない=明示必須)
+ * 4. QR 施策 → サービスの通貨
+ * rebate 以外(discount=即時割引・lottery)には通貨の概念が無いため常に null。
+ * judgeCards/judgeQr(お店・地図)とおトクタブの施策詳細(MainViewModel)で共有する。
+ */
+fun payoutCurrency(
+    campaign: Campaign,
+    currencies: List<PointCurrency>,
+    card: PaymentCard?,
+    qr: QrPayment? = null,
+): PointCurrency? {
+    if (BenefitType.fromString(campaign.benefitType) != BenefitType.REBATE) return null
+    val id = campaign.pointCurrencyId
+        ?: campaign.pointProgramId
+        ?: (if (campaign.cardId != null) card?.pointCurrencyId else null)
+        ?: (if (campaign.paymentMethodId != null) qr?.pointCurrencyId else null)
+        ?: return null
+    return currencies.firstOrNull { it.id == id }
+}
+
+/**
+ * 施策側の率にポイント倍率(ウエル活等)を適用する(#39)。#35 B-1 の「promotion の率には
+ * ウエル活を掛けない」は、払い出し通貨が分かるなら掛けるのが正しい(Vポイント払いの 15% は
+ * ウエル活で実質 22.5%)に原理的に置き換わった。カードの実効率(usesCardRate)はマージ
+ * (UserDataMerge)で適用済みのため二重適用しない。
+ */
+fun boostedCampaignRate(rate: Double?, usesCardRate: Boolean, currency: PointCurrency?): Double? {
+    if (rate == null || usesCardRate) return rate
+    val factor = currency?.takeIf { it.multiplierEnabled }?.pointMultiplier?.factor ?: return rate
+    return rate * factor
+}
+
+/** [boostedCampaignRate] が実際に倍率を掛けたか(welcatsuApplied=適用時注記の表示条件)を同じ基準で返す */
+fun campaignRateBoosted(rate: Double?, usesCardRate: Boolean, currency: PointCurrency?): Boolean =
+    rate != null && !usesCardRate &&
+        currency?.multiplierEnabled == true && currency.pointMultiplier != null
+
+/**
  * card_program の店舗別レート(rate_override。基準構成=カタログ既定クラス・1pt=既定価値の絶対%で
  * 収録)に、ユーザー設定を合成した実効率。クラス加算はポイント数の加算なので価値の乗算より先に足す:
  * (店舗別レート + クラス加算) × (1pt価値 × ウエル活倍率)。
@@ -348,6 +391,12 @@ data class JudgmentResult(
      * (黙って消すと「施策がどこに行ったか」が分からない)。bestOption・一覧の集計には含まれない。
      */
     val excludedJudgments: List<CampaignJudgment> = emptyList(),
+    /**
+     * 提示のみ施策(presentation_only。カード現物提示 #80・プログラム会員提示 #39)。
+     * 支払い方法の選択肢ではない(提示しつつ別の高還元手段で払うのが最適解)ため、判定リストと
+     * 分けて「あわせて提示」の並記枠に出し、bestOption の比較にも載せない。
+     */
+    val presentationJudgments: List<CampaignJudgment> = emptyList(),
 )
 
 /**
@@ -361,12 +410,13 @@ data class JudgmentResult(
  */
 fun JudgmentResult.bestBenefitLabel(): BenefitLabel? {
     bestOption?.let { return formatBenefit(it.benefitType, it.rate, it.discountAmount) }
-    judgments.filter { it.campaign.productScope == null && !it.campaign.presentationOnly }
+    judgments.filter { it.campaign.productScope == null }
         .firstNotNullOfOrNull { formatBenefit(it.benefitType, it.effectiveRate, it.discountAmount) }
         ?.let { return it }
-    // 最良比較から分離した施策しか無いチェーン。judgeAll のソート先頭(率の高い順)を採り、
-    // 付記はその施策のフラグで選ぶ(両立時はより限定の強い「対象商品」を優先)
-    return judgments.firstNotNullOfOrNull { j ->
+    // 最良比較から分離した施策しか無いチェーン(対象商品限定・提示のみ=並記枠)。
+    // judgeAll のソート先頭(率の高い順)を採り、付記はその施策のフラグで選ぶ
+    // (両立時はより限定の強い「対象商品」を優先)
+    return (judgments + presentationJudgments).firstNotNullOfOrNull { j ->
         formatBenefit(j.benefitType, j.effectiveRate, j.discountAmount)?.let { it to j.campaign }
     }?.let { (label, campaign) ->
         val note = if (campaign.productScope != null) "(対象商品)" else "(提示のみ)"
@@ -762,21 +812,25 @@ class JudgmentEngine(private val data: PoikatsuData) {
                 // 率の優先基準(promotion=施策の率 / card_program=カードの実効率、定額・率なし
                 // promotion は率を出さない)は resolveCardCampaignRate に集約(おトクタブと共有)
                 val resolved = resolveCardCampaignRate(campaign, card, rule.rateOverride)
-                // ブランド施策はどのカード会社のカードでも使えるため、バッジは特定カード名でなく
-                // ブランド名(Visa 等)を出す。ポイント倍率もカード固有の話なので出さない
-                val isBrandCampaign = campaign.cardBrand != null
+                // ポイント倍率は払い出し通貨の価値特性(#39): 施策側の率を採用したときも通貨が
+                // 分かれば掛ける。カードの実効率にはマージで適用済み(boostedCampaignRate は
+                // usesCardRate なら素通し)。card_brand 施策は明示(point_currency_id)が無い限り
+                // 通貨が解決されず、倍率もバッジも自然に出ない
+                val currency = payoutCurrency(campaign, data.pointCurrencies, card)
                 buildJudgment(
                     campaign = campaign,
                     merchant = merchant,
                     rule = rule,
+                    // ブランド施策はどのカード会社のカードでも使えるため、バッジは特定カード名でなく
+                    // ブランド名(Visa 等)を出す
                     badgeLabel = campaign.cardBrand ?: card.cardName,
-                    effectiveRate = resolved.effectiveRate,
+                    effectiveRate = boostedCampaignRate(resolved.effectiveRate, resolved.usesCardRate, currency),
                     discountAmount = campaign.discountAmount,
-                    pointMultiplier = card.pointMultiplier.takeUnless { isBrandCampaign },
-                    // ウエル活倍率はカードの実効率にだけ掛かっている。施策側の率を採用したときや
-                    // カードの率を使わない定額施策で「ウエル活利用時の実質還元率」の注記が出ると
-                    // 誤りなのでフラグを落とす(=カードの率を実際に表示したときだけ true)
-                    welcatsuApplied = card.welcatsuApplied && resolved.usesCardRate && !isBrandCampaign,
+                    pointMultiplier = currency?.pointMultiplier,
+                    // 「実質還元率」の適用時注記は、倍率が実際に掛かった率を表示したときだけ出す:
+                    // カードの実効率(マージで適用済み)を出したか、施策側の率にここで掛けたか
+                    welcatsuApplied = (card.welcatsuApplied && resolved.usesCardRate) ||
+                        campaignRateBoosted(resolved.effectiveRate, resolved.usesCardRate, currency),
                     // Google Pay が還元対象と公式が明記している施策だけウォレット起動リンクを出す
                     appLinks = listOfNotNull(campaign.walletAppLink),
                     today = today,
@@ -800,16 +854,55 @@ class JudgmentEngine(private val data: PoikatsuData) {
             .mapNotNull { campaign ->
                 val rule = campaign.ruleFor(merchant, bannerId) ?: return@mapNotNull null
                 val qr = qrPaymentMap[campaign.paymentMethodId] ?: return@mapNotNull null
+                // QR の rebate もサービスが稼ぐ通貨の倍率が有効なら掛ける(#39)
+                val currency = payoutCurrency(campaign, data.pointCurrencies, card = null, qr = qr)
+                val rate = rule.rateOverride ?: campaign.rateBase
                 buildJudgment(
                     campaign = campaign,
                     merchant = merchant,
                     rule = rule,
                     badgeLabel = qr.name,
-                    effectiveRate = rule.rateOverride ?: campaign.rateBase,
+                    effectiveRate = boostedCampaignRate(rate, usesCardRate = false, currency = currency),
                     discountAmount = campaign.discountAmount,
-                    pointMultiplier = null,
-                    welcatsuApplied = false,
+                    pointMultiplier = currency?.pointMultiplier,
+                    welcatsuApplied = campaignRateBoosted(rate, usesCardRate = false, currency = currency),
                     appLinks = qr.appLinks,
+                    today = today,
+                )
+            }
+
+    /**
+     * プログラム会員提示型施策(point_program_id。#39)の判定を返す。dポイントカード提示 +3% のような
+     * 「カード所有でなくプログラム会員かどうか」に紐づく施策で、会員登録済み(memberships)の
+     * プログラムのものだけ判定する(所有カードのフィルタと同じ opt-in の構図)。
+     * presentation_only 必須(整合性テストで強制)のため、judgeAll で並記枠へ振り分けられる。
+     */
+    fun judgePrograms(
+        merchant: Merchant,
+        today: LocalDate,
+        memberships: Set<String>,
+        bannerId: String? = null,
+    ): List<CampaignJudgment> =
+        data.campaigns
+            .filter { campaignStatus(it, today) == CampaignStatus.ACTIVE && isTargetDay(it, today) }
+            .filter { it.storeScope == "managed" }
+            .filter { it.pointProgramId != null && it.pointProgramId in memberships }
+            .mapNotNull { campaign ->
+                val rule = campaign.ruleFor(merchant, bannerId) ?: return@mapNotNull null
+                val program = data.pointCurrencies.firstOrNull { it.id == campaign.pointProgramId }
+                    ?: return@mapNotNull null
+                val currency = payoutCurrency(campaign, data.pointCurrencies, card = null)
+                val rate = rule.rateOverride ?: campaign.rateBase
+                buildJudgment(
+                    campaign = campaign,
+                    merchant = merchant,
+                    rule = rule,
+                    badgeLabel = program.name,
+                    effectiveRate = boostedCampaignRate(rate, usesCardRate = false, currency = currency),
+                    discountAmount = campaign.discountAmount,
+                    pointMultiplier = currency?.pointMultiplier,
+                    welcatsuApplied = campaignRateBoosted(rate, usesCardRate = false, currency = currency),
+                    appLinks = emptyList(),
                     today = today,
                 )
             }
@@ -822,6 +915,8 @@ class JudgmentEngine(private val data: PoikatsuData) {
      * storeIneligibleCampaignIds は網羅リスト由来の店舗対象外(#64。
      * [exhaustiveListIneligibleCampaignIds] で算出)。ユーザー登録と違い解除の概念が無いため、
      * excludedJudgments には載せず看板スコープ外と同じ扱いで黙って間引く。
+     * memberships は会員登録済みのポイントプログラム id(#39。提示型施策のフィルタ)。
+     * 提示のみ施策(presentation_only)は判定リストと分けて presentationJudgments(並記枠)で返す。
      */
     fun judgeAll(
         merchant: Merchant,
@@ -830,17 +925,23 @@ class JudgmentEngine(private val data: PoikatsuData) {
         bannerId: String? = null,
         excludedCampaignIds: Set<String> = emptySet(),
         storeIneligibleCampaignIds: Set<String> = emptySet(),
+        memberships: Set<String> = emptySet(),
     ): JudgmentResult {
-        val all = (judgeCards(merchant, today, bannerId) + judgeQr(merchant, today, enabledQrIds, bannerId))
+        val all = (
+            judgeCards(merchant, today, bannerId) +
+                judgeQr(merchant, today, enabledQrIds, bannerId) +
+                judgePrograms(merchant, today, memberships, bannerId)
+            )
             .filterNot { it.campaign.id in storeIneligibleCampaignIds }
             .sortedWith(
                 compareBy<CampaignJudgment> { it.discountAmount != null }
                     .thenByDescending { it.effectiveRate ?: 0.0 }
                     .thenByDescending { it.discountAmount ?: 0 },
             )
-        val (excluded, active) = all.partition { it.campaign.id in excludedCampaignIds }
+        val (excluded, remaining) = all.partition { it.campaign.id in excludedCampaignIds }
+        val (presentation, active) = remaining.partition { it.campaign.presentationOnly }
         val bestOption = determineBest(active)
-        return JudgmentResult(active, bestOption, excluded)
+        return JudgmentResult(active, bestOption, excluded, presentation)
     }
 
     /**
@@ -871,9 +972,9 @@ class JudgmentEngine(private val data: PoikatsuData) {
     private fun determineBest(judgments: List<CampaignJudgment>): BestPaymentOption? {
         // 抽選は確定還元でないため比較に載せない(buildJudgment で率を null にしているが意図を明示)。
         // 対象商品限定(product_scope)も店の全商品には効かないため載せない(対象商品を買わない人に
-        // 「この店は30%」と誤提示しないため。#43)。提示のみ(presentation_only)も載せない:
-        // 「最大おトク率: エポスカード10% OFF」は「エポスで払え」に読めるが、実際の最適解は
-        // 「提示しつつ別の高還元手段で払う」のため(#80)
+        // 「この店は30%」と誤提示しないため。#43)。提示のみ(presentation_only)は judgeAll で
+        // 並記枠(presentationJudgments)へ分離済みだが、意図(「最大おトク率: エポスカード10% OFF」は
+        // 「エポスで払え」に読める。#80)の明示と防御を兼ねてここでも外す
         val best = judgments
             .filter { it.benefitType != BenefitType.LOTTERY }
             .filter { it.campaign.productScope == null && !it.campaign.presentationOnly }

@@ -24,5 +24,8 @@ fun campaignGroupKey(campaign: Campaign): String = when {
     campaign.isCustom -> customCampaignBaseId(campaign.id)
     campaign.campaignType == CampaignType.CARD_PROGRAM && campaign.cardId != null && !campaign.isTimeLimited ->
         "cardProgram:" + campaign.cardId
+    // 常設のプログラム提示施策(#39)もプログラム単位に束ねる(発行体単位の束ねと同じ理由)
+    campaign.campaignType == CampaignType.CARD_PROGRAM && campaign.pointProgramId != null && !campaign.isTimeLimited ->
+        "pointProgram:" + campaign.pointProgramId
     else -> campaign.id
 }

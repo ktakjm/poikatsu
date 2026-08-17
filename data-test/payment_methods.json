@@ -1,11 +1,26 @@
 {
-  "schema_version": 8,
-  "updated_at": "2026-08-16",
+  "schema_version": 9,
+  "updated_at": "2026-08-18",
   "card_brands": [
     { "name": "Visa", "color": "#1A1F71" },
     { "name": "Mastercard", "color": "#EB001B" },
     { "name": "JCB", "color": "#005BAC" },
     { "name": "Amex", "color": "#016FD0" }
+  ],
+  "point_currencies": [
+    {
+      "id": "test_point",
+      "name": "テストポイント",
+      "brand_color": "#0F3F8F",
+      "membership_program": false,
+      "point_multiplier": { "label": "テスト倍率デーで表示(ウエル活相当)", "factor": 1.5, "color": "#00A0E9", "badge_label": "倍率デー利用可", "applied_note": "還元率は倍率デー利用時の実質還元率" }
+    },
+    {
+      "id": "test_program",
+      "name": "テストプログラム",
+      "brand_color": "#8E24AA",
+      "membership_program": true
+    }
   ],
   "cards": [
     {
@@ -13,7 +28,8 @@
       "card_name": "テストカード",
       "brand_color": "#4CAF50",
       "brands": ["Visa"],
-      "effective_rate_default": 7.0
+      "effective_rate_default": 7.0,
+      "point_currency_id": "test_point"
     },
     {
       "id": "test_brand_card",

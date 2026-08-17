@@ -12,6 +12,7 @@ import com.ktakjm.poikatsu.data.OfficialStoreList
 import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.PointValueConfig
+import com.ktakjm.poikatsu.data.PointCurrency
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.ProductScope
@@ -37,6 +38,8 @@ import com.ktakjm.poikatsu.domain.nextTargetDay
 import com.ktakjm.poikatsu.domain.recurrenceLabel
 import com.ktakjm.poikatsu.domain.resolveCardCampaignRate
 import com.ktakjm.poikatsu.util.JapaneseText
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -598,6 +601,7 @@ class JudgmentEngineTest {
         campaign: Campaign,
         cards: List<PaymentCard> = listOf(testCard),
         qrPayments: List<QrPayment> = emptyList(),
+        pointCurrencies: List<PointCurrency> = emptyList(),
     ): JudgmentEngine =
         JudgmentEngine(
             PoikatsuData(
@@ -605,6 +609,7 @@ class JudgmentEngineTest {
                 campaigns = listOf(campaign),
                 cards = cards,
                 qrPayments = qrPayments,
+                pointCurrencies = pointCurrencies,
                 updatedAt = "2026-06-01",
             ),
         )
@@ -935,10 +940,7 @@ class JudgmentEngineTest {
             rateBase = null,
             discountAmount = 500,
         ).copy(id = "d500")
-        val welcatsuCard = testCard.copy(
-            pointMultiplier = PointMultiplier(label = "ウエル活", factor = 1.5),
-            welcatsuApplied = true,
-        )
+        val welcatsuCard = testCard.copy(pointCurrencyId = "vp", welcatsuApplied = true)
         val engine = JudgmentEngine(
             PoikatsuData(
                 merchants = listOf(testMerchant),
@@ -947,6 +949,7 @@ class JudgmentEngineTest {
                     welcatsuCard,
                     PaymentCard(id = "low_rate_card", cardName = "低率カード", effectiveRateDefault = 1.0),
                 ),
+                pointCurrencies = listOf(vpointLike),
                 updatedAt = "2026-06-01",
             ),
         )
@@ -1134,9 +1137,12 @@ class JudgmentEngineTest {
             ),
         )
         val result = engine.judgeAll(testMerchant, today)
-        // 判定カードには両方出るが、「最良」は決済で受けられる7%。提示のみ10% OFFを最良にすると
-        // 「このカードで払え」に読め、実際の最適解(提示しつつ別の高還元手段で払う)と矛盾する
-        assertEquals(2, result.judgments.size)
+        // 提示のみ施策は支払い方法の選択肢ではないため、判定リストから「あわせて提示」の並記枠
+        // (presentationJudgments)へ分離する(#39 で様式統一)。「最良」は決済で受けられる7%。
+        // 提示のみ10% OFFを最良にすると「このカードで払え」に読め、実際の最適解
+        // (提示しつつ別の高還元手段で払う)と矛盾する
+        assertEquals(listOf("base"), result.judgments.map { it.campaign.id })
+        assertEquals(listOf("teiji10"), result.presentationJudgments.map { it.campaign.id })
         assertEquals(7.0, result.bestOption!!.rate!!, 0.001)
         assertEquals("7% 還元", result.bestBenefitLabel().toString())
     }
@@ -1150,6 +1156,7 @@ class JudgmentEngineTest {
         val engine = periodTestEngine(presentation)
         val result = engine.judgeAll(testMerchant, today)
         assertNull(result.bestOption)
+        assertTrue(result.judgments.isEmpty())
         assertEquals("10% OFF(提示のみ)", result.bestBenefitLabel().toString())
     }
 
@@ -1164,6 +1171,156 @@ class JudgmentEngineTest {
         val resolved = resolveCardCampaignRate(presentation, testCard.copy(effectiveRateDefault = 0.5))
         assertEquals(10.0, resolved.effectiveRate!!, 0.001)
         assertFalse(resolved.usesCardRate)
+    }
+
+    // ---- ポイント通貨マスタ(point_currencies。#39)のテスト ----
+
+    private val testMultiplier = PointMultiplier(
+        label = "ウエル活利用時の還元率を表示",
+        factor = 1.5,
+        badgeLabel = "ウエル活利用可",
+        appliedNote = "還元率はウエル活利用時の実質還元率",
+    )
+    private val vpointLike = PointCurrency(
+        id = "vp",
+        name = "テストVポイント",
+        pointMultiplier = testMultiplier,
+        multiplierEnabled = true,
+    )
+
+    @Test
+    fun `promotionの率にも払い出し通貨の倍率が掛かる`() {
+        // #35 B-1「promotion の率にはウエル活を掛けない」の原理的置き換え(#39):
+        // 払い出し通貨が分かるなら掛けるのが正しい(Vポイント払いの15%はウエル活で実質22.5%)
+        val promo = campaignWithPeriod(type = CampaignType.PROMOTION, rateBase = 15.0)
+        val engine = periodTestEngine(
+            promo,
+            cards = listOf(testCard.copy(pointCurrencyId = "vp")),
+            pointCurrencies = listOf(vpointLike),
+        )
+        val judgment = engine.judgeAll(testMerchant, today).judgments.single()
+        assertEquals(22.5, judgment.effectiveRate!!, 1e-9)
+        assertTrue(judgment.welcatsuApplied)
+        assertEquals("ウエル活利用可", judgment.pointMultiplier?.badgeLabel)
+    }
+
+    @Test
+    fun `倍率が無効なら施策の率はそのまま(バッジは出る)`() {
+        val promo = campaignWithPeriod(type = CampaignType.PROMOTION, rateBase = 15.0)
+        val engine = periodTestEngine(
+            promo,
+            cards = listOf(testCard.copy(pointCurrencyId = "vp")),
+            pointCurrencies = listOf(vpointLike.copy(multiplierEnabled = false)),
+        )
+        val judgment = engine.judgeAll(testMerchant, today).judgments.single()
+        assertEquals(15.0, judgment.effectiveRate!!, 1e-9)
+        assertFalse(judgment.welcatsuApplied)
+        assertNotNull("倍率を持つ通貨で払い出される事実は無効時もバッジで示す", judgment.pointMultiplier)
+    }
+
+    @Test
+    fun `card_brand施策は明示のpoint_currency_idがあるときだけ倍率が掛かる`() {
+        // 継承元が無いため明示必須: resolveCard がブランド一致で返すカードは「支払いに使うカード」で
+        // 払い出し元ではない(報酬通貨は施策が決める)
+        val visaCard = testCard.copy(brand = "Visa", pointCurrencyId = "vp")
+        fun judge(campaign: Campaign) = periodTestEngine(
+            campaign,
+            cards = listOf(visaCard),
+            pointCurrencies = listOf(vpointLike),
+        ).judgeAll(testMerchant, today).judgments.single()
+
+        val explicit = campaignWithPeriod(type = CampaignType.PROMOTION, cardId = null, cardBrand = "Visa", rateBase = 15.0)
+            .copy(pointCurrencyId = "vp")
+        assertEquals(22.5, judge(explicit).effectiveRate!!, 1e-9)
+
+        val implicit = campaignWithPeriod(type = CampaignType.PROMOTION, cardId = null, cardBrand = "Visa", rateBase = 15.0)
+        val judgment = judge(implicit)
+        assertEquals("カードの通貨は継承しない", 15.0, judgment.effectiveRate!!, 1e-9)
+        assertNull(judgment.pointMultiplier)
+        assertFalse(judgment.welcatsuApplied)
+    }
+
+    @Test
+    fun `QR施策の率にも払い出し通貨の倍率が掛かる`() {
+        val qr = QrPayment(id = "qr1", name = "テストペイ", brandColor = "#000000", pointCurrencyId = "vp")
+        val promo = campaignWithPeriod(type = CampaignType.PROMOTION, cardId = null, paymentMethodId = "qr1", rateBase = 10.0)
+        val engine = periodTestEngine(promo, cards = emptyList(), qrPayments = listOf(qr), pointCurrencies = listOf(vpointLike))
+        val judgment = engine.judgeAll(testMerchant, today, setOf("qr1")).judgments.single()
+        assertEquals(15.0, judgment.effectiveRate!!, 1e-9)
+        assertTrue(judgment.welcatsuApplied)
+    }
+
+    @Test
+    fun `カードの実効率には倍率を二重適用しない`() {
+        // マージ後を模す: 実効率 10.5 = 7.0 × 1.5 適用済み(UserDataMerge)
+        val mergedCard = testCard.copy(effectiveRateDefault = 10.5, welcatsuApplied = true, pointCurrencyId = "vp")
+        val program = campaignWithPeriod(rateBase = 7.0)
+        val engine = periodTestEngine(program, cards = listOf(mergedCard), pointCurrencies = listOf(vpointLike))
+        val judgment = engine.judgeAll(testMerchant, today).judgments.single()
+        assertEquals(10.5, judgment.effectiveRate!!, 1e-9)
+        assertTrue(judgment.welcatsuApplied)
+    }
+
+    @Test
+    fun `即時割引の施策には通貨の倍率が掛からない`() {
+        // discount は即時割引=ポイント払い出しが無いため通貨の概念がない
+        val discount = campaignWithPeriod(type = CampaignType.PROMOTION, benefitType = BenefitType.DISCOUNT, rateBase = 10.0)
+        val engine = periodTestEngine(
+            discount,
+            cards = listOf(testCard.copy(pointCurrencyId = "vp")),
+            pointCurrencies = listOf(vpointLike),
+        )
+        val judgment = engine.judgeAll(testMerchant, today).judgments.single()
+        assertEquals(10.0, judgment.effectiveRate!!, 1e-9)
+        assertFalse(judgment.welcatsuApplied)
+        assertNull(judgment.pointMultiplier)
+    }
+
+    // ---- プログラム会員提示施策(point_program_id。#39)のテスト ----
+
+    private val testProgram = PointCurrency(
+        id = "dp",
+        name = "テストdポイント",
+        brandColor = "#E60033",
+        membershipProgram = true,
+    )
+    private val programPresentation = campaignWithPeriod(cardId = null, rateBase = 3.0)
+        .copy(id = "dp_teiji", pointProgramId = "dp", presentationOnly = true)
+
+    @Test
+    fun `プログラム提示施策は会員のときだけ並記枠に出る`() {
+        val engine = periodTestEngine(programPresentation, cards = emptyList(), pointCurrencies = listOf(testProgram))
+        val member = engine.judgeAll(testMerchant, today, memberships = setOf("dp"))
+        assertTrue(member.judgments.isEmpty())
+        val judgment = member.presentationJudgments.single()
+        assertEquals("dp_teiji", judgment.campaign.id)
+        assertEquals("テストdポイント", judgment.badgeLabel)
+        assertEquals("#E60033", judgment.brandColor)
+        assertEquals(3.0, judgment.effectiveRate!!, 1e-9)
+        assertNull("提示施策は最良比較に載せない", member.bestOption)
+        assertEquals("3% 還元(提示のみ)", member.bestBenefitLabel().toString())
+
+        val nonMember = engine.judgeAll(testMerchant, today)
+        assertTrue(nonMember.judgments.isEmpty())
+        assertTrue(nonMember.presentationJudgments.isEmpty())
+    }
+
+    @Test
+    fun `プログラム提示施策は決済施策と共存し最良は決済側から選ぶ`() {
+        val base = campaignWithPeriod(rateBase = 7.0).copy(id = "base")
+        val engine = JudgmentEngine(
+            PoikatsuData(
+                merchants = listOf(testMerchant),
+                campaigns = listOf(base, programPresentation),
+                cards = listOf(testCard.copy(effectiveRateDefault = 7.0)),
+                pointCurrencies = listOf(testProgram),
+                updatedAt = "2026-06-01",
+            ),
+        )
+        val result = engine.judgeAll(testMerchant, today, memberships = setOf("dp"))
+        assertEquals(listOf("base"), result.judgments.map { it.campaign.id })
+        assertEquals(listOf("dp_teiji"), result.presentationJudgments.map { it.campaign.id })
+        assertEquals(7.0, result.bestOption!!.rate!!, 0.001)
     }
 
     @Test
@@ -1515,13 +1672,69 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
-    fun `実データ_施策の帰属はcard_id_card_brand_payment_method_idのちょうど1つ`() {
+    fun `実データ_施策の帰属は4種のうちちょうど1つ`() {
         data.campaigns.forEach { c ->
-            val owners = listOfNotNull(c.cardId, c.cardBrand, c.paymentMethodId)
+            val owners = listOfNotNull(c.cardId, c.cardBrand, c.paymentMethodId, c.pointProgramId)
             assertEquals(
-                "${c.id}: card_id(${c.cardId}) / card_brand(${c.cardBrand}) / payment_method_id(${c.paymentMethodId}) はちょうど1つが non-null",
+                "${c.id}: card_id(${c.cardId}) / card_brand(${c.cardBrand}) / " +
+                    "payment_method_id(${c.paymentMethodId}) / point_program_id(${c.pointProgramId}) は" +
+                    "ちょうど1つが non-null",
                 1,
                 owners.size,
+            )
+        }
+    }
+
+    @Test
+    fun `実データ_ポイント通貨の参照が正しい`() {
+        val currencyIds = data.pointCurrencies.map { it.id }.toSet()
+        assertTrue("point_currencies が未収録", currencyIds.isNotEmpty())
+        data.cards.mapNotNull { c -> c.pointCurrencyId?.let { c.id to it } }.forEach { (cardId, cur) ->
+            assertTrue("cards '$cardId': point_currency_id '$cur' が point_currencies に無い", cur in currencyIds)
+        }
+        data.qrPayments.mapNotNull { q -> q.pointCurrencyId?.let { q.id to it } }.forEach { (qrId, cur) ->
+            assertTrue("qr_payments '$qrId': point_currency_id '$cur' が point_currencies に無い", cur in currencyIds)
+        }
+        data.campaigns.forEach { c ->
+            c.pointCurrencyId?.let {
+                assertTrue("${c.id}: point_currency_id '$it' が point_currencies に無い", it in currencyIds)
+            }
+            c.pointProgramId?.let {
+                assertTrue("${c.id}: point_program_id '$it' が point_currencies に無い", it in currencyIds)
+            }
+        }
+    }
+
+    @Test
+    fun `実データ_プログラム帰属の施策はpresentation_only必須`() {
+        // point_program_id は提示型専用の帰属(#39)。決済型をプログラムに帰属させると
+        // 判定エンジンが「どの支払い方法か」を解決できない
+        data.campaigns.filter { it.pointProgramId != null }.forEach { c ->
+            assertTrue("${c.id}: point_program_id 指定の施策は presentation_only: true が必須", c.presentationOnly)
+        }
+    }
+
+    @Test
+    fun `実データ_ウエル活の倍率はVポイント通貨に定義されSMCCが稼ぐ`() {
+        // 旧 cards[].point_multiplier(#39 で通貨マスタへ正規化)の挙動維持を実データで検証する
+        val vpoint = data.pointCurrencies.firstOrNull { it.id == "vpoint" }
+        assertNotNull("point_currencies に vpoint が無い", vpoint)
+        assertEquals(1.5, vpoint!!.pointMultiplier!!.factor, 0.0)
+        assertEquals("vpoint", data.cards.first { it.id == "smcc" }.pointCurrencyId)
+    }
+
+    @Test
+    fun `実データ_カード直下に旧point_multiplierが残っていない`() {
+        // #39 で cards[].point_multiplier → point_currencies[].point_multiplier へ移設。
+        // ignoreUnknownKeys のため旧位置のキーはパース時に黙って捨てられる(静かに壊れる)ので構造で検出する
+        val root = kotlinx.serialization.json.Json.parseToJsonElement(
+            File("../data/payment_methods.json").readText(),
+        ).jsonObject
+        root.getValue("cards").jsonArray.forEach { card ->
+            val obj = card.jsonObject
+            assertTrue(
+                "cards '${obj["id"]}': 旧スキーマのキー point_multiplier が残っている(point_currencies へ移す)",
+                "point_multiplier" !in obj,
             )
         }
     }
@@ -2095,10 +2308,13 @@ class TestDataIntegrityTest {
     fun `テストデータ_施策の帰属の参照と排他が正しい`() {
         val cardIds = data.cards.map { it.id }.toSet()
         val qrIds = data.qrPayments.map { it.id }.toSet()
+        val currencyIds = data.pointCurrencies.map { it.id }.toSet()
         data.campaigns.forEach { c ->
-            val owners = listOfNotNull(c.cardId, c.cardBrand, c.paymentMethodId)
+            val owners = listOfNotNull(c.cardId, c.cardBrand, c.paymentMethodId, c.pointProgramId)
             assertEquals(
-                "${c.id}: card_id(${c.cardId}) / card_brand(${c.cardBrand}) / payment_method_id(${c.paymentMethodId}) はちょうど1つが non-null",
+                "${c.id}: card_id(${c.cardId}) / card_brand(${c.cardBrand}) / " +
+                    "payment_method_id(${c.paymentMethodId}) / point_program_id(${c.pointProgramId}) は" +
+                    "ちょうど1つが non-null",
                 1,
                 owners.size,
             )
@@ -2110,7 +2326,18 @@ class TestDataIntegrityTest {
                 )
             }
             c.paymentMethodId?.let { assertTrue("${c.id}: payment_method_id '$it' が qr_payments に無い", it in qrIds) }
+            c.pointProgramId?.let {
+                assertTrue("${c.id}: point_program_id '$it' が point_currencies に無い", it in currencyIds)
+                assertTrue("${c.id}: point_program_id 指定の施策は presentation_only: true が必須", c.presentationOnly)
+            }
+            c.pointCurrencyId?.let {
+                assertTrue("${c.id}: point_currency_id '$it' が point_currencies に無い", it in currencyIds)
+            }
         }
+        (data.cards.mapNotNull { it.pointCurrencyId } + data.qrPayments.mapNotNull { it.pointCurrencyId })
+            .forEach { cur ->
+                assertTrue("point_currency_id '$cur' が point_currencies に無い", cur in currencyIds)
+            }
     }
 
     @Test
@@ -2243,6 +2470,29 @@ class TestDataIntegrityTest {
         assertEquals(CampaignType.CARD_PROGRAM, showcase.campaignType)
         assertNull("常設(期間なし)で安定させる", showcase.periodEnd)
         assertNotNull("提示特典の率が必要(定率でないと率分岐を検証できない)", showcase.rateBase)
+    }
+
+    @Test
+    fun `テストデータ_ポイント通貨とプログラム提示のショーケースを含む`() {
+        // ウエル活相当(倍率付き通貨)と会員プログラム(dポイント特約店の提示分相当)を実機で確認できる形(#39)
+        assertTrue(
+            "倍率付き通貨のショーケースが必要(設定画面のポイント倍率チェック・倍率適用の実機確認用)",
+            data.pointCurrencies.any { it.pointMultiplier != null },
+        )
+        assertTrue(
+            "会員プログラムのショーケースが必要(設定画面の会員チェックの実機確認用)",
+            data.pointCurrencies.any { it.membershipProgram },
+        )
+        assertTrue(
+            "倍率付き通貨を稼ぐカードが必要(実効率×倍率の実機確認用)",
+            data.cards.any { card ->
+                data.pointCurrencies.any { it.id == card.pointCurrencyId && it.pointMultiplier != null }
+            },
+        )
+        val program = data.campaigns.first { it.pointProgramId != null }
+        assertTrue("プログラム提示ショーケースは presentation_only", program.presentationOnly)
+        assertNull("常設(期間なし)で安定させる", program.periodEnd)
+        assertNotNull("提示特典の率が必要(並記枠の率表示の実機確認用)", program.rateBase)
     }
 
     @Test
@@ -2492,6 +2742,71 @@ class CardClassMergeTest {
     fun `クラス持ちカードの手入力レートも無視される`() {
         val card = merged(mapOf("jcb" to CardOverride(rate = 1.0)))
         assertEquals(10.0, card.effectiveRateDefault!!, 0.0)
+    }
+}
+
+/**
+ * ポイント通貨マスタ(point_currencies。#39)のマージ(UserDataMerge)。
+ * ウエル活等の倍率は通貨の価値特性で、有効/無効はユーザー設定
+ * (enabled_point_multipliers: Set<通貨id>)から通貨単位で決まる。
+ */
+class PointCurrencyMergeTest {
+
+    private val vpoint = PointCurrency(
+        id = "vp",
+        name = "テストVポイント",
+        pointMultiplier = PointMultiplier(label = "ウエル活利用時の還元率を表示", factor = 1.5),
+    )
+    private val smccLike = PaymentCard(
+        id = "smcc",
+        cardName = "テストカード",
+        effectiveRateDefault = 7.0,
+        pointCurrencyId = "vp",
+    )
+
+    private fun merged(enabled: Set<String>, currencies: List<PointCurrency> = listOf(vpoint)) = mergeUserData(
+        PoikatsuData(
+            merchants = emptyList(),
+            campaigns = emptyList(),
+            cards = listOf(smccLike),
+            pointCurrencies = currencies,
+            updatedAt = "",
+        ),
+        cardOverrides = emptyMap(),
+        ownedBrands = emptySet(),
+        customCards = emptyList(),
+        customCampaigns = emptyList(),
+        enabledPointMultipliers = enabled,
+    )
+
+    @Test
+    fun `倍率を有効にすると通貨を稼ぐカードの実効率に掛かる`() {
+        val card = merged(setOf("vp")).engineData.cards.single()
+        assertEquals(10.5, card.effectiveRateDefault!!, 1e-9)
+        assertTrue(card.welcatsuApplied)
+        assertEquals(1.5, card.rateMultiplier, 1e-9)
+    }
+
+    @Test
+    fun `倍率が無効なら等倍`() {
+        val card = merged(emptySet()).engineData.cards.single()
+        assertEquals(7.0, card.effectiveRateDefault!!, 0.0)
+        assertFalse(card.welcatsuApplied)
+        assertEquals(1.0, card.rateMultiplier, 0.0)
+    }
+
+    @Test
+    fun `マージ後の通貨マスタに有効フラグが立ちエンジンへ渡る`() {
+        assertTrue(merged(setOf("vp")).engineData.pointCurrencies.single().multiplierEnabled)
+        assertFalse(merged(emptySet()).engineData.pointCurrencies.single().multiplierEnabled)
+    }
+
+    @Test
+    fun `倍率定義の無い通貨は有効にしても何も起きない`() {
+        val noMultiplier = listOf(vpoint.copy(pointMultiplier = null))
+        val result = merged(setOf("vp"), currencies = noMultiplier)
+        assertEquals(7.0, result.engineData.cards.single().effectiveRateDefault!!, 0.0)
+        assertFalse(result.engineData.pointCurrencies.single().multiplierEnabled)
     }
 }
 

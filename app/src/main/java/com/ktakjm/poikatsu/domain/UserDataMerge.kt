@@ -31,8 +31,19 @@ fun mergeUserData(
     ownedBrands: Set<String>,
     customCards: List<CustomCard>,
     customCampaigns: List<CustomCampaign>,
+    enabledPointMultipliers: Set<String> = emptySet(),
 ): MergedUserData {
     val baseCards = base.cards
+
+    // ポイント通貨マスタ(#39): 倍率(ウエル活等)の有効/無効はユーザー設定(通貨 id の Set)から
+    // 通貨単位で決まる。有効フラグを立てた通貨マスタをエンジン・表示の両方へ渡し、
+    // 施策側の率への倍率適用(judgeCards/judgeQr)とバッジ表示が同じ状態を参照するようにする
+    val currencyById = base.pointCurrencies.associateBy { it.id }
+    val mergedCurrencies = base.pointCurrencies.map { currency ->
+        currency.copy(
+            multiplierEnabled = currency.pointMultiplier != null && currency.id in enabledPointMultipliers,
+        )
+    }
 
     // エンジン用: 所有カードのみ、上書きを反映したカード一覧。
     // 実ブランドはユーザー設定(CardOverride.brand)が唯一の情報源で、カタログが単一ブランド製品の
@@ -46,8 +57,11 @@ fun mergeUserData(
         // カードは保存済みの手入力値が残っていても無視する(allowsManualRate 参照)
         val manualRate = ov?.rate?.takeIf { card.allowsManualRate(base.campaigns) }
         val rawRate = manualRate ?: card.effectiveRateDefault
-        val welcatsuOn = ov?.welcatsu == true && card.pointMultiplier != null
-        val factor = if (welcatsuOn) card.pointMultiplier?.factor ?: 1.0 else 1.0
+        // ポイント倍率(ウエル活等)は通貨の価値特性(#39): このカードが稼ぐ通貨の倍率が
+        // 有効なら実効率に掛ける。同じ通貨を稼ぐカードが複数あっても設定は通貨単位の1箇所
+        val multiplierDef = card.pointCurrencyId?.let { currencyById[it] }?.pointMultiplier
+        val welcatsuOn = multiplierDef != null && card.pointCurrencyId in enabledPointMultipliers
+        val factor = if (welcatsuOn) multiplierDef?.factor ?: 1.0 else 1.0
         // カードクラス(JCB W/S 等): 未選択はカタログ先頭(保守側=加算の小さい方)を既定にする。
         // 1pt 価値(J-POINT の 0.7〜1円等): 実効率と店舗別レートの両方に掛かる乗数。
         // クラス加算はポイント数の加算なので、価値の乗算より先に足す: (率 + 加算) × 価値
@@ -108,12 +122,14 @@ fun mergeUserData(
         cards = mergedCards + customPaymentCards + brandCards,
         merchants = mergedMerchants,
         campaigns = mergedCampaigns,
+        pointCurrencies = mergedCurrencies,
     )
     // 表示用(色解決・名前引き・地図の検索設定)は所有に関わらず全カタログのカードで組む
     val displayData = base.copy(
         cards = baseCards + customPaymentCards,
         merchants = mergedMerchants,
         campaigns = mergedCampaigns,
+        pointCurrencies = mergedCurrencies,
     )
     return MergedUserData(engineData = engineData, displayData = displayData)
 }

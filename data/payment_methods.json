@@ -1,11 +1,44 @@
 {
-  "schema_version": 8,
-  "updated_at": "2026-08-16",
+  "schema_version": 9,
+  "updated_at": "2026-08-18",
   "card_brands": [
     { "name": "Visa", "color": "#1A1F71" },
     { "name": "Mastercard", "color": "#EB001B" },
     { "name": "JCB", "color": "#005BAC" },
     { "name": "Amex", "color": "#016FD0" }
+  ],
+  "point_currencies": [
+    {
+      "id": "vpoint",
+      "name": "Vポイント",
+      "brand_color": "#0F3F8F",
+      "membership_program": true,
+      "point_multiplier": { "label": "ウエル活利用時の還元率を表示", "factor": 1.5, "color": "#00A0E9", "badge_label": "ウエル活利用可", "applied_note": "還元率はウエル活利用時の実質還元率" }
+    },
+    {
+      "id": "dpoint",
+      "name": "dポイント",
+      "brand_color": "#E60033",
+      "membership_program": true
+    },
+    {
+      "id": "rakuten_point",
+      "name": "楽天ポイント",
+      "brand_color": "#BF0000",
+      "membership_program": true
+    },
+    {
+      "id": "ponta",
+      "name": "Pontaポイント",
+      "brand_color": "#F39800",
+      "membership_program": true
+    },
+    {
+      "id": "paypay_point",
+      "name": "PayPayポイント",
+      "brand_color": "#FF0033",
+      "membership_program": false
+    }
   ],
   "cards": [
     {
@@ -14,7 +47,7 @@
       "brand_color": "#00A94F",
       "brands": ["Visa", "Mastercard"],
       "effective_rate_default": 7.0,
-      "point_multiplier": { "label": "ウエル活利用時の還元率を表示", "factor": 1.5, "color": "#00A0E9", "badge_label": "ウエル活利用可", "applied_note": "還元率はウエル活利用時の実質還元率" }
+      "point_currency_id": "vpoint"
     },
     {
       "id": "mufg",
@@ -40,7 +73,8 @@
       "card_name": "dカード",
       "brand_color": "#E60033",
       "brands": ["Visa", "Mastercard"],
-      "effective_rate_default": 4.0
+      "effective_rate_default": 4.0,
+      "point_currency_id": "dpoint"
     },
     {
       "id": "epos",
@@ -59,7 +93,8 @@
         { "package": "jp.ne.paypay.android.app", "label": "PayPay" }
       ],
       "store_search_label": "PayPayアプリの「近くのおトク」で対象店舗を確認",
-      "enabled_default": false
+      "enabled_default": false,
+      "point_currency_id": "paypay_point"
     },
     {
       "id": "aupay",
@@ -69,7 +104,8 @@
         { "package": "jp.auone.wallet", "label": "au PAY" }
       ],
       "store_search_label": "au PAYアプリで対象店舗を確認",
-      "enabled_default": false
+      "enabled_default": false,
+      "point_currency_id": "ponta"
     },
     {
       "id": "dpay",
@@ -79,7 +115,8 @@
         { "package": "com.nttdocomo.keitai.payment", "label": "d払い" }
       ],
       "store_search_label": "d払いアプリで対象店舗を確認",
-      "enabled_default": false
+      "enabled_default": false,
+      "point_currency_id": "dpoint"
     },
     {
       "id": "rakuten_pay",
@@ -89,7 +126,8 @@
         { "package": "jp.co.rakuten.pay", "label": "楽天ペイ" }
       ],
       "store_search_label": "楽天ペイアプリで対象店舗を確認",
-      "enabled_default": false
+      "enabled_default": false,
+      "point_currency_id": "rakuten_point"
     },
     {
       "id": "aeon_pay",

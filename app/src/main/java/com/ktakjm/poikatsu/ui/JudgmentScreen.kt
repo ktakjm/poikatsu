@@ -148,7 +148,7 @@ internal fun JudgmentDetail(
                 }
             }
         }
-        if (selection.judgments.isEmpty()) {
+        if (selection.judgments.isEmpty() && selection.presentationJudgments.isEmpty()) {
             item(key = "__empty") {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Text(
@@ -162,6 +162,23 @@ internal fun JudgmentDetail(
                 item(key = "__best") { BestOptionBanner(selection.bestOption) }
             }
             items(selection.judgments, key = { it.campaign.id }) { judgment ->
+                CampaignJudgmentCard(
+                    judgment,
+                    onExcludeStore = if (hasStoreName) ({ excludingCampaign = judgment }) else null,
+                )
+            }
+        }
+        // 提示のみ施策(カード現物提示 #80・プログラム会員提示 #39)の並記枠。支払い方法の
+        // 選択肢ではない(提示しつつ上の決済手段で払うのが最適解)ため、判定リストと見出しで分ける
+        if (selection.presentationJudgments.isNotEmpty()) {
+            item(key = "__presentation_header") {
+                Text(
+                    "あわせて提示でおトク",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            items(selection.presentationJudgments, key = { it.campaign.id }) { judgment ->
                 CampaignJudgmentCard(
                     judgment,
                     onExcludeStore = if (hasStoreName) ({ excludingCampaign = judgment }) else null,

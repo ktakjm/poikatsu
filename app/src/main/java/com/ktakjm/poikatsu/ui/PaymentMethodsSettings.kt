@@ -57,9 +57,9 @@ import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningContainerColor
 
 /**
- * お支払い方法サブページ(#47)。マイカード / 国際ブランド / コード決済の 3 セクションを統合する
- * (いずれも「何を持っているか」の登録で意味的に同族)。値は DataStore 由来(MainViewModel 経由)で、
- * 変更は即 ViewModel の setter へ流す。
+ * お支払い方法サブページ(#47)。マイカード / 国際ブランド / コード決済 / ポイントの 4 セクションを
+ * 統合する(いずれも「何を持っているか」の登録で意味的に同族)。値は DataStore 由来
+ * (MainViewModel 経由)で、変更は即 ViewModel の setter へ流す。
  */
 @Composable
 internal fun PaymentMethodsSettingsPage(
@@ -67,11 +67,11 @@ internal fun PaymentMethodsSettingsPage(
     customCards: List<CustomCard>,
     brands: List<MainViewModel.BrandSetting>,
     qrPayments: List<MainViewModel.QrPaymentSetting>,
+    pointCurrencies: List<MainViewModel.PointCurrencySetting>,
     onBack: () -> Unit,
     onCardOwnedChange: (String, Boolean) -> Unit,
     onCardRateChange: (String, Double?) -> Unit,
     onCardBrandChange: (String, String) -> Unit,
-    onCardWelcatsuChange: (String, Boolean) -> Unit,
     onCardClassChange: (String, String) -> Unit,
     onCardPointValueChange: (String, Double?) -> Unit,
     onAddCustomCard: (name: String, color: String?, brand: String) -> Unit,
@@ -79,6 +79,8 @@ internal fun PaymentMethodsSettingsPage(
     onRemoveCustomCard: (String) -> Unit,
     onBrandOwnedChange: (String, Boolean) -> Unit,
     onQrEnabledChange: (String, Boolean) -> Unit,
+    onPointProgramMemberChange: (String, Boolean) -> Unit,
+    onPointMultiplierChange: (String, Boolean) -> Unit,
 ) {
     BackHandler(onBack = onBack)
 
@@ -105,7 +107,6 @@ internal fun PaymentMethodsSettingsPage(
                         onOwnedChange = { onCardOwnedChange(card.cardId, it) },
                         onRateChange = { onCardRateChange(card.cardId, it) },
                         onBrandChange = { onCardBrandChange(card.cardId, it) },
-                        onWelcatsuChange = { onCardWelcatsuChange(card.cardId, it) },
                         onClassChange = { onCardClassChange(card.cardId, it) },
                         onPointValueChange = { onCardPointValueChange(card.cardId, it) },
                     )
@@ -203,6 +204,70 @@ internal fun PaymentMethodsSettingsPage(
                     modifier = Modifier.clickable { onQrEnabledChange(qr.id, !qr.enabled) },
                     colors = transparentListItemColors(),
                 )
+            }
+        }
+
+        // --- ポイント(#39: 通貨単位の会員登録・ポイント倍率) ---
+        if (pointCurrencies.isNotEmpty()) {
+            SettingsSectionHeader("ポイント")
+            Text(
+                "会員になっているポイントにチェックを入れてください。カード提示型の特典の表示に使われます。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+            pointCurrencies.forEach { currency ->
+                // 会員チェック行(会員プログラムのある通貨のみ)。倍率だけの通貨(Vポイント等)は
+                // 会員チェック無しで名前行だけ出し、その下に倍率チェックをぶら下げる
+                if (currency.membershipProgram) {
+                    ListItem(
+                        headlineContent = { NameWithColorDot(currency.name, currency.brandColor) },
+                        leadingContent = {
+                            Checkbox(
+                                checked = currency.member,
+                                onCheckedChange = { onPointProgramMemberChange(currency.id, it) },
+                            )
+                        },
+                        modifier = Modifier.clickable {
+                            onPointProgramMemberChange(currency.id, !currency.member)
+                        },
+                        colors = transparentListItemColors(),
+                    )
+                } else {
+                    ListItem(
+                        headlineContent = { NameWithColorDot(currency.name, currency.brandColor) },
+                        colors = transparentListItemColors(),
+                    )
+                }
+                // ポイント倍率チェック(旧: カード行のウエル活チェック。#39 で通貨単位へ移設)
+                currency.pointMultiplier?.let { pm ->
+                    val note: (@Composable () -> Unit)? = if (
+                        currency.multiplierEnabled && currency.multiplierCardNames.isNotEmpty()
+                    ) {
+                        {
+                            Text(
+                                "${currency.multiplierCardNames.joinToString("・")}の還元率を" +
+                                    "×${trimRate(pm.factor)}で表示中",
+                            )
+                        }
+                    } else {
+                        null
+                    }
+                    ListItem(
+                        headlineContent = { Text(pm.label) },
+                        leadingContent = {
+                            Checkbox(
+                                checked = currency.multiplierEnabled,
+                                onCheckedChange = { onPointMultiplierChange(currency.id, it) },
+                            )
+                        },
+                        supportingContent = note,
+                        colors = transparentListItemColors(),
+                        modifier = Modifier.padding(start = 24.dp).clickable {
+                            onPointMultiplierChange(currency.id, !currency.multiplierEnabled)
+                        },
+                    )
+                }
             }
         }
         Spacer(Modifier.height(24.dp))
@@ -477,7 +542,6 @@ private fun CardSettingItem(
     onOwnedChange: (Boolean) -> Unit,
     onRateChange: (Double?) -> Unit,
     onBrandChange: (String) -> Unit,
-    onWelcatsuChange: (Boolean) -> Unit,
     onClassChange: (String) -> Unit,
     onPointValueChange: (Double?) -> Unit,
 ) {
@@ -566,20 +630,7 @@ private fun CardSettingItem(
                 modifier = Modifier.padding(start = 24.dp).clickable { showRateDialog = true },
             )
         }
-        card.pointMultiplier?.let { pm ->
-            val welcatsuNote: (@Composable () -> Unit)? = if (card.welcatsu) {
-                ({ Text("${trimRate(card.rate * pm.factor)}% で表示中") })
-            } else {
-                null
-            }
-            ListItem(
-                headlineContent = { Text(pm.label) },
-                leadingContent = { Checkbox(checked = card.welcatsu, onCheckedChange = onWelcatsuChange) },
-                supportingContent = welcatsuNote,
-                colors = transparentListItemColors(),
-                modifier = Modifier.padding(start = 24.dp).clickable { onWelcatsuChange(!card.welcatsu) },
-            )
-        }
+        // ウエル活等のポイント倍率チェックは #39 でカード行から「ポイント」セクション(通貨単位)へ移設
     }
     if (showRateDialog) {
         RateEditDialog(

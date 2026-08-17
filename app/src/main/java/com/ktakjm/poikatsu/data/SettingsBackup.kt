@@ -8,8 +8,10 @@ import kotlinx.serialization.json.Json
  * バックアップ JSON のスキーマ版(#50)。キーの追加だけなら旧ファイルは既定値で読めるので上げない。
  * 既存キーの意味を変える・消す等の非互換変更をしたときだけ上げ、[SettingsBackup.schemaVersion] が
  * これより新しいファイルは「新しいアプリで書き出したファイル」として読み込みを断る。
+ * 履歴: 2 = CardOverride.welcatsu(カード単位)を廃止し enabledPointMultipliers(通貨単位)へ
+ * 正規化(#39)。旧ファイル(1)は読めるが welcatsu は復元されない(再設定)。
  */
-const val SETTINGS_BACKUP_SCHEMA_VERSION = 1
+const val SETTINGS_BACKUP_SCHEMA_VERSION = 2
 
 /**
  * 設定のエクスポート/インポート(#50)で読み書きする JSON 1 ファイルの中身。
@@ -46,6 +48,8 @@ data class SettingsBackup(
     val cardOverrides: Map<String, CardOverride> = emptyMap(),
     val enabledQrPaymentIds: Set<String> = emptySet(),
     val ownedBrands: Set<String> = emptySet(),
+    val enabledPointMultipliers: Set<String> = emptySet(),
+    val pointProgramMemberships: Set<String> = emptySet(),
     val registeredAreas: List<RegisteredArea> = emptyList(),
     val customCards: List<CustomCard> = emptyList(),
     val customCampaigns: List<CustomCampaign> = emptyList(),
@@ -65,6 +69,8 @@ fun AppSettings.toBackup(exportedAt: String, appVersion: String): SettingsBackup
     cardOverrides = cardOverrides,
     enabledQrPaymentIds = enabledQrPaymentIds,
     ownedBrands = ownedBrands,
+    enabledPointMultipliers = enabledPointMultipliers,
+    pointProgramMemberships = pointProgramMemberships,
     registeredAreas = registeredAreas,
     customCards = customCards,
     customCampaigns = customCampaigns,
@@ -85,6 +91,8 @@ fun SettingsBackup.toSettings(): AppSettings = AppSettings(
     cardOverrides = cardOverrides,
     enabledQrPaymentIds = enabledQrPaymentIds,
     ownedBrands = ownedBrands,
+    enabledPointMultipliers = enabledPointMultipliers,
+    pointProgramMemberships = pointProgramMemberships,
     registeredAreas = registeredAreas.distinctBy { it.type to it.code },
     customCards = customCards.distinctBy { it.id },
     customCampaigns = customCampaigns.distinctBy { it.id }.map { it.normalized() },

@@ -154,8 +154,10 @@ erDiagram
         string benefit_type "rebate/discount/lottery"
         string store_scope "managed/external"
         string operator "運営者(カード会社/決済事業者)"
-        string card_id "カードID(card_brand/payment_method_idと排他)"
-        string card_brand "ブランド施策の対象ブランド(card_id/payment_method_idと排他)"
+        string card_id "カードID(4帰属で排他)"
+        string card_brand "ブランド施策の対象ブランド(4帰属で排他)"
+        string point_program_id "会員提示施策の帰属プログラム(4帰属で排他。presentation_only必須。#39)"
+        string point_currency_id "rebateの払い出し通貨(任意。倍率適用の判定。#39)"
         string payment_instruction "支払い方法の説明"
         double rate_base "基準還元率(定率時)"
         int discount_amount "割引額(定額時)"
@@ -168,7 +170,7 @@ erDiagram
         int usage_limit "利用回数上限"
         string usage_limit_note "回数上限の補足(表示用)"
         bool may_end_early "予算到達次第の早期終了があり得るか"
-        bool presentation_only "カード現物の提示のみで受けられる特典か(#80。最良比較から分離)"
+        bool presentation_only "提示のみで受けられる特典か(#80/#39。並記枠へ分離)"
         string_list eligible_wallets "公式が還元対象と明記したウォレット(apple_pay/google_pay)"
         string_list ineligible_wallets "公式が還元対象外と明記したウォレット(未掲載=不明の3状態)"
         Recurrence recurrence "繰り返し日付条件(days_of_week/days_of_month)"
@@ -215,9 +217,16 @@ erDiagram
         string brand_color "#RRGGBB(施策の色は発行体側で一元管理)"
         string_list brands "選べるブランドの選択肢(実ブランドはユーザー設定)"
         double effective_rate_default "店舗別レート施策では rate_override の最大値と一致(#52)"
-        PointMultiplier point_multiplier "ポイント倍率(任意)"
+        string point_currency_id "このカードが稼ぐ通貨(任意。#39)"
         CardClass_list card_classes "カードクラスの選択肢(任意。JCB W/S 等。#52)"
         PointValueConfig point_value "1pt価値の設定定義(任意。#52)"
+    }
+    POINT_CURRENCY {
+        string id PK "例: vpoint / dpoint(#39)"
+        string name "Vポイント/dポイント等"
+        string brand_color "#RRGGBB(提示施策のバッジ・ピン色)"
+        bool membership_program "会員プログラムがあるか(trueなら設定に会員チェック)"
+        PointMultiplier point_multiplier "ポイント倍率(任意。ウエル活等)"
     }
     CARD_CLASS {
         string id PK "例: w / s"
@@ -243,6 +252,7 @@ erDiagram
         string app_package "Android パッケージ名"
         string store_search_label "対象店舗検索の表示名"
         bool enabled_default
+        string point_currency_id "このサービスが稼ぐ通貨(任意。#39)"
     }
     YOLP_CONFIG {
         int max_keyword_sources "keyword上限"
@@ -256,6 +266,7 @@ erDiagram
     PAYMENT_METHODS ||--o{ CARD_BRAND : "card_brands[]"
     PAYMENT_METHODS ||--o{ PAYMENT_CARD : "cards[]"
     PAYMENT_METHODS ||--o{ QR_PAYMENT : "qr_payments[]"
+    PAYMENT_METHODS ||--o{ POINT_CURRENCY : "point_currencies[](#39)"
     CAMPAIGN ||--o{ MERCHANT_RULE : "merchant_rules[]"
     CAMPAIGN ||--o| REGION : "region(自治体施策のみ)"
     MERCHANT ||--o{ BANNER : "banners[](系列と看板の2階層。#60)"
@@ -264,7 +275,10 @@ erDiagram
     MERCHANT_RULE }o--o{ BANNER : "banner_ids / ineligible_banner_ids で参照(任意)"
     MERCHANT_RULE ||--o| OFFICIAL_STORE_LIST : "official_store_list(任意)"
     CAMPAIGN }o--o| PAYMENT_CARD : "card_id で参照(1カード:N施策)"
-    PAYMENT_CARD ||--o| POINT_MULTIPLIER : "point_multiplier(任意)"
+    CAMPAIGN }o--o| POINT_CURRENCY : "point_program_id / point_currency_id で参照(#39)"
+    PAYMENT_CARD }o--o| POINT_CURRENCY : "point_currency_id で参照(稼ぐ通貨)"
+    QR_PAYMENT }o--o| POINT_CURRENCY : "point_currency_id で参照(稼ぐ通貨)"
+    POINT_CURRENCY ||--o| POINT_MULTIPLIER : "point_multiplier(任意。#39でカードから移設)"
     PAYMENT_CARD ||--o{ CARD_CLASS : "card_classes[](任意。先頭が未選択時の既定=保守側)"
     PAYMENT_CARD ||--o| POINT_VALUE_CONFIG : "point_value(任意)"
     YOLP_CONFIG ||--o{ GC_GROUP : "gc_groups[]"
@@ -273,8 +287,8 @@ erDiagram
 3 つの JSON の役割分担:
 
 - `merchants.json` — チェーンの正規化マスタ。**1 merchant = 1 系列**（施策の帰属単位）で、傘下で別の名前を掲げる**看板**（UI 表記は「業態」）は `banners` に入れ子で持つ（#60。merchant 自身の name/reading/aliases は「代表看板」= banner id は merchant.id）。施策側は `merchant_id` を書くだけで傘下看板がすべて対象になり、看板単位の対象/対象外は `merchant_rules[].banner_ids` / `ineligible_banner_ids` で表す。alias（同一看板の略称・表記ゆれ）と banner（別の看板）の線引き・照合制約・運用ルールは data/README.md「系列と看板」参照。検索ヒット率は `reading` / `aliases` の充実度で決まる。トップレベルに `yolp_config`（YOLP 検索の gc グループ定義・密度チューニング用の `max_pages`）を持ち、各 merchant の `yolp_search`（`gc`/`keyword`/`none`）で検索方式を指定する。`YolpClient` はこの設定から `YolpSearchConfig` を動的に構築し、アクティブな施策が参照する merchant だけを検索対象にする（該当 merchant がいない gc_group はスキップ）。位置情報を持たない発行体（自販機など）は `location_hint` で外部導線（Coke ON アプリ等）を案内し、「近くのこのお店を探す」を出さない
-- `campaigns.json` — 汎用的な施策情報のみ。**ユーザー固有の前提を書かない**（規約）。`type` で常設カード（`card_program`）/ キャンペーン（`promotion`。managed=特定チェーン対象、external=全加盟店対象のおトクタブ専用。#44）/ 自治体施策（`municipal`）を区分し、`benefit_type` でポイント還元（`rebate`）/ 即時割引（`discount`）を区分し、定率/定額は `rate_base` / `discount_amount` のどちらが入っているかで導出する。`store_scope` が `managed` ならチェーン検索・地図に表示、`external` ならおトクタブのみ表示（`detail_url`/`store_search_url` で公式ページへリンク）。施策の帰属は `card_id`（カード施策。payment_methods.json の `cards[].id` を参照、1 カード : N 施策）か `payment_method_id`（QR 施策・自治体施策）の**ちょうど一方**を持つ
-- `payment_methods.json` — 決済手段カタログ（カード `cards` + QR 決済 `qr_payments`）。ユーザー固有値は持たず（差分は DataStore）、merchants/campaigns と同様にリモート更新・テストデータ切替の対象。`point_multiplier`（`PointMultiplier`）を持つカードはポイント価値の倍率（例: ウエル活 ×1.5）を設定画面で ON/OFF でき、ON 時は `effectiveRateDefault × factor` が実質還元率になる。`point_multiplier.color` はウエルシアのロゴ色など識別バッジに使う。`card_classes`（同一製品内のグレード差。JCB CARD W/S 等）と `point_value`（1pt 価値が使い道で変動するポイント通貨）を持つカード（#52）は、どのクラスか・1pt をいくらとみなすかをユーザー設定（`CardOverride.cardClass` / `pointValue`）で持ち、マージ時に `(率 + クラス加算) × 1pt価値` で実効率へ合成する（店舗別レート用の `rateBonus` / `rateMultiplier` もマージ後カードに載る。§5.4 参照）
+- `campaigns.json` — 汎用的な施策情報のみ。**ユーザー固有の前提を書かない**（規約）。`type` で常設カード（`card_program`）/ キャンペーン（`promotion`。managed=特定チェーン対象、external=全加盟店対象のおトクタブ専用。#44）/ 自治体施策（`municipal`）を区分し、`benefit_type` でポイント還元（`rebate`）/ 即時割引（`discount`）を区分し、定率/定額は `rate_base` / `discount_amount` のどちらが入っているかで導出する。`store_scope` が `managed` ならチェーン検索・地図に表示、`external` ならおトクタブのみ表示（`detail_url`/`store_search_url` で公式ページへリンク）。施策の帰属は `card_id`（カード施策。payment_methods.json の `cards[].id` を参照、1 カード : N 施策）/ `card_brand`（イシュアー不問のブランド施策）/ `payment_method_id`（QR 施策・自治体施策）/ `point_program_id`（プログラム会員提示施策。#39。`presentation_only` 必須）の **4 種のうちちょうど 1 つ**を持つ。rebate の払い出し通貨は `point_currency_id`（任意）で明示でき、未指定はカード/QR/プログラムの通貨を継承する（card_brand 施策は明示必須）
+- `payment_methods.json` — 決済手段カタログ（カード `cards` + QR 決済 `qr_payments`）+ **ポイント通貨マスタ**（`point_currencies`。#39）。ユーザー固有値は持たず（差分は DataStore）、merchants/campaigns と同様にリモート更新・テストデータ切替の対象。**ポイント倍率**（`PointMultiplier`。例: ウエル活 ×1.5）は通貨の価値特性として `point_currencies[].point_multiplier` に持ち、カード・QR は `point_currency_id` でその通貨を「稼ぐ手段」として参照する。倍率の ON/OFF は通貨単位のユーザー設定（`enabled_point_multipliers`）で、ON 時はその通貨で払い出される率（通貨を稼ぐカードの実効率と、施策側の rebate 率の両方）が `× factor` される（§5.4）。`membership_program: true` の通貨（dポイント等）は提示型施策（`point_program_id`）の帰属先で、会員かどうかもユーザー設定（`point_program_memberships`）。`card_classes`（同一製品内のグレード差。JCB CARD W/S 等）と `point_value`（1pt 価値が使い道で変動するポイント通貨）を持つカード（#52）は、どのクラスか・1pt をいくらとみなすかをユーザー設定（`CardOverride.cardClass` / `pointValue`）で持ち、マージ時に `(率 + クラス加算) × 1pt価値` で実効率へ合成する（店舗別レート用の `rateBonus` / `rateMultiplier` もマージ後カードに載る。§5.4 参照）
 
 パースは `PoikatsuJson.parse()` に集約。`ignoreUnknownKeys = true` + `coerceInputValues = true` により、スキーマに後からフィールドを追加しても旧アプリが壊れない（前方互換）。
 
@@ -338,7 +352,7 @@ flowchart TD
 
 ### 設定の永続化（data/SettingsRepository.kt）
 
-テーマ・データ取得・マイカード・QR 決済・自治体の設定は **DataStore Preferences**（`SettingsRepository`）に保存する。テーマ／dynamic color／自動更新は型付きキー、カード差分（`CardOverride`：所有・還元率・ブランド・ウエル活）はカード id（payment_methods.json の `cards[].id`）をキーにした Map を JSON 文字列として 1 キーに格納する（キー数が可変でも Preferences のキーを増やさない）。QR 決済の有効 ID（`Set<String>`）・カタログ外カードの保有ブランド（`owned_brands`: `Set<String>`。card_brand 施策の仮想カード合成に使う）・登録エリア（`registered_areas`: `List<RegisteredArea>`。自治体単体かグループを type+code で持ち、おトクタブの地域フィルタに使う）・ユーザー登録の対象外ペア（`excluded_store_pairs`: `List<ExcludedStorePair>`。#63。詳細は 5.4）も同様に JSON 文字列として格納する。カスタムキャンペーン（`custom_campaigns` / `custom_campaigns_test`。#65）と対象外ペア（`excluded_store_pairs` / `excluded_store_pairs_test`。#68）は通常データ用とテストデータ用の 2 キーに分かれ、`useTestData` に応じた側だけを読み書きする（「開発者モード」節参照）。`MainViewModel` は `settings` Flow を購読し、変更のたびに **payment_methods.json（カタログ＝既定値）へユーザー差分を重ねて**エンジンを作り直す（マージは VM 層、`JudgmentEngine` は純 Kotlin のまま）。payment_methods.json 自体は書き換えない。テーマは描画前に必要なので `MainActivity` が `state.themeMode`/`dynamicColor` を `PoikatsuTheme` に渡す（6.1 参照）。
+テーマ・データ取得・マイカード・QR 決済・ポイント・自治体の設定は **DataStore Preferences**（`SettingsRepository`）に保存する。テーマ／dynamic color／自動更新は型付きキー、カード差分（`CardOverride`：所有・還元率・ブランド。旧 welcatsu は #39 で通貨単位へ正規化し廃止＝移行せず再設定）はカード id（payment_methods.json の `cards[].id`）をキーにした Map を JSON 文字列として 1 キーに格納する（キー数が可変でも Preferences のキーを増やさない）。QR 決済の有効 ID（`Set<String>`）・カタログ外カードの保有ブランド（`owned_brands`: `Set<String>`。card_brand 施策の仮想カード合成に使う）・**ポイント倍率の有効通貨**（`enabled_point_multipliers`: `Set<通貨id>`。ウエル活等。#39）・**プログラム会員**（`point_program_memberships`: `Set<通貨id>`。提示型施策のフィルタ。#39）・登録エリア（`registered_areas`: `List<RegisteredArea>`。自治体単体かグループを type+code で持ち、おトクタブの地域フィルタに使う）・ユーザー登録の対象外ペア（`excluded_store_pairs`: `List<ExcludedStorePair>`。#63。詳細は 5.4）も同様に JSON 文字列として格納する。カスタムキャンペーン（`custom_campaigns` / `custom_campaigns_test`。#65）と対象外ペア（`excluded_store_pairs` / `excluded_store_pairs_test`。#68）は通常データ用とテストデータ用の 2 キーに分かれ、`useTestData` に応じた側だけを読み書きする（「開発者モード」節参照）。`MainViewModel` は `settings` Flow を購読し、変更のたびに **payment_methods.json（カタログ＝既定値）へユーザー差分を重ねて**エンジンを作り直す（マージは VM 層、`JudgmentEngine` は純 Kotlin のまま）。payment_methods.json 自体は書き換えない。テーマは描画前に必要なので `MainActivity` が `state.themeMode`/`dynamicColor` を `PoikatsuTheme` に渡す（6.1 参照）。
 
 ### 設定のバックアップと引き継ぎ（#50 / #51）
 
@@ -350,7 +364,7 @@ flowchart TD
 
 - **形式**: `SettingsBackup`（data/SettingsBackup.kt）を 1 ファイルの JSON に整形出力（`prettyPrint` + `encodeDefaults`。不具合報告でそのまま読める）。キー名は埋め込む `CustomCampaign` 等が DataStore に camelCase で保存済みなのに合わせ **camelCase**（同梱データの snake_case とは別系統）
 - **含める/含めない**: 含めるのは端末をまたいで持っていく意味があるものだけ。開発者向け設定（ref/testData/bundled/developerMode）は端末ごとの一時状態なので除外し、復元時も現在値を書き換えない。通知済みキーは設定値でなく通知ジョブの内部状態なので除外。テストデータ側のカスタムキャンペーン（`custom_campaigns_test`。#65）・対象外ペア（`excluded_store_pairs_test`。#68）も検証用の一時データなので除外し、復元でも触らない（通常側のみ全上書き）
-- **スキーマ版**: `schemaVersion`（現在 1）。キー追加は旧ファイルが既定値で読めるので上げず、非互換変更のときだけ上げる。**`schemaVersion` に既定値を持たせない**のが要点で、無関係な JSON を選んだときにパースを失敗させる（既定値ありだと「全部既定値のバックアップ」として読めてしまい、復元で設定を消す事故になる）。読み込み側が現在版より新しいファイルは読まずに断る
+- **スキーマ版**: `schemaVersion`（現在 2。1→2 は CardOverride.welcatsu の廃止=#39）。キー追加は旧ファイルが既定値で読めるので上げず、非互換変更のときだけ上げる。**`schemaVersion` に既定値を持たせない**のが要点で、無関係な JSON を選んだときにパースを失敗させる（既定値ありだと「全部既定値のバックアップ」として読めてしまい、復元で設定を消す事故になる）。読み込み側が現在版より新しいファイルは読まずに断る
 - **経路**: SAF（`CreateDocument` / `OpenDocument`）でユーザーがファイルを選ぶ。ストレージのパーミッションは持たない。書き出しは `"wt"`（切り詰め）で開き、既存ファイルへの上書きで前の内容が末尾に残らないようにする。読み込みは 1MB で打ち切り（誤って動画等を選ばれてもメモリを食い潰さない）
 - **適用**: 選択 → 中身の要約（`backupContentSummary`）付き確認ダイアログ → `SettingsRepository.importSettings()` が **1 回の edit で全上書き**（emission 1 回 = rebuild 1 回）。マージはしない。通知ジョブ（WorkManager）は DataStore と別管理なので、復元値に合わせて `schedule`/`cancel` し直す
 - **実行時パーミッションは復元時に取り直す**: 通知の許可はアプリが持てる情報ではないのでバックアップに入らない。通知 ON のファイルを未許可の端末に復元すると「設定は ON なのに通知が来ない」状態になるため、確認ダイアログの「復元」で **POST_NOTIFICATIONS を要求してから適用**する（Android 13+ かつ未許可のときだけ。ダイアログ本文にも要求することを予告する）。拒否されたら通知だけ OFF に落として復元し、Snackbar でその旨を伝える（通知サブページの ON 操作と同じ「許可を取ってから ON にする」方針。判定は共通の `notificationPermissionGranted()`）。Auto Backup 経路では権限付与状態を OS が別枠で扱う（揃うとは限らず、アプリからは復元を検知できない）ため、通知サブページ側でも「設定は ON なのに権限が無い」状態を検出して warning 面で知らせる（`ON_RESUME` のたびに権限を読み直す。端末設定での取り消しにも効く）
@@ -419,7 +433,7 @@ enum class CampaignStatus { ACTIVE, UPCOMING, EXPIRED }
 
 ### 5.4 チェーン判定（judgeCards / judgeQr / judgeAll）と店舗単位の対象判定（checkStore）
 
-`judgeCards(merchant, today)` はカード施策のチェーン単位判定。`judgeQr` は QR 決済施策の判定。どちらも統一型 `CampaignJudgment` を返す。`judgeAll` は両方を統合して `JudgmentResult`（`judgments` + `bestOption`）を返す。店舗単位の対象/対象外は別関数 `checkStore` が担う。
+`judgeCards(merchant, today)` はカード施策のチェーン単位判定。`judgeQr` は QR 決済施策の判定。`judgePrograms` はプログラム会員提示施策（`point_program_id`。#39）の判定で、会員登録済み（DataStore の `point_program_memberships`）のプログラムの施策だけを返す。いずれも統一型 `CampaignJudgment` を返す。`judgeAll` は 3 つを統合して `JudgmentResult`（`judgments` + `bestOption` + `presentationJudgments`）を返す。店舗単位の対象/対象外は別関数 `checkStore` が担う。
 
 ```mermaid
 flowchart LR
@@ -451,7 +465,9 @@ flowchart LR
 - **store_scope フィルタ**: `store_scope == "managed"` のみ。`external` の施策は「お店」「地図」に出さない。
 - **カード vs QR の分離**: `paymentMethodId == null` のカード施策のみ `judgeCards` が返す。QR 決済施策は `judgeQr` が担当（`enabledQrIds` でユーザーの利用 QR をフィルタ）。どちらも統一型 `CampaignJudgment` を返す。
 - **ブランドの対象外**: カードの実ブランドが店舗 rule の `ineligible_brands` に含まれるとき、その店ではこの施策を除外する（警告ではなく非表示。検索・判定詳細・地図ピン/件数すべてに波及）。リストに無いブランドは従来どおり。ブランド未選択でも除外ブランドを取りうるカードは除外側に倒す（`JudgmentEngine.excludedByBrand`）。
-- **設定値の反映はマージ層**: 還元率の手入力・MUFG ブランド・ウエル活 ×1.5（`PaymentCard.point_multiplier` の係数）は `MainViewModel` が DataStore の差分（`CardOverride`）をカタログのカード一覧に重ねてからエンジンへ渡す。`JudgmentEngine` は純 Kotlin・実データテストのまま保つ（4 章「設定の永続化」／6.1 参照）。
+- **設定値の反映はマージ層**: 還元率の手入力・MUFG ブランドは `MainViewModel` が DataStore の差分（`CardOverride`）をカタログのカード一覧に重ねてからエンジンへ渡す。ウエル活 ×1.5 は**通貨単位**（#39。`point_currencies[].point_multiplier` × DataStore `enabled_point_multipliers`）で、通貨を稼ぐカード（`point_currency_id`）の実効率にはマージ時に焼き込み、`multiplierEnabled` を立てた通貨マスタもエンジンへ渡す。`JudgmentEngine` は純 Kotlin・実データテストのまま保つ（4 章「設定の永続化」／6.1 参照）。
+- **施策側の率へのポイント倍率（#39。#35 B-1 の置き換え）**: promotion / rate_override 等で施策側の率を採用したときも、**払い出し通貨**（`payoutCurrency`: 施策の `point_currency_id` 明示 > プログラム帰属 > card_id 施策はカードの通貨 > QR 施策はサービスの通貨。card_brand 施策は明示必須）が解決でき倍率が有効なら `boostedCampaignRate` が率に `× factor` を掛ける（Vポイント払いの 15% はウエル活で実質 22.5%）。カードの実効率（`usesCardRate`）はマージで適用済みのため二重適用しない。rebate 以外（discount・lottery）には通貨の概念が無く掛からない。倍率バッジは払い出し通貨が倍率を持てば出し、「実質還元率」注記は実際に掛かった率を表示したときだけ出す。
+- **提示のみ施策は並記枠へ分離（#80/#39）**: `presentation_only` の施策（カード現物提示・プログラム会員提示）は `judgeAll` が `presentationJudgments` に分けて返し、判定詳細の「あわせて提示でおトク」セクションに出す（支払い方法の選択肢ではないため。bestOption にも載らない）。一覧・地図の「特典あり」判定（`searchRewarded` / `loadNearbyAround` / `recomputeNearbyPlaces`）は `judgments + presentationJudgments` で数え、並記枠しか無いチェーン（マルイ等）も一覧・ピンに残す。
 - **reward の無いチェーンは一覧に出さない**: 判定が空（所有カードで対象になる施策が無い）チェーンは検索結果・近隣リストから除外する（`MainViewModel.searchRewarded` と `loadNearbyAround` で `judgeAll` 非空のものだけ残す）。
 - **エントリー要否は持たない**: 還元率はユーザーが公式アプリの実効値（エントリー込み）を手入力する前提のため、`entry_done` フラグと未エントリー警告は廃止した。`CampaignJudgment.warnings` は期限切れ間近（残り 3 日以下）の警告に使われる。
 - **店舗単位の判定 `checkStore(merchant, storeName)`**: `official_store_list` を持つ施策ごとに、`ineligible_stores` 一致 → 対象外 / `eligible_stores` 一致 → 対象 / どちらにも無し → 要確認（`StoreEligibility.UNKNOWN`）の **3 状態**を返す（対象外を優先）。リスト網羅性を仮定せず、**公式が店舗名で明示した店だけ言い切る**設計（旧 `facility_risk_patterns` によるキーワード推測警告は実際の対象外店舗との乖離が大きく廃止）。例外は **`list_is_exhaustive: true` の網羅リスト（#64）**: 「対象は次のN店舗のみ」型（コジマ×ビックカメラの au PAY クーポン等）では掲載なし=**対象外**と断定する（`matched = null` の INELIGIBLE。UI は「対象のお店リストに掲載がない」理由文に分岐）。
@@ -488,13 +504,13 @@ data class CampaignJudgment(
 )
 ```
 
-`judgeAll(merchant, today, enabledQrIds)` は `judgeCards` + `judgeQr` を統合し、定率（`effectiveRate` 降順）→ 定額（`discountAmount` 降順）の統一ソートで `JudgmentResult`（`judgments` + `bestOption`）を返す。`bestOption` は定率（`rate_base` あり・`discount_amount` なし）で最高還元率のものを選ぶ。定額は購入額に依存するため比較せず並列表示とする。抽選（lottery）と**対象商品限定（`product_scope`。店の全商品に効かないため。#43）**、**提示のみ（`presentation_only`。「最大おトク率」に載せると「このカードで払え」に読めるが、実際の最適解は提示しつつ別の高還元手段で払うことのため。#80）**も比較から除外する。
+`judgeAll(merchant, today, enabledQrIds, ..., memberships)` は `judgeCards` + `judgeQr` + `judgePrograms` を統合し、定率（`effectiveRate` 降順）→ 定額（`discountAmount` 降順）の統一ソートで `JudgmentResult`（`judgments` + `bestOption` + `presentationJudgments`）を返す。**提示のみ（`presentation_only`。#80/#39）は `presentationJudgments`（「あわせて提示」の並記枠）へ分離**され、判定リストにも「最大おトク率」にも載らない（載せると「このカードで払え」に読めるが、実際の最適解は提示しつつ別の高還元手段で払うことのため）。`bestOption` は定率（`rate_base` あり・`discount_amount` なし）で最高還元率のものを選ぶ。定額は購入額に依存するため比較せず並列表示とする。抽選（lottery）と**対象商品限定（`product_scope`。店の全商品に効かないため。#43）**も比較から除外する。
 
 `BenefitType`（`REBATE` / `DISCOUNT`）と `CampaignType`（`CARD_PROGRAM` / `PROMOTION` / `MUNICIPAL`）はそれぞれ `jsonValue` プロパティを持つ enum で、`fromString()` で JSON 文字列から変換する。`Campaign.campaignType` 拡張プロパティで `type` 文字列を enum に変換でき、コード中で生 String 比較を排除している。rebate は後日ポイント付与（PayPay の「クーポン」含む）、discount は即時値引き。定率/定額は `rate_base` / `discount_amount` のどちらが入っているかで導出する（2 軸直交）。
 
 特典の表示ラベルは `formatBenefit(benefitType, rate, discount): BenefitLabel?` に集約されている。`BenefitLabel`（`value` + `suffix`）が 2×2 のラベル行列（`%還元` / `円還元` / `% OFF` / `円引き`）を返し、UI 層はこれを `toString()` するだけで統一的に表示できる
 
-一覧系（検索一覧・近くリスト・地図プレビュー）の「最良特典」は `JudgmentResult.bestBenefitLabel(): BenefitLabel?` で組み立てる（#29）。`bestOption`（定率の最大）があればそれを、定額特典しか無いチェーンでは判定リスト先頭（定額同士は金額降順ソート済み）の特典をラベル化する。定額を比較対象にしない `determineBest` のポリシーはそのままに見せ方だけをラベルにしたもので、これにより定額のみのチェーンが「0%」と表示される問題を防ぐ。**対象商品限定（`product_scope`）・提示のみ（`presentation_only`）の特典しか無いチェーンは「○% 還元(対象商品)」「○% OFF(提示のみ)」と付記**し、支払うだけで全商品に効く率と誤認されないようにする（#43/#80）。UI 側は `SearchResult.bestBenefit` / `NearbyPlace.bestBenefit`（ともに `BenefitLabel?`）を表示するだけで、率の `Double` は一覧系のモデルに持たない
+一覧系（検索一覧・近くリスト・地図プレビュー）の「最良特典」は `JudgmentResult.bestBenefitLabel(): BenefitLabel?` で組み立てる（#29）。`bestOption`（定率の最大）があればそれを、定額特典しか無いチェーンでは判定リスト先頭（定額同士は金額降順ソート済み）の特典をラベル化する。定額を比較対象にしない `determineBest` のポリシーはそのままに見せ方だけをラベルにしたもので、これにより定額のみのチェーンが「0%」と表示される問題を防ぐ。**対象商品限定（`product_scope`）・提示のみ（`presentation_only`＝並記枠 `presentationJudgments` 側から拾う）の特典しか無いチェーンは「○% 還元(対象商品)」「○% OFF(提示のみ)」と付記**し、支払うだけで全商品に効く率と誤認されないようにする（#43/#80）。UI 側は `SearchResult.bestBenefit` / `NearbyPlace.bestBenefit`（ともに `BenefitLabel?`）を表示するだけで、率の `Double` は一覧系のモデルに持たない
 
 ## 6. UI レイヤ（ui/）
 
@@ -528,11 +544,11 @@ stateDiagram-v2
 
 下部ナビ（`NavigationBar`）で対等に切り替わる **4 タブ**（お店 / 地図 / おトク / 設定）を `selectedTab`（`AppTab` enum: `SEARCH` / `NEARBY` / `CAMPAIGNS` / `SETTINGS`）で管理する。`Detail`（判定詳細）/`StoreCheck`（店舗判定）はお店・地図タブに**重なるオーバーレイ**で、`selectedTab` を変更しないため戻ると元のタブへ復帰する（地図で選んだ店の詳細から戻れば地図に戻る）。**例外はお店・おトクタブの二ペイン時**（#54/#55。窓が M3 の list-detail 二ペイン相当のとき＝`searchTwoPane`/`campaignsTwoPane`）: `selection`/`storeCheck`/`selectedCampaignGroup` はオーバーレイでなく**右の詳細ペイン内の表示**になり、topBar・下部ナビ/Rail・本文とも「ベースのタブ表示」のまま扱う（状態フィールド自体は同じで、見せ方だけが窓に応じて変わる。詳細は 6.4）。**地図タブの横画面**（#57。`nearbySideSheet`）も同様にオーバーレイ分岐を素通りさせ、`selection`/`storeCheck`/`selectedCampaignGroup` を地図の上に浮くサイドシート（`NearbyDetailSideSheet`。6.4 参照）に出す。`selectedCampaignGroup`（施策詳細）はタブ非依存のため、二ペイン扱いになるのは**おトクタブ表示中に開いたときだけ**（地図タブのお知らせピル発は横画面ならサイドシート、縦画面は従来どおり全画面オーバーレイ）。
 
-**設定**は 4 タブの 1 つ（`AppTab.SETTINGS`）として独立した `SettingsScreen` に分離されている。設定値（`themeMode`/`dynamicColor`/`autoRefresh`/`cardSettings`/`qrPaymentSettings`/`registeredAreas`）は `SettingsRepository`（DataStore）の Flow を購読して `UiState` に載せ、変更は VM の setter→DataStore へ書く（`onEach { rebuild() }` で再判定）。テーマだけは描画前にテーマ層へ渡す必要があるため、`MainActivity` で VM を生成し `state.themeMode`/`dynamicColor` を `PoikatsuTheme` に注入してから `PoikatsuApp` を包む。設定画面は**トップページ（カテゴリ行のみ）+ サブページ**の 2 階層（#47）。トップ（`SettingsScreen`）はカテゴリ行（表示 / お支払い方法 / マイエリア / 通知 / キャンペーンデータ / バックアップ / 開発者向け / このアプリ）だけを置き、各行に畳んだ現在値のサマリ（`UiHelpers` の純関数 `displaySettingsSummary`・`paymentMethodsSummary`・`municipalitySummary`・`dataRowSummary`・`developerRowSummary`。例「カード3枚・コード決済2件」「埼玉県 南部 ほか1件」。登録なしは「未登録」+効果の一言）を出して遷移せず状態を一望できるようにする。行タップで `UiState.settingsSubpage`（`SettingsSubpage` enum）にサブページを積む（設定タブ上のオーバーレイ+`BackHandler`。topBar のタイトルは enum の `title`、分岐順は本文 when と一致させる。下部ナビは非表示）。サブページ: **表示**（`DisplaySettingsPage`。テーマ・dynamic color）/ **お支払い方法**（`PaymentMethodsSettingsPage`。マイカード（所有・還元率・国際ブランド・ウエル活）+ 国際ブランド + コード決済の 3 セクション統合——いずれも「何を持っているか」の登録で意味的に同族）/ **マイエリア**（`MunicipalitySettingsPage`。居住地・行動圏の自治体を登録。「自治体」だと登録する動機が伝わらないため「受け取りたくて登録している地域」のニュアンスで命名（マイカードと対）。登録済みリストの表示名は「都道府県 名前」（`areaDisplayName`。「南部」だけではどこの南部か分からないため。グループは構成自治体数を supporting に併記）。追加は都道府県→「グループ(まとめて登録)」+「市区町村」の 2 段ピッカー。グループは municipalities.json の `groups` 由来で「東京23区」「埼玉県南部」等。ピッカーの都道府県選択の階には**検索フィールド**（#49。`searchAreas`＝純関数+実マスタでテスト）があり、自治体名・グループ名の部分一致で都道府県横断の候補を出す（例「札幌」→ 北海道 札幌市。名前が分かっているとき 2 段を辿らずに済む近道で、都道府県から辿る導線も残す。マスタに読みがなが無いため表記の一致のみ）。行はチェックボックスのトグルで登録/解除を**即時反映**——「登録済み=操作不能」にせず押し間違いをその場で取り消せる。グループ行は ▼ で構成自治体名を展開でき「23区西部」の範囲を確認できる。登録済みリストの ✕ は確認ダイアログを挟まず**即削除+Snackbar「元に戻す」**（#49。アプリ共通の snackbarHost を使う。ピッカー内のトグル解除には出さない——チェックし直せば戻せるし、ダイアログ背面の Snackbar は押せないため）。マスタは起動時に assets からロードし、登録内容はおトクタブの地域フィルタに反映される）/ **キャンペーンデータ**（`DataSettingsPage`。データの状態・自動更新・手動更新。行サマリは「データ更新日：」の接頭辞を省いた短縮形 `dataRowSummary`）/ **バックアップ**（`BackupSettingsPage`。設定の JSON エクスポート/インポート。#50。状態を持たない操作の入口なので行サマリは現在値でなく用途「機種変更・再インストールに備えて設定をファイルに保存」。詳細は「4. データ取得戦略」の設定のバックアップ節）/ **開発者向け**（`DeveloperSettingsPage`。「開発者モード」トグル+ ON 中のみ現れる開発者向け設定。詳細は「4. データ取得戦略」の開発者モード節）/ **このアプリ**（`AboutSettingsPage`。バージョン・GitHub リンク・**オープンソースライセンス**（#48。`LicensesPage`＝ABOUT 配下の 2 階層目サブページ `SettingsSubpage.LICENSES`。戻る操作は `onCloseSettingsSubpage` が親の ABOUT へ戻す。一覧は AboutLibraries の Android プラグインがビルド時に Gradle 依存から自動生成した `R.raw.aboutlibraries` を M3 の `LibrariesContainer` で表示——依存の増減に自動追従。Gradle 依存でない同梱コード（AppIcons.kt の material-design-icons）は `app/config/libraries/` のカスタム定義で掲載））。
+**設定**は 4 タブの 1 つ（`AppTab.SETTINGS`）として独立した `SettingsScreen` に分離されている。設定値（`themeMode`/`dynamicColor`/`autoRefresh`/`cardSettings`/`qrPaymentSettings`/`registeredAreas`）は `SettingsRepository`（DataStore）の Flow を購読して `UiState` に載せ、変更は VM の setter→DataStore へ書く（`onEach { rebuild() }` で再判定）。テーマだけは描画前にテーマ層へ渡す必要があるため、`MainActivity` で VM を生成し `state.themeMode`/`dynamicColor` を `PoikatsuTheme` に注入してから `PoikatsuApp` を包む。設定画面は**トップページ（カテゴリ行のみ）+ サブページ**の 2 階層（#47）。トップ（`SettingsScreen`）はカテゴリ行（表示 / お支払い方法 / マイエリア / 通知 / キャンペーンデータ / バックアップ / 開発者向け / このアプリ）だけを置き、各行に畳んだ現在値のサマリ（`UiHelpers` の純関数 `displaySettingsSummary`・`paymentMethodsSummary`・`municipalitySummary`・`dataRowSummary`・`developerRowSummary`。例「カード3枚・コード決済2件」「埼玉県 南部 ほか1件」。登録なしは「未登録」+効果の一言）を出して遷移せず状態を一望できるようにする。行タップで `UiState.settingsSubpage`（`SettingsSubpage` enum）にサブページを積む（設定タブ上のオーバーレイ+`BackHandler`。topBar のタイトルは enum の `title`、分岐順は本文 when と一致させる。下部ナビは非表示）。サブページ: **表示**（`DisplaySettingsPage`。テーマ・dynamic color）/ **お支払い方法**（`PaymentMethodsSettingsPage`。マイカード（所有・還元率・国際ブランド）+ 国際ブランド + コード決済 + **ポイント**（#39。会員チェック=`membership_program` の通貨のみ・ポイント倍率チェック=`point_multiplier` を持つ通貨のみ。旧カード行のウエル活チェックはここへ通貨単位で移設）の 4 セクション統合——いずれも「何を持っているか」の登録で意味的に同族）/ **マイエリア**（`MunicipalitySettingsPage`。居住地・行動圏の自治体を登録。「自治体」だと登録する動機が伝わらないため「受け取りたくて登録している地域」のニュアンスで命名（マイカードと対）。登録済みリストの表示名は「都道府県 名前」（`areaDisplayName`。「南部」だけではどこの南部か分からないため。グループは構成自治体数を supporting に併記）。追加は都道府県→「グループ(まとめて登録)」+「市区町村」の 2 段ピッカー。グループは municipalities.json の `groups` 由来で「東京23区」「埼玉県南部」等。ピッカーの都道府県選択の階には**検索フィールド**（#49。`searchAreas`＝純関数+実マスタでテスト）があり、自治体名・グループ名の部分一致で都道府県横断の候補を出す（例「札幌」→ 北海道 札幌市。名前が分かっているとき 2 段を辿らずに済む近道で、都道府県から辿る導線も残す。マスタに読みがなが無いため表記の一致のみ）。行はチェックボックスのトグルで登録/解除を**即時反映**——「登録済み=操作不能」にせず押し間違いをその場で取り消せる。グループ行は ▼ で構成自治体名を展開でき「23区西部」の範囲を確認できる。登録済みリストの ✕ は確認ダイアログを挟まず**即削除+Snackbar「元に戻す」**（#49。アプリ共通の snackbarHost を使う。ピッカー内のトグル解除には出さない——チェックし直せば戻せるし、ダイアログ背面の Snackbar は押せないため）。マスタは起動時に assets からロードし、登録内容はおトクタブの地域フィルタに反映される）/ **キャンペーンデータ**（`DataSettingsPage`。データの状態・自動更新・手動更新。行サマリは「データ更新日：」の接頭辞を省いた短縮形 `dataRowSummary`）/ **バックアップ**（`BackupSettingsPage`。設定の JSON エクスポート/インポート。#50。状態を持たない操作の入口なので行サマリは現在値でなく用途「機種変更・再インストールに備えて設定をファイルに保存」。詳細は「4. データ取得戦略」の設定のバックアップ節）/ **開発者向け**（`DeveloperSettingsPage`。「開発者モード」トグル+ ON 中のみ現れる開発者向け設定。詳細は「4. データ取得戦略」の開発者モード節）/ **このアプリ**（`AboutSettingsPage`。バージョン・GitHub リンク・**オープンソースライセンス**（#48。`LicensesPage`＝ABOUT 配下の 2 階層目サブページ `SettingsSubpage.LICENSES`。戻る操作は `onCloseSettingsSubpage` が親の ABOUT へ戻す。一覧は AboutLibraries の Android プラグインがビルド時に Gradle 依存から自動生成した `R.raw.aboutlibraries` を M3 の `LibrariesContainer` で表示——依存の増減に自動追従。Gradle 依存でない同梱コード（AppIcons.kt の material-design-icons）は `app/config/libraries/` のカスタム定義で掲載））。
 
 **おトクタブの構成**（#44 で「期間限定」タブから改名）: `rebuild()` は card_program も除外せず全施策を `campaignsActive`/`campaignsUpcoming` に載せ、セクション分けは `CampaignScreen` 側が行う。順序は **開催中 → 常設 → 開催中（本日対象外）→ 常設（本日対象外）→ もうすぐ開始 → 終了（自作）**（recurrence 持ちは期間限定・常設それぞれの側で本日対象外セクションへ分ける）。「常設」は `isTimeLimited=false`（終了日なし かつ may_end_early でない: SMCC/MUFG の card_program・全加盟店対象の常設 promotion・終了日なしカスタム）のグループで、日付が無ければ期間行ごと省く（常設セクションの見出しが説明を兼ねる。専用バッジは他タブに無い装飾になるため付けない。判定詳細側の期間表示は `formatPeriod` が「常設」を返す）。recurrence 持ちの常設（たぬきの抽選会等）は非対象日でも常設セクションに留め、カード内の「次の対象日」行で案内する。card_program のカードタイトルは display_name → name（多チェーンでも「他Nチェーン」形式にしない）。**同一カードの常設 card_program は発行体（card_id）単位に 1 カードへ束ねる**（#81。エポス優待の 5 施策が常設セクションに 5 枚並ぶため）: `campaignGroupKey` の cardProgram 分岐（`"cardProgram:{cardId}"`。期間限定 card_program・card_id なしは従来どおり施策単位。通知は card_program を丸ごと対象外にしているため影響なし）で畳み、束ねカード（`isCardProgramBundle`=同一 card_id の card_program 2 件以上）はタイトル「{operator} 優待・特典 N件」+内訳サブ行（`cardProgramBundleSubtitle`。display_name から operator 接頭辞を除いた施策名 3 件+「ほかN件」）で出す。施策単位のバッジ（提示のみ・対象商品限定・対象のお店のみ）は束ねカードには付けず内訳側で出す（一部施策のバッジをグループに付けると #59 の注記混入と同種の誤解を生む）。右側の最大特典（`campaignGroupMaxBenefit`）は rebate/discount の型混在時、**%が大きい方の型だけを代表で出す**（「最大30% OFF」。同率は OFF 優先。2.5%還元と30%OFFを「最大30%還元」に合成しない）。タップは自治体束ねと同じ経路（`onSelectCampaignGroup`）で内訳の施策リストが開く。**束ねの詳細（CampaignDetail）は「対象:」を最上部で合成せず各施策カード内に出す**——複数施策の対象を率別に混ぜると、どの対象がどの施策のものか読めない（ビッグエコーのように同じチェーンが別条件で複数施策に登場すると特に）ため。最上部は地図ブリッジのボタンだけ残し、`CampaignJudgmentCard` の省略可能な `targetGroups` 引数（束ね時のみ非空。お店タブ・地図の判定カードはお店の文脈が既にあるため常に空）で施策単位の「対象のお店:」行を支払い方法の下に描く（行頭を「対象:」にすると eligible_notes の「対象：」と被るため `noRatePrefix` で区別。短くても常に枠の面に入れて注記の行に埋もれないようにする `alwaysFramed`——タップ不可の枠には chevron を出さず最小 48dp も確保しない）。率別グルーピング・折りたたみは #52 と共通（`TargetGroupLines`。UiHelpers）で、束ね時は対象 1 チェーンでも省略しない（タイトルが「{カード名} 優待・特典」で対象がどこにも出なくなるため）。束ね対象 1 件のカード（dカード特約店等）は従来表示のまま。全加盟店対象の promotion は `store_scope=external`+`merchant_rules` 空の「おトクタブ専用施策」（お店/地図の判定エンジンは managed のみ対象なので出ない。整合性テストは managed にだけ期間+merchant_rules を強制）。カスタムキャンペーンにも「お店を指定しない（全店舗対象）」トグルがあり、保存時に external へ写る。カスタムにも「早期終了の可能性あり」チェック（`CustomCampaign.mayEndEarly`＝campaigns.json の may_end_early と同義。終了日の有無と直交する 4 パターン対応）があり、終了日なし+チェックなしは常設扱い、チェックありは「終了日未定」の期間限定扱いになる。may_end_early の注記文言は終了日の有無で出し分ける: 終了日ありは「※早期終了の可能性あり」（詳細は自治体＝予算型なら「予算上限あり。〜」、カスタムは予算に言及しない）、終了日なしは「※予告なく終了する場合があります」（「早期」の比較対象となる期限が無いため）。カスタムの詳細条件には「提示のみで受けられる特典」チェック（`CustomCampaign.presentationOnly`＝campaigns.json の presentation_only と同義。#80）もあり、変換時にフラグがそのまま写って同梱施策と同じ分離・バッジ・注記の経路に乗る。
 
-**おトクタブの表示レートはお店タブと同じ基準**: 率の優先ロジック（promotion=施策の率優先 / card_program=カードの実効率優先・定額と率なし promotion は率を出さない）は `domain/JudgmentEngine.kt` の純関数 `resolveCardCampaignRate` に集約し、judgeCards（お店/地図）とおトクタブ（一覧=`campaignPersonalRates`・詳細=`onSelectCampaignGroup`）が共有する。所有カードの card_program はユーザー設定の実効率（ウエル活 ON ならマージ時に倍率適用済み）で表示され、倍率バッジ・「実質還元率」注記も判定カードと同様に出る。未所有カードの施策は施策側の rate_base へフォールバック（カタログ値の表示）。施策詳細カードの率の「最大」修飾は、段階制（rate_rules）に加えて**店舗別レートのばらつき（`Campaign.storeRatesVary`＝rate_override+rate_base が 2 値以上）でも冠する**（#81。エポス提示優待のビッグエコー30%/ジャンカラ20%で rate_base=30 を「30% OFF」と断定表示していた取りこぼしの修正）。施策全体ビューだけが最大値を表示するため、`CampaignJudgment.rateVariesByStore` は `onSelectCampaignGroup` でのみ設定し、お店タブ・地図（その店の実際の率を表示）は false のまま。定額表示（effectiveRate なし）には冠しない。一覧カード側（`campaignGroupMaxBenefit`）の同判定も同じ拡張プロパティを共用する。
+**おトクタブの表示レートはお店タブと同じ基準**: 率の優先ロジック（promotion=施策の率優先 / card_program=カードの実効率優先・定額と率なし promotion は率を出さない）は `domain/JudgmentEngine.kt` の純関数 `resolveCardCampaignRate` に集約し、judgeCards（お店/地図）とおトクタブ（一覧=`campaignPersonalRates`・詳細=`onSelectCampaignGroup`）が共有する。所有カードの card_program はユーザー設定の実効率（ウエル活 ON ならマージ時に倍率適用済み）で表示され、倍率バッジ・「実質還元率」注記も判定カードと同様に出る。施策側の率を使う施策も、払い出し通貨の倍率が有効なら `payoutCurrency`+`boostedCampaignRate`（#39。§5.4）で掛けた値を一覧・詳細とも表示する。未所有カードの施策は施策側の rate_base へフォールバック（カタログ値の表示）。施策詳細カードの率の「最大」修飾は、段階制（rate_rules）に加えて**店舗別レートのばらつき（`Campaign.storeRatesVary`＝rate_override+rate_base が 2 値以上）でも冠する**（#81。エポス提示優待のビッグエコー30%/ジャンカラ20%で rate_base=30 を「30% OFF」と断定表示していた取りこぼしの修正）。施策全体ビューだけが最大値を表示するため、`CampaignJudgment.rateVariesByStore` は `onSelectCampaignGroup` でのみ設定し、お店タブ・地図（その店の実際の率を表示）は false のまま。定額表示（effectiveRate なし）には冠しない。一覧カード側（`campaignGroupMaxBenefit`）の同判定も同じ拡張プロパティを共用する。
 
 **おトクタブの地域フィルタ**: 登録エリアがあると `rebuild()` が `filterCampaignsByArea`（domain/RegionFilter.kt・純 Kotlin）で `campaignsActive`/`campaignsUpcoming` を絞り込む。突合は (都道府県名, 自治体名)。region を持たない全国施策と、マスタで解決できない region（合併等で名称がずれた場合）は防御的に通す。タブのチップ行末尾に「登録地域のみ」チップ（登録あり かつ マスタ読込済みのときだけ表示・既定 ON）があり、OFF で全件表示（`showAllCampaigns`。閲覧モードなので永続化せず、再起動で既定のフィルタ ON に戻る）。
 

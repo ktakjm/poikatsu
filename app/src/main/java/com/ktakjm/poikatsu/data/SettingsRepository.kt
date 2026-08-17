@@ -31,8 +31,8 @@ data class CardOverride(
     val rate: Double? = null,
     /** 国際ブランド(MUFG の Amex/Mastercard/Visa/JCB 等)。null ならカタログの既定値。 */
     val brand: String? = null,
-    /** ウエル活(ポイント価値 ×倍率)で表示するか。 */
-    val welcatsu: Boolean = false,
+    // 旧フィールド welcatsu(カード単位のウエル活)は #39 で通貨単位の enabled_point_multipliers へ
+    // 正規化して廃止。保存済み JSON の残存値は ignoreUnknownKeys で無視される(移行せず再設定)
     /** カードクラス(カタログ card_classes の id。JCB W/S 等)。null ならカタログ先頭(保守側)。 */
     val cardClass: String? = null,
     /** 1pt の価値(円)。null ならカタログ(point_value.default)の既定値。 */
@@ -242,6 +242,16 @@ data class AppSettings(
      * card_brand 値から出すため、カタログ(payment_methods.json)にスキーマ追加は不要。
      */
     val ownedBrands: Set<String> = emptySet(),
+    /**
+     * ポイント倍率(ウエル活等)を有効にしている通貨 id(payment_methods.json の point_currencies)。
+     * 倍率は通貨の価値特性(#39)なので、Vポイントを稼ぐカードが複数あっても設定はここ1箇所。
+     */
+    val enabledPointMultipliers: Set<String> = emptySet(),
+    /**
+     * 会員になっているポイントプログラムの通貨 id(#39)。プログラム会員提示型施策
+     * (point_program_id)の判定フィルタに使う(所有カードと同じ opt-in の構図)。
+     */
+    val pointProgramMemberships: Set<String> = emptySet(),
     /** 登録エリア(自治体単体 or グループ)。おトクタブの地域フィルタに使う */
     val registeredAreas: List<RegisteredArea> = emptyList(),
     /** カタログ外のカスタムカード(登録順) */
@@ -301,6 +311,12 @@ class SettingsRepository(private val context: Context) {
         val DEVELOPER_MODE = booleanPreferencesKey("developer_mode")
         val QR_ENABLED = stringPreferencesKey("qr_enabled")
         val OWNED_BRANDS = stringPreferencesKey("owned_brands")
+
+        /** ポイント倍率(ウエル活等)を有効にしている通貨 id の Set(#39)。旧 CardOverride.welcatsu は移行せず廃止 */
+        val ENABLED_POINT_MULTIPLIERS = stringPreferencesKey("enabled_point_multipliers")
+
+        /** 会員になっているポイントプログラムの通貨 id の Set(#39) */
+        val POINT_PROGRAM_MEMBERSHIPS = stringPreferencesKey("point_program_memberships")
         // 旧キー "municipalities"(RegisteredMunicipality のリスト)は公開前のスキーマ刷新で廃止。
         // 移行せず捨てる(登録し直してもらう)
         val REGISTERED_AREAS = stringPreferencesKey("registered_areas")
@@ -331,6 +347,8 @@ class SettingsRepository(private val context: Context) {
             developerMode = prefs[Keys.DEVELOPER_MODE] ?: false,
             enabledQrPaymentIds = prefs.decodeQrEnabled(),
             ownedBrands = prefs.decodeOwnedBrands(),
+            enabledPointMultipliers = prefs.decodeIdSet(Keys.ENABLED_POINT_MULTIPLIERS),
+            pointProgramMemberships = prefs.decodeIdSet(Keys.POINT_PROGRAM_MEMBERSHIPS),
             registeredAreas = prefs.decodeRegisteredAreas(),
             customCards = prefs.decodeCustomCards(),
             customCampaigns = prefs.decodeCustomCampaigns(Keys.CUSTOM_CAMPAIGNS),
@@ -359,6 +377,8 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.CARD_OVERRIDES] = json.encodeToString(settings.cardOverrides)
             prefs[Keys.QR_ENABLED] = json.encodeToString(settings.enabledQrPaymentIds)
             prefs[Keys.OWNED_BRANDS] = json.encodeToString(settings.ownedBrands)
+            prefs[Keys.ENABLED_POINT_MULTIPLIERS] = json.encodeToString(settings.enabledPointMultipliers)
+            prefs[Keys.POINT_PROGRAM_MEMBERSHIPS] = json.encodeToString(settings.pointProgramMemberships)
             prefs[Keys.REGISTERED_AREAS] = json.encodeToString(settings.registeredAreas)
             prefs[Keys.CUSTOM_CARDS] = json.encodeToString(settings.customCards)
             // カスタムキャンペーンは通常データ側のみ復元する。テスト側(CUSTOM_CAMPAIGNS_TEST)は
@@ -455,9 +475,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setBrand(cardId: String, brand: String) =
         updateOverride(cardId) { it.copy(brand = brand) }
 
-    suspend fun setWelcatsu(cardId: String, enabled: Boolean) =
-        updateOverride(cardId) { it.copy(welcatsu = enabled) }
-
     suspend fun setCardClass(cardId: String, cardClass: String?) =
         updateOverride(cardId) { it.copy(cardClass = cardClass) }
 
@@ -486,6 +503,24 @@ class SettingsRepository(private val context: Context) {
             val current = prefs.decodeOwnedBrands().toMutableSet()
             if (owned) current.add(brand) else current.remove(brand)
             prefs[Keys.OWNED_BRANDS] = json.encodeToString(current)
+        }
+    }
+
+    /** ポイント倍率(ウエル活等)の有効/無効。通貨単位(#39。旧カード単位の setWelcatsu を置換) */
+    suspend fun setPointMultiplierEnabled(currencyId: String, enabled: Boolean) {
+        context.settingsDataStore.edit { prefs ->
+            val current = prefs.decodeIdSet(Keys.ENABLED_POINT_MULTIPLIERS).toMutableSet()
+            if (enabled) current.add(currencyId) else current.remove(currencyId)
+            prefs[Keys.ENABLED_POINT_MULTIPLIERS] = json.encodeToString(current)
+        }
+    }
+
+    /** ポイントプログラムの会員登録(#39)。提示型施策(point_program_id)の判定フィルタに効く */
+    suspend fun setPointProgramMembership(currencyId: String, member: Boolean) {
+        context.settingsDataStore.edit { prefs ->
+            val current = prefs.decodeIdSet(Keys.POINT_PROGRAM_MEMBERSHIPS).toMutableSet()
+            if (member) current.add(currencyId) else current.remove(currencyId)
+            prefs[Keys.POINT_PROGRAM_MEMBERSHIPS] = json.encodeToString(current)
         }
     }
 
@@ -595,6 +630,11 @@ class SettingsRepository(private val context: Context) {
 
     private fun Preferences.decodeOwnedBrands(): Set<String> =
         this[Keys.OWNED_BRANDS]
+            ?.let { runCatching { json.decodeFromString<Set<String>>(it) }.getOrNull() }
+            ?: emptySet()
+
+    private fun Preferences.decodeIdSet(key: Preferences.Key<String>): Set<String> =
+        this[key]
             ?.let { runCatching { json.decodeFromString<Set<String>>(it) }.getOrNull() }
             ?: emptySet()
 

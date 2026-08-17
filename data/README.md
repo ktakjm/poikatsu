@@ -6,7 +6,7 @@
 
 - `merchants.json` — チェーン店マスタ。1 merchant = 1 系列(施策の帰属単位)で、傘下の看板(店頭の名前。UI 表記は「業態」)は `banners` に持つ(§ 系列と看板 参照)。`reading`(ひらがな読み)と `aliases`(略称・別ブランド名)は検索のヒット率に直結するので、追加時は必ず入れる。位置情報を持たない発行体(自販機など)は `location_hint`(`text`/`label`/`url`/`app_package`(任意))を持たせる。これがあると判定詳細で「近くのこのお店を探す」を出さず、代わりに位置を確認できる外部アプリ/サイトへ案内する(例: コカ・コーラ自販機 → Coke ON 公式アプリ)。`app_package` を書くとインストール済みのアプリを直接起動し、未インストールなら `url` へフォールバックする(**パッケージ名は app の AndroidManifest `<queries>` と対で管理**。qr_payments の app_packages と同じ制約)。アプリ内に店舗マップがある確証が無い発行体は `url`(公式 Web マップ等)だけにする(例: ジハンピ → サントリー公式設置マップ)。`yolp_config` で YOLP 検索の gc グループ設定、各 merchant の `yolp_search`/`yolp_keyword` で検索方式を持つ(§ YOLP 検索設定 参照)。YOLP の提供データにそのチェーンの店舗がほぼ無いなど**地図に出にくい事実**は `yolp_coverage_note`(任意。表示文をそのまま持つ)に書き、判定詳細の「近くのこのお店を探す」直下に通常の補足として表示される(#70。対象外の意味ではないので warning にはしない)。**実測の根拠がある場合だけ書く**(推測で書かない)。alias 不足による取りこぼし(alias 補完で直せる)と、データセット自体に無いもの(補完で直せない)を混同しないこと(実例: OWNDAYS。#52 の実測記録参照)。
 - `campaigns.json` — 還元施策。`merchant_rules[].merchant_id` は merchants.json の `id`、`card_id` は payment_methods.json の `cards[].id` を参照する。**ユーザー固有の前提はここに書かず、汎用的な施策情報のみを持つ。** 常設施策(`card_program`)・期間限定施策(`promotion`)・自治体施策(`municipal`) の 3 種類をサポート。
-- `payment_methods.json` — 決済手段(カード + QR 決済)の**カタログ(マスタ)**。`cards` は現状: 三井住友(`smcc`、7%、`point_multiplier` でウエル活×1.5)、三菱UFJ(`mufg`、基準7%)、JCBオリジナルシリーズ(`jcb_original`、最大10%、`card_classes` で W/S・`point_value` で J-POINT の 1pt 価値を設定)、dカード(`dcard`、特約店最大4%)、エポスカード(`epos`、ポイントアップ優待最大2.5%。#59)。`brands` はそのカード製品で**選べるブランドの選択肢**で、実際に持っているブランドはユーザー設定(`CardOverride.brand`)に分離する(カタログにユーザー属性を混ぜない)。**設定画面でカード所有・還元率・ブランド・ウエル活を編集でき、差分はカード id をキーに DataStore に保存して起動時にこのカタログへ重ねる(payment_methods.json 自体は書き換えない)**。判定エンジンは**所有カードのみ**を対象とし、実ブランドが `ineligible_brands` に一致(または未選択でその除外ブランドを取りうる)ならその店を除外・リストに無いブランドなら無視、`effective_rate_default` を実効還元率として用いる。`qr_payments` に QR 決済サービスのカタログを持つ。
+- `payment_methods.json` — 決済手段(カード + QR 決済)と**ポイント通貨のカタログ(マスタ)**。`cards` は現状: 三井住友(`smcc`、7%、Vポイント)、三菱UFJ(`mufg`、基準7%)、JCBオリジナルシリーズ(`jcb_original`、最大10%、`card_classes` で W/S・`point_value` で J-POINT の 1pt 価値を設定)、dカード(`dcard`、特約店最大4%、dポイント)、エポスカード(`epos`、ポイントアップ優待最大2.5%。#59)。`brands` はそのカード製品で**選べるブランドの選択肢**で、実際に持っているブランドはユーザー設定(`CardOverride.brand`)に分離する(カタログにユーザー属性を混ぜない)。**設定画面でカード所有・還元率・ブランドを編集でき、差分はカード id をキーに DataStore に保存して起動時にこのカタログへ重ねる(payment_methods.json 自体は書き換えない)**。判定エンジンは**所有カードのみ**を対象とし、実ブランドが `ineligible_brands` に一致(または未選択でその除外ブランドを取りうる)ならその店を除外・リストに無いブランドなら無視、`effective_rate_default` を実効還元率として用いる。`qr_payments` に QR 決済サービスのカタログを持つ。`point_currencies` は**ポイント通貨・プログラムのマスタ**(#39): 倍率(ウエル活×1.5=Vポイントの価値特性)と会員プログラム(dポイント等。提示型施策の帰属先)を通貨単位で持ち、ウエル活 ON/OFF・会員かどうかは設定画面「ポイント」から DataStore(通貨 id の Set)に保存する。
 - `municipalities.json` — 全国自治体マスタ(47 都道府県・1,741 市区町村・自治体グループ)。設定画面で居住地・行動圏を登録する際のピッカーデータと、おトクタブの地域フィルタ(グループ→自治体の展開)に使う。`scripts/generate_municipalities.py` が気象庁の予報区データから自動生成する(§ municipalities.json 参照)。
 
 ## スキーマの要点
@@ -21,10 +21,12 @@
   - `"municipal"`: 自治体施策(店舗データなし)。おトクタブにのみ表示(`detail_url`/`store_search_url` で公式ページへリンク)
 - `operator` — 施策の運営者(カード会社・QR 決済事業者)。バッジ表示のフォールバックに使う
 - `display_name` — (任意)おトクタブのカード表示用の短いタイトル。**多チェーン promotion と card_program 用**(単一チェーン promotion は merchant 名、自治体系は region タイトルが使われるため不要。municipal には持たせない=整合性テストで検証)。`name` は公式表記の写し(メンテ時の照合キー+判定詳細の説明文)の役割を持つため、「ウエル/スギ」のような**略記の編集判断はこちらに分離**する。未指定時のフォールバック: card_program は `name`(常設プログラムは固有名で呼ぶ) → 単一チェーンは merchant 名 → 複数チェーンは「{先頭チェーン} 他Nチェーン」の自動生成。系列の 1 看板だけが対象の施策(`banner_ids` が 1 看板。例: くすりの福太郎限定クーポン)は**コード側がその看板名を出す**ので `display_name` での手当ては不要(#69)。登録規則(`{メーカー/運営}×{対象の略}` 形式・15 文字目安・率と期間は入れない。card_program は `{発行体名} {プログラム略称}`)は collect-campaigns スキルの mapping.md 参照
-- 施策の帰属は **`card_id` / `card_brand` / `payment_method_id` のちょうど 1 つ**(残り 2 つは null):
+- 施策の帰属は **`card_id` / `card_brand` / `payment_method_id` / `point_program_id` のちょうど 1 つ**(残りは null。整合性テストで強制):
   - `card_id` — 紐づくカード(payment_methods.json の `cards[].id`)。card_program / promotion で使う。1 カードに複数施策を紐づけられる
   - `card_brand` — ブランド施策(イシュアー不問。例: 「タッチで Visa 割」、Amex 30% OFF)の対象ブランド。値は payment_methods.json の `card_brands` にあるものを使う。所有カードのうち実ブランド(ユーザー設定。単一ブランド製品は自動確定)が一致するカードが 1 枚でもあれば判定に出る(複数一致でも判定は施策につき 1 件)。バッジは特定カード名でなく**ブランド名**(イシュアー不問のため)。**カタログに無いカードの保有ブランド**は設定画面「国際ブランド」(DataStore の `owned_brands` に保存)で登録でき、仮想カードとしてマッチする。セクションは常時表示し、事前登録しておけば施策開始と同時に判定へ現れる
   - `payment_method_id` — QR 決済(後述)
+  - `point_program_id` — **プログラム会員提示型施策**(dポイントカード提示 +3% 等。#39)の帰属先プログラム(payment_methods.json の `point_currencies[].id`)。カード所有でなく「プログラムの会員かどうか」(設定画面「ポイント」の会員チェック → DataStore `point_program_memberships`)に紐づく施策の帰属で、**提示型専用**(`presentation_only: true` 必須=整合性テストで強制。決済型をプログラムに帰属させると判定エンジンが支払い方法を解決できない)。判定は会員登録済みのプログラムの施策だけが「あわせて提示」の並記枠に出る。バッジ・識別色はプログラム名・`point_currencies[].brand_color` から解決する
+- `point_currency_id` — (任意)rebate の**払い出し通貨**(payment_methods.json の `point_currencies[].id`。#39)。ポイント倍率(ウエル活等)の適用判定に使う。未指定時の解決: card_id 施策はカードの通貨、QR 施策はサービスの通貨、提示型はプログラム自体を継承する。**card_brand 施策は継承元が無いため明示必須**(未指定なら倍率適用なし。「Visa の施策なら Vポイント」のような固定マッピングは採らない——報酬通貨は施策ごとに異なるため施策データで都度指定する)。discount(即時割引)・lottery には通貨の概念が無い
 - `benefit_type` — 特典のタイミング(3 値)。省略時は `"rebate"`:
   - `"rebate"`: ポイント還元(後日ポイント付与)。PayPay の「クーポン」も実態は後日ポイント付与のため rebate に分類
   - `"discount"`: 即時割引。定率(`rate_base`)か定額(`discount_amount`)かはフィールドから導出
@@ -47,7 +49,7 @@
 - `min_purchase_scope` — `min_purchase` の集計単位: `"transaction"`(1決済ごと。省略時) | `"period_total"`(期間中の購入合計に掛かる型。PayPay×花王の「期間累計3,000円以上」等)。`period_total` は表示が「期間中の購入合計○円以上で適用(複数回の買い物の合算可)」になる。指定するなら `min_purchase` 必須(整合性テストで強制)
 - `product_scope` — 対象商品限定(メーカー×小売×決済連動キャンペーンの「花王商品のみ」等)。`{ "label": "花王商品(メリーズ・キュレル・ソフィーナ・カネボウ除く)" }`。これがある施策は店の全商品に効かないため**「最良特典」比較(bestOption)から分離**される: 一覧・地図のラベルは無条件の特典を優先し、商品限定しか無いチェーンは「○% 還元(対象商品)」と付記、判定詳細では率の数字に「対象商品」を冠し「対象商品限定：{label}」の注意を表示する。判定カード・おトクタブのサマリーには「期間限定」と同列に**「商品限定」バッジ**(warning 系)が付く。なお**メーカー主催のレシート応募型**(決済不問。P&G ツルハ/ウエルシア等)は帰属先が無く「どの支払いを選ぶか」にも影響しないため収録対象外(#43)
 - `requires_entry` — 事前エントリーしないと還元されない施策(楽天ペイ×花王等)は true(省略時 false)。判定詳細に「事前エントリーが必要です(詳細ページから)」の警告を出す。エントリー導線は `detail_url` が担う
-- `presentation_only` — カード現物の**提示のみ**で受けられる特典(エポス優待「エポスカード提示で10%OFF」等。#80)は true(省略時 false)。支払いは別の決済手段でも対象のため**「最良特典」比較(bestOption)から分離**される: 一覧・地図のラベルは決済で受けられる特典を優先し、提示のみ施策しか無いチェーンは「○% OFF(提示のみ)」と付記、判定詳細には「提示のみ」バッジ(利点の表示なので warning 系でなく secondary 系)+「支払いは別の支払い方法でも対象」の注記が出る。帰属(`card_id`)は「提示にはカード現物の所有が必要」の意味でそのまま維持し(未所有カードの施策が判定に出ない所有フィルタがそのまま正しく機能する)、常設 `card_program` でもカードの通常還元率でなく**施策側の率**を表示する。**提示分と決済分は別施策として分離して起こす**(1 施策に混ぜるとフラグが施策単位で破綻する。mapping.md「提示と決済の分離」)。なお**ポイントプログラム会員の提示**(dポイントカード提示等。カード所有と無関係)はこのフラグでは表現できず、#39(プログラムマスタ)が受け皿
+- `presentation_only` — カード現物の**提示のみ**で受けられる特典(エポス優待「エポスカード提示で10%OFF」等。#80)は true(省略時 false)。支払いは別の決済手段でも対象のため**「最良特典」比較(bestOption)から分離**される: 一覧・地図のラベルは決済で受けられる特典を優先し、提示のみ施策しか無いチェーンは「○% OFF(提示のみ)」と付記、判定詳細には「提示のみ」バッジ(利点の表示なので warning 系でなく secondary 系)+「支払いは別の支払い方法でも対象」の注記が出る。帰属(`card_id`)は「提示にはカード現物の所有が必要」の意味でそのまま維持し(未所有カードの施策が判定に出ない所有フィルタがそのまま正しく機能する)、常設 `card_program` でもカードの通常還元率でなく**施策側の率**を表示する。**提示分と決済分は別施策として分離して起こす**(1 施策に混ぜるとフラグが施策単位で破綻する。mapping.md「提示と決済の分離」)。**ポイントプログラム会員の提示**(dポイントカード提示等。カード所有と無関係)はこのフラグ+`point_program_id` 帰属で表現する(#39)。提示のみ施策(両タイプとも)は判定リストでなく**「あわせて提示」の並記枠**に出る
 - `usage_limit` — 利用回数上限。null = 期間中無制限、1 = 1 回限り
 - `usage_limit_note` — 利用条件の人間向け補足
 - `eligible_wallets` / `ineligible_wallets` — **公式がウォレット単位で還元対象/対象外を言い切っている場合のみ**登録する(値: `"apple_pay"` / `"google_pay"`)。未掲載 = 不明として扱い、網羅性を仮定しない(official_store_list と同じ3状態の設計思想)。抽象フラグにしないのは「Apple Pay は対象・Google Pay は対象外」(MUFG)のような非対称な事実を表現するため:
@@ -90,7 +92,7 @@
   - `ineligible_banner_ids` — その看板だけ**対象外**(実例: MUFG ポイントアッププログラムはローソン対象だがローソンスリーエフの公式記載なし → 除外。#62)。該当看板の POI は判定なし = 地図ピン・一覧からも消える
   - 判定詳細では「対象は◯◯のみ」「◯◯は対象外」の注記に自動合成されるので、同じ内容を `ineligible_notes` に重ねて書かない
 - `verified_date` — 公式ページで最後に確認した日。**判定画面に必ず表示する。**
-- 識別色(brand_color)は campaigns.json には**持たない**。発行体(payment_methods.json の cards / card_brands / qr_payments)側で一元管理し、アプリが帰属(card_id / card_brand / payment_method_id)から解決する(同一発行体の施策間で色がぶれないようにするため。§ payment_methods.json 参照)
+- 識別色(brand_color)は campaigns.json には**持たない**。発行体(payment_methods.json の cards / card_brands / qr_payments / point_currencies)側で一元管理し、アプリが帰属(card_id / card_brand / payment_method_id / point_program_id)から解決する(同一発行体の施策間で色がぶれないようにするため。§ payment_methods.json 参照)
 
 ### payment_methods.json
 
@@ -99,13 +101,16 @@
   - カード: 三井住友=フレッシュグリーン `#00A94F`(SMFG VI にはトラッドグリーン `#004831` もあるが、視認性と従来表示の継続のため明るい方に統一)、三菱UFJ=MUFGレッド `#E60000`、JCB=ティール `#00707C`、dカード=dレッド `#E60033`(d払いと同色。同一発行体グループとして色を統一し、判定・バッジはラベル文字で区別する。#58)、エポス=エポスレッド `#E60012`(MUFG・dカードと近接する赤系だが公式VIを維持し、区別はラベル文字に委ねる。#59)
   - ブランド: Visa `#1A1F71`、Mastercard `#EB001B`、JCB `#005BAC`、Amex `#016FD0`(各社ロゴの近似色)
   - QR 決済: PayPay `#FF0033`、au PAY `#FF5722`、d払い `#E60033`、楽天ペイ `#BF0000`
-- `cards` — カードのカタログ。`{ id, card_name, brand_color, brands, effective_rate_default, point_multiplier }`。`id`(例: `"smcc"`)は campaigns.json の `card_id` と DataStore のカード差分キーから参照される
+  - ポイントプログラム: Vポイント `#0F3F8F`(ロゴの青系)、dポイント `#E60033`(dカード・d払いと同色)、楽天ポイント `#BF0000`(楽天ペイと同色)、Ponta `#F39800`(オレンジ)、PayPayポイント `#FF0033`(PayPay と同色)
+- `point_currencies` — **ポイント通貨・プログラムのマスタ**(#39)。`{ id, name, brand_color, membership_program, point_multiplier }`。「Vポイント」「dポイント」のようなエンティティを、通貨価値(倍率の帰属先)と会員プログラム(提示型施策 `point_program_id` の帰属先)の両面で表す 1 行。カード・QR は `point_currency_id` でこの通貨を「稼ぐ手段」として参照する
+  - `membership_program` — カード/アプリ提示の**会員プログラムがあるか**(dポイント・Ponta 等)。true の通貨だけ設定画面「ポイント」に会員チェックを出す(PayPayポイントのように提示の仕組みが無い通貨に意味のないトグルを出さない)。会員かどうかは DataStore(`point_program_memberships`)に分離
+  - `point_multiplier` — (任意)ポイント価値の倍率。`{ label, factor, color, badge_label, applied_note }`。設定画面「ポイント」に label のチェックを出し、ON でこの通貨で払い出される率(通貨を稼ぐカードの実効率+施策側の rebate 率)を `factor` 倍で表示する。`color` はバッジ色(ウエルシアのロゴ色)。Vポイント(ウエル活×1.5)に設定。**条件付きの増価**(特定の使い方をしたときの価値)であり、恒常的な 1pt 価値(J-POINT の point_value)とは別軸(恒常価値の通貨単位化・一般化は #13)
+- `cards` — カードのカタログ。`{ id, card_name, brand_color, brands, effective_rate_default, point_currency_id }`。`id`(例: `"smcc"`)は campaigns.json の `card_id` と DataStore のカード差分キーから参照される。`point_currency_id` はこのカードが稼ぐ通貨(point_currencies.id。任意)で、rebate 施策の払い出し通貨の既定継承元になる
 - `brands` — そのカード製品で**選べるブランドの選択肢**(カタログの事実。例: 三菱UFJカードは Visa/Mastercard/JCB/Amex)。**ユーザーが実際に持っているブランドはカタログに置かず** `CardOverride.brand`(DataStore)で持つ。`brands` が単一なら自動確定、複数なら未選択(空)から設定画面で選ぶ。未選択の間は**好条件側に倒さない**: `card_brand` 施策には一致せず(特典を出さない)、`ineligible_brands` はそのカードが除外ブランドを取りうる限り除外側に倒す。加えて、ブランドが判定に効くカードは有効化時にブランド選択を必須にしている
-- `point_multiplier`(任意) — ポイント価値の倍率。`{ label, factor, color }`。設定画面で「ウエル活利用時の還元率を表示」チェックを出し、ON で `factor` 倍した実効還元率を表示する。`color` はバッジ色(ウエルシアのロゴ色 #RRGGBB)。三井住友(Vポイント)に設定。
 - `card_classes`(任意) — 同一カード製品内の**グレード差の選択肢**(#52)。`[{ id, label, rate_bonus }]`。`rate_bonus` は店舗別レート(rate_override)と実効率既定値に**加算**する率(%。例: JCB CARD W はパートナー店で S より +1pt/200円 = +0.5)。どのクラスを持っているかはユーザー設定(`CardOverride.cardClass`)で、未選択は**先頭**が既定になるため**保守側(加算の小さい方)を先頭に置く**。JCBオリジナルシリーズ(S / W)に設定
-- `point_value`(任意) — **1pt 価値の設定定義**(#52)。`{ label, default, note }`。使い道で 1pt の価値が変動するポイント通貨(J-POINT は 0.7〜1円)のカードに置くと、設定画面に「1ptの価値」入力が出て、実効率・店舗別レートに乗算される(`CardOverride.pointValue`。null なら `default`)。収録レートは `default` 基準で書く。ポイント通貨マスタ(#39)が入るまでのカード単位の暫定表現
+- `point_value`(任意) — **1pt 価値の設定定義**(#52)。`{ label, default, note }`。使い道で 1pt の価値が変動するポイント通貨(J-POINT は 0.7〜1円)のカードに置くと、設定画面に「1ptの価値」入力が出て、実効率・店舗別レートに乗算される(`CardOverride.pointValue`。null なら `default`)。収録レートは `default` 基準で書く。**恒常的な 1pt 価値**のカード単位の暫定表現(通貨単位への統合・ユーザー設定の一般化は #13。条件付き増価=ウエル活型は point_currencies の `point_multiplier` へ移設済み)
   - **設定画面の還元率行は手入力に意味があるカード(単一率プログラム=SMCC/MUFG)だけに出す**。クラス/1pt価値を持つカード(JCB)は率が設定からの導出値 `(effective_rate_default + rate_bonus) × 1pt価値`、店舗別レートプログラム(`rate_override`)のカード(dカード)は率が店舗ごとの収録値で決まり、どちらも設定の余地が無いため行自体を出さず、保存済みの手入力値もマージで無視する(`allowsManualRate`。#58)
-- `qr_payments` — 利用中の QR 決済サービスのカタログ。`{ id, name, brand_color, app_packages, store_search_label, enabled_default }`。設定画面でチェックした QR 決済が判定エンジンのフィルタに使われる。DataStore に差分保存。
+- `qr_payments` — 利用中の QR 決済サービスのカタログ。`{ id, name, brand_color, app_packages, store_search_label, enabled_default, point_currency_id }`。設定画面でチェックした QR 決済が判定エンジンのフィルタに使われる。DataStore に差分保存。`point_currency_id` はこのサービスが稼ぐ通貨(任意。rebate の払い出し通貨の既定継承元)。
   - `app_packages` — そのサービスで決済できるアプリのリスト `[{ package, label }]`(優先順)。1 サービスを複数アプリが担える(AEON Pay = 単独アプリ / iAEON の 2 本立て)ため 1:N で持ち、判定詳細の起動リンクは候補全部をボタンで出す。`label` は起動先アプリの実名(サービス名と一致するとは限らない。メルペイ → メルカリ)。**パッケージ名は app の AndroidManifest `<queries>` と対で管理**(宣言が無いと Android 11+ でインストール済みでも起動 Intent が取れず Play ストア送りになる。リモート JSON で追加してもアプリ更新が要る)
 
 ### merchants.json — 系列と看板(banners)
@@ -203,7 +208,8 @@
 | `test_exhaustive_store_list` | **網羅リスト**(`list_is_exhaustive`。#64): 掲載店(テスト対象1号店/2号店)以外のドラッグストアではこの施策だけ判定・地図から消える(他施策があれば店は残る)。網羅リストのみのチェーンでも「このお店が対象か調べる」導線が出る(#70) | 常時安定 |
 | `test_rebate_fixed` | **後日定額** rebate+`discount_amount`(500 円還元)、`usage_limit`(3 回)、`usage_limit_note`、`period_total_cap` | 常時安定 |
 | `test_product_scope` | **対象商品限定**(`product_scope`。最良比較から分離・「対象商品」冠表示)、`min_purchase_scope: period_total`(期間累計の最低購入額表示)、`requires_entry`(要エントリー警告)、**多チェーン+`display_name`**(カードタイトルの手動略記。`display_name` の無い多チェーンの自動生成「{先頭} 他Nチェーン」は `test_promotion` で確認) | 常時安定 |
-| `test_presentation_only` | **提示のみ**(`presentation_only`。#80): 常設 card_program のカード現物提示型優待(エポス優待相当の 10% OFF)。「提示のみ」バッジ+「支払いは別の支払い方法でも対象」注記、最良比較からの分離(テストスーパーで最大おトク率が 7% のまま)、常設 card_program でもカードの通常率(7%)でなく**施策側の率(10% OFF)**が出ることを確認 | 常時安定 |
+| `test_presentation_only` | **提示のみ**(`presentation_only`。#80): 常設 card_program のカード現物提示型優待(エポス優待相当の 10% OFF)。「提示のみ」バッジ+「支払いは別の支払い方法でも対象」注記、判定リストと分かれた**「あわせて提示」並記枠**(#39)、最良比較からの分離(テストスーパーで最大おトク率が 7% のまま)、常設 card_program でもカードの通常率(7%)でなく**施策側の率(10% OFF)**が出ることを確認 | 常時安定 |
+| `test_program_presentation` | **プログラム会員提示**(`point_program_id`。#39): dポイント特約店の提示分相当(テストプログラム会員証提示で 3% 還元)。設定→お支払い方法→ポイント→「テストプログラム」の会員チェック ON のときだけ「あわせて提示」並記枠に出る(OFF なら消える)。バッジ・色がプログラム(紫)由来になることを確認 | 常時安定 |
 | `test_discount_card_program` | **決済型の即時定率割引** discount+card_program(カラオケ館相当。#59): カード `test_card_epos` の決済条件付き最大30%OFF。`rate_rules`(ルーム30%/フリータイム25%の内訳)+`product_scope`(対象料金限定)+`rate_override`。rebate 施策と混ざったとき「最大30% OFF(対象商品)」表示になり、最良比較から分離される(テストバーガーの最良が変わらない)ことを確認 | 常時安定 |
 | `test_upcoming` | **UPCOMING** 状態(常時未開始)、`requires_entry` | 常時安定 |
 | `test_ending_soon` | **残り 3 日警告**(検証日に `period_end` を手直し) | **要手直し** |
@@ -215,8 +221,9 @@
 
 - **テストコンビニ**: test_card_program(7%)・test_store_rate_program(1.5% テストJCB)・test_promotion(10%)・test_recurrence_weekly(20% 金土)・test_lottery(抽選)・test_rebate_fixed(500 円還元 PayPay)・test_upcoming(25% 未開始)・test_ending_soon(15% 終了間近)
 - **テストバーガー**: test_card_program(7%)・test_store_rate_program(10% テストJCB)・test_promotion(15% override)・test_brand_promotion(Visa 30% OFF)・test_recurrence_monthly(12% 5・20・30 日)・test_discount_fixed(300 円引き PayPay)・test_discount_card_program(最大30% OFF 対象料金限定・テストエポス)・test_upcoming(25% 未開始)
-- **テストスーパー**: test_card_program(7%・Amex 除外)・test_product_scope(30% 対象商品限定 PayPay)・test_presentation_only(10% OFF 提示のみ)。無条件の 7% と商品限定 30%・提示のみ 10% OFF が並んでも最大おトク率が 7% のまま(商品限定・提示のみを最良比較に載せない)ことを確認できる
-- **テストデパート**: test_presentation_only(10% OFF 提示のみ)のみ。提示のみ施策しか無いチェーンの一覧ラベル「10% OFF(提示のみ)」の確認用(エポス優待×マルイ相当。alias「マルイ」+YOLP キーワード「マルイ」で実店舗ピンの実機確認ができる)
+- **テストスーパー**: test_card_program(7%・Amex 除外)・test_product_scope(30% 対象商品限定 PayPay)・test_presentation_only(10% OFF 提示のみ)・test_program_presentation(3% 会員提示。会員 ON 時のみ)。無条件の 7% と商品限定 30%・提示のみ 10% OFF が並んでも最大おトク率が 7% のまま(商品限定・提示のみを最良比較に載せない)ことを確認できる
+- **テストデパート**: test_presentation_only(10% OFF 提示のみ)・test_program_presentation(3% 会員提示。会員 ON 時のみ)。提示のみ施策しか無いチェーンの一覧ラベル「10% OFF(提示のみ)」と「あわせて提示」並記枠だけの判定画面の確認用(エポス優待×マルイ相当。alias「マルイ」+YOLP キーワード「マルイ」で実店舗ピンの実機確認ができる)
+- **ポイント倍率(#39)**: `test_card` は `point_currency_id: test_point`(倍率×1.5 のテストポイント)を稼ぐ。設定→ポイント→「テスト倍率デーで表示」ON で、test_card の実効率(7%→10.5%)と promotion の施策側の率(10%→15% 等)の両方に倍率が掛かり、倍率バッジ+実質還元率注記が出ることを確認できる
 - **テストドラッグ**: test_product_scope(30% 対象商品限定 PayPay)のみ。商品限定施策しか無いチェーンの一覧ラベル「30% 還元(対象商品)」の確認用。実在ドラッグストア 6 チェーンを **banners**(テストドラッググループの業態)として持ち、gc グループ `0202001` で地図表示・業態レンズ・グループ束ね UI の実機確認ができる。施策側は `ineligible_banner_ids: ["test_sundrug"]` の使用例を兼ね、**サンドラッグの実店舗ピンだけ地図から消える**(看板スコープの実機確認用。#60)
 
 #### 日付依存パターンの手直し手順
@@ -245,7 +252,7 @@
 - 「実効」は**そのカードの最有利構成**(最上位 `card_classes` の加算込み・1pt=1円換算)での絶対%(決済の通常ポイント込み)。例: J-POINT パートナーのセブン-イレブン(収録値 1.5% = S 基準)は W 換算 +0.5% で 2.0% になるため収録
 - 根拠: 常時 1.5% 級+ポイント倍率の高還元カード(カタログ外含む)を常用するユーザーにとって、実効 2% 未満の常設施策は支払い方法の選択を変えないため
 - 期間限定(promotion・自治体)の 5% 基準と水準が違うのは、常設は日常の支払い先の恒常的な選択に効く(低率でも累積する)のに対し、期間限定は期間・条件の把握という手間があり 5% 未満では行動を変える価値が薄いため
-- **提示分**(ポイントカード提示・カード現物提示が条件の特典)は必ず決済分と分離して起こす。分離した提示分のうち**カード現物提示型**(エポス優待等)は `presentation_only: true` で収録する(#80 で解禁)。**ポイントプログラム会員提示型**(dポイントカード提示等。カード所有と無関係)は受け皿(#39)ができるまで引き続き理由付きで見送りに回す。閾値 2% は提示施策にも同じく適用する(全加盟店共通の通常提示分 1% は閾値未満かつ自明なので収録しない)。詳細は collect-campaigns の mapping.md「提示と決済の分離」
+- **提示分**(ポイントカード提示・カード現物提示が条件の特典)は必ず決済分と分離して起こす。分離した提示分のうち**カード現物提示型**(エポス優待等)は `presentation_only: true` + `card_id` で(#80)、**ポイントプログラム会員提示型**(dポイントカード提示等。カード所有と無関係)は `presentation_only: true` + `point_program_id` で収録する(#39 で解禁)。閾値 2% は提示施策にも同じく適用する(全加盟店共通の通常提示分 1% は閾値未満かつ自明なので収録しない。dポイントの提示は全加盟店 0.5〜1% が標準で、マツキヨ/ココカラも税抜100円=1pt=1% と 2026-08-18 に公式確認済み——現時点で閾値を超える会員提示型の実例は無い。ランク倍率のようなユーザー属性による増率は施策ではないためデータ化しない)。詳細は collect-campaigns の mapping.md「提示と決済の分離」
 - 自社経済圏の自明な組み合わせ(イオンカード×イオン系列、ルミネカード×ルミネ等)は率によらず収録しない(「アプリを見ないと分からない組み合わせ」にこそ判定価値があるため)
 - この閾値は CI で機械検証しない(収集・メンテ時の運用基準)。実効値はカードクラス・1pt 価値のユーザー設定で変わるため収録生値では判定できず、data-test には率別グルーピング検証用に基準未満の値を意図的に置いている
 

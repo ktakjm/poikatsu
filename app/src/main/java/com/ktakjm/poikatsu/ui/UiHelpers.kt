@@ -164,14 +164,15 @@ internal fun displaySettingsSummary(
 }.joinToString("・")
 
 /**
- * 「お支払い方法」行のサマリ。登録のある種別だけ列挙し(カード=カタログ所有+カスタム)、
- * すべて未登録なら「未登録」。
+ * 「お支払い方法」行のサマリ。登録のある種別だけ列挙し(カード=カタログ所有+カスタム、
+ * ポイント=会員登録+倍率有効の通貨数)、すべて未登録なら「未登録」。
  */
-internal fun paymentMethodsSummary(cardCount: Int, brandCount: Int, qrCount: Int): String {
+internal fun paymentMethodsSummary(cardCount: Int, brandCount: Int, qrCount: Int, pointCount: Int = 0): String {
     val parts = buildList {
         if (cardCount > 0) add("カード${cardCount}枚")
         if (brandCount > 0) add("国際ブランド${brandCount}件")
         if (qrCount > 0) add("コード決済${qrCount}件")
+        if (pointCount > 0) add("ポイント${pointCount}件")
     }
     return if (parts.isEmpty()) "未登録" else parts.joinToString("・")
 }
@@ -238,6 +239,8 @@ internal fun backupContentSummary(backup: SettingsBackup): String {
         if (backup.customCards.isNotEmpty()) add("カスタムカード${backup.customCards.size}枚")
         if (backup.ownedBrands.isNotEmpty()) add("国際ブランド${backup.ownedBrands.size}件")
         if (backup.enabledQrPaymentIds.isNotEmpty()) add("コード決済${backup.enabledQrPaymentIds.size}件")
+        val pointCount = (backup.pointProgramMemberships + backup.enabledPointMultipliers).size
+        if (pointCount > 0) add("ポイント${pointCount}件")
         if (backup.registeredAreas.isNotEmpty()) add("マイエリア${backup.registeredAreas.size}件")
         if (backup.customCampaigns.isNotEmpty()) {
             add("自分で登録したキャンペーン${backup.customCampaigns.size}件")
@@ -1032,12 +1035,19 @@ private fun effectiveRates(campaigns: List<Campaign>, personalRates: Map<String,
  * 発行体束ね(#81)のグループか: 同一 card_id の常設 card_program が2件以上。
  * エポス優待のように1カードへ複数の常設施策がぶら下がる場合、おトクタブの一覧では
  * 1カードに束ねて出す([campaignGroupKey] の cardProgram 分岐で畳まれたグループ)。
+ * 同一 point_program_id の常設プログラム提示施策(#39)も同じ扱い。
  * 1件だけのカード(dカード特約店等)は従来表示のまま。
  */
 internal fun isCardProgramBundle(campaigns: List<Campaign>): Boolean =
     campaigns.size >= 2 &&
-        campaigns.all { it.campaignType == CampaignType.CARD_PROGRAM && it.cardId != null } &&
-        campaigns.mapTo(HashSet()) { it.cardId }.size == 1
+        campaigns.all { it.campaignType == CampaignType.CARD_PROGRAM } &&
+        (
+            (campaigns.all { it.cardId != null } && campaigns.mapTo(HashSet()) { it.cardId }.size == 1) ||
+                (
+                    campaigns.all { it.pointProgramId != null } &&
+                        campaigns.mapTo(HashSet()) { it.pointProgramId }.size == 1
+                    )
+            )
 
 /**
  * 発行体束ねカードの内訳サブ行。「モンテローザ優待 / KEYUCA優待 / カラオケ館優待 ほか2件」。

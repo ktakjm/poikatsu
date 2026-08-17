@@ -437,11 +437,11 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         customCards = state.customCards,
                         brands = state.brandSettings,
                         qrPayments = state.qrPaymentSettings,
+                        pointCurrencies = state.pointCurrencySettings,
                         onBack = viewModel::onCloseSettingsSubpage,
                         onCardOwnedChange = viewModel::onSetCardOwned,
                         onCardRateChange = viewModel::onSetCardRate,
                         onCardBrandChange = viewModel::onSetCardBrand,
-                        onCardWelcatsuChange = viewModel::onSetCardWelcatsu,
                         onCardClassChange = viewModel::onSetCardClass,
                         onCardPointValueChange = viewModel::onSetCardPointValue,
                         onAddCustomCard = viewModel::onAddCustomCard,
@@ -449,6 +449,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         onRemoveCustomCard = viewModel::onRemoveCustomCard,
                         onBrandOwnedChange = viewModel::onSetBrandOwned,
                         onQrEnabledChange = viewModel::onSetQrEnabled,
+                        onPointProgramMemberChange = viewModel::onSetPointProgramMembership,
+                        onPointMultiplierChange = viewModel::onSetPointMultiplierEnabled,
                     )
                     SettingsSubpage.MUNICIPALITIES -> MunicipalitySettingsPage(
                         registeredAreas = state.registeredAreas,
@@ -724,6 +726,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                                     cardCount = state.cardSettings.count { it.owned } + state.customCards.size,
                                     brandCount = state.brandSettings.count { it.owned },
                                     qrCount = state.qrPaymentSettings.count { it.enabled },
+                                    pointCount = state.pointCurrencySettings
+                                        .count { it.member || it.multiplierEnabled },
                                 ),
                                 municipalitySummary = municipalitySummary(state.registeredAreas),
                                 notificationSummary = notificationSummary(

@@ -38,12 +38,15 @@ class SettingsBackupTest {
         notificationTimeMinutes = 7 * 60 + 30,
         cardOverrides = mapOf(
             "olive" to CardOverride(owned = false),
-            "epos_gold" to CardOverride(rate = 1.5, brand = "Visa", welcatsu = true),
+            "epos_gold" to CardOverride(rate = 1.5, brand = "Visa"),
             // カードクラス・1pt価値(#52。JCB W/S 等)も機種変更で失われないこと
             "jcb_original" to CardOverride(cardClass = "w", pointValue = 0.7),
         ),
         enabledQrPaymentIds = setOf("paypay", "rakuten_pay"),
         ownedBrands = setOf("Amex"),
+        // ポイント通貨の設定(#39)も機種変更で失われないこと
+        enabledPointMultipliers = setOf("vpoint"),
+        pointProgramMemberships = setOf("dpoint"),
         registeredAreas = listOf(
             RegisteredArea(RegisteredAreaType.MUNICIPALITY, "13113", "渋谷区", "東京都"),
         ),
@@ -79,6 +82,8 @@ class SettingsBackupTest {
         assertEquals(settings.cardOverrides, restored.cardOverrides)
         assertEquals(settings.enabledQrPaymentIds, restored.enabledQrPaymentIds)
         assertEquals(settings.ownedBrands, restored.ownedBrands)
+        assertEquals(settings.enabledPointMultipliers, restored.enabledPointMultipliers)
+        assertEquals(settings.pointProgramMemberships, restored.pointProgramMemberships)
         assertEquals(settings.registeredAreas, restored.registeredAreas)
         assertEquals(settings.customCards, restored.customCards)
         assertEquals(settings.customCampaigns, restored.customCampaigns)
@@ -128,6 +133,16 @@ class SettingsBackupTest {
     fun `知らないキーがあっても読める`() {
         val future = """{"schemaVersion":1,"ownedBrands":["JCB"],"futureKey":{"a":1}}"""
         assertEquals(setOf("JCB"), decodeSettingsBackup(future)!!.toSettings().ownedBrands)
+    }
+
+    // 旧 CardOverride.welcatsu(カード単位。#39 で通貨単位へ正規化して廃止)を含む v1 ファイルも
+    // 読める(welcatsu は捨てられ、他の上書き値は残る)
+    @Test
+    fun `旧welcatsu付きのカード差分も読める`() {
+        val legacy = """{"schemaVersion":1,"cardOverrides":{"smcc":{"rate":8.0,"welcatsu":true}}}"""
+        val restored = decodeSettingsBackup(legacy)!!.toSettings()
+        assertEquals(8.0, restored.cardOverrides.getValue("smcc").rate!!, 0.0)
+        assertTrue(restored.enabledPointMultipliers.isEmpty())
     }
 
     // schemaVersion 無しを弾けないと、無関係な JSON が「全部既定値のバックアップ」として
@@ -198,8 +213,8 @@ class SettingsBackupTest {
     fun `確認ダイアログの要約は登録のある種別だけ並べる`() {
         val backup = settings.toBackup("2026-07-27T10:00:00", "0.9.0")
         assertEquals(
-            "マイカードの設定3件・カスタムカード1枚・国際ブランド1件・コード決済2件・マイエリア1件・" +
-                "自分で登録したキャンペーン1件・対象外に登録したお店1件",
+            "マイカードの設定3件・カスタムカード1枚・国際ブランド1件・コード決済2件・ポイント2件・" +
+                "マイエリア1件・自分で登録したキャンペーン1件・対象外に登録したお店1件",
             backupContentSummary(backup),
         )
         assertEquals(

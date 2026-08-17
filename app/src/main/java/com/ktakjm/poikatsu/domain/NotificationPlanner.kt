@@ -67,26 +67,29 @@ fun notificationTargets(
     enabledQrIds: Set<String>,
     registeredAreas: List<RegisteredArea>,
     master: MunicipalityMaster,
+    memberships: Set<String> = emptySet(),
 ): List<Campaign> {
     val timeLimited = campaigns.filter { it.campaignType != CampaignType.CARD_PROGRAM }
     val municipal = municipalCampaignsForAreas(timeLimited, registeredAreas, master)
     val promotions = timeLimited.filter { campaign ->
         campaign.campaignType == CampaignType.PROMOTION &&
-            (campaign.isCustom || backedByUserPayments(campaign, ownedCards, enabledQrIds))
+            (campaign.isCustom || backedByUserPayments(campaign, ownedCards, enabledQrIds, memberships))
     }
     return (municipal + promotions).distinctBy { it.id }
 }
 
-/** 施策の紐付け先決済手段をユーザーが持っているか(resolveCard / judgeQr のフィルタと同じ基準) */
+/** 施策の紐付け先(決済手段・プログラム会員 #39)をユーザーが持っているか(resolveCard / judgeQr / judgePrograms のフィルタと同じ基準) */
 private fun backedByUserPayments(
     campaign: Campaign,
     ownedCards: List<PaymentCard>,
     enabledQrIds: Set<String>,
+    memberships: Set<String>,
 ): Boolean = when {
     campaign.paymentMethodId != null -> campaign.paymentMethodId in enabledQrIds
     campaign.cardId != null -> ownedCards.any { it.id == campaign.cardId }
     campaign.cardBrand != null ->
         ownedCards.any { it.brand.equals(campaign.cardBrand, ignoreCase = true) }
+    campaign.pointProgramId != null -> campaign.pointProgramId in memberships
     else -> true // 決済手段の紐付けが無い施策は決済側の条件では絞らない
 }
 
