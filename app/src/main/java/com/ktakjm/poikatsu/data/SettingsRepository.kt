@@ -35,7 +35,11 @@ data class CardOverride(
     // 正規化して廃止。保存済み JSON の残存値は ignoreUnknownKeys で無視される(移行せず再設定)
     /** カードクラス(カタログ card_classes の id。JCB W/S 等)。null ならカタログ先頭(保守側)。 */
     val cardClass: String? = null,
-    /** 1pt の価値(円)。null ならカタログ(point_value.default)の既定値。 */
+    /**
+     * 1pt の価値(円)。#13 で通貨単位(AppSettings.pointCurrencyValues)へ移行済み。
+     * 読み込みは旧データからの移行(SettingsRepository.migrateCardPointValues)のために残し、
+     * それ以外での新規書き込みはしない(UI からの設定は通貨単位で行う)。
+     */
     val pointValue: Double? = null,
 )
 
@@ -209,6 +213,18 @@ data class ExcludedStorePair(
         campaignId == other.campaignId && merchantId == other.merchantId && storeName == other.storeName
 }
 
+/**
+ * 期間限定ポイントの残高と失効日(通貨ごとに1件=直近失効分。#13)。
+ * 公式 API が無いため手入力。失効したら次の塊を入れ直す運用。
+ */
+@Serializable
+data class PointBalance(
+    /** 残高(pt) */
+    val balancePt: Int,
+    /** 失効日(YYYY-MM-DD)。この日までは利用可能、翌日以降は失効済み扱い */
+    val expiryDate: String,
+)
+
 /** アプリ全体の設定スナップショット。DataStore から1本の Flow で配る。 */
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -252,6 +268,17 @@ data class AppSettings(
      * (point_program_id)の判定フィルタに使う(所有カードと同じ opt-in の構図)。
      */
     val pointProgramMemberships: Set<String> = emptySet(),
+    /**
+     * 1pt の価値(円)。通貨単位(payment_methods.json の point_currencies)で保持する(#13)。
+     * 値が無い通貨はカタログの pointValueConfig.default、それも無ければ 1.0 円を使う
+     * (解決は domain/UserDataMerge.kt の mergeUserData で行う)。
+     */
+    val pointCurrencyValues: Map<String, Double> = emptyMap(),
+    /**
+     * 期間限定ポイントの残高・失効日(通貨単位。#13)。公式 API が無いため手入力で、
+     * 通貨ごとに直近失効分1件だけを保持する(失効したら次の塊を入れ直す運用)。
+     */
+    val pointBalances: Map<String, PointBalance> = emptyMap(),
     /** 登録エリア(自治体単体 or グループ)。おトクタブの地域フィルタに使う */
     val registeredAreas: List<RegisteredArea> = emptyList(),
     /** カタログ外のカスタムカード(登録順) */
@@ -282,6 +309,33 @@ data class AppSettings(
     /** 現在のデータモード(useTestData)に対応する対象外ペア。表示・判定はこちらを使う(#68) */
     val activeExcludedStorePairs: List<ExcludedStorePair>
         get() = if (useTestData) excludedStorePairsTest else excludedStorePairs
+}
+
+/**
+ * 旧カード単位の 1pt 価値(CardOverride.pointValue)→通貨単位(pointCurrencyValues)への
+ * 移行の純ロジック(#13)。[cardToCurrency] に対応が実在する cardId だけ通貨側へ値を移して
+ * pointValue を消す。対応が無い(カタログ不完全な状態で呼ばれた)カードは pointValue を
+ * 消さずに残し、カタログが揃った後続の呼び出しで再度移行できるようにする
+ * (SettingsRepository.migrateCardPointValues から呼ばれる。Android 非依存の純関数なので
+ * SettingsRepository を介さず直接ユニットテストできる)。
+ * 既に通貨側に値がある場合は通貨側を優先する(putIfAbsent)。
+ */
+fun migratePointValueMaps(
+    overrides: Map<String, CardOverride>,
+    values: Map<String, Double>,
+    cardToCurrency: Map<String, String>,
+): Pair<Map<String, CardOverride>, Map<String, Double>> {
+    val pending = overrides.filterValues { it.pointValue != null }
+    if (pending.isEmpty()) return overrides to values
+    val updatedValues = values.toMutableMap()
+    val updatedOverrides = overrides.toMutableMap()
+    pending.forEach { (cardId, ov) ->
+        val currencyId = cardToCurrency[cardId] ?: return@forEach
+        updatedValues.putIfAbsent(currencyId, ov.pointValue!!)
+        // 移行できたカードだけ pointValue を消す。cardToCurrency に無いカードは触らない
+        updatedOverrides[cardId] = ov.copy(pointValue = null)
+    }
+    return updatedOverrides to updatedValues
 }
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore("settings")
@@ -317,6 +371,12 @@ class SettingsRepository(private val context: Context) {
 
         /** 会員になっているポイントプログラムの通貨 id の Set(#39) */
         val POINT_PROGRAM_MEMBERSHIPS = stringPreferencesKey("point_program_memberships")
+
+        /** 1pt の価値(円)。通貨 id → 円の Map(#13) */
+        val POINT_CURRENCY_VALUES = stringPreferencesKey("point_currency_values")
+
+        /** 期間限定ポイントの残高・失効日。通貨 id → PointBalance の Map(#13) */
+        val POINT_BALANCES = stringPreferencesKey("point_balances")
         // 旧キー "municipalities"(RegisteredMunicipality のリスト)は公開前のスキーマ刷新で廃止。
         // 移行せず捨てる(登録し直してもらう)
         val REGISTERED_AREAS = stringPreferencesKey("registered_areas")
@@ -349,6 +409,8 @@ class SettingsRepository(private val context: Context) {
             ownedBrands = prefs.decodeOwnedBrands(),
             enabledPointMultipliers = prefs.decodeIdSet(Keys.ENABLED_POINT_MULTIPLIERS),
             pointProgramMemberships = prefs.decodeIdSet(Keys.POINT_PROGRAM_MEMBERSHIPS),
+            pointCurrencyValues = prefs.decodeCurrencyValues(),
+            pointBalances = prefs.decodePointBalances(),
             registeredAreas = prefs.decodeRegisteredAreas(),
             customCards = prefs.decodeCustomCards(),
             customCampaigns = prefs.decodeCustomCampaigns(Keys.CUSTOM_CAMPAIGNS),
@@ -379,6 +441,8 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.OWNED_BRANDS] = json.encodeToString(settings.ownedBrands)
             prefs[Keys.ENABLED_POINT_MULTIPLIERS] = json.encodeToString(settings.enabledPointMultipliers)
             prefs[Keys.POINT_PROGRAM_MEMBERSHIPS] = json.encodeToString(settings.pointProgramMemberships)
+            prefs[Keys.POINT_CURRENCY_VALUES] = json.encodeToString(settings.pointCurrencyValues)
+            prefs[Keys.POINT_BALANCES] = json.encodeToString(settings.pointBalances)
             prefs[Keys.REGISTERED_AREAS] = json.encodeToString(settings.registeredAreas)
             prefs[Keys.CUSTOM_CARDS] = json.encodeToString(settings.customCards)
             // カスタムキャンペーンは通常データ側のみ復元する。テスト側(CUSTOM_CAMPAIGNS_TEST)は
@@ -478,9 +542,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setCardClass(cardId: String, cardClass: String?) =
         updateOverride(cardId) { it.copy(cardClass = cardClass) }
 
-    suspend fun setPointValue(cardId: String, pointValue: Double?) =
-        updateOverride(cardId) { it.copy(pointValue = pointValue) }
-
     private suspend fun updateOverride(cardId: String, transform: (CardOverride) -> CardOverride) {
         context.settingsDataStore.edit { prefs ->
             val current = prefs.decodeOverrides()
@@ -521,6 +582,42 @@ class SettingsRepository(private val context: Context) {
             val current = prefs.decodeIdSet(Keys.POINT_PROGRAM_MEMBERSHIPS).toMutableSet()
             if (member) current.add(currencyId) else current.remove(currencyId)
             prefs[Keys.POINT_PROGRAM_MEMBERSHIPS] = json.encodeToString(current)
+        }
+    }
+
+    /** 1pt の価値(円)。通貨単位(#13)。null で既定(カタログ default または 1.0 円)に戻す */
+    suspend fun setPointCurrencyValue(currencyId: String, value: Double?) {
+        context.settingsDataStore.edit { prefs ->
+            val current = prefs.decodeCurrencyValues().toMutableMap()
+            if (value == null) current.remove(currencyId) else current[currencyId] = value
+            prefs[Keys.POINT_CURRENCY_VALUES] = json.encodeToString(current)
+        }
+    }
+
+    /** 期間限定ポイントの残高・失効日。null で削除(#13) */
+    suspend fun setPointBalance(currencyId: String, balance: PointBalance?) {
+        context.settingsDataStore.edit { prefs ->
+            val current = prefs.decodePointBalances().toMutableMap()
+            if (balance == null) current.remove(currencyId) else current[currencyId] = balance
+            prefs[Keys.POINT_BALANCES] = json.encodeToString(current)
+        }
+    }
+
+    /**
+     * 旧カード単位の 1pt 価値(CardOverride.pointValue)を通貨単位へ移行する(#13)。
+     * カード→通貨の対応はカタログ由来(呼び出し側=VM がデータロード後に渡す)。純ロジックは
+     * [migratePointValueMaps] に分離してあり、対応が無い(カタログ不完全な状態で呼ばれた)
+     * カードの pointValue は消さずに残す(バックアップ v2 の復元・カタログ未反映のキャッシュから
+     * の読み込み直後でも値を失わない。何度呼んでも安全)。
+     */
+    suspend fun migrateCardPointValues(cardToCurrency: Map<String, String>) {
+        context.settingsDataStore.edit { prefs ->
+            val overrides = prefs.decodeOverrides()
+            val values = prefs.decodeCurrencyValues()
+            val (updatedOverrides, updatedValues) = migratePointValueMaps(overrides, values, cardToCurrency)
+            if (updatedOverrides == overrides && updatedValues == values) return@edit
+            prefs[Keys.POINT_CURRENCY_VALUES] = json.encodeToString(updatedValues)
+            prefs[Keys.CARD_OVERRIDES] = json.encodeToString(updatedOverrides)
         }
     }
 
@@ -637,6 +734,16 @@ class SettingsRepository(private val context: Context) {
         this[key]
             ?.let { runCatching { json.decodeFromString<Set<String>>(it) }.getOrNull() }
             ?: emptySet()
+
+    private fun Preferences.decodeCurrencyValues(): Map<String, Double> =
+        this[Keys.POINT_CURRENCY_VALUES]
+            ?.let { runCatching { json.decodeFromString<Map<String, Double>>(it) }.getOrNull() }
+            ?: emptyMap()
+
+    private fun Preferences.decodePointBalances(): Map<String, PointBalance> =
+        this[Keys.POINT_BALANCES]
+            ?.let { runCatching { json.decodeFromString<Map<String, PointBalance>>(it) }.getOrNull() }
+            ?: emptyMap()
 
     private fun Preferences.decodeRegisteredAreas(): List<RegisteredArea> =
         this[Keys.REGISTERED_AREAS]

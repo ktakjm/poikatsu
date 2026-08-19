@@ -32,16 +32,19 @@ fun mergeUserData(
     customCards: List<CustomCard>,
     customCampaigns: List<CustomCampaign>,
     enabledPointMultipliers: Set<String> = emptySet(),
+    pointCurrencyValues: Map<String, Double> = emptyMap(),
 ): MergedUserData {
     val baseCards = base.cards
 
     // ポイント通貨マスタ(#39): 倍率(ウエル活等)の有効/無効はユーザー設定(通貨 id の Set)から
     // 通貨単位で決まる。有効フラグを立てた通貨マスタをエンジン・表示の両方へ渡し、
-    // 施策側の率への倍率適用(judgeCards/judgeQr)とバッジ表示が同じ状態を参照するようにする
-    val currencyById = base.pointCurrencies.associateBy { it.id }
+    // 率への円換算(judgeCards/judgeQr/judgePrograms)とバッジ表示が同じ状態を参照するようにする。
+    // 1pt 価値(#13)も同じく通貨単位: ユーザー設定(pointCurrencyValues)→カタログの
+    // pointValueConfig.default → 1.0円 の順で解決し valueYen に載せる
     val mergedCurrencies = base.pointCurrencies.map { currency ->
         currency.copy(
             multiplierEnabled = currency.pointMultiplier != null && currency.id in enabledPointMultipliers,
+            valueYen = pointCurrencyValues[currency.id] ?: currency.pointValueConfig?.default ?: 1.0,
         )
     }
 
@@ -57,24 +60,19 @@ fun mergeUserData(
         // カードは保存済みの手入力値が残っていても無視する(allowsManualRate 参照)
         val manualRate = ov?.rate?.takeIf { card.allowsManualRate(base.campaigns) }
         val rawRate = manualRate ?: card.effectiveRateDefault
-        // ポイント倍率(ウエル活等)は通貨の価値特性(#39): このカードが稼ぐ通貨の倍率が
-        // 有効なら実効率に掛ける。同じ通貨を稼ぐカードが複数あっても設定は通貨単位の1箇所
-        val multiplierDef = card.pointCurrencyId?.let { currencyById[it] }?.pointMultiplier
-        val welcatsuOn = multiplierDef != null && card.pointCurrencyId in enabledPointMultipliers
-        val factor = if (welcatsuOn) multiplierDef?.factor ?: 1.0 else 1.0
+        // 1pt 価値・条件付き倍率(ウエル活等)の円換算はスコア層(ExpectedValueScoring)で判定時に
+        // 一括適用する(#13)。マージが組むのは名目率(クラス加算まで)で、通貨側の価値は
+        // mergedCurrencies(valueYen / multiplierEnabled)に載せてエンジンへ渡す。
+        // 適用点を1箇所に寄せることで、マージ層とエンジン層の二重適用を原理的に防ぐ。
         // カードクラス(JCB W/S 等): 未選択はカタログ先頭(保守側=加算の小さい方)を既定にする。
-        // 1pt 価値(J-POINT の 0.7〜1円等): 実効率と店舗別レートの両方に掛かる乗数。
-        // クラス加算はポイント数の加算なので、価値の乗算より先に足す: (率 + 加算) × 価値
+        // クラス加算はポイント数の加算なので価値の乗算より先に足す必要があり(= (率 + 加算) × 価値)、
+        // 加算だけをここで済ませておけばスコア層は掛けるだけでよい
         val classBonus = (card.cardClasses.firstOrNull { it.id == ov?.cardClass }
             ?: card.cardClasses.firstOrNull())?.rateBonus ?: 0.0
-        val pointValue = ov?.pointValue ?: card.pointValueConfig?.default ?: 1.0
-        val multiplier = pointValue * factor
         card.copy(
             brand = ov?.brand ?: card.brands.singleOrNull().orEmpty(),
-            effectiveRateDefault = rawRate?.let { (it + classBonus) * multiplier },
-            welcatsuApplied = welcatsuOn,
+            effectiveRateDefault = rawRate?.let { it + classBonus },
             rateBonus = classBonus,
-            rateMultiplier = multiplier,
         )
     }
     // カスタムカード(カタログ外)は登録内容をそのまま PaymentCard に写してエンジンへ渡す。

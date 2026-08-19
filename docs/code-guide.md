@@ -219,7 +219,6 @@ erDiagram
         double effective_rate_default "店舗別レート施策では rate_override の最大値と一致(#52)"
         string point_currency_id "このカードが稼ぐ通貨(任意。#39)"
         CardClass_list card_classes "カードクラスの選択肢(任意。JCB W/S 等。#52)"
-        PointValueConfig point_value "1pt価値の設定定義(任意。#52)"
     }
     POINT_CURRENCY {
         string id PK "例: vpoint / dpoint(#39)"
@@ -227,6 +226,7 @@ erDiagram
         string brand_color "#RRGGBB(提示施策のバッジ・ピン色)"
         bool membership_program "会員プログラムがあるか(trueなら設定に会員チェック)"
         PointMultiplier point_multiplier "ポイント倍率(任意。ウエル活等)"
+        PointValueConfig point_value "1pt価値の設定定義(任意。説明が要る通貨のみ。#13で通貨単位へ移設)"
     }
     CARD_CLASS {
         string id PK "例: w / s"
@@ -279,8 +279,8 @@ erDiagram
     PAYMENT_CARD }o--o| POINT_CURRENCY : "point_currency_id で参照(稼ぐ通貨)"
     QR_PAYMENT }o--o| POINT_CURRENCY : "point_currency_id で参照(稼ぐ通貨)"
     POINT_CURRENCY ||--o| POINT_MULTIPLIER : "point_multiplier(任意。#39でカードから移設)"
+    POINT_CURRENCY ||--o| POINT_VALUE_CONFIG : "point_value(任意。#13でカードから移設)"
     PAYMENT_CARD ||--o{ CARD_CLASS : "card_classes[](任意。先頭が未選択時の既定=保守側)"
-    PAYMENT_CARD ||--o| POINT_VALUE_CONFIG : "point_value(任意)"
     YOLP_CONFIG ||--o{ GC_GROUP : "gc_groups[]"
 ```
 
@@ -288,7 +288,7 @@ erDiagram
 
 - `merchants.json` — チェーンの正規化マスタ。**1 merchant = 1 系列**（施策の帰属単位）で、傘下で別の名前を掲げる**看板**（UI 表記は「業態」）は `banners` に入れ子で持つ（#60。merchant 自身の name/reading/aliases は「代表看板」= banner id は merchant.id）。施策側は `merchant_id` を書くだけで傘下看板がすべて対象になり、看板単位の対象/対象外は `merchant_rules[].banner_ids` / `ineligible_banner_ids` で表す。alias（同一看板の略称・表記ゆれ）と banner（別の看板）の線引き・照合制約・運用ルールは data/README.md「系列と看板」参照。検索ヒット率は `reading` / `aliases` の充実度で決まる。トップレベルに `yolp_config`（YOLP 検索の gc グループ定義・密度チューニング用の `max_pages`）を持ち、各 merchant の `yolp_search`（`gc`/`keyword`/`none`）で検索方式を指定する。`YolpClient` はこの設定から `YolpSearchConfig` を動的に構築し、アクティブな施策が参照する merchant だけを検索対象にする（該当 merchant がいない gc_group はスキップ）。位置情報を持たない発行体（自販機など）は `location_hint` で外部導線（Coke ON アプリ等）を案内し、「近くのこのお店を探す」を出さない
 - `campaigns.json` — 汎用的な施策情報のみ。**ユーザー固有の前提を書かない**（規約）。`type` で常設カード（`card_program`）/ キャンペーン（`promotion`。managed=特定チェーン対象、external=全加盟店対象のおトクタブ専用。#44）/ 自治体施策（`municipal`）を区分し、`benefit_type` でポイント還元（`rebate`）/ 即時割引（`discount`）を区分し、定率/定額は `rate_base` / `discount_amount` のどちらが入っているかで導出する。`store_scope` が `managed` ならチェーン検索・地図に表示、`external` ならおトクタブのみ表示（`detail_url`/`store_search_url` で公式ページへリンク）。施策の帰属は `card_id`（カード施策。payment_methods.json の `cards[].id` を参照、1 カード : N 施策）/ `card_brand`（イシュアー不問のブランド施策）/ `payment_method_id`（QR 施策・自治体施策）/ `point_program_id`（プログラム会員提示施策。#39。`presentation_only` 必須）の **4 種のうちちょうど 1 つ**を持つ。rebate の払い出し通貨は `point_currency_id`（任意）で明示でき、未指定はカード/QR/プログラムの通貨を継承する（card_brand 施策は明示必須）
-- `payment_methods.json` — 決済手段カタログ（カード `cards` + QR 決済 `qr_payments`）+ **ポイント通貨マスタ**（`point_currencies`。#39）。ユーザー固有値は持たず（差分は DataStore）、merchants/campaigns と同様にリモート更新・テストデータ切替の対象。**ポイント倍率**（`PointMultiplier`。例: ウエル活 ×1.5）は通貨の価値特性として `point_currencies[].point_multiplier` に持ち、カード・QR は `point_currency_id` でその通貨を「稼ぐ手段」として参照する。倍率の ON/OFF は通貨単位のユーザー設定（`enabled_point_multipliers`）で、ON 時はその通貨で払い出される率（通貨を稼ぐカードの実効率と、施策側の rebate 率の両方）が `× factor` される（§5.4）。`membership_program: true` の通貨（dポイント等）は提示型施策（`point_program_id`）の帰属先で、会員かどうかもユーザー設定（`point_program_memberships`）。`card_classes`（同一製品内のグレード差。JCB CARD W/S 等）と `point_value`（1pt 価値が使い道で変動するポイント通貨）を持つカード（#52）は、どのクラスか・1pt をいくらとみなすかをユーザー設定（`CardOverride.cardClass` / `pointValue`）で持ち、マージ時に `(率 + クラス加算) × 1pt価値` で実効率へ合成する（店舗別レート用の `rateBonus` / `rateMultiplier` もマージ後カードに載る。§5.4 参照）
+- `payment_methods.json` — 決済手段カタログ（カード `cards` + QR 決済 `qr_payments`）+ **ポイント通貨マスタ**（`point_currencies`。#39）。ユーザー固有値は持たず（差分は DataStore）、merchants/campaigns と同様にリモート更新・テストデータ切替の対象。**ポイント倍率**（`PointMultiplier`。例: ウエル活 ×1.5）は通貨の価値特性として `point_currencies[].point_multiplier` に持ち、カード・QR は `point_currency_id` でその通貨を「稼ぐ手段」として参照する。倍率の ON/OFF は通貨単位のユーザー設定（`enabled_point_multipliers`）で、ON 時はその通貨で払い出される率（通貨を稼ぐカードの実効率と、施策側の rebate 率の両方）が `× factor` される（§5.4）。`membership_program: true` の通貨（dポイント等）は提示型施策（`point_program_id`）の帰属先で、会員かどうかもユーザー設定（`point_program_memberships`）。**1pt 価値**（`point_value`。使い道で変動するポイント通貨の価値。J-POINT は 0.7〜1円）は `point_currencies[].point_value` に持つ（#13。カードは `point_currency_id` でその通貨を参照するだけで、カード側に `point_value` は持たない）。`default` は全通貨共通の既定 1.0 円で、`point_value` 定義自体は説明（label/note）が要る通貨だけに置く。`card_classes`（同一製品内のグレード差。JCB CARD W/S 等。#52）と合わせ、どのクラスか・1pt をいくらとみなすかをユーザー設定（`CardOverride.cardClass` / 通貨単位の 1pt 価値設定）で持つ。マージ時に合成するのは `(率 + クラス加算)` の**名目率**まで（店舗別レート用の `rateBonus` もマージ後カードに載る）で、**1pt 価値・倍率の円換算は判定時のスコア層**（`ExpectedValueScoring`。#13）に一本化している（§5.4 参照）
 
 パースは `PoikatsuJson.parse()` に集約。`ignoreUnknownKeys = true` + `coerceInputValues = true` により、スキーマに後からフィールドを追加しても旧アプリが壊れない（前方互換）。
 
@@ -459,14 +459,14 @@ flowchart LR
 ```
 
 - `effectiveRate = card.effectiveRateDefault ?: campaign.rateBase` — ユーザー設定の実効率があればそれを優先
-- **card_program の店舗別レート（#52）**: J-POINT パートナーのように 1 施策内で店舗ごとに率が異なる常設プログラムは、`merchant_rules[].rate_override` に**基準構成（カタログ既定クラス・1pt=既定価値）の絶対%**を全ルールへ収録する（`rate_base` = その最大値。整合性テストで強制）。判定時は `resolveCardCampaignRate` → `scaledStoreRate` が `(rate_override + クラス加算) × (1pt価値 × ウエル活倍率)` でユーザー設定を合成する（加算はポイント数の加算なので乗算より先。JCB CARD W の +0.5% と J-POINT の価値変動 0.7〜1円 を 1 つの式で正確に吸収）。rate_override の無い従来の card_program（SMCC/MUFG）は挙動不変。おトクタブ一覧の「最大○%」はユーザー実効率（`campaignPersonalRates`）を、詳細の対象チェーン列挙は率別グルーピング（`campaignStoreRates` → `campaignTargetLabelGroups`）を使い、低率店が最大率と誤読されないようにする
+- **card_program の店舗別レート（#52）**: J-POINT パートナーのように 1 施策内で店舗ごとに率が異なる常設プログラムは、`merchant_rules[].rate_override` に**基準構成（カタログ既定クラス・1pt=既定価値）の絶対%**を全ルールへ収録する（`rate_base` = その最大値。整合性テストで強制）。判定時は `resolveCardCampaignRate` → `scaledStoreRate` が `(rate_override + クラス加算)` の名目率を組み、スコア層（`effectiveValueRate`）が `× (1pt価値 × ウエル活倍率)` を掛けて実質%にする（加算はポイント数の加算なので乗算より先。JCB CARD W の +0.5% と J-POINT の価値変動 0.7〜1円 を 1 つの式で正確に吸収。#13 で乗算の適用点をマージ層からスコア層へ移した）。rate_override の無い従来の card_program（SMCC/MUFG）は挙動不変。おトクタブ一覧の「最大○%」はユーザー実効率（`campaignPersonalRates`）を、詳細の対象チェーン列挙は率別グルーピング（`campaignStoreRates` → `campaignTargetLabelGroups`）を使い、低率店が最大率と誤読されないようにする
 - **保有カードのみ対象**: 施策の `card_id` に一致するカードが cards に無い施策はスキップする。設定で「所有」OFF にしたカードは `MainViewModel` のマージ層でカード一覧から外れるため、ここで自然に除外される。
 - **期間フィルタ**: `campaignStatus(campaign, today)` が ACTIVE の施策のみ。期限切れ・未来開始はスキップ。
 - **store_scope フィルタ**: `store_scope == "managed"` のみ。`external` の施策は「お店」「地図」に出さない。
 - **カード vs QR の分離**: `paymentMethodId == null` のカード施策のみ `judgeCards` が返す。QR 決済施策は `judgeQr` が担当（`enabledQrIds` でユーザーの利用 QR をフィルタ）。どちらも統一型 `CampaignJudgment` を返す。
 - **ブランドの対象外**: カードの実ブランドが店舗 rule の `ineligible_brands` に含まれるとき、その店ではこの施策を除外する（警告ではなく非表示。検索・判定詳細・地図ピン/件数すべてに波及）。リストに無いブランドは従来どおり。ブランド未選択でも除外ブランドを取りうるカードは除外側に倒す（`JudgmentEngine.excludedByBrand`）。
-- **設定値の反映はマージ層**: 還元率の手入力・MUFG ブランドは `MainViewModel` が DataStore の差分（`CardOverride`）をカタログのカード一覧に重ねてからエンジンへ渡す。ウエル活 ×1.5 は**通貨単位**（#39。`point_currencies[].point_multiplier` × DataStore `enabled_point_multipliers`）で、通貨を稼ぐカード（`point_currency_id`）の実効率にはマージ時に焼き込み、`multiplierEnabled` を立てた通貨マスタもエンジンへ渡す。`JudgmentEngine` は純 Kotlin・実データテストのまま保つ（4 章「設定の永続化」／6.1 参照）。
-- **施策側の率へのポイント倍率（#39。#35 B-1 の置き換え）**: promotion / rate_override 等で施策側の率を採用したときも、**払い出し通貨**（`payoutCurrency`: 施策の `point_currency_id` 明示 > プログラム帰属 > card_id 施策はカードの通貨 > QR 施策はサービスの通貨。card_brand 施策は明示必須）が解決でき倍率が有効なら `boostedCampaignRate` が率に `× factor` を掛ける（Vポイント払いの 15% はウエル活で実質 22.5%）。カードの実効率（`usesCardRate`）はマージで適用済みのため二重適用しない。rebate 以外（discount・lottery）には通貨の概念が無く掛からない。倍率バッジは払い出し通貨が倍率を持てば出し、「実質還元率」注記は実際に掛かった率を表示したときだけ出す。
+- **設定値の反映はマージ層**: 還元率の手入力・MUFG ブランドは `MainViewModel` が DataStore の差分（`CardOverride`）をカタログのカード一覧に重ねてからエンジンへ渡す。ウエル活 ×1.5 は**通貨単位**（#39。`point_currencies[].point_multiplier` × DataStore `enabled_point_multipliers`）で、1pt 価値（`pointCurrencyValues`）と合わせて `multiplierEnabled` / `valueYen` を載せた通貨マスタをエンジンへ渡す（#13 以降、カードの実効率へ焼き込まず**判定時に円換算**する）。`JudgmentEngine` は純 Kotlin・実データテストのまま保つ（4 章「設定の永続化」／6.1 参照）。
+- **施策側の率へのポイント倍率（#39。#35 B-1 の置き換え）**: promotion / rate_override 等で施策側の率を採用したときも、**払い出し通貨**（`payoutCurrency`: 施策の `point_currency_id` 明示 > プログラム帰属 > card_id 施策はカードの通貨 > QR 施策はサービスの通貨。card_brand 施策は明示必須）が解決できるなら、施策側の率・カードの実効率のどちらを採ったかによらず `effectiveValueRate` が名目率へ `× (1pt価値 × 倍率)` を掛ける（Vポイント払いの 15% はウエル活で実質 22.5%）。適用点がスコア層の 1 箇所だけなので二重適用は起こらない（#13）。rebate 以外（discount・lottery）には通貨の概念が無く掛からない。倍率バッジは払い出し通貨が倍率を持てば出し、「実質還元率」注記は実際に掛かった率を表示したときだけ出す。
 - **提示のみ施策は並記枠へ分離（#80/#39）**: `presentation_only` の施策（カード現物提示・プログラム会員提示）は `judgeAll` が `presentationJudgments` に分けて返し、判定詳細の「あわせて提示でおトク」セクションに出す（支払い方法の選択肢ではないため。bestOption にも載らない）。一覧・地図の「特典あり」判定（`searchRewarded` / `loadNearbyAround` / `recomputeNearbyPlaces`）は `judgments + presentationJudgments` で数え、並記枠しか無いチェーン（マルイ等）も一覧・ピンに残す。
 - **reward の無いチェーンは一覧に出さない**: 判定が空（所有カードで対象になる施策が無い）チェーンは検索結果・近隣リストから除外する（`MainViewModel.searchRewarded` と `loadNearbyAround` で `judgeAll` 非空のものだけ残す）。
 - **エントリー要否は持たない**: 還元率はユーザーが公式アプリの実効値（エントリー込み）を手入力する前提のため、`entry_done` フラグと未エントリー警告は廃止した。`CampaignJudgment.warnings` は期限切れ間近（残り 3 日以下）の警告に使われる。
@@ -488,7 +488,8 @@ data class CampaignJudgment(
     val badgeLabel: String,          // カード名 / QR決済名 / operator
     val brandColor: String?,
     val benefitType: BenefitType,    // REBATE / DISCOUNT
-    val effectiveRate: Double?,
+    val effectiveRate: Double?,      // 実質%（名目率 × 通貨価値係数。#13）
+    val nominalRate: Double?,        // 名目率（円換算前。実質と異なるとき UI が「実質○%相当」を併記）
     val discountAmount: Int?,
     val daysRemaining: Int?,
     val eligibleNotes: List<String>,   // campaign直下 + その店のrule をレベル横断で連結(「対象」セクション)
@@ -548,7 +549,7 @@ stateDiagram-v2
 
 **おトクタブの構成**（#44 で「期間限定」タブから改名）: `rebuild()` は card_program も除外せず全施策を `campaignsActive`/`campaignsUpcoming` に載せ、セクション分けは `CampaignScreen` 側が行う。順序は **開催中 → 常設 → 開催中（本日対象外）→ 常設（本日対象外）→ もうすぐ開始 → 終了（自作）**（recurrence 持ちは期間限定・常設それぞれの側で本日対象外セクションへ分ける）。「常設」は `isTimeLimited=false`（終了日なし かつ may_end_early でない: SMCC/MUFG の card_program・全加盟店対象の常設 promotion・終了日なしカスタム）のグループで、日付が無ければ期間行ごと省く（常設セクションの見出しが説明を兼ねる。専用バッジは他タブに無い装飾になるため付けない。判定詳細側の期間表示は `formatPeriod` が「常設」を返す）。recurrence 持ちの常設（たぬきの抽選会等）は非対象日でも常設セクションに留め、カード内の「次の対象日」行で案内する。card_program のカードタイトルは display_name → name（多チェーンでも「他Nチェーン」形式にしない）。**同一カードの常設 card_program は発行体（card_id）単位に 1 カードへ束ねる**（#81。エポス優待の 5 施策が常設セクションに 5 枚並ぶため）: `campaignGroupKey` の cardProgram 分岐（`"cardProgram:{cardId}"`。期間限定 card_program・card_id なしは従来どおり施策単位。通知は card_program を丸ごと対象外にしているため影響なし）で畳み、束ねカード（`isCardProgramBundle`=同一 card_id の card_program 2 件以上）はタイトル「{operator} 優待・特典 N件」+内訳サブ行（`cardProgramBundleSubtitle`。display_name から operator 接頭辞を除いた施策名 3 件+「ほかN件」）で出す。施策単位のバッジ（提示のみ・対象商品限定・対象のお店のみ）は束ねカードには付けず内訳側で出す（一部施策のバッジをグループに付けると #59 の注記混入と同種の誤解を生む）。右側の最大特典（`campaignGroupMaxBenefit`）は rebate/discount の型混在時、**%が大きい方の型だけを代表で出す**（「最大30% OFF」。同率は OFF 優先。2.5%還元と30%OFFを「最大30%還元」に合成しない）。タップは自治体束ねと同じ経路（`onSelectCampaignGroup`）で内訳の施策リストが開く。**束ねの詳細（CampaignDetail）は「対象:」を最上部で合成せず各施策カード内に出す**——複数施策の対象を率別に混ぜると、どの対象がどの施策のものか読めない（ビッグエコーのように同じチェーンが別条件で複数施策に登場すると特に）ため。最上部は地図ブリッジのボタンだけ残し、`CampaignJudgmentCard` の省略可能な `targetGroups` 引数（束ね時のみ非空。お店タブ・地図の判定カードはお店の文脈が既にあるため常に空）で施策単位の「対象のお店:」行を支払い方法の下に描く（行頭を「対象:」にすると eligible_notes の「対象：」と被るため `noRatePrefix` で区別。短くても常に枠の面に入れて注記の行に埋もれないようにする `alwaysFramed`——タップ不可の枠には chevron を出さず最小 48dp も確保しない）。率別グルーピング・折りたたみは #52 と共通（`TargetGroupLines`。UiHelpers）で、束ね時は対象 1 チェーンでも省略しない（タイトルが「{カード名} 優待・特典」で対象がどこにも出なくなるため）。束ね対象 1 件のカード（dカード特約店等）は従来表示のまま。全加盟店対象の promotion は `store_scope=external`+`merchant_rules` 空の「おトクタブ専用施策」（お店/地図の判定エンジンは managed のみ対象なので出ない。整合性テストは managed にだけ期間+merchant_rules を強制）。カスタムキャンペーンにも「お店を指定しない（全店舗対象）」トグルがあり、保存時に external へ写る。カスタムにも「早期終了の可能性あり」チェック（`CustomCampaign.mayEndEarly`＝campaigns.json の may_end_early と同義。終了日の有無と直交する 4 パターン対応）があり、終了日なし+チェックなしは常設扱い、チェックありは「終了日未定」の期間限定扱いになる。may_end_early の注記文言は終了日の有無で出し分ける: 終了日ありは「※早期終了の可能性あり」（詳細は自治体＝予算型なら「予算上限あり。〜」、カスタムは予算に言及しない）、終了日なしは「※予告なく終了する場合があります」（「早期」の比較対象となる期限が無いため）。カスタムの詳細条件には「提示のみで受けられる特典」チェック（`CustomCampaign.presentationOnly`＝campaigns.json の presentation_only と同義。#80）もあり、変換時にフラグがそのまま写って同梱施策と同じ分離・バッジ・注記の経路に乗る。
 
-**おトクタブの表示レートはお店タブと同じ基準**: 率の優先ロジック（promotion=施策の率優先 / card_program=カードの実効率優先・定額と率なし promotion は率を出さない）は `domain/JudgmentEngine.kt` の純関数 `resolveCardCampaignRate` に集約し、judgeCards（お店/地図）とおトクタブ（一覧=`campaignPersonalRates`・詳細=`onSelectCampaignGroup`）が共有する。所有カードの card_program はユーザー設定の実効率（ウエル活 ON ならマージ時に倍率適用済み）で表示され、倍率バッジ・「実質還元率」注記も判定カードと同様に出る。施策側の率を使う施策も、払い出し通貨の倍率が有効なら `payoutCurrency`+`boostedCampaignRate`（#39。§5.4）で掛けた値を一覧・詳細とも表示する。未所有カードの施策は施策側の rate_base へフォールバック（カタログ値の表示）。施策詳細カードの率の「最大」修飾は、段階制（rate_rules）に加えて**店舗別レートのばらつき（`Campaign.storeRatesVary`＝rate_override+rate_base が 2 値以上）でも冠する**（#81。エポス提示優待のビッグエコー30%/ジャンカラ20%で rate_base=30 を「30% OFF」と断定表示していた取りこぼしの修正）。施策全体ビューだけが最大値を表示するため、`CampaignJudgment.rateVariesByStore` は `onSelectCampaignGroup` でのみ設定し、お店タブ・地図（その店の実際の率を表示）は false のまま。定額表示（effectiveRate なし）には冠しない。一覧カード側（`campaignGroupMaxBenefit`）の同判定も同じ拡張プロパティを共用する。
+**おトクタブの表示レートはお店タブと同じ基準**: 率の優先ロジック（promotion=施策の率優先 / card_program=カードの実効率優先・定額と率なし promotion は率を出さない）は `domain/JudgmentEngine.kt` の純関数 `resolveCardCampaignRate` に集約し、judgeCards（お店/地図）とおトクタブ（一覧=`campaignPersonalRates`・詳細=`onSelectCampaignGroup`）が共有する。所有カードの card_program はユーザー設定の実効率（名目）で表示され、倍率バッジ・「実質還元率」注記も判定カードと同様に出る。率の出どころによらず、払い出し通貨が解決できれば `payoutCurrency`+`effectiveValueRate`（#39/#13。§5.4）で円換算した値を一覧・詳細とも表示する。未所有カードの施策は施策側の rate_base へフォールバック（カタログ値の表示）。施策詳細カードの率の「最大」修飾は、段階制（rate_rules）に加えて**店舗別レートのばらつき（`Campaign.storeRatesVary`＝rate_override+rate_base が 2 値以上）でも冠する**（#81。エポス提示優待のビッグエコー30%/ジャンカラ20%で rate_base=30 を「30% OFF」と断定表示していた取りこぼしの修正）。施策全体ビューだけが最大値を表示するため、`CampaignJudgment.rateVariesByStore` は `onSelectCampaignGroup` でのみ設定し、お店タブ・地図（その店の実際の率を表示）は false のまま。定額表示（effectiveRate なし）には冠しない。一覧カード側（`campaignGroupMaxBenefit`）の同判定も同じ拡張プロパティを共用する。
 
 **おトクタブの地域フィルタ**: 登録エリアがあると `rebuild()` が `filterCampaignsByArea`（domain/RegionFilter.kt・純 Kotlin）で `campaignsActive`/`campaignsUpcoming` を絞り込む。突合は (都道府県名, 自治体名)。region を持たない全国施策と、マスタで解決できない region（合併等で名称がずれた場合）は防御的に通す。タブのチップ行末尾に「登録地域のみ」チップ（登録あり かつ マスタ読込済みのときだけ表示・既定 ON）があり、OFF で全件表示（`showAllCampaigns`。閲覧モードなので永続化せず、再起動で既定のフィルタ ON に戻る）。
 

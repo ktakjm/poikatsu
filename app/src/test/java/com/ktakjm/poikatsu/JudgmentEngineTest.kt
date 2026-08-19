@@ -940,7 +940,7 @@ class JudgmentEngineTest {
             rateBase = null,
             discountAmount = 500,
         ).copy(id = "d500")
-        val welcatsuCard = testCard.copy(pointCurrencyId = "vp", welcatsuApplied = true)
+        val welcatsuCard = testCard.copy(pointCurrencyId = "vp")
         val engine = JudgmentEngine(
             PoikatsuData(
                 merchants = listOf(testMerchant),
@@ -1075,6 +1075,59 @@ class JudgmentEngineTest {
         assertEquals("5% 還元", label.toString())
     }
 
+    // ---- 損益分岐額(#13 rebate vs coupon の損益分岐)のテスト ----
+
+    @Test
+    fun `judgeAll_定率と定額が同居するとき定額側にだけ損益分岐額が付く`() {
+        val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
+        val fixedCoupon = campaignWithPeriod(
+            type = CampaignType.PROMOTION,
+            benefitType = BenefitType.DISCOUNT,
+            cardId = null,
+            paymentMethodId = "paypay",
+            rateBase = null,
+            discountAmount = 100,
+        ).copy(id = "fixed")
+        val rateCampaign = campaignWithPeriod(rateBase = 7.0).copy(id = "rate")
+        val engine = JudgmentEngine(
+            PoikatsuData(
+                merchants = listOf(testMerchant),
+                campaigns = listOf(fixedCoupon, rateCampaign),
+                cards = listOf(testCard.copy(effectiveRateDefault = 7.0)),
+                qrPayments = listOf(paypay),
+                updatedAt = "2026-06-01",
+            ),
+        )
+        val result = engine.judgeAll(testMerchant, today, setOf("paypay"))
+        val fixedJudgment = result.judgments.first { it.campaign.id == "fixed" }
+        val rateJudgment = result.judgments.first { it.campaign.id == "rate" }
+        assertEquals(1430, fixedJudgment.breakevenAmount) // 100÷0.07=1428.6→1430
+        assertNull(rateJudgment.breakevenAmount)
+        // バナー2行目のアドバイス(#13 実機フィードバック)も定額判定から組み立てられる
+        val advice = result.fixedAdvice!!
+        assertEquals("PayPay", advice.method)
+        assertEquals(100, advice.discountAmount)
+        assertEquals(1430, advice.breakevenAmount)
+        assertNull(advice.minPurchase)
+    }
+
+    @Test
+    fun `judgeAll_定率施策が無いチェーンでは定額判定の損益分岐額はnullのまま`() {
+        val paypay = QrPayment(id = "paypay", name = "PayPay", brandColor = "#FF0033")
+        val campaign = campaignWithPeriod(
+            type = CampaignType.PROMOTION,
+            benefitType = BenefitType.DISCOUNT,
+            cardId = null,
+            paymentMethodId = "paypay",
+            rateBase = null,
+            discountAmount = 300,
+        )
+        val engine = periodTestEngine(campaign, cards = emptyList(), qrPayments = listOf(paypay))
+        val result = engine.judgeAll(testMerchant, today, setOf("paypay"))
+        assertNull(result.judgments.single().breakevenAmount)
+        assertNull(result.fixedAdvice)
+    }
+
     // ---- product_scope(対象商品限定。メーカー×小売×決済連動キャンペーン #43)のテスト ----
 
     @Test
@@ -1158,6 +1211,23 @@ class JudgmentEngineTest {
         assertNull(result.bestOption)
         assertTrue(result.judgments.isEmpty())
         assertEquals("10% OFF(提示のみ)", result.bestBenefitLabel().toString())
+    }
+
+    @Test
+    fun `judgeAll_提示のみの定額施策は最良比較の対象外のため損益分岐額を持たない`() {
+        // 定率施策が無く提示のみの定額(500円引き)だけのチェーン。提示のみは支払いの選択肢で
+        // ないため損益分岐の対象にしてはならない
+        // (breakevenAmount は judgeAll が active にしか付与しないため presentation 側は常に null)
+        val presentation = campaignWithPeriod(
+            benefitType = BenefitType.DISCOUNT,
+            rateBase = null,
+            discountAmount = 500,
+        ).copy(presentationOnly = true)
+        val engine = periodTestEngine(presentation)
+        val result = engine.judgeAll(testMerchant, today)
+        assertNull(result.bestOption)
+        assertTrue(result.judgments.isEmpty())
+        assertNull(result.presentationJudgments.single().breakevenAmount)
     }
 
     @Test
@@ -1247,17 +1317,19 @@ class JudgmentEngineTest {
         val engine = periodTestEngine(promo, cards = emptyList(), qrPayments = listOf(qr), pointCurrencies = listOf(vpointLike))
         val judgment = engine.judgeAll(testMerchant, today, setOf("qr1")).judgments.single()
         assertEquals(15.0, judgment.effectiveRate!!, 1e-9)
+        assertEquals("名目率は円換算前のまま持つ", 10.0, judgment.nominalRate!!, 0.0)
         assertTrue(judgment.welcatsuApplied)
     }
 
     @Test
     fun `カードの実効率には倍率を二重適用しない`() {
-        // マージ後を模す: 実効率 10.5 = 7.0 × 1.5 適用済み(UserDataMerge)
-        val mergedCard = testCard.copy(effectiveRateDefault = 10.5, welcatsuApplied = true, pointCurrencyId = "vp")
+        // マージ後を模す: 実効率は名目 7.0(マージは倍率を掛けない。#13)。倍率はスコア層で1回だけ
+        val mergedCard = testCard.copy(effectiveRateDefault = 7.0, pointCurrencyId = "vp")
         val program = campaignWithPeriod(rateBase = 7.0)
         val engine = periodTestEngine(program, cards = listOf(mergedCard), pointCurrencies = listOf(vpointLike))
         val judgment = engine.judgeAll(testMerchant, today).judgments.single()
         assertEquals(10.5, judgment.effectiveRate!!, 1e-9)
+        assertEquals("名目率は円換算前のまま持つ", 7.0, judgment.nominalRate!!, 0.0)
         assertTrue(judgment.welcatsuApplied)
     }
 
@@ -1321,6 +1393,33 @@ class JudgmentEngineTest {
         assertEquals(listOf("base"), result.judgments.map { it.campaign.id })
         assertEquals(listOf("dp_teiji"), result.presentationJudgments.map { it.campaign.id })
         assertEquals(7.0, result.bestOption!!.rate!!, 0.001)
+    }
+
+    @Test
+    fun `提示施策があると決済分と合算した実質率が返る`() {
+        // :1311 と同じデータ構成(決済 7% + プログラム提示 3%)
+        val base = campaignWithPeriod(rateBase = 7.0).copy(id = "base")
+        val engine = JudgmentEngine(
+            PoikatsuData(
+                merchants = listOf(testMerchant),
+                campaigns = listOf(base, programPresentation),
+                cards = listOf(testCard.copy(effectiveRateDefault = 7.0)),
+                pointCurrencies = listOf(testProgram),
+                updatedAt = "2026-06-01",
+            ),
+        )
+        val result = engine.judgeAll(testMerchant, today, memberships = setOf("dp"))
+        val stacked = result.stackedRate!!
+        assertEquals(7.0, stacked.paymentRate, 0.0)
+        assertEquals(3.0, stacked.presentationRate, 0.0)
+        assertEquals(10.0, stacked.totalRate, 1e-9)
+    }
+
+    @Test
+    fun `提示施策が無ければ合算はnull`() {
+        // 決済施策のみのチェーン(既存フィクスチャの mcdonalds)。best はあるが提示が無いので null
+        val mcdonalds = data.merchants.first { it.id == "mcdonalds" }
+        assertNull(engine.judgeAll(mcdonalds, today).stackedRate)
     }
 
     @Test
@@ -1629,6 +1728,7 @@ class JudgmentEngineTest {
         assertEquals(1, result.judgments.size)
         assertEquals(BenefitType.LOTTERY, result.judgments.single().benefitType)
         assertNull(result.judgments.single().effectiveRate)
+        assertNull("抽選は名目率も持たない(円換算の対象にしない)", result.judgments.single().nominalRate)
         assertNull(result.bestOption)
         assertNull(result.bestBenefitLabel())
     }
@@ -1903,7 +2003,7 @@ class JudgmentEngineRealDataTest {
 
     @Test
     fun `実データ_JPOINTパートナーは店舗別レートで判定される`() {
-        // カタログ直パース(未マージ)は S・1pt=1円相当(rateBonus 0・rateMultiplier 1)で収録値がそのまま出る
+        // カタログ直パース(未マージ)は S・1pt=1円相当(rateBonus 0・通貨価値係数 1)で収録値がそのまま出る
         val seven = data.merchants.first { it.id == "seven_eleven" }
         val sevenJcb = engine.judgeCards(seven, today).first { it.campaign.id == "jcb_jpoint_partner" }
         assertEquals(1.5, sevenJcb.effectiveRate!!, 0.001)
@@ -1947,6 +2047,31 @@ class JudgmentEngineRealDataTest {
         // クラスは保守側(加算の小さい方)を先頭にする(未選択時の既定)
         assertTrue(jcbCard.cardClasses.size >= 2)
         assertEquals(jcbCard.cardClasses.minOf { it.rateBonus }, jcbCard.cardClasses.first().rateBonus, 0.0)
+    }
+
+    @Test
+    fun `実データ_1pt価値は通貨単位で定義されカード側にpoint_valueは無い`() {
+        // #13: J-POINT の 1pt 価値をカード単位(cards[].point_value)から通貨単位
+        // (point_currencies[].point_value)へ移設。jcb_original は point_currency_id で
+        // j_point を参照し、カード側の point_value は廃止される
+        val jcb = data.cards.first { it.id == "jcb_original" }
+        assertEquals("j_point", jcb.pointCurrencyId)
+        val jpoint = data.pointCurrencies.first { it.id == "j_point" }
+        assertNotNull(jpoint.pointValueConfig)
+        assertEquals(1.0, jpoint.pointValueConfig!!.default, 0.0)
+        // 全カードでカード単位の point_value が廃止されていること。モデルから
+        // PaymentCard.point_value を消したため、旧位置のキーは ignoreUnknownKeys で黙って
+        // 捨てられる(静かに壊れる)ので構造で検出する
+        val root = kotlinx.serialization.json.Json.parseToJsonElement(
+            File("../data/payment_methods.json").readText(),
+        ).jsonObject
+        root.getValue("cards").jsonArray.forEach { card ->
+            val obj = card.jsonObject
+            assertTrue(
+                "cards '${obj["id"]}': カード単位の point_value が残っている(point_currencies へ移す)",
+                "point_value" !in obj,
+            )
+        }
     }
 
     @Test
@@ -2496,6 +2621,27 @@ class TestDataIntegrityTest {
     }
 
     @Test
+    fun `テストデータ_1pt価値は通貨単位で定義されカード側にpoint_valueは無い`() {
+        // #13: 実データと同型(test_card_jcb → test_jpoint)
+        val jcb = data.cards.first { it.id == "test_card_jcb" }
+        assertEquals("test_jpoint", jcb.pointCurrencyId)
+        val jpoint = data.pointCurrencies.first { it.id == "test_jpoint" }
+        assertNotNull(jpoint.pointValueConfig)
+        assertEquals(1.0, jpoint.pointValueConfig!!.default, 0.0)
+        // カード側の旧キーはモデルから消えた分 ignoreUnknownKeys で黙って捨てられるため構造で検出する
+        val root = kotlinx.serialization.json.Json.parseToJsonElement(
+            File("../data-test/payment_methods.json").readText(),
+        ).jsonObject
+        root.getValue("cards").jsonArray.forEach { card ->
+            val obj = card.jsonObject
+            assertTrue(
+                "cards '${obj["id"]}': カード単位の point_value が残っている(point_currencies へ移す)",
+                "point_value" !in obj,
+            )
+        }
+    }
+
+    @Test
     fun `テストデータ_display_nameのショーケースを含み空白でない`() {
         data.campaigns.forEach { c ->
             c.displayName?.let { dn ->
@@ -2556,26 +2702,25 @@ class ResolveCardCampaignRateTest {
             discountAmount = discountAmount,
         )
 
-    // ウエル活 ON のマージ後を模す: 実効率にはマージ時点で倍率が掛かっている(UserDataMerge)
+    // マージ後を模す: 実効率は名目(クラス加算まで)。1pt価値・倍率の円換算はスコア層(#13)
     private val card = PaymentCard(
         id = "c1",
         cardName = "テストカード",
         effectiveRateDefault = 1.5,
-        welcatsuApplied = true,
     )
 
     @Test
-    fun `card_programはカードの実効率を優先する(ウエル活込みの値がそのまま出る)`() {
+    fun `card_programはカードの実効率(名目)を優先する`() {
         val r = resolveCardCampaignRate(campaign(CampaignType.CARD_PROGRAM, rateBase = 7.0), card)
         assertEquals(1.5, r.effectiveRate!!, 0.0)
-        assertTrue("ウエル活注記の条件になるためカード率使用フラグが立つ", r.usesCardRate)
+        assertTrue("おトクタブの個別レート判定に使うカード率使用フラグが立つ", r.usesCardRate)
     }
 
     @Test
     fun `card_programでも未所有(card=null)は施策側のrate_baseへフォールバック`() {
         val r = resolveCardCampaignRate(campaign(CampaignType.CARD_PROGRAM, rateBase = 7.0), card = null)
         assertEquals(7.0, r.effectiveRate!!, 0.0)
-        assertFalse("フォールバック時はカードの率でないのでウエル活注記を出さない", r.usesCardRate)
+        assertFalse("フォールバック時はユーザー個別の率でないのでフラグは立たない", r.usesCardRate)
     }
 
     @Test
@@ -2604,20 +2749,19 @@ class ResolveCardCampaignRateTest {
     // ---- card_program の店舗別レート(#52。J-POINT パートナー型) ----
 
     @Test
-    fun `card_programの店舗別rate_overrideはクラス加算と1pt価値を合成する`() {
-        // マージ後を模す: W 選択(+0.5)・1pt=0.7円 → effectiveRateDefault = (10 + 0.5) × 0.7
+    fun `card_programの店舗別rate_overrideはクラス加算を合成する(名目)`() {
+        // マージ後を模す: W 選択(+0.5)→ effectiveRateDefault = 10 + 0.5(1pt価値の乗算はスコア層。#13)
         val jcbLike = PaymentCard(
             id = "c1",
             cardName = "テストJCB",
-            effectiveRateDefault = 7.35,
+            effectiveRateDefault = 10.5,
             rateBonus = 0.5,
-            rateMultiplier = 0.7,
         )
         val program = campaign(CampaignType.CARD_PROGRAM, rateBase = 10.0)
-        // 低倍率店(セブン 1.5%収録): (1.5 + 0.5) × 0.7 = 1.4%
+        // 低倍率店(セブン 1.5%収録): 1.5 + 0.5 = 2.0%(1pt=0.7円なら判定で 1.4% になる)
         val low = resolveCardCampaignRate(program, jcbLike, rateOverride = 1.5)
-        assertEquals(1.4, low.effectiveRate!!, 1e-9)
-        assertTrue("カード由来の率なのでウエル活等の注記条件は満たす", low.usesCardRate)
+        assertEquals(2.0, low.effectiveRate!!, 1e-9)
+        assertTrue("カード由来の率なのでカード率使用フラグが立つ", low.usesCardRate)
         // 最大レート店(rate_base と同値の override): カードの実効率と一致する
         val top = resolveCardCampaignRate(program, jcbLike, rateOverride = 10.0)
         assertEquals(jcbLike.effectiveRateDefault!!, top.effectiveRate!!, 1e-9)
@@ -2625,7 +2769,7 @@ class ResolveCardCampaignRateTest {
 
     @Test
     fun `card_programの店舗別rate_overrideは既定設定なら収録値そのまま`() {
-        // クラス概念の無いカード(rateBonus 0・rateMultiplier 1)は収録値がそのまま出る
+        // クラス概念の無いカード(rateBonus 0)は収録値がそのまま出る
         val plain = PaymentCard(id = "c1", cardName = "テスト", effectiveRateDefault = 10.0)
         val r = resolveCardCampaignRate(campaign(CampaignType.CARD_PROGRAM, rateBase = 10.0), plain, rateOverride = 2.5)
         assertEquals(2.5, r.effectiveRate!!, 0.0)
@@ -2640,9 +2784,9 @@ class ResolveCardCampaignRateTest {
 }
 
 /**
- * カードクラス(JCB W/S 等)と 1pt 価値のマージ(UserDataMerge)。
- * 実効率は (率 + クラス加算) × 1pt価値 で合成され、店舗別レート用の
- * rateBonus / rateMultiplier がマージ後カードに載る(#52)。
+ * カードクラス(JCB W/S 等)のマージ(UserDataMerge)と、1pt 価値との合成。
+ * マージが組むのは名目率 (率 + クラス加算) までで、1pt 価値の円換算はスコア層(judgeAll。#13)。
+ * 店舗別レート用の rateBonus はマージ後カードに載る(#52)。
  */
 class CardClassMergeTest {
 
@@ -2651,45 +2795,88 @@ class CardClassMergeTest {
         cardName = "テストJCB",
         brands = listOf("JCB"),
         effectiveRateDefault = 10.0,
+        pointCurrencyId = "jp",
         cardClasses = listOf(
             CardClass(id = "s", label = "S", rateBonus = 0.0),
             CardClass(id = "w", label = "W", rateBonus = 0.5),
         ),
-        pointValueConfig = PointValueConfig(label = "1ptの価値", default = 1.0),
+    )
+    private val jpoint = PointCurrency(
+        id = "jp",
+        name = "テストJポイント",
+        pointValueConfig = PointValueConfig(label = "Jポイントの価値", default = 1.0),
     )
 
-    private fun merged(overrides: Map<String, CardOverride>) = mergeUserData(
+    private fun merged(
+        overrides: Map<String, CardOverride>,
+        pointCurrencyValues: Map<String, Double> = emptyMap(),
+    ) = mergeUserData(
         PoikatsuData(
             merchants = emptyList(),
             campaigns = emptyList(),
             cards = listOf(jcbLikeCard),
+            pointCurrencies = listOf(jpoint),
             updatedAt = "2026-08-07",
         ),
         cardOverrides = overrides,
         ownedBrands = emptySet(),
         customCards = emptyList(),
         customCampaigns = emptyList(),
+        pointCurrencyValues = pointCurrencyValues,
     ).engineData.cards.single()
 
     @Test
-    fun `未選択はカタログ先頭クラス(保守側)と既定の1pt価値`() {
+    fun `未選択はカタログ先頭クラス(保守側)`() {
         val card = merged(emptyMap())
         assertEquals(0.0, card.rateBonus, 0.0)
-        assertEquals(1.0, card.rateMultiplier, 0.0)
         assertEquals(10.0, card.effectiveRateDefault!!, 0.0)
     }
 
     @Test
-    fun `クラスWと1pt価値0_7が実効率と店舗別レート係数に反映される`() {
-        val card = merged(mapOf("jcb" to CardOverride(cardClass = "w", pointValue = 0.7)))
+    fun `クラスWの加算がマージ後の名目率と店舗別レート加算に載る`() {
+        val card = merged(mapOf("jcb" to CardOverride(cardClass = "w")))
         assertEquals(0.5, card.rateBonus, 0.0)
-        assertEquals(0.7, card.rateMultiplier, 1e-9)
-        // (10.0 + 0.5) × 0.7 = 7.35
-        assertEquals(7.35, card.effectiveRateDefault!!, 1e-9)
+        // 1pt 価値(0.7 等)はここでは掛からない: 名目は 10.0 + 0.5
+        assertEquals(10.5, card.effectiveRateDefault!!, 1e-9)
     }
 
     @Test
-    fun `クラスの無いカードは従来どおり率のみ(係数は恒等)`() {
+    fun `クラス加算と1pt価値は判定レベルで合成される`() {
+        // マージ(名目 = 店舗別レート + クラス加算)× 通貨価値係数(1pt=0.7円)= 実質率
+        val merchant = Merchant(id = "m", name = "テスト店", reading = "てすとてん", category = "その他")
+        val program = Campaign(
+            id = "jcb_partner",
+            operator = "テスト",
+            cardId = "jcb",
+            name = "テストパートナー",
+            paymentInstruction = "カード利用",
+            rateBase = 10.0,
+            verifiedDate = "2026-06-01",
+            merchantRules = listOf(MerchantRule(merchantId = "m", rateOverride = 1.5)),
+        )
+        val engineData = mergeUserData(
+            PoikatsuData(
+                merchants = listOf(merchant),
+                campaigns = listOf(program),
+                cards = listOf(jcbLikeCard),
+                pointCurrencies = listOf(jpoint),
+                updatedAt = "",
+            ),
+            cardOverrides = mapOf("jcb" to CardOverride(cardClass = "w")),
+            ownedBrands = emptySet(),
+            customCards = emptyList(),
+            customCampaigns = emptyList(),
+            pointCurrencyValues = mapOf("jp" to 0.7),
+        ).engineData
+        val judgment = JudgmentEngine(engineData)
+            .judgeAll(merchant, LocalDate.of(2026, 6, 28)).judgments.single()
+        // (1.5 + 0.5) × 0.7 = 1.4
+        assertEquals(1.4, judgment.effectiveRate!!, 1e-9)
+        assertEquals(2.0, judgment.nominalRate!!, 1e-9)
+    }
+
+    @Test
+    fun `クラスの無いカードは従来どおり率のみ`() {
         val plain = PaymentCard(id = "p", cardName = "テスト", effectiveRateDefault = 7.0)
         val card = mergeUserData(
             PoikatsuData(merchants = emptyList(), campaigns = emptyList(), cards = listOf(plain), updatedAt = ""),
@@ -2699,14 +2886,13 @@ class CardClassMergeTest {
             customCampaigns = emptyList(),
         ).engineData.cards.single()
         assertEquals(0.0, card.rateBonus, 0.0)
-        assertEquals(1.0, card.rateMultiplier, 0.0)
         assertEquals(7.0, card.effectiveRateDefault!!, 0.0)
     }
 
     @Test
     fun `手入力レートは単一率プログラムのカードだけに効く`() {
         // 手入力に意味があるのは「単一率でユーザーごとに実際の率が違う」プログラム(SMCC/MUFG)だけ。
-        // 店舗別レートプログラム(dカード #58)のカードとクラス/1pt価値のカード(JCB)は率が
+        // 店舗別レートプログラム(dカード #58)のカードとクラスを持つカード(JCB)は率が
         // 収録値・導出値で決まるため、保存済みの手入力値が残っていても無視する
         val plainCard = PaymentCard(id = "plain", cardName = "単一率", effectiveRateDefault = 7.0)
         val storeRateCard = PaymentCard(id = "dcard_like", cardName = "店舗別レート", effectiveRateDefault = 4.0)
@@ -2749,6 +2935,8 @@ class CardClassMergeTest {
  * ポイント通貨マスタ(point_currencies。#39)のマージ(UserDataMerge)。
  * ウエル活等の倍率は通貨の価値特性で、有効/無効はユーザー設定
  * (enabled_point_multipliers: Set<通貨id>)から通貨単位で決まる。
+ * 円換算(1pt価値 × 倍率)の適用点はマージ層でなくスコア層(judgeAll。#13)なので、
+ * マージ後のカード実効率は名目のままで、実質率は判定レベルで検証する。
  */
 class PointCurrencyMergeTest {
 
@@ -2779,20 +2967,80 @@ class PointCurrencyMergeTest {
         enabledPointMultipliers = enabled,
     )
 
+    private val testMerchant = Merchant(id = "m", name = "テスト店", reading = "てすとてん", category = "その他")
+    private val cardProgram = Campaign(
+        id = "c1",
+        operator = "テスト",
+        cardId = "smcc",
+        name = "テスト施策",
+        paymentInstruction = "カード利用",
+        rateBase = 7.0,
+        verifiedDate = "2026-06-01",
+        merchantRules = listOf(MerchantRule(merchantId = "m")),
+    )
+
     @Test
-    fun `倍率を有効にすると通貨を稼ぐカードの実効率に掛かる`() {
+    fun `倍率を有効にしてもマージ後のカード実効率は名目のまま`() {
+        // 円換算(1pt価値 × 倍率)の適用点はスコア層(judgeAll)に一本化した(#13)。
+        // マージ層はクラス加算までの名目率を組む
         val card = merged(setOf("vp")).engineData.cards.single()
-        assertEquals(10.5, card.effectiveRateDefault!!, 1e-9)
-        assertTrue(card.welcatsuApplied)
-        assertEquals(1.5, card.rateMultiplier, 1e-9)
+        assertEquals(7.0, card.effectiveRateDefault!!, 0.0)
     }
 
     @Test
-    fun `倍率が無効なら等倍`() {
+    fun `倍率が無効でもマージ後のカード実効率は名目のまま`() {
         val card = merged(emptySet()).engineData.cards.single()
         assertEquals(7.0, card.effectiveRateDefault!!, 0.0)
-        assertFalse(card.welcatsuApplied)
-        assertEquals(1.0, card.rateMultiplier, 0.0)
+    }
+
+    @Test
+    fun `判定レベルでは倍率ONのカード施策が実質率になり名目率も持つ`() {
+        val engineData = merged(setOf("vp")).engineData.copy(
+            merchants = listOf(testMerchant),
+            campaigns = listOf(cardProgram),
+        )
+        val judgment = JudgmentEngine(engineData)
+            .judgeAll(testMerchant, LocalDate.of(2026, 6, 28)).judgments.single()
+        assertEquals(10.5, judgment.effectiveRate!!, 1e-9)
+        assertEquals(7.0, judgment.nominalRate!!, 0.0)
+        assertTrue(judgment.welcatsuApplied)
+    }
+
+    @Test
+    fun `判定レベルでは倍率OFFなら実質率と名目率が一致する`() {
+        val engineData = merged(emptySet()).engineData.copy(
+            merchants = listOf(testMerchant),
+            campaigns = listOf(cardProgram),
+        )
+        val judgment = JudgmentEngine(engineData)
+            .judgeAll(testMerchant, LocalDate.of(2026, 6, 28)).judgments.single()
+        assertEquals(7.0, judgment.effectiveRate!!, 0.0)
+        assertEquals(7.0, judgment.nominalRate!!, 0.0)
+        assertFalse(judgment.welcatsuApplied)
+    }
+
+    @Test
+    fun `判定レベルでは1pt価値0円の通貨の施策は実質0パーセントになる`() {
+        // 「貯まるが使わない」層(設計書 §3): 名目率は残り実質が 0 になる
+        val engineData = mergeUserData(
+            PoikatsuData(
+                merchants = listOf(testMerchant),
+                campaigns = listOf(cardProgram),
+                cards = listOf(smccLike),
+                pointCurrencies = listOf(vpoint),
+                updatedAt = "",
+            ),
+            cardOverrides = emptyMap(),
+            ownedBrands = emptySet(),
+            customCards = emptyList(),
+            customCampaigns = emptyList(),
+            enabledPointMultipliers = emptySet(),
+            pointCurrencyValues = mapOf("vp" to 0.0),
+        ).engineData
+        val judgment = JudgmentEngine(engineData)
+            .judgeAll(testMerchant, LocalDate.of(2026, 6, 28)).judgments.single()
+        assertEquals(0.0, judgment.effectiveRate!!, 0.0)
+        assertEquals(7.0, judgment.nominalRate!!, 0.0)
     }
 
     @Test
@@ -2807,6 +3055,59 @@ class PointCurrencyMergeTest {
         val result = merged(setOf("vp"), currencies = noMultiplier)
         assertEquals(7.0, result.engineData.cards.single().effectiveRateDefault!!, 0.0)
         assertFalse(result.engineData.pointCurrencies.single().multiplierEnabled)
+    }
+
+    @Test
+    fun `通貨の1pt価値はマージでは通貨マスタに載るだけでカード率は名目のまま`() {
+        // valueYen=0.5 は通貨マスタに載り、実際に率へ掛かるのは判定時(スコア層。#13)
+        val result = mergeUserData(
+            PoikatsuData(
+                merchants = emptyList(),
+                campaigns = emptyList(),
+                cards = listOf(smccLike),
+                pointCurrencies = listOf(vpoint),
+                updatedAt = "",
+            ),
+            cardOverrides = emptyMap(),
+            ownedBrands = emptySet(),
+            customCards = emptyList(),
+            customCampaigns = emptyList(),
+            enabledPointMultipliers = emptySet(),
+            pointCurrencyValues = mapOf("vp" to 0.5),
+        )
+        assertEquals(7.0, result.engineData.cards.single().effectiveRateDefault!!, 0.0)
+        assertEquals(0.5, result.engineData.pointCurrencies.single().valueYen, 1e-9)
+    }
+
+    @Test
+    fun `通貨の1pt価値の既定はカタログのdefaultで未設定なら1円`() {
+        val jpointLike = PointCurrency(
+            id = "jp",
+            name = "テストJポイント",
+            pointValueConfig = PointValueConfig(label = "Jポイントの価値", default = 1.0, note = ""),
+        )
+        val card = smccLike.copy(pointCurrencyId = "jp")
+        val result = mergeUserData(
+            PoikatsuData(merchants = emptyList(), campaigns = emptyList(), cards = listOf(card), pointCurrencies = listOf(jpointLike), updatedAt = ""),
+            cardOverrides = emptyMap(), ownedBrands = emptySet(), customCards = emptyList(),
+            customCampaigns = emptyList(), enabledPointMultipliers = emptySet(),
+        )
+        assertEquals(1.0, result.engineData.pointCurrencies.single().valueYen, 0.0)
+        assertEquals(7.0, result.engineData.cards.single().effectiveRateDefault!!, 0.0)
+    }
+
+    @Test
+    fun `bestOptionは名目率も持ち実質率で選ばれる`() {
+        // 最大おトク率(BestPaymentOption)の比較・選出は実質率(rate)のまま、UI 併記用に
+        // 名目率(nominalRate)も一緒に持ち回る(#13)
+        val engineData = merged(setOf("vp")).engineData.copy(
+            merchants = listOf(testMerchant),
+            campaigns = listOf(cardProgram),
+        )
+        val best = JudgmentEngine(engineData)
+            .judgeAll(testMerchant, LocalDate.of(2026, 6, 28)).bestOption!!
+        assertEquals(10.5, best.rate!!, 1e-9)
+        assertEquals(7.0, best.nominalRate!!, 0.0)
     }
 }
 

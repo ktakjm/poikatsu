@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -34,6 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -51,10 +53,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.ktakjm.poikatsu.data.CardClass
 import com.ktakjm.poikatsu.data.CustomCard
-import com.ktakjm.poikatsu.data.PointValueConfig
+import com.ktakjm.poikatsu.data.PointBalance
 import com.ktakjm.poikatsu.domain.trimRate
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningContainerColor
+import java.time.LocalDate
 
 /**
  * お支払い方法サブページ(#47)。マイカード / 国際ブランド / コード決済 / ポイントの 4 セクションを
@@ -73,7 +76,6 @@ internal fun PaymentMethodsSettingsPage(
     onCardRateChange: (String, Double?) -> Unit,
     onCardBrandChange: (String, String) -> Unit,
     onCardClassChange: (String, String) -> Unit,
-    onCardPointValueChange: (String, Double?) -> Unit,
     onAddCustomCard: (name: String, color: String?, brand: String) -> Unit,
     onUpdateCustomCard: (CustomCard) -> Unit,
     onRemoveCustomCard: (String) -> Unit,
@@ -81,12 +83,18 @@ internal fun PaymentMethodsSettingsPage(
     onQrEnabledChange: (String, Boolean) -> Unit,
     onPointProgramMemberChange: (String, Boolean) -> Unit,
     onPointMultiplierChange: (String, Boolean) -> Unit,
+    onPointValueChange: (String, Double?) -> Unit,
+    onPointBalanceChange: (String, PointBalance?) -> Unit,
 ) {
     BackHandler(onBack = onBack)
 
     // カスタムカードの追加/編集ダイアログ。NEW_CUSTOM_CARD(id 空のセンチネル)なら新規、null なら非表示
     var editingCustomCard by remember { mutableStateOf<CustomCard?>(null) }
     var deletingCustomCard by remember { mutableStateOf<CustomCard?>(null) }
+    // 1pt 価値ピッカー(#13: 通貨単位)。編集対象の通貨(null なら非表示)
+    var editingValueCurrency by remember { mutableStateOf<MainViewModel.PointCurrencySetting?>(null) }
+    // 期間限定ポイントの残高・失効日入力(#13: 通貨ごとに1件)。編集対象の通貨(null なら非表示)
+    var editingBalanceCurrency by remember { mutableStateOf<MainViewModel.PointCurrencySetting?>(null) }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         // --- マイカード ---
@@ -108,7 +116,6 @@ internal fun PaymentMethodsSettingsPage(
                         onRateChange = { onCardRateChange(card.cardId, it) },
                         onBrandChange = { onCardBrandChange(card.cardId, it) },
                         onClassChange = { onCardClassChange(card.cardId, it) },
-                        onPointValueChange = { onCardPointValueChange(card.cardId, it) },
                     )
                 }
             }
@@ -160,7 +167,7 @@ internal fun PaymentMethodsSettingsPage(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
             // 1行×N の均質なチェックリストで境界問題は起きないため、面にはしない
-            // (面は「複数行に膨らむ設定グループの境界」=マイカード限定。SettingsGroupSurface の KDoc 参照)
+            // (面は「複数行に膨らむ設定グループの境界」=マイカード/ポイント。SettingsGroupSurface の KDoc 参照)
             brands.forEach { b ->
                 ListItem(
                     headlineContent = { NameWithColorDot(b.brand, b.color) },
@@ -211,62 +218,107 @@ internal fun PaymentMethodsSettingsPage(
         if (pointCurrencies.isNotEmpty()) {
             SettingsSectionHeader("ポイント")
             Text(
-                "会員になっているポイントにチェックを入れてください。カード提示型の特典の表示に使われます。",
+                "会員になっているポイントにチェックを入れてください。カード提示型の特典の表示に使われます。" +
+                    "1ptの価値を設定すると、判定が実質還元率で比較されます。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
-            pointCurrencies.forEach { currency ->
-                // 会員チェック行(会員プログラムのある通貨のみ)。倍率だけの通貨(Vポイント等)は
-                // 会員チェック無しで名前行だけ出し、その下に倍率チェックをぶら下げる
-                if (currency.membershipProgram) {
-                    ListItem(
-                        headlineContent = { NameWithColorDot(currency.name, currency.brandColor) },
-                        leadingContent = {
-                            Checkbox(
-                                checked = currency.member,
-                                onCheckedChange = { onPointProgramMemberChange(currency.id, it) },
+            // 通貨1つ=面1つ(マイカードと同型)。会員・倍率・1pt価値・期間限定ポイントの複数行が
+            // どの通貨に属するかを面の切れ目で示す(実機フィードバック。#13)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                pointCurrencies.forEach { currency ->
+                    SettingsGroupSurface {
+                        // 会員チェック行(会員プログラムのある通貨のみ)。倍率だけの通貨(Vポイント等)は
+                        // 会員チェック無しで名前行だけ出し、その下に倍率チェックをぶら下げる
+                        if (currency.membershipProgram) {
+                            ListItem(
+                                headlineContent = { NameWithColorDot(currency.name, currency.brandColor) },
+                                leadingContent = {
+                                    Checkbox(
+                                        checked = currency.member,
+                                        onCheckedChange = { onPointProgramMemberChange(currency.id, it) },
+                                    )
+                                },
+                                modifier = Modifier.clickable {
+                                    onPointProgramMemberChange(currency.id, !currency.member)
+                                },
+                                colors = transparentListItemColors(),
                             )
-                        },
-                        modifier = Modifier.clickable {
-                            onPointProgramMemberChange(currency.id, !currency.member)
-                        },
-                        colors = transparentListItemColors(),
-                    )
-                } else {
-                    ListItem(
-                        headlineContent = { NameWithColorDot(currency.name, currency.brandColor) },
-                        colors = transparentListItemColors(),
-                    )
-                }
-                // ポイント倍率チェック(旧: カード行のウエル活チェック。#39 で通貨単位へ移設)
-                currency.pointMultiplier?.let { pm ->
-                    val note: (@Composable () -> Unit)? = if (
-                        currency.multiplierEnabled && currency.multiplierCardNames.isNotEmpty()
-                    ) {
-                        {
-                            Text(
-                                "${currency.multiplierCardNames.joinToString("・")}の還元率を" +
-                                    "×${trimRate(pm.factor)}で表示中",
+                        } else {
+                            ListItem(
+                                headlineContent = { NameWithColorDot(currency.name, currency.brandColor) },
+                                colors = transparentListItemColors(),
                             )
                         }
-                    } else {
-                        null
-                    }
-                    ListItem(
-                        headlineContent = { Text(pm.label) },
-                        leadingContent = {
-                            Checkbox(
-                                checked = currency.multiplierEnabled,
-                                onCheckedChange = { onPointMultiplierChange(currency.id, it) },
+                        // ポイント倍率チェック(旧: カード行のウエル活チェック。#39 で通貨単位へ移設)
+                        currency.pointMultiplier?.let { pm ->
+                            val note: (@Composable () -> Unit)? = if (
+                                currency.multiplierEnabled && currency.multiplierCardNames.isNotEmpty()
+                            ) {
+                                {
+                                    Text(
+                                        "${currency.multiplierCardNames.joinToString("・")}の還元率を" +
+                                            "×${trimRate(pm.factor)}で表示中",
+                                    )
+                                }
+                            } else {
+                                null
+                            }
+                            ListItem(
+                                headlineContent = { Text(pm.label) },
+                                leadingContent = {
+                                    Checkbox(
+                                        checked = currency.multiplierEnabled,
+                                        onCheckedChange = { onPointMultiplierChange(currency.id, it) },
+                                    )
+                                },
+                                supportingContent = note,
+                                colors = transparentListItemColors(),
+                                modifier = Modifier.padding(start = 24.dp).clickable {
+                                    onPointMultiplierChange(currency.id, !currency.multiplierEnabled)
+                                },
                             )
-                        },
-                        supportingContent = note,
-                        colors = transparentListItemColors(),
-                        modifier = Modifier.padding(start = 24.dp).clickable {
-                            onPointMultiplierChange(currency.id, !currency.multiplierEnabled)
-                        },
-                    )
+                        }
+                        // 1pt の価値(#13: 全通貨でユーザー設定可能。既定 1.0 円)
+                        ListItem(
+                            headlineContent = { Text(currency.pointValueConfig?.label ?: "1ptの価値") },
+                            supportingContent = currency.pointValueConfig?.note
+                                ?.takeIf { it.isNotBlank() }?.let { { Text(it) } },
+                            trailingContent = {
+                                Text(
+                                    "1pt=${trimRate(currency.valueYen)}円",
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                            },
+                            colors = transparentListItemColors(),
+                            modifier = Modifier.padding(start = 24.dp)
+                                .clickable { editingValueCurrency = currency },
+                        )
+                        // 期間限定ポイントの残高・失効日(#13: 通貨ごとに1件=直近失効分)
+                        ListItem(
+                            headlineContent = { Text("期間限定ポイント") },
+                            supportingContent = {
+                                val balance = currency.balance
+                                when {
+                                    balance == null -> Text("残高と失効日を登録すると、失効前にお知らせします")
+                                    // 失効済みの警告は色文字でなく下の CardSettingWarning(container 対)で見せる
+                                    currency.balanceExpired -> Text(
+                                        "${"%,d".format(balance.balancePt)}pt・${balance.expiryDate} に失効",
+                                    )
+                                    else -> Text(
+                                        "${"%,d".format(balance.balancePt)}pt・${balance.expiryDate} まで",
+                                    )
+                                }
+                            },
+                            colors = transparentListItemColors(),
+                            modifier = Modifier.padding(start = 24.dp)
+                                .clickable { editingBalanceCurrency = currency },
+                        )
+                        if (currency.balanceExpired) {
+                            CardSettingWarning("失効済みです。残高を入れ直してください")
+                        }
+                    }
                 }
             }
         }
@@ -307,6 +359,28 @@ internal fun PaymentMethodsSettingsPage(
             },
         )
     }
+
+    editingValueCurrency?.let { currency ->
+        PointValuePickerDialog(
+            currency = currency,
+            onDismiss = { editingValueCurrency = null },
+            onConfirm = {
+                onPointValueChange(currency.id, it)
+                editingValueCurrency = null
+            },
+        )
+    }
+
+    editingBalanceCurrency?.let { currency ->
+        PointBalanceEditDialog(
+            currency = currency,
+            onDismiss = { editingBalanceCurrency = null },
+            onConfirm = {
+                onPointBalanceChange(currency.id, it)
+                editingBalanceCurrency = null
+            },
+        )
+    }
 }
 
 /** カスタムカード追加ダイアログを新規モードで開くためのセンチネル(id 空)。 */
@@ -315,7 +389,8 @@ private val NEW_CUSTOM_CARD = CustomCard(id = "", name = "")
 /**
  * 設定グループ1つ分のトーナル面。所有カードは設定行が下に膨らみ、フラットなリストでは
  * 次のカード行と地続きに見えてグループ境界が読めないため、面の切れ目で境界を示す。
- * 用途は「複数行に膨らむ可変高グループの境界」に限る(マイカードのカード1枚=面1つ)。
+ * 用途は「複数行に膨らむ可変高グループの境界」に限る(マイカードのカード1枚=面1つ、
+ * ポイントの通貨1つ=面1つ。後者は #13 の実機フィードバックで追加)。
  * 1行×N の均質なチェックリスト(国際ブランド/コード決済)や他の設定ページには使わない
  * ——スタイルとして広げ始めると設定タブ全体を grouped 化しないと一貫しなくなるため。
  * 色は surfaceContainerHigh 固定: 横画面の詳細ペイン(#78 で surfaceContainerLow 化)の上でも
@@ -543,10 +618,8 @@ private fun CardSettingItem(
     onRateChange: (Double?) -> Unit,
     onBrandChange: (String) -> Unit,
     onClassChange: (String) -> Unit,
-    onPointValueChange: (Double?) -> Unit,
 ) {
     var showRateDialog by remember { mutableStateOf(false) }
-    var showPointValueDialog by remember { mutableStateOf(false) }
     var showBrandRequiredDialog by remember { mutableStateOf(false) }
     // ブランドが判定に効くカード(showBrandPicker)は、未選択のままだと除外側に倒れて
     // 過少表示になり得るため、有効化時にブランド選択を必須にする(選択せず閉じたら有効化しない)
@@ -604,20 +677,8 @@ private fun CardSettingItem(
                 modifier = Modifier.padding(start = 24.dp),
             )
         }
-        // 1pt の価値(J-POINT のように使い道で価値が変動するポイント通貨のカードだけ出す)
-        card.pointValueConfig?.let { pv ->
-            ListItem(
-                headlineContent = { Text(pv.label) },
-                supportingContent = pv.note.takeIf { it.isNotBlank() }?.let { { Text(it) } },
-                trailingContent = {
-                    Text("1pt=${trimRate(card.pointValue)}円", style = MaterialTheme.typography.titleMedium)
-                },
-                colors = transparentListItemColors(),
-                modifier = Modifier.padding(start = 24.dp).clickable { showPointValueDialog = true },
-            )
-        }
         // 還元率行は手入力に意味があるカード(単一率プログラム=SMCC/MUFG)だけ出す。
-        // クラス/1pt価値のカード(JCB)や店舗別レートのカード(dカード)は率が導出値・収録値で
+        // クラスを持つカード(JCB)や店舗別レートのカード(dカード)は率が導出値・収録値で
         // 決まり設定の余地が無いため、行自体を出さない(この画面はユーザーが設定するものだけを置く)
         if (card.rateEditable) {
             ListItem(
@@ -641,19 +702,6 @@ private fun CardSettingItem(
                 showRateDialog = false
             },
         )
-    }
-    if (showPointValueDialog) {
-        card.pointValueConfig?.let { pv ->
-            PointValueEditDialog(
-                config = pv,
-                initial = card.pointValue,
-                onDismiss = { showPointValueDialog = false },
-                onConfirm = {
-                    onPointValueChange(it)
-                    showPointValueDialog = false
-                },
-            )
-        }
     }
     if (showBrandRequiredDialog) {
         BrandRequiredDialog(
@@ -751,27 +799,35 @@ private fun BrandRequiredDialog(
     )
 }
 
-/** 1pt 価値の数値入力ダイアログ。「既定に戻す」で上書きを解除する(null を返す)。 */
+/**
+ * 1pt 価値のピッカー(#13: 通貨単位・全通貨で設定可能)。プリセット(使わない=0円/等価=1円)+
+ * カスタム入力。「既定に戻す」で上書きを解除する(null を返す)。旧カード単位の
+ * PointValueEditDialog を通貨向けに一般化したもの(#39 の通貨マスタ移設に追従)。
+ */
 @Composable
-private fun PointValueEditDialog(
-    config: PointValueConfig,
-    initial: Double,
+private fun PointValuePickerDialog(
+    currency: MainViewModel.PointCurrencySetting,
     onDismiss: () -> Unit,
     onConfirm: (Double?) -> Unit,
 ) {
-    var text by remember { mutableStateOf(trimRate(initial)) }
+    var text by remember { mutableStateOf(trimRate(currency.valueYen)) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(config.label) },
+        title = { Text(currency.pointValueConfig?.label ?: "${currency.name}の1ptの価値") },
         text = {
             Column {
                 Text(
                     buildString {
-                        append("1ポイントをいくらの価値として計算するか入力してください。")
-                        if (config.note.isNotBlank()) append("\n${config.note}")
+                        append("1ポイントをいくらの価値として計算するか選んでください。判定の実質還元率に反映されます。")
+                        currency.pointValueConfig?.note?.takeIf { it.isNotBlank() }?.let { append("\n$it") }
                     },
                     style = MaterialTheme.typography.bodyMedium,
                 )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AssistChip(onClick = { text = "0" }, label = { Text("使わない(0円)") })
+                    AssistChip(onClick = { text = "1" }, label = { Text("等価(1円)") })
+                }
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = text,
@@ -784,10 +840,79 @@ private fun PointValueEditDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(text.toDoubleOrNull()) }) { Text("保存") }
+            TextButton(onClick = { onConfirm(text.toDoubleOrNull()?.takeIf { it >= 0.0 }) }) { Text("保存") }
         },
         dismissButton = { TextButton(onClick = { onConfirm(null) }) { Text("既定に戻す") } },
     )
+}
+
+/**
+ * 期間限定ポイントの残高・失効日入力(#13)。通貨ごとに1件(直近失効分)。「削除」で登録を消す。
+ * 失効日の選択は CustomCampaignEditor.kt の EditorDatePickerDialog を共用する(横画面 Input モード等の
+ * 既存実装を再利用するため internal 化済み)。実物のシグネチャは LocalDate? ベースなので、
+ * PointBalance.expiryDate(ISO 文字列)とはここで相互変換する。
+ */
+@Composable
+private fun PointBalanceEditDialog(
+    currency: MainViewModel.PointCurrencySetting,
+    onDismiss: () -> Unit,
+    onConfirm: (PointBalance?) -> Unit,
+) {
+    var balanceText by remember { mutableStateOf(currency.balance?.balancePt?.toString().orEmpty()) }
+    var expiry by remember {
+        mutableStateOf(
+            currency.balance?.expiryDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
+        )
+    }
+    var showDatePicker by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("${currency.name}の期間限定ポイント") },
+        text = {
+            Column {
+                Text(
+                    "直近で失効する分の残高と失効日を入力してください。失効が近づくと判定画面でお知らせします。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = balanceText,
+                    onValueChange = { balanceText = it },
+                    label = { Text("残高") },
+                    suffix = { Text("pt") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = { showDatePicker = true }) {
+                    Text(expiry?.toString() ?: "失効日を選ぶ")
+                }
+            }
+        },
+        confirmButton = {
+            val pt = balanceText.toIntOrNull()
+            TextButton(
+                onClick = {
+                    val expiryValue = expiry
+                    if (pt != null && pt > 0 && expiryValue != null) {
+                        onConfirm(PointBalance(balancePt = pt, expiryDate = expiryValue.toString()))
+                    }
+                },
+                enabled = pt != null && pt > 0 && expiry != null,
+            ) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = { onConfirm(null) }) { Text("削除") } },
+    )
+    if (showDatePicker) {
+        EditorDatePickerDialog(
+            initial = expiry,
+            onConfirm = {
+                expiry = it
+                showDatePicker = false
+            },
+            onDismiss = { showDatePicker = false },
+        )
+    }
 }
 
 /** 還元率の数値入力ダイアログ。空/「既定に戻す」で上書きを解除する(null を返す)。 */

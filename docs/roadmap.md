@@ -3,11 +3,11 @@
 開発の現在地と今後の計画をまとめるドキュメント。
 フェーズの定義と背景は [PLAN.md](../PLAN.md)、コードの構成は [code-guide.md](code-guide.md)、個別タスクは [GitHub Issues](https://github.com/ktakjm/poikatsu/issues)（[Project Board](https://github.com/users/ktakjm/projects/1)）を参照。
 
-最終更新: 2026-08-18
+最終更新: 2026-08-19
 
 ## 1. 現在地サマリ
 
-**Phase 1（MVP）は完了**（2026-06-12）。Phase 2（店舗単位判定・GPS 周辺検索・期間限定キャンペーン・自治体施策・QR 決済クーポン・設定画面拡張）も完了（2026-06-30）。実機検証待ち。
+**Phase 1（MVP）は完了**（2026-06-12）。Phase 2（店舗単位判定・GPS 周辺検索・期間限定キャンペーン・自治体施策・QR 決済クーポン・設定画面拡張）も完了（2026-06-30）。Phase 3（期待価値スコア比較）も実装済み（2026-08-19）。いずれも実機検証待ち。
 
 ```mermaid
 flowchart LR
@@ -15,14 +15,14 @@ flowchart LR
 
     style P1 fill:#2E7D32,stroke:#1B5E20,color:#fff
     style P2 fill:#2E7D32,stroke:#1B5E20,color:#fff
-    style P3 fill:#E0E0E0,stroke:#9E9E9E,color:#333
+    style P3 fill:#2E7D32,stroke:#1B5E20,color:#fff
 ```
 
 | フェーズ | 状態 |
 |---|---|
 | Phase 1（MVP） | ✅ 完了（2026-06-12） |
 | Phase 2（拡張 + キャンペーン Phase A〜F） | ✅ 完了（2026-06-30）。実機検証待ち |
-| Phase 3 | ⬜ 未着手 |
+| Phase 3（期待価値スコア比較） | ✅ 実装済み（2026-08-19）。実機検証待ち |
 
 ## 2. 完了した作業
 
@@ -100,9 +100,9 @@ flowchart LR
 
 - **ポイント通貨マスタ: point_multiplier の通貨単位正規化+プログラム会員提示の受け皿（[#39](https://github.com/ktakjm/poikatsu/issues/39)）**: ウエル活×1.5 を「カードの属性」から「Vポイントという通貨の価値特性」へ正規化し、あわせて「dポイントカード提示 +3%」型（カード所有でなくプログラム会員に紐づく施策）の受け皿を実装（schema_version: payment_methods 8→9 / campaigns 11→12 の一斉入れ替え。S-in 前のため DataStore の旧 `CardOverride.welcatsu` は移行せず廃止=再設定）。**スキーマ**: payment_methods.json に `point_currencies` マスタ（vpoint=倍率+会員/dpoint/rakuten_point/ponta=会員/paypay_point。`membership_program` で会員チェックの表示可否を制御——PayPayポイントのように提示の仕組みが無い通貨に意味のないトグルを出さない）を追加し、cards/qr_payments が `point_currency_id` で「稼ぐ通貨」を参照。campaigns.json は帰属を 4 種（card_id / card_brand / payment_method_id / **point_program_id**=提示型専用・presentation_only 必須）へ拡張し、rebate の払い出し通貨 `point_currency_id`（明示>カード継承>QR継承・card_brand は明示必須）を追加。**エンジン**: `payoutCurrency`+`boostedCampaignRate`（純関数）で #35 B-1「promotion の率にはウエル活を掛けない」を原理的に置き換え——払い出し通貨が分かれば施策側の率にも倍率を掛ける（Vポイント払いの 15% は実質 22.5%。カード実効率はマージで適用済みのため二重適用しない）。QR の rebate も同経路。`judgePrograms`（会員登録済みプログラムの提示施策）を新設し、**提示のみ施策（#80 のエポス優待含む）は `JudgmentResult.presentationJudgments` に分離**して判定詳細の「あわせて提示でおトク」並記枠で表示（bestOption 非対象は従来どおり。一覧・地図の「特典あり」判定は並記枠込みで数え、マルイ等のピンが消えない）。合算「実質○%相当」は #13。**設定**: DataStore に `enabled_point_multipliers` / `point_program_memberships`（通貨 id の Set）を新設し、お支払い方法サブページに「ポイント」セクション（会員チェック+倍率チェック。カード行のウエル活チェックは撤去）。バックアップは schemaVersion 2（welcatsu 廃止の非互換）。**実データ**: dポイント特約店の提示分を公式確認した結果、**提示は全加盟店 0.5〜1% が標準（マツキヨ/ココカラも税抜100円=1pt=1%）で収録閾値 2% を超える実例なし**=収録ゼロ件（memo・mapping.md に台帳化。ランク倍率=最大2.5倍はユーザー属性でありデータ化しない）。data-test に `test_point`（倍率×1.5）/`test_program`（会員プログラム）と `test_program_presentation` ショーケースを追加。常設プログラム提示施策の発行体束ね（`"pointProgram:{id}"`）・通知の会員フィルタも追随。テストは倍率マージ 4 件・エンジン 8 件（B-1 置換・通貨解決・並記枠・会員フィルタ）・整合性(帰属 4 種・参照・旧キー検出・ショーケース)を追加（2026-08-18、実機検証待ち）
 
-### Phase 3: 最適化アドバイス（未着手）
+### Phase 3: 最適化アドバイス（実装済み、実機検証待ち）
 
-判定エンジンを「還元率比較」から「期待価値スコア比較」へ拡張する。詳細は [#13](https://github.com/ktakjm/poikatsu/issues/13)。
+- **判定エンジンを「還元率比較」から「期待価値スコア比較」へ拡張（[#13](https://github.com/ktakjm/poikatsu/issues/13)）**: 5 サブ機能を実装。(1) **1pt 価値モデルの通貨単位化**（payment_methods.json schema_version 10。J-POINT のカード単位 `point_value` を `point_currencies` へ移設し、1pt 価値は全通貨でユーザー設定可能に一般化。設定画面「ポイント」にプリセット「使わない(0円)」「等価(1円)」+カスタム値のピッカー、DataStore `point_currency_values` に保存。旧 `CardOverride.pointValue` はカタログ由来のカード→通貨対応表で移行、バックアップは schemaVersion 3）。(2) **スコア層の新設**（`domain/ExpectedValueScoring.kt`。円価値換算「実質% = 名目% × 1pt 価値 × 倍率」をスコア層へ一本化し、マージ層(`UserDataMerge`)の乗算処理と `boostedCampaignRate` を撤去。`CampaignJudgment`/`BestPaymentOption` に `nominalRate` を追加）。(3) **UI「実質○%相当」併記**（名目率と実質率が異なるときのみ判定カード・最大おトク率バナーに表示）。(4) **期間限定ポイントの残高・失効日入力**（通貨ごと1件、DataStore `point_balances`）**+失効通知**（失効 30 日以内で表示・7 日以内で warning 強調。施策の有無・決済手段によらずどのお店の判定画面にも表示）。**方針変更**（2026-08-19、ユーザー決定）: issue 記載の「消化ボーナス(スコア加点)」は採用せず、判定を変えない失効通知として実装——施策開催店でのポイント払いは「その施策の対象か」の確認が別途必要になり、むしろ**施策の無いお店で消化したい**のが実態のため。(5) **提示スタック合算+損益分岐**（`StackedRate`。最大おトク率バナーに「あわせて提示で実質○%相当(お支払い○% + 提示○%)」を表示。`breakevenAmount` で定額カードに「○○円未満のお買い物ならこちらが得」を10円単位切り上げで算出、決済分のみで比較）。**見送り**（理由つき）: lottery(抽選型)の期待値換算(当選確率・最大額が memo の非構造化テキストのみでスキーマ拡張コストが大きい)、QR 決済のユーザー実効率(収録基準「差5%未満は割り切り」を継続)、三重取り(チャージ元カード)のモデル化(チャージ経路のモデルが未整備)。設計書: [2026-08-19-issue13-expected-value-scoring-design.md](superpowers/specs/2026-08-19-issue13-expected-value-scoring-design.md) / 実装計画: [2026-08-19-issue13-expected-value-scoring.md](superpowers/plans/2026-08-19-issue13-expected-value-scoring.md)（2026-08-19、実機検証待ち）
 
 ### バックログ
 

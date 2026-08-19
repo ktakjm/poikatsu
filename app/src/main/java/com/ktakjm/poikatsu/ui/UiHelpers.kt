@@ -979,7 +979,7 @@ internal fun municipalRegionsLabel(campaigns: List<Campaign>): String? {
  * グループ内で率の異なる複数施策・rebate/discount の型混在)と、対象商品限定(product_scope。
  * 全商品には効かない)のときは「最大」を冠し、一律の率と誤認されないようにする。
  * [personalRates] に載っている施策(所有カードの card_program)は rate_base の代わりに
- * ユーザー実効率(ウエル活込み)で出す(お店タブの判定と同じ値になる)。
+ * 円換算済みの実質率(1pt価値・倍率込み)で出す(お店タブの判定と同じ値になる)。
  *
  * 発行体束ね(#81)で rebate と discount が混在するグループは、%が大きい方の型だけを代表で
  * 出す(2.5%還元と30%OFFを「最大30%還元」に合成すると割引率が還元率に化ける)。同率は

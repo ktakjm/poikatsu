@@ -55,12 +55,17 @@ import com.ktakjm.poikatsu.data.LocationHint
 import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.BestPaymentOption
 import com.ktakjm.poikatsu.domain.CampaignJudgment
+import com.ktakjm.poikatsu.domain.ExpiringPointNotice
+import com.ktakjm.poikatsu.domain.FixedBenefitAdvice
+import com.ktakjm.poikatsu.domain.StackedRate
 import com.ktakjm.poikatsu.domain.StoreEligibility
 import com.ktakjm.poikatsu.domain.StoreVerdict
+import com.ktakjm.poikatsu.domain.nominalRateNote
 import com.ktakjm.poikatsu.domain.formatBenefit
 import com.ktakjm.poikatsu.domain.isCustom
 import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.recurrenceLabel
+import com.ktakjm.poikatsu.domain.trimRate
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningColor
 import com.ktakjm.poikatsu.ui.theme.warningContainerColor
@@ -90,6 +95,8 @@ internal fun JudgmentDetail(
     onFindNearby: () -> Unit,
     onExcludeStore: (campaignId: String, storeName: String) -> Unit,
     onRestoreExcludedStore: (campaignId: String) -> Unit,
+    /** 期間限定ポイントの失効通知(#13)。施策・お店と独立の内容のためどのお店でも同じ一覧を出す */
+    expiringNotices: List<ExpiringPointNotice> = emptyList(),
 ) {
     BackHandler(onBack = onBack)
     // displayName あり = 地図(YOLP)から開いた店舗。帰属表示を出し、「近くを探す」は不要。
@@ -148,6 +155,11 @@ internal fun JudgmentDetail(
                 }
             }
         }
+        // 期間限定ポイントの失効通知(#13)。施策・お店と独立の内容のため、施策 0 件の __empty
+        // 表示時も含めどのお店の判定画面でも出す(設計書 §4)。最良候補バナーより上に置く
+        if (expiringNotices.isNotEmpty()) {
+            item(key = "__expiring_points") { ExpiringPointsNotice(expiringNotices) }
+        }
         if (selection.judgments.isEmpty() && selection.presentationJudgments.isEmpty()) {
             item(key = "__empty") {
                 Card(modifier = Modifier.fillMaxWidth()) {
@@ -158,8 +170,12 @@ internal fun JudgmentDetail(
                 }
             }
         } else {
-            if (selection.bestOption != null && selection.judgments.size >= 2) {
-                item(key = "__best") { BestOptionBanner(selection.bestOption) }
+            if (selection.bestOption != null &&
+                (selection.judgments.size >= 2 || selection.stackedRate != null)
+            ) {
+                item(key = "__best") {
+                    BestOptionBanner(selection.bestOption, selection.stackedRate, selection.fixedAdvice)
+                }
             }
             items(selection.judgments, key = { it.campaign.id }) { judgment ->
                 CampaignJudgmentCard(
@@ -203,6 +219,28 @@ internal fun JudgmentDetail(
             },
             onDismiss = { excludingCampaign = null },
         )
+    }
+}
+
+/** 期間限定ポイントの失効通知(#13)。施策の有無と独立に出す(warning=残り7日以内は強調) */
+@Composable
+private fun ExpiringPointsNotice(notices: List<ExpiringPointNotice>) {
+    val warn = notices.any { it.warn }
+    Surface(
+        color = if (warn) warningContainerColor() else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (warn) onWarningContainerColor() else MaterialTheme.colorScheme.onSurfaceVariant,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            notices.forEach { n ->
+                val days = if (n.daysLeft == 0L) "今日" else "残り${n.daysLeft}日で"
+                Text(
+                    "${days}失効する${n.currencyName} ${"%,d".format(n.balancePt)}pt あり",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
     }
 }
 
@@ -309,28 +347,67 @@ private fun ExcludeStoreDialog(
 }
 
 @Composable
-private fun BestOptionBanner(best: BestPaymentOption) {
-    val label = formatBenefit(best.benefitType, best.rate, best.discountAmount) ?: return
-    val benefitLabel = "${best.method} $label"
+private fun BestOptionBanner(
+    best: BestPaymentOption,
+    stacked: StackedRate? = null,
+    fixedAdvice: FixedBenefitAdvice? = null,
+) {
+    // 表示は実質率が主(ユーザーが実際に得る価値。名目==実質なら従来どおり同じ値)。異なるときは
+    // 「実質」を冠して名目を「(額面○%)」で後置する(実機フィードバックで主従を逆転。#13。
+    // 比較・選出そのものは実質率のままで変えない)
+    val label = formatBenefit(best.benefitType, best.rate ?: best.nominalRate, best.discountAmount) ?: return
+    val note = nominalRateNote(best.nominalRate, best.rate)
+    val prefix = if (note != null) "実質" else ""
+    val benefitLabel = "${best.method} $prefix$label" + (note?.let { "($it)" } ?: "")
     Surface(
         color = MaterialTheme.colorScheme.primaryContainer,
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Row(
+        Column(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(20.dp))
-            Text("最大おトク率：$benefitLabel", style = MaterialTheme.typography.titleSmall)
-            if (best.isTimeLimited && best.daysRemaining != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(20.dp))
+                // ラベルが長いときはこちらを折り返す(weight で余りを引き受ける)。weight を付けないと
+                // 右端の「残り○日」が極小幅に押し潰されて1文字ずつ縦に折り返ってしまう
                 Text(
-                    "残り${best.daysRemaining}日",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (best.daysRemaining <= 3) warningColor()
-                    else MaterialTheme.colorScheme.onPrimaryContainer,
+                    "最大おトク率：$benefitLabel",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f),
+                )
+                if (best.isTimeLimited && best.daysRemaining != null) {
+                    Text(
+                        "残り${best.daysRemaining}日",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (best.daysRemaining <= 3) warningColor()
+                        else MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+            }
+            // 提示スタック合算(#13。決済分 + 併用可能な提示分の実質%)。判定1件+提示のみでも意味があるため
+            // バナー自体の表示条件にもこれを含める(呼び出し元 JudgmentScreen 参照)
+            if (stacked != null) {
+                Text(
+                    "あわせて提示で実質${trimRate(stacked.totalRate)}%相当" +
+                        "(お支払い${trimRate(stacked.paymentRate)}% + 提示${trimRate(stacked.presentationRate)}%)",
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+            // 定額特典が得になる購入額の範囲(#13 実機フィードバック: カード内の小さな注記では
+            // 気付けないため、最低購入額の下限も含めてバナーで案内する)
+            fixedAdvice?.let { advice ->
+                val label = formatBenefit(advice.benefitType, null, advice.discountAmount)
+                val lower = advice.minPurchase?.let { "%,d円以上".format(it) } ?: ""
+                Text(
+                    "$lower${"%,d円未満".format(advice.breakevenAmount)}のお買い物なら" +
+                        "${advice.method} $label",
+                    style = MaterialTheme.typography.labelMedium,
                 )
             }
         }
@@ -343,6 +420,8 @@ private fun BestOptionBanner(best: BestPaymentOption) {
  * onExcludeStore 非 null なら「対象外のお店として登録」の導線を出す(判定詳細を具体的なお店として開いたときのみ。#63)。
  * targetGroups はこの施策の「対象:」行(発行体束ね #81 の詳細のみ。束ねでは複数施策の対象を
  * 最上部で合成せず各施策カード内に出す)。お店タブ・地図の判定カードはお店の文脈が既にあるため空のまま。
+ * 定額特典の損益分岐(#13)はカード内には出さない——分岐額は最大おトク率バナー側で購入額の
+ * 範囲付きで案内し、定率の最良が無いチェーンは定額が得なのが自明なため注記しない。
  */
 @Composable
 internal fun CampaignJudgmentCard(
@@ -570,7 +649,12 @@ private fun BenefitDisplay(judgment: CampaignJudgment) {
         }
         return
     }
-    val label = formatBenefit(judgment.benefitType, judgment.effectiveRate, judgment.discountAmount) ?: return
+    // 表示は実質率が主(ユーザーが実際に得る価値。名目==実質なら従来どおり同じ値)。異なるときは
+    // 値の上に「実質」を冠し、収録上の名目率を「(額面○%)」で下に添える(実機フィードバックで
+    // 主従を逆転。#13。判定の並べ替え・最良判定は effectiveRate のまま変えない)
+    val displayRate = judgment.effectiveRate ?: judgment.nominalRate
+    val label = formatBenefit(judgment.benefitType, displayRate, judgment.discountAmount) ?: return
+    val note = nominalRateNote(judgment.nominalRate, judgment.effectiveRate)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         // 断定に見せない修飾: 段階制(rate_rules)は rate_base = 最大値なので「最大」、
         // 施策全体ビューで店舗別レートがばらつく施策(rateVariesByStore。#81)も表示は最大値なので
@@ -582,6 +666,8 @@ private fun BenefitDisplay(judgment: CampaignJudgment) {
                 judgment.campaign.rateRules.isNotEmpty() ||
                     (judgment.rateVariesByStore && judgment.effectiveRate != null)
             },
+            // 円換算で名目と異なる値を出しているときは実質であることを値の上に明示(#13)
+            "実質".takeIf { note != null },
         ).joinToString("")
         if (qualifier.isNotEmpty()) {
             Text(
@@ -600,6 +686,13 @@ private fun BenefitDisplay(judgment: CampaignJudgment) {
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary,
         )
+        note?.let {
+            Text(
+                "($it)",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+        }
     }
 }
 

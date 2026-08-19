@@ -10,8 +10,10 @@ import kotlinx.serialization.json.Json
  * これより新しいファイルは「新しいアプリで書き出したファイル」として読み込みを断る。
  * 履歴: 2 = CardOverride.welcatsu(カード単位)を廃止し enabledPointMultipliers(通貨単位)へ
  * 正規化(#39)。旧ファイル(1)は読めるが welcatsu は復元されない(再設定)。
+ * 3 = 1pt 価値の通貨単位化(pointCurrencyValues)+期間限定ポイント残高(pointBalances)を追加、
+ * CardOverride.pointValue は移行用の残置(#13)。
  */
-const val SETTINGS_BACKUP_SCHEMA_VERSION = 2
+const val SETTINGS_BACKUP_SCHEMA_VERSION = 3
 
 /**
  * 設定のエクスポート/インポート(#50)で読み書きする JSON 1 ファイルの中身。
@@ -50,6 +52,10 @@ data class SettingsBackup(
     val ownedBrands: Set<String> = emptySet(),
     val enabledPointMultipliers: Set<String> = emptySet(),
     val pointProgramMemberships: Set<String> = emptySet(),
+    /** 1pt の価値(円)。通貨単位(#13) */
+    val pointCurrencyValues: Map<String, Double> = emptyMap(),
+    /** 期間限定ポイントの残高・失効日。通貨単位(#13) */
+    val pointBalances: Map<String, PointBalance> = emptyMap(),
     val registeredAreas: List<RegisteredArea> = emptyList(),
     val customCards: List<CustomCard> = emptyList(),
     val customCampaigns: List<CustomCampaign> = emptyList(),
@@ -71,6 +77,8 @@ fun AppSettings.toBackup(exportedAt: String, appVersion: String): SettingsBackup
     ownedBrands = ownedBrands,
     enabledPointMultipliers = enabledPointMultipliers,
     pointProgramMemberships = pointProgramMemberships,
+    pointCurrencyValues = pointCurrencyValues,
+    pointBalances = pointBalances,
     registeredAreas = registeredAreas,
     customCards = customCards,
     customCampaigns = customCampaigns,
@@ -93,6 +101,9 @@ fun SettingsBackup.toSettings(): AppSettings = AppSettings(
     ownedBrands = ownedBrands,
     enabledPointMultipliers = enabledPointMultipliers,
     pointProgramMemberships = pointProgramMemberships,
+    // 手で書き換えられる可能性があるため範囲外の値は落とす(負の価値・負の残高は意味を持たない)
+    pointCurrencyValues = pointCurrencyValues.filterValues { it >= 0.0 },
+    pointBalances = pointBalances.filterValues { it.balancePt >= 0 },
     registeredAreas = registeredAreas.distinctBy { it.type to it.code },
     customCards = customCards.distinctBy { it.id },
     customCampaigns = customCampaigns.distinctBy { it.id }.map { it.normalized() },

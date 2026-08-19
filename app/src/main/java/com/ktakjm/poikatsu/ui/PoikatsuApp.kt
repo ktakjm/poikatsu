@@ -118,6 +118,7 @@ import com.ktakjm.poikatsu.data.CustomCampaign
 import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.domain.CampaignJudgment
+import com.ktakjm.poikatsu.domain.ExpiringPointNotice
 import com.ktakjm.poikatsu.domain.customCampaignBaseId
 import com.ktakjm.poikatsu.domain.isCustom
 import com.ktakjm.poikatsu.ui.theme.AppIcons
@@ -443,7 +444,6 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         onCardRateChange = viewModel::onSetCardRate,
                         onCardBrandChange = viewModel::onSetCardBrand,
                         onCardClassChange = viewModel::onSetCardClass,
-                        onCardPointValueChange = viewModel::onSetCardPointValue,
                         onAddCustomCard = viewModel::onAddCustomCard,
                         onUpdateCustomCard = viewModel::onUpdateCustomCard,
                         onRemoveCustomCard = viewModel::onRemoveCustomCard,
@@ -451,6 +451,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         onQrEnabledChange = viewModel::onSetQrEnabled,
                         onPointProgramMemberChange = viewModel::onSetPointProgramMembership,
                         onPointMultiplierChange = viewModel::onSetPointMultiplierEnabled,
+                        onPointValueChange = viewModel::onSetPointCurrencyValue,
+                        onPointBalanceChange = viewModel::onSetPointBalance,
                     )
                     SettingsSubpage.MUNICIPALITIES -> MunicipalitySettingsPage(
                         registeredAreas = state.registeredAreas,
@@ -588,6 +590,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             },
                             onExcludeStore = viewModel::onExcludeStore,
                             onRestoreExcludedStore = viewModel::onRestoreExcludedStore,
+                            expiringNotices = state.expiringPointNotices,
                         )
                     }
                     // キャンペーン詳細(タブ非依存のオーバーレイ)。topBar の分岐順と一致させること
@@ -643,6 +646,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                                     campaignGroup = state.selectedCampaignGroup,
                                     merchants = state.merchantsById,
                                     storeRates = state.campaignStoreRates,
+                                    expiringNotices = state.expiringPointNotices,
                                     topInset = innerPadding.calculateTopPadding(),
                                     onBack = viewModel::onBack,
                                     onOpenStoreCheck = viewModel::onOpenStoreCheck,
@@ -829,6 +833,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                                 },
                                 onExcludeStore = viewModel::onExcludeStore,
                                 onRestoreExcludedStore = viewModel::onRestoreExcludedStore,
+                                expiringNotices = state.expiringPointNotices,
                             )
                         } else {
                             PaddedColumn { searchPane() }
@@ -1133,6 +1138,7 @@ private fun SearchListDetail(
     onFindNearby: () -> Unit,
     onExcludeStore: (campaignId: String, storeName: String) -> Unit,
     onRestoreExcludedStore: (campaignId: String) -> Unit,
+    expiringNotices: List<ExpiringPointNotice>,
 ) {
     ListDetailPaneScaffold(
         directive = directive,
@@ -1188,6 +1194,7 @@ private fun SearchListDetail(
                                 onFindNearby = onFindNearby,
                                 onExcludeStore = onExcludeStore,
                                 onRestoreExcludedStore = onRestoreExcludedStore,
+                                expiringNotices = expiringNotices,
                             )
                         }
                         else -> Centered {
@@ -1940,6 +1947,7 @@ private fun NearbyDetailSideSheet(
     campaignGroup: List<CampaignJudgment>?,
     merchants: Map<String, Merchant>,
     storeRates: Map<String, Map<String, Double>>,
+    expiringNotices: List<ExpiringPointNotice>,
     topInset: Dp,
     onBack: () -> Unit,
     onOpenStoreCheck: () -> Unit,
@@ -1998,6 +2006,7 @@ private fun NearbyDetailSideSheet(
                         onFindNearby = {},
                         onExcludeStore = onExcludeStore,
                         onRestoreExcludedStore = onRestoreExcludedStore,
+                        expiringNotices = expiringNotices,
                     )
                 }
                 campaignGroup != null -> {

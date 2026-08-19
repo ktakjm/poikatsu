@@ -26,6 +26,7 @@ import com.ktakjm.poikatsu.data.ExcludedStorePair
 import com.ktakjm.poikatsu.data.MunicipalityMaster
 import com.ktakjm.poikatsu.data.CardClass
 import com.ktakjm.poikatsu.data.PaymentCard
+import com.ktakjm.poikatsu.data.PointBalance
 import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.PointValueConfig
 import com.ktakjm.poikatsu.data.PoikatsuData
@@ -44,21 +45,25 @@ import com.ktakjm.poikatsu.domain.BestPaymentOption
 import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.domain.CampaignType
+import com.ktakjm.poikatsu.domain.ExpiringPointNotice
 import com.ktakjm.poikatsu.domain.JudgmentEngine
+import com.ktakjm.poikatsu.domain.FixedBenefitAdvice
+import com.ktakjm.poikatsu.domain.StackedRate
 import com.ktakjm.poikatsu.domain.StoreVerdict
 import com.ktakjm.poikatsu.domain.allStoreListsExhaustive
 import com.ktakjm.poikatsu.domain.allowsManualRate
 import com.ktakjm.poikatsu.domain.appLinks
 import com.ktakjm.poikatsu.domain.bestBenefitLabel
-import com.ktakjm.poikatsu.domain.boostedCampaignRate
-import com.ktakjm.poikatsu.domain.campaignRateBoosted
 import com.ktakjm.poikatsu.domain.campaignType
+import com.ktakjm.poikatsu.domain.effectiveValueRate
+import com.ktakjm.poikatsu.domain.expiringPointNotices
 import com.ktakjm.poikatsu.domain.filterCampaignsByArea
 import com.ktakjm.poikatsu.domain.googlePayIneligibleWarning
 import com.ktakjm.poikatsu.domain.mergeUserData
 import com.ktakjm.poikatsu.domain.municipalCampaignsForAreas
 import com.ktakjm.poikatsu.domain.municipalCampaignsForLocation
 import com.ktakjm.poikatsu.domain.isCustom
+import com.ktakjm.poikatsu.domain.isExpired
 import com.ktakjm.poikatsu.domain.isPrefectureWide
 import com.ktakjm.poikatsu.domain.isTargetDay
 import com.ktakjm.poikatsu.domain.isTimeLimited
@@ -209,6 +214,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          * 「あわせて提示」の並記枠に出す(支払い方法の選択肢ではないため)。
          */
         val presentationJudgments: List<CampaignJudgment> = emptyList(),
+        /** 提示スタック合算(#13)。bestOption + presentationJudgments から judgeAll が算出したもの */
+        val stackedRate: StackedRate? = null,
+        /** 定額特典のアドバイス(#13)。最大おトク率バナーの2行目(○○円未満なら定額が得)に使う */
+        val fixedAdvice: FixedBenefitAdvice? = null,
     )
 
     data class StoreCheckState(
@@ -368,6 +377,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val results: List<SearchResult> = emptyList(),
         /** 検索にヒットしたが判定 0 件で一覧から落としたチェーンの表示名(0 件時の案内の出し分け用。#70) */
         val unrewardedNames: List<String> = emptyList(),
+        /**
+         * 期間限定ポイントの失効通知(#13)。施策・お店と独立の内容のためどのお店の判定画面でも
+         * 同じ一覧を出す(施策 0 件でも表示。設計書 §4)。rebuild で算出する
+         */
+        val expiringPointNotices: List<ExpiringPointNotice> = emptyList(),
         val selection: Selection? = null,
         val storeCheck: StoreCheckState? = null,
         val dataUpdatedAt: String = "",
@@ -413,8 +427,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val campaignsActive: List<Campaign> = emptyList(),
         val campaignsUpcoming: List<Campaign> = emptyList(),
         /**
-         * おトクタブ一覧の表示レート上書き(施策 id → ユーザー実効率)。所有カードの card_program のみ
-         * 載る(お店タブと同じ基準=resolveCardCampaignRate。ウエル活 ON なら倍率適用済みの値)。
+         * おトクタブ一覧の表示レート上書き(施策 id → 円換算済みの実質率。1pt価値・倍率込み)。
+         * 所有カードの card_program のカード実効率由来に加え、換算で値が変わる施策(QR/promotion
+         * 含む)も載る(お店タブと同じ基準=resolveCardCampaignRate + effectiveValueRate)。
          * 載っていない施策は施策側の率(rate_base 等)で表示する
          */
         val campaignPersonalRates: Map<String, Double> = emptyMap(),
@@ -551,6 +566,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val multiplierEnabled: Boolean,
         /** 倍率が掛かるカード名(この通貨を稼ぐ所有カード)。有効時の「○○の還元率を×1.5で表示中」注記に使う */
         val multiplierCardNames: List<String> = emptyList(),
+        /** 1pt の価値(円)。上書きがあれば上書き値、無ければカタログ既定(#13: 通貨単位・全通貨で設定可能) */
+        val valueYen: Double = 1.0,
+        /** 1pt 価値の設定定義(カタログ)。label/note は J-POINT のように説明が要る通貨だけ持つ。null でも設定行は出す */
+        val pointValueConfig: PointValueConfig? = null,
+        /** valueYen がユーザー上書きでなくカタログ既定のままか(設定画面での表示・判定分岐に使う予定) */
+        val valueIsDefault: Boolean = true,
+        /** 期間限定ポイントの残高・失効日(通貨ごとに1件=直近失効分。#13)。null は未登録 */
+        val balance: PointBalance? = null,
+        /** balance の失効日を今日基準で過ぎているか(設定画面の「失効済み」表示に使う) */
+        val balanceExpired: Boolean = false,
     )
 
     /** 設定画面のカード1枚分の表示・編集状態(payment_methods カタログ + ユーザー差分のマージ結果) */
@@ -582,10 +607,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val cardClasses: List<CardClass> = emptyList(),
         /** 選択中クラスの id(未選択はカタログ先頭=保守側) */
         val cardClassId: String? = null,
-        /** 1pt 価値の設定定義(カタログ)。null = 価値変動の概念なし(入力 UI を出さない) */
-        val pointValueConfig: PointValueConfig? = null,
-        /** 1pt の価値(円)(上書きがあれば上書き値、無ければカタログ既定) */
-        val pointValue: Double = 1.0,
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -796,6 +817,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             displayName = displayName,
             excludedJudgments = result.excludedJudgments,
             presentationJudgments = result.presentationJudgments,
+            stackedRate = result.stackedRate,
+            fixedAdvice = result.fixedAdvice,
         )
     }
 
@@ -846,7 +869,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun applyData(loaded: LoadedData) {
         lastLoaded = loaded
         rebuild()
+        // 旧カード単位の 1pt 価値を通貨単位へ移行(#13)。対応表はカタログから引く。
+        // 何度呼んでも安全な処理(migrateCardPointValues 参照)なのでデータロードのたびに発火してよい
+        viewModelScope.launch { settingsRepo.migrateCardPointValues(cardToCurrencyMap(loaded)) }
     }
+
+    /** カード→ポイント通貨 ID の対応表をカタログから作る(applyData と onConfirmSettingsImport で共用)。 */
+    private fun cardToCurrencyMap(loaded: LoadedData): Map<String, String> =
+        loaded.data.cards.mapNotNull { c -> c.pointCurrencyId?.let { c.id to it } }.toMap()
 
     /**
      * 直近のデータ(lastLoaded)とユーザー設定(lastSettings)からエンジンを作り直し状態へ反映する。
@@ -867,6 +897,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             customCards = settings.customCards,
             customCampaigns = settings.activeCustomCampaigns,
             enabledPointMultipliers = settings.enabledPointMultipliers,
+            pointCurrencyValues = settings.pointCurrencyValues,
         )
         val newEngine = JudgmentEngine(merged.engineData)
         engine = newEngine
@@ -885,11 +916,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // isTimeLimited を見て行う)。通知対象は従来どおり NotificationPlanner 側で card_program を除外
         val campaignsActive = applyAreaFilter(newEngine.activeCampaigns(today))
         val campaignsUpcoming = applyAreaFilter(newEngine.upcomingCampaigns(today))
-        // おトクタブ一覧の表示レートをお店タブと同じ基準(resolveCardCampaignRate)にする:
-        // 所有カードの card_program はユーザー実効率(ウエル活込み)で出す。施策側の率を使う施策も、
-        // 払い出し通貨の倍率が有効なら掛けた値にする(#39。お店タブの judgeCards/judgeQr と同じ基準)。
-        // どちらにも載らない施策(未所有カード・倍率なしの QR/自治体)は従来どおり施策側の率のまま
+        // おトクタブ一覧の表示レートをお店タブと同じ基準(resolveCardCampaignRate + 円換算)にする:
+        // 所有カードの card_program はユーザー実効率で出す。施策側の率を使う施策も、払い出し通貨の
+        // 円価値(1pt価値 × 倍率)で換算した値にする(#39/#13。judgeCards/judgeQr と同じ基準)。
+        // どちらにも載らない施策(未所有カード・換算で値が変わらない QR/自治体)は施策側の率のまま
         val mergedCurrencies = merged.engineData.pointCurrencies
+        // 期間限定ポイントの失効通知(#13): 施策・お店と独立の内容のためどのお店の判定画面でも
+        // 同じ一覧を出す(設計書 §4)。判定(Selection)には手を入れず UiState 側で持つ
+        val expiringNotices = expiringPointNotices(settings.pointBalances, mergedCurrencies, today)
         val qrPaymentsById = loaded.data.qrPayments.associateBy { it.id }
         val payoutCurrencyOf = { c: Campaign ->
             payoutCurrency(c, mergedCurrencies, c.cardId?.let { newOwnedCardsById[it] }, qrPaymentsById[c.paymentMethodId])
@@ -897,20 +931,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val campaignPersonalRates = (campaignsActive + campaignsUpcoming)
             .mapNotNull { c ->
                 val resolved = if (c.cardId != null) resolveCardCampaignRate(c, newOwnedCardsById[c.cardId]) else null
-                val usesCardRate = resolved?.usesCardRate == true
-                val rate = resolved?.effectiveRate ?: c.rateBase
+                val nominal = resolved?.effectiveRate ?: c.rateBase
+                val effective = effectiveValueRate(nominal, payoutCurrencyOf(c))
                 when {
-                    usesCardRate -> c.id to (resolved?.effectiveRate ?: 0.0)
-                    campaignRateBoosted(rate, usesCardRate = false, currency = payoutCurrencyOf(c)) ->
-                        c.id to boostedCampaignRate(rate, usesCardRate = false, currency = payoutCurrencyOf(c))!!
+                    // 所有カードの実効率(ユーザー個別の値)は常に載せる
+                    resolved?.usesCardRate == true -> c.id to (effective ?: 0.0)
+                    // 施策側の率は円換算で収録値と変わるときだけ載せる(等価なら収録値のままでよい)
+                    effective != null && effective != nominal -> c.id to effective
                     else -> null
                 }
             }
             .toMap()
         // 施策詳細の率別グルーピング用(#52): 店舗別レート(rate_override)を持つ施策の
-        // merchant_id → 実効率。お店タブの判定と同じ基準(resolveCardCampaignRate)で解決するため、
-        // 所有カードの card_program はクラス加算・1pt価値を合成した値、未所有・QR は収録値そのまま
-        // (施策側の率には払い出し通貨の倍率を合成する。#39)
+        // merchant_id → 実効率。お店タブの判定と同じ基準(resolveCardCampaignRate + 円換算)で
+        // 解決するため、所有カードの card_program はクラス加算を合成した名目率に払い出し通貨の
+        // 円価値を掛けた値、未所有・QR は収録値を同じ係数で換算した値になる(#39/#13)
         val campaignStoreRates = (campaignsActive + campaignsUpcoming)
             .filter { c -> c.storeScope == "managed" && c.merchantRules.any { it.rateOverride != null } }
             .associate { c ->
@@ -921,12 +956,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     } else {
                         null
                     }
-                    val rate = if (resolved != null) {
-                        boostedCampaignRate(resolved.effectiveRate, resolved.usesCardRate, currency)
-                    } else {
-                        boostedCampaignRate(r.rateOverride ?: c.rateBase, usesCardRate = false, currency = currency)
-                    }
-                    rate?.let { r.merchantId to it }
+                    val nominal = if (resolved != null) resolved.effectiveRate else (r.rateOverride ?: c.rateBase)
+                    effectiveValueRate(nominal, currency)?.let { r.merchantId to it }
                 }.toMap()
             }
         // 終了日を過ぎたカスタムキャンペーンは判定・一覧から消えるが、編集・削除の入口を残すため
@@ -953,12 +984,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 .flatMap { c -> c.merchantRules.flatMap { it.ineligibleBrands } }
                 .distinct()
             val brandAffectsJudgment = ineligibleBrands.isNotEmpty() || hasBrandCampaign
-            // クラス/1pt価値を持つカード(JCB W/S 等)の表示レートは UserDataMerge と同じ式で導出する:
-            // (率 + クラス加算) × 1pt価値。持たないカードは従来どおり(加算0・乗数1で同値)。
+            // クラスを持つカード(JCB W/S 等)の表示レートは UserDataMerge と同じ式で導出する:
+            // (率 + クラス加算)の名目率。1pt 価値の円換算はスコア層に一本化したためここでは掛けない
+            // (#13。この行は還元率の手入力ダイアログの初期値で、手入力値と同じ土俵=名目である必要がある)。
             // 手入力レートは単一率プログラムのカードだけに効く(UserDataMerge と同じガード)
             val selectedClass = card.cardClasses.firstOrNull { it.id == ov?.cardClass }
                 ?: card.cardClasses.firstOrNull()
-            val pointValue = ov?.pointValue ?: card.pointValueConfig?.default ?: 1.0
             val rateEditable = card.allowsManualRate(loaded.data.campaigns)
             val manualRate = ov?.rate?.takeIf { rateEditable }
             CardSetting(
@@ -966,8 +997,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 cardName = card.cardName,
                 brandColor = card.brandColor,
                 owned = ov?.owned ?: true,
-                rate = ((manualRate ?: card.effectiveRateDefault ?: 0.0) +
-                    (selectedClass?.rateBonus ?: 0.0)) * pointValue,
+                rate = (manualRate ?: card.effectiveRateDefault ?: 0.0) +
+                    (selectedClass?.rateBonus ?: 0.0),
                 rateEditable = rateEditable,
                 brand = ov?.brand ?: card.brands.singleOrNull().orEmpty(),
                 brands = card.brands,
@@ -977,8 +1008,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ineligibleBrands = ineligibleBrands,
                 cardClasses = card.cardClasses,
                 cardClassId = selectedClass?.id,
-                pointValueConfig = card.pointValueConfig,
-                pointValue = pointValue,
             )
         }
 
@@ -1005,10 +1034,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
 
-        // 設定画面「ポイント」(#39): 会員チェック or 倍率チェックのどちらかを出せる通貨だけ並べる
-        // (どちらも無い通貨は設定の余地が無いため行自体を出さない)
+        // 設定画面「ポイント」: 会員登録・倍率チェック・1pt価値の3役を担うセクション(#39/#13)。
+        // 1pt価値はカタログの membership_program・point_multiplier・point_value 定義の有無に
+        // 依存せず全通貨で編集可能(既定 1.0 円)なため、フィルタせず全通貨を並べる
+        // (membership/multiplier 行は各通貨の定義有無で個別に出し分ける。下の forEach 参照)
         val pointCurrencySettings = loaded.data.pointCurrencies
-            .filter { it.membershipProgram || it.pointMultiplier != null }
             .map { currency ->
                 PointCurrencySetting(
                     id = currency.id,
@@ -1021,6 +1051,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     multiplierCardNames = merged.engineData.cards
                         .filter { it.pointCurrencyId == currency.id }
                         .map { it.cardName },
+                    valueYen = settings.pointCurrencyValues[currency.id]
+                        ?: currency.pointValueConfig?.default ?: 1.0,
+                    pointValueConfig = currency.pointValueConfig,
+                    valueIsDefault = currency.id !in settings.pointCurrencyValues,
+                    balance = settings.pointBalances[currency.id],
+                    balanceExpired = settings.pointBalances[currency.id]
+                        ?.isExpired(LocalDate.now()) == true,
                 )
             }
 
@@ -1035,6 +1072,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 categories = newEngine.categories,
                 results = searchOutcome.results,
                 unrewardedNames = searchOutcome.unrewardedNames,
+                expiringPointNotices = expiringNotices,
                 selection = it.selection?.let { sel ->
                     newDisplayData.merchants.firstOrNull { m -> m.id == sel.merchant.id }
                         ?.let { m -> newEngine.selectionFor(m, sel.storeNameHint, sel.displayName, sel.bannerId) }
@@ -2069,24 +2107,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val benefitType = com.ktakjm.poikatsu.domain.BenefitType.fromString(campaign.benefitType)
             val isLottery = benefitType == com.ktakjm.poikatsu.domain.BenefitType.LOTTERY
             val todayIsTarget = isTargetDay(campaign, today)
-            // カード施策の率はお店タブと同じ基準(resolveCardCampaignRate)で解決する:
-            // 所有カードの card_program はユーザー実効率(ウエル活込み)、未所有は施策側の率へ
-            // フォールバック。QR・自治体・ブランド施策(cardId 無し)は従来どおり施策側の率。
-            // 施策側の率には払い出し通貨の倍率が有効なら掛ける(#39。judgeCards/judgeQr と同じ基準)
+            // カード施策の率はお店タブと同じ基準(resolveCardCampaignRate)で名目率を解決する:
+            // 所有カードの card_program はユーザー実効率、未所有は施策側の率へフォールバック。
+            // QR・自治体・ブランド施策(cardId 無し)は従来どおり施策側の率。
+            // 円換算(1pt価値 × 倍率)はスコア層で一度だけ掛ける(#13。judgeCards/judgeQr と同じ基準)
             val ownedCard = campaign.cardId?.let { ownedCardsById[it] }
             val resolved = if (campaign.cardId != null) resolveCardCampaignRate(campaign, ownedCard) else null
-            val usesCardRate = resolved?.usesCardRate == true
             val currency = payoutCurrency(
                 campaign,
                 catalog?.pointCurrencies.orEmpty(),
                 ownedCard,
                 qr,
             )
-            val effectiveRate = boostedCampaignRate(
-                if (resolved != null) resolved.effectiveRate else campaign.rateBase,
-                usesCardRate,
-                currency,
-            )
+            val nominalRate = if (resolved != null) resolved.effectiveRate else campaign.rateBase
+            val effectiveRate = effectiveValueRate(nominalRate, currency)
             // 提示施策(point_program_id)のバッジはプログラム名(dポイント等)を出す
             val programName = campaign.pointProgramId?.let { id ->
                 catalog?.pointCurrencies?.firstOrNull { it.id == id }?.name
@@ -2099,6 +2133,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 brandColor = catalog?.brandColorOf(campaign),
                 benefitType = benefitType,
                 effectiveRate = effectiveRate.takeUnless { isLottery },
+                nominalRate = nominalRate.takeUnless { isLottery },
                 discountAmount = campaign.discountAmount.takeUnless { isLottery },
                 daysRemaining = e.daysRemaining(campaign, today),
                 // merchant 未特定のため店舗固有分は乗らず、campaign 直下(施策全体に一様に効く事実)だけが出る。
@@ -2124,12 +2159,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // judgeCards/judgeQr と同じ条件(#39): 倍率バッジは払い出し通貨が倍率を持てば出す。
                 // 「実質還元率」注記は倍率が実際に掛かった率を表示したときだけ
                 pointMultiplier = currency?.pointMultiplier,
-                welcatsuApplied = (ownedCard?.welcatsuApplied == true && usesCardRate) ||
-                    campaignRateBoosted(
-                        if (resolved != null) resolved.effectiveRate else campaign.rateBase,
-                        usesCardRate,
-                        currency,
-                    ),
+                welcatsuApplied = currency?.multiplierEnabled == true &&
+                    currency.pointMultiplier != null && nominalRate != null,
                 mayEndEarly = campaign.mayEndEarly,
                 todayIsTarget = todayIsTarget,
                 nextTargetDate = if (todayIsTarget) null else nextTargetDay(campaign, today),
@@ -2282,6 +2313,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val imported =
             if (notificationsDropped) restored.copy(notificationsEnabled = false) else restored
         settingsRepo.importSettings(imported)
+        // v2 バックアップは CardOverride.pointValue を復元し得るが、旧カード単位→通貨単位の移行
+        // (migrateCardPointValues)は applyData(次回データロード)でしか発火しない。復元直後にも
+        // 発火させ、値が次回起動まで宙に浮くのを防ぐ。lastLoaded が null(カタログ未ロード)なら
+        // 何もしない(次回ロードで自然に移行される)
+        lastLoaded?.let { loaded ->
+            settingsRepo.migrateCardPointValues(cardToCurrencyMap(loaded))
+        }
         val app = getApplication<Application>()
         if (imported.notificationsEnabled) {
             CampaignNotifications.schedule(app, imported.notificationTimeMinutes)
@@ -2344,8 +2382,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onSetCardClass(cardId: String, cardClass: String) =
         viewModelScope.launch { settingsRepo.setCardClass(cardId, cardClass) }
 
-    fun onSetCardPointValue(cardId: String, pointValue: Double?) =
-        viewModelScope.launch { settingsRepo.setPointValue(cardId, pointValue) }
+    // 1pt 価値は #13 で通貨単位(pointCurrencyValues)へ移設済み。null で上書き解除(既定に戻す)
+    fun onSetPointCurrencyValue(currencyId: String, value: Double?) =
+        viewModelScope.launch { settingsRepo.setPointCurrencyValue(currencyId, value) }
+
+    /** 期間限定ポイントの残高・失効日(通貨ごとに1件。#13)。null で削除 */
+    fun onSetPointBalance(currencyId: String, balance: PointBalance?) =
+        viewModelScope.launch { settingsRepo.setPointBalance(currencyId, balance) }
 
     fun onSetQrEnabled(id: String, enabled: Boolean) =
         viewModelScope.launch { settingsRepo.setQrEnabled(id, enabled) }

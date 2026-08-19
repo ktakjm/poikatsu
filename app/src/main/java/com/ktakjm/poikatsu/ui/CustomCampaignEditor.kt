@@ -957,10 +957,13 @@ private fun ChainPickerDropdown(
     }
 }
 
-/** 開始日・終了日の DatePicker。M3 の DatePickerState は UTC ミリ秒なので LocalDate と相互変換する。 */
+/**
+ * 開始日・終了日の DatePicker。M3 の DatePickerState は UTC ミリ秒なので LocalDate と相互変換する。
+ * internal: 設定「ポイント」の期間限定ポイント失効日入力(PointBalanceEditDialog)からも共用する(#13)。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EditorDatePickerDialog(
+internal fun EditorDatePickerDialog(
     initial: LocalDate?,
     onConfirm: (LocalDate?) -> Unit,
     onDismiss: () -> Unit,

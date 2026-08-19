@@ -6,6 +6,7 @@ import com.ktakjm.poikatsu.data.CustomCampaign
 import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.CustomPayment
 import com.ktakjm.poikatsu.data.ExcludedStorePair
+import com.ktakjm.poikatsu.data.PointBalance
 import com.ktakjm.poikatsu.data.RegisteredArea
 import com.ktakjm.poikatsu.data.RegisteredAreaType
 import com.ktakjm.poikatsu.data.SETTINGS_BACKUP_SCHEMA_VERSION
@@ -118,6 +119,34 @@ class SettingsBackupTest {
         assertEquals(SETTINGS_BACKUP_SCHEMA_VERSION, backup!!.schemaVersion)
         assertEquals("2026-07-27T10:00:00", backup.exportedAt)
         assertEquals("0.9.0", backup.appVersion)
+    }
+
+    // 1pt 価値・期間限定ポイント残高は通貨単位で保持する(#13。schemaVersion 3)
+    @Test
+    fun `1pt価値と残高がバックアップに含まれ復元できる`() {
+        val settings = AppSettings(
+            pointCurrencyValues = mapOf("vpoint" to 1.5, "j_point" to 0.7),
+            pointBalances = mapOf("rakuten_point" to PointBalance(balancePt = 500, expiryDate = "2026-09-01")),
+        )
+        val backup = settings.toBackup(exportedAt = "2026-08-19T00:00:00", appVersion = "0.5.0")
+        assertEquals(3, backup.schemaVersion)
+        val restored = decodeSettingsBackup(encodeSettingsBackup(backup))!!.toSettings()
+        assertEquals(1.5, restored.pointCurrencyValues["vpoint"]!!, 0.0)
+        assertEquals(500, restored.pointBalances["rakuten_point"]!!.balancePt)
+        assertEquals("2026-09-01", restored.pointBalances["rakuten_point"]!!.expiryDate)
+    }
+
+    // 旧 v2 ファイルは新フィールド無しで読める。CardOverride.pointValue は #13 の移行のために
+    // 残置されているため、v2 ファイルにあれば読み込み時点ではそのまま復元される(通貨側への
+    // 移行は次回 rebuild 時に migrateCardPointValues が行う)
+    @Test
+    fun `v2バックアップは読めて新フィールドは空になる`() {
+        val v2Json = """{"schemaVersion": 2, "cardOverrides": {"jcb_original": {"pointValue": 0.8}}}"""
+        val restored = decodeSettingsBackup(v2Json)!!.toSettings()
+        assertTrue(restored.pointCurrencyValues.isEmpty())
+        assertTrue(restored.pointBalances.isEmpty())
+        // 旧 CardOverride.pointValue は残したまま復元される(次回 rebuild 時の移行で通貨側へ移る)
+        assertEquals(0.8, restored.cardOverrides["jcb_original"]!!.pointValue!!, 0.0)
     }
 
     @Test

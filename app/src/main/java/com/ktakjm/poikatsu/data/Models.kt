@@ -398,9 +398,10 @@ data class CardClass(
 )
 
 /**
- * 1 ポイントの価値設定(使い道で価値が変動するポイント通貨のカード。例: J-POINT は 1pt=0.7〜1円)。
- * これがあるカードは設定画面に「1ptの価値」入力を出し、実効率・店舗別レートに乗算する。
- * ポイント通貨の正規化(#39)が入るまでの、カード単位の暫定表現。
+ * 1 ポイントの価値設定(使い道で価値が変動するポイント通貨。例: J-POINT は 1pt=0.7〜1円)。
+ * 通貨単位の 1pt 価値定義(#13 で移設)。label/note は説明が要る通貨だけが持つ(設定画面の
+ * 「1ptの価値」行自体は全通貨に出す)。値の適用はスコア層(ExpectedValueScoring)で、
+ * 名目率に通貨価値係数として掛かる。
  */
 @Serializable
 data class PointValueConfig(
@@ -434,8 +435,12 @@ data class PointCurrency(
     @SerialName("membership_program") val membershipProgram: Boolean = false,
     /** ポイント価値の倍率(ウエル活等)。null = 倍率の概念なし */
     @SerialName("point_multiplier") val pointMultiplier: PointMultiplier? = null,
+    /** 1pt 価値の設定定義(任意)。label/note は J-POINT のように説明が要る通貨だけ持つ。#13 で通貨単位へ移設 */
+    @SerialName("point_value") val pointValueConfig: PointValueConfig? = null,
     /** 実行時フラグ: ユーザーがこの通貨の倍率表示を有効にしているか。マージで設定し JSON には現れない */
     @Transient val multiplierEnabled: Boolean = false,
+    /** 実行時: ユーザー設定の 1pt 価値(円)。マージで設定し JSON には現れない。既定 1.0 円 */
+    @Transient val valueYen: Double = 1.0,
 )
 
 @Serializable
@@ -461,19 +466,13 @@ data class PaymentCard(
      * どれを持っているかは CardOverride.cardClass(DataStore)で、未選択は先頭(保守側)扱い。
      */
     @SerialName("card_classes") val cardClasses: List<CardClass> = emptyList(),
-    /** 1pt 価値の設定定義。null = 価値変動の概念なし(設定 UI も出さない) */
-    @SerialName("point_value") val pointValueConfig: PointValueConfig? = null,
     /**
      * 実行時フィールド: 判定に使う実ブランド。VM のマージで CardOverride.brand(なければ brands が
      * 単一のときその値)を設定し JSON には現れない。空文字は「未選択」= どのブランドとも断定しない。
      */
     @Transient val brand: String = "",
-    /** 実行時フラグ: ウエル活(×factor)を適用済みか。VM のマージで設定し JSON には現れない */
-    @Transient val welcatsuApplied: Boolean = false,
     /** 実行時: 選択中クラスの加算率(%)。店舗別レート(rate_override)に足す。マージで設定 */
     @Transient val rateBonus: Double = 0.0,
-    /** 実行時: 店舗別レートに掛かる乗数(1pt価値 × ウエル活倍率)。マージで設定 */
-    @Transient val rateMultiplier: Double = 1.0,
 )
 
 /** 国際ブランド1件(payment_methods.json の card_brands)。name は campaigns.json の card_brand から参照される */

@@ -1,6 +1,6 @@
 {
-  "schema_version": 9,
-  "updated_at": "2026-08-18",
+  "schema_version": 10,
+  "updated_at": "2026-08-19",
   "card_brands": [
     { "name": "Visa", "color": "#1A1F71" },
     { "name": "Mastercard", "color": "#EB001B" },
@@ -20,6 +20,13 @@
       "name": "テストプログラム",
       "brand_color": "#8E24AA",
       "membership_program": true
+    },
+    {
+      "id": "test_jpoint",
+      "name": "テストJポイント",
+      "brand_color": "#00707C",
+      "membership_program": false,
+      "point_value": { "label": "テストポイントの価値", "default": 1.0, "note": "使い道により1pt=0.7〜1円(検証用)" }
     }
   ],
   "cards": [
@@ -48,7 +55,7 @@
         { "id": "s", "label": "テストS", "rate_bonus": 0.0 },
         { "id": "w", "label": "テストW", "rate_bonus": 0.5 }
       ],
-      "point_value": { "label": "テストポイントの価値", "default": 1.0, "note": "使い道により1pt=0.7〜1円(検証用)" }
+      "point_currency_id": "test_jpoint"
     },
     {
       "id": "test_card_epos",
