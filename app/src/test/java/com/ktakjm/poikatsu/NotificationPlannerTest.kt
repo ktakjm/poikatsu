@@ -11,6 +11,8 @@ import com.ktakjm.poikatsu.data.RegisteredAreaType
 import com.ktakjm.poikatsu.domain.CampaignNotification
 import com.ktakjm.poikatsu.domain.NotificationKind
 import com.ktakjm.poikatsu.domain.delayUntilNextNotifyTime
+import com.ktakjm.poikatsu.domain.notificationItemText
+import com.ktakjm.poikatsu.domain.notificationItemTitle
 import com.ktakjm.poikatsu.domain.notificationLine
 import com.ktakjm.poikatsu.domain.notificationTargets
 import com.ktakjm.poikatsu.domain.notificationTitle
@@ -343,6 +345,49 @@ class NotificationPlannerTest {
         assertEquals(
             "「千葉県キャッシュレス決済キャンペーン」が今日から開始(〜2026/08/30)",
             notificationLine(items.single()),
+        )
+    }
+
+    @Test
+    fun `文言-個別通知のタイトルは名前と決済の添え書き`() {
+        // 通知の分割(#82): 1キャンペーン=1通知のタイトル。名前はおトクタブと同じ略記優先で、
+        // 複数決済にまたがるグループは代表+件数を添える(notificationLine と同じ添え書き)
+        val multi = planCampaignNotifications(
+            chibaByPayment("PayPay", "au PAY", "d払い", "楽天ペイ", "AEON Pay"),
+            today,
+        )
+        assertEquals(
+            "千葉県キャッシュレス決済キャンペーン PayPay ほか4件",
+            notificationItemTitle(multi.single()),
+        )
+        val single = planCampaignNotifications(chibaByPayment("PayPay"), today)
+        assertEquals("千葉県キャッシュレス決済キャンペーン", notificationItemTitle(single.single()))
+    }
+
+    @Test
+    fun `文言-個別通知の本文は状況別で開始には終了日を併記`() {
+        val c = promotion("p", displayName = "サイゼ10%", start = "2026-07-26", end = "2026-07-31")
+        assertEquals(
+            "今日から開始(〜2026/07/31)",
+            notificationItemText(CampaignNotification(listOf(c), NotificationKind.STARTED, 0)),
+        )
+        assertEquals(
+            "開始しました(〜2026/07/31)",
+            notificationItemText(CampaignNotification(listOf(c), NotificationKind.STARTED, 1)),
+        )
+        // 終了日の無い施策は併記なし
+        val noEnd = promotion("q", displayName = "サイゼ10%", start = "2026-07-26")
+        assertEquals(
+            "今日から開始",
+            notificationItemText(CampaignNotification(listOf(noEnd), NotificationKind.STARTED, 0)),
+        )
+        assertEquals(
+            "残り2日",
+            notificationItemText(CampaignNotification(listOf(c), NotificationKind.ENDS_SOON, 2)),
+        )
+        assertEquals(
+            "今日で終了",
+            notificationItemText(CampaignNotification(listOf(c), NotificationKind.ENDS_SOON, 0)),
         )
     }
 

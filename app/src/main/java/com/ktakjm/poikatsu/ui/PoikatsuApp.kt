@@ -190,6 +190,14 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
         }
     }
 
+    // 通知ディープリンク(#82)の引き当て失敗(終了済み・データ改定)の通知
+    LaunchedEffect(state.notificationLinkMessage) {
+        state.notificationLinkMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.onNotificationLinkMessageShown()
+        }
+    }
+
     val selectedTab = state.selectedTab
 
     // カスタムキャンペーンの追加/編集ダイアログ。NEW_CUSTOM_CAMPAIGN(id 空)なら新規、null なら非表示。

@@ -55,6 +55,7 @@ import com.ktakjm.poikatsu.domain.allowsManualRate
 import com.ktakjm.poikatsu.domain.appLinks
 import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
+import com.ktakjm.poikatsu.domain.campaignsInGroup
 import com.ktakjm.poikatsu.domain.effectiveValueRate
 import com.ktakjm.poikatsu.domain.expiringPointNotices
 import com.ktakjm.poikatsu.domain.filterCampaignsByArea
@@ -527,6 +528,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val settingsBackupMessage: String? = null,
         /** 開発者向け操作(テスト通知等)の結果通知(Snackbar)。表示後に消費する */
         val developerMessage: String? = null,
+        /**
+         * 通知ディープリンク(#82)の引き当て失敗(終了済み・データ改定・テストデータ切替)の
+         * Snackbar 文言。表示後に消費する
+         */
+        val notificationLinkMessage: String? = null,
     )
 
     /**
@@ -615,6 +621,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // applyData(IO) と設定購読(Main)の両方から書き換わるので可視性を確保する
     @Volatile
     private var engine: JudgmentEngine? = null
+
+    /**
+     * 通知タップ(#82)で開くべきキャンペーンのグループキー。コールドスタート時はデータロードが
+     * 非同期のため、rebuild でデータが揃った時点で消費する(起動中のタップは即消費)
+     */
+    private var pendingNotificationGroupKey: String? = null
 
     private val locationProvider = LocationProvider(app)
 
@@ -1126,6 +1138,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     .toMap(),
             )
         }
+        // 通知タップ(#82)がデータロード待ちだったら、揃った今開く
+        consumePendingNotificationLink()
     }
 
     fun onQueryChange(query: String) {
@@ -2179,6 +2193,42 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onCloseCampaignDetail() {
         _state.update { it.copy(selectedCampaignGroup = null) }
     }
+
+    /**
+     * 通知タップ(#82。MainActivity の onCreate/onNewIntent から)。おトクタブへ移動し、
+     * 通知に積まれたグループキーの詳細カードを開く。キー無し(サマリ通知)はタブ移動のみ。
+     */
+    fun onNotificationTapped(groupKey: String?) {
+        onSelectTab(AppTab.CAMPAIGNS)
+        if (groupKey.isNullOrBlank()) return
+        pendingNotificationGroupKey = groupKey
+        // 起動中のタップならデータは揃っている=即開く。コールドスタートは rebuild 後に消費される
+        consumePendingNotificationLink()
+    }
+
+    /**
+     * 保留中の通知ディープリンクを消費して詳細カードを開く。エンジン未生成(データロード前)なら
+     * 何もせず保留のまま(rebuild の末尾で再度呼ばれる)。通知後にデータが改定・終了して
+     * 引き当てられないときはおトクタブのまま Snackbar で知らせる。
+     */
+    private fun consumePendingNotificationLink() {
+        val key = pendingNotificationGroupKey ?: return
+        val e = engine ?: return
+        pendingNotificationGroupKey = null
+        val today = LocalDate.now()
+        // おトクタブの一覧と同じ範囲(開催中+開催予定)から引き当てる。エリアフィルタは通さない
+        // (通知対象=登録エリア一致の自治体施策・所有決済の promotion なので絞る必要がなく、
+        // 「すべて表示」トグルの状態に引き当てが左右されない方が確実)
+        val group = campaignsInGroup(e.activeCampaigns(today) + e.upcomingCampaigns(today), key)
+        if (group.isEmpty()) {
+            _state.update { it.copy(notificationLinkMessage = "このキャンペーンは終了したか、見つかりませんでした") }
+            return
+        }
+        onSelectCampaignGroup(group)
+    }
+
+    /** 通知ディープリンクの失敗 Snackbar を表示し終えたら消費する */
+    fun onNotificationLinkMessageShown() = _state.update { it.copy(notificationLinkMessage = null) }
 
     // --- 設定値の更新(DataStore へ書き込み → settings Flow 経由で rebuild される) ---
     fun onSetThemeMode(mode: ThemeMode) = viewModelScope.launch { settingsRepo.setThemeMode(mode) }

@@ -126,21 +126,42 @@ fun planCampaignNotifications(targets: List<Campaign>, today: LocalDate): List<C
         }
     }
 
-/** 通知本文の1行分。タイトルはおトクタブと同じ略記優先(display_name → name) */
+/**
+ * 通知本文の1行分(サマリ通知の InboxStyle 用)。タイトルはおトクタブと同じ略記優先
+ * (display_name → name)で、状況文言は個別通知の本文([notificationItemText])と共通。
+ */
 fun notificationLine(notification: CampaignNotification): String {
     val title = notification.campaign.displayName ?: notification.campaign.name
-    val body = when (notification.kind) {
-        NotificationKind.STARTED -> {
-            // 終了日を併記する。開始と終了間近が同日に重なる短期施策は開始通知しか出ない
-            // (1キャンペーン1行で開始優先)ため、これが無いと終了時期が通知から読めない。
-            // 年は formatPeriodDate と同じく省略しない(年跨ぎ期間が読めなくなるため)
-            val until = notification.campaign.periodEnd?.let { "(〜${it.replace('-', '/')})" } ?: ""
-            if (notification.days == 0) "「$title」が今日から開始$until" else "「$title」が開始しました$until"
-        }
-        NotificationKind.ENDS_SOON ->
-            if (notification.days == 0) "「$title」は今日で終了" else "「$title」は残り${notification.days}日"
+    val connective = when (notification.kind) {
+        NotificationKind.STARTED -> "が"
+        NotificationKind.ENDS_SOON -> "は"
     }
-    return body + paymentsSuffix(notification.campaigns)
+    return "「$title」$connective${notificationItemText(notification)}" +
+        paymentsSuffix(notification.campaigns)
+}
+
+/**
+ * 個別通知(1キャンペーン=1通知。#82)のタイトル。おトクタブと同じ略記優先の名前に、
+ * 決済手段の添え書き([paymentsSuffix])を付ける。状況(開始/終了間近)は本文
+ * ([notificationItemText])側に出す。
+ */
+fun notificationItemTitle(notification: CampaignNotification): String {
+    val title = notification.campaign.displayName ?: notification.campaign.name
+    return title + paymentsSuffix(notification.campaigns)
+}
+
+/**
+ * 個別通知の本文(状況)。開始通知には終了日を併記する——開始と終了間近が同日に重なる短期施策は
+ * 開始通知しか出ない(1キャンペーン1通知で開始優先)ため、これが無いと終了時期が通知から
+ * 読めない。年は省略しない(年跨ぎ期間が読めなくなるため。[notificationLine] と同じ方針)。
+ */
+fun notificationItemText(notification: CampaignNotification): String = when (notification.kind) {
+    NotificationKind.STARTED -> {
+        val until = notification.campaign.periodEnd?.let { "(〜${it.replace('-', '/')})" } ?: ""
+        if (notification.days == 0) "今日から開始$until" else "開始しました$until"
+    }
+    NotificationKind.ENDS_SOON ->
+        if (notification.days == 0) "今日で終了" else "残り${notification.days}日"
 }
 
 /**

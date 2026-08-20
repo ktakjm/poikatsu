@@ -3,6 +3,7 @@ package com.ktakjm.poikatsu
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.domain.campaignGroupKey
+import com.ktakjm.poikatsu.domain.campaignsInGroup
 import com.ktakjm.poikatsu.ui.isCardProgramBundle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -67,6 +68,18 @@ class CampaignGroupingTest {
     fun `常設promotionは束ねず施策id単位`() {
         val c = cardProgram("promo_permanent", type = "promotion")
         assertEquals("promo_permanent", campaignGroupKey(c))
+    }
+
+    @Test
+    fun `グループキーで施策リストから同一キャンペーンを引き当てる`() {
+        // 通知ディープリンク(#82): 通知に積んだ groupKey から現在のデータのグループを復元する。
+        // 元の並び順を保つ(先頭=代表の規約を崩さない)
+        val a1 = cardProgram("epos_yutai_a")
+        val a2 = cardProgram("epos_yutai_b")
+        val other = cardProgram("dcard_x", cardId = "dcard")
+        assertEquals(listOf(a1, a2), campaignsInGroup(listOf(a1, other, a2), campaignGroupKey(a1)))
+        // 見つからないキー(終了済み・データ改定)は空リスト
+        assertTrue(campaignsInGroup(listOf(a1, other), "municipal:存在しない").isEmpty())
     }
 
     @Test

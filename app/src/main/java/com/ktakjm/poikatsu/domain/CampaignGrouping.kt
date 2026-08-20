@@ -29,3 +29,11 @@ fun campaignGroupKey(campaign: Campaign): String = when {
         "pointProgram:" + campaign.pointProgramId
     else -> campaign.id
 }
+
+/**
+ * [campaignGroupKey] が一致する施策を元の並び順のまま取り出す(空リスト=見つからない)。
+ * 通知ディープリンク(#82)が、通知に積んだキーから現在のデータのグループを復元するのに使う
+ * (通知後にデータが改定・終了していると空になり得る。呼び出し側でフォールバックする)。
+ */
+fun campaignsInGroup(campaigns: List<Campaign>, groupKey: String): List<Campaign> =
+    campaigns.filter { campaignGroupKey(it) == groupKey }

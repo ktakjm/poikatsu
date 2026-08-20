@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.first
  *
  * 方式はローカル通知: サーバー(FCM)は使わず、端末内の WorkManager が毎日の通知時刻
  * (設定値。既定 8:00)ごろに [CampaignNotificationWorker] を起動して最新データを取得・判定し、
- * 通知すべき施策があるときだけ1件のまとめ通知を出す。登録エリア・所有カード等の個人化情報は
+ * 通知すべき施策があるときだけ1キャンペーン=1通知で出す(#82)。登録エリア・所有カード等の個人化情報は
  * DataStore(端末内)にしかないため、この判定は端末側でしか行えない(issue #6 の調査コメント参照)。
  */
 object CampaignNotifications {
@@ -37,8 +37,22 @@ object CampaignNotifications {
      */
     const val CHANNEL_ID = "campaign_alerts"
 
-    /** まとめ通知1件を上書き更新するための固定 ID */
-    const val NOTIFICATION_ID = 1
+    /**
+     * サマリ通知(複数キャンペーンを束ねるグループの親)の固定 ID。個別通知(#82)は
+     * dedupKey のハッシュを ID にするため、固定なのはこれだけ。
+     */
+    const val SUMMARY_NOTIFICATION_ID = 1
+
+    /** 個別通知を通知シェードで1グループに束ねるためのグループキー(#82) */
+    const val GROUP_KEY = "campaign_alerts_group"
+
+    /**
+     * 通知タップの PendingIntent に積む extra: 対象キャンペーンのグループキー
+     * (domain/CampaignGrouping.kt の campaignGroupKey)。MainActivity が受け取り、
+     * おトクタブの該当キャンペーン詳細カードを開く(#82)。空文字はサマリ通知
+     * (おトクタブを開くだけ)。
+     */
+    const val EXTRA_CAMPAIGN_GROUP_KEY = "campaign_group_key"
 
     private const val WORK_NAME = "campaign_notification"
 

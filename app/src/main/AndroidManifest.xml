@@ -50,10 +50,13 @@
             android:name="com.google.android.geo.API_KEY"
             android:value="${MAPS_API_KEY}" />
 
+        <!-- singleTop: 通知タップ(#82)でアプリが起動中でも新しい Activity を積まず
+             onNewIntent で受ける(積むと二重起動になり、戻る操作で同じ画面が2枚出る) -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.Poikatsu">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

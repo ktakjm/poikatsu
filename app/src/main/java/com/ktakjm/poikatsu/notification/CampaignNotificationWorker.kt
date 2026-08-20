@@ -19,7 +19,10 @@ import com.ktakjm.poikatsu.data.MunicipalityMaster
 import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.SettingsRepository
 import com.ktakjm.poikatsu.domain.CampaignNotification
+import com.ktakjm.poikatsu.domain.campaignGroupKey
 import com.ktakjm.poikatsu.domain.mergeUserData
+import com.ktakjm.poikatsu.domain.notificationItemText
+import com.ktakjm.poikatsu.domain.notificationItemTitle
 import com.ktakjm.poikatsu.domain.notificationLine
 import com.ktakjm.poikatsu.domain.notificationTargets
 import com.ktakjm.poikatsu.domain.notificationTitle
@@ -33,7 +36,8 @@ import timber.log.Timber
 
 /**
  * キャンペーン通知(#6)の日次ジョブ本体。最新の施策データを取得し、ユーザーに関係する施策の
- * 「開始」「終了間近」を判定して、あるときだけ1件のまとめ通知を出す。
+ * 「開始」「終了間近」を判定して、あるときだけ1キャンペーン=1通知で出す(#82。複数件は
+ * グループ+サマリで束ねる)。タップでおトクタブの該当キャンペーン詳細カードが開く。
  * 判定・文言は domain/NotificationPlanner.kt(純 Kotlin)、データ取得・設定マージは
  * MainViewModel と同じ経路(DataRepository / mergeUserData)を使い、アプリの表示と基準を揃える。
  */
@@ -129,7 +133,7 @@ class CampaignNotificationWorker(
         const val KEY_TEST_RUN = "test_run"
     }
 
-    /** まとめ通知を1件出す。許可が無く出せなかったときは false */
+    /** 1キャンペーン=1通知で出す(#82。複数件はグループ+サマリで束ねる)。許可が無く出せなかったときは false */
     private fun postNotification(context: Context, items: List<CampaignNotification>): Boolean {
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
@@ -137,23 +141,62 @@ class CampaignNotificationWorker(
         ) {
             return false
         }
-        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
+        val manager = NotificationManagerCompat.from(context)
+        if (!manager.areNotificationsEnabled()) return false
         CampaignNotifications.ensureChannel(context)
-        val intent = Intent(context, MainActivity::class.java)
-        val pending = PendingIntent.getActivity(
-            context, 0, intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-        val lines = items.map { notificationLine(it) }
-        val notification = NotificationCompat.Builder(context, CampaignNotifications.CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_campaign)
-            .setContentTitle(notificationTitle(items))
-            .setContentText(lines.joinToString(" / "))
-            .setStyle(NotificationCompat.BigTextStyle().bigText(lines.joinToString("\n")))
-            .setContentIntent(pending)
-            .setAutoCancel(true)
-            .build()
-        NotificationManagerCompat.from(context).notify(CampaignNotifications.NOTIFICATION_ID, notification)
+        // 複数件のときは音・バイブをサマリ1回に集約する(各通知が鳴るとN連発になる)。
+        // 1件のみはサマリを出さないので、その通知自身が鳴る
+        val alertBehavior = if (items.size >= 2) {
+            NotificationCompat.GROUP_ALERT_SUMMARY
+        } else {
+            NotificationCompat.GROUP_ALERT_ALL
+        }
+        items.forEach { item ->
+            // 通知 ID は dedupKey のハッシュ: 同じキャンペーンの再掲は上書き、期間改定は別通知になる
+            val id = item.dedupKey.hashCode()
+            // タップで対象キャンペーンの詳細カードを開くためのグループキー。requestCode は通知ごとに
+            // 変える(PendingIntent は extras の違いを区別しないため、同じ requestCode だと
+            // FLAG_UPDATE_CURRENT で extras が上書きされ、全通知が最後のキャンペーンに飛ぶ)
+            val intent = Intent(context, MainActivity::class.java)
+                .putExtra(CampaignNotifications.EXTRA_CAMPAIGN_GROUP_KEY, campaignGroupKey(item.campaign))
+            val pending = PendingIntent.getActivity(
+                context, id, intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            val notification = NotificationCompat.Builder(context, CampaignNotifications.CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_stat_campaign)
+                .setContentTitle(notificationItemTitle(item))
+                .setContentText(notificationItemText(item))
+                .setContentIntent(pending)
+                .setAutoCancel(true)
+                .setGroup(CampaignNotifications.GROUP_KEY)
+                .setGroupAlertBehavior(alertBehavior)
+                .build()
+            manager.notify(id, notification)
+        }
+        // 複数件はサマリ通知で束ねる(通知シェードで1グループに折り畳まれる)。タップは
+        // おトクタブを開くだけ(extra は空文字)。今回1件のみなら出さない——前日までの
+        // 古いサマリが残っていても、新しい通知は同じグループに合流するだけで実害はない
+        if (items.size >= 2) {
+            val intent = Intent(context, MainActivity::class.java)
+                .putExtra(CampaignNotifications.EXTRA_CAMPAIGN_GROUP_KEY, "")
+            val pending = PendingIntent.getActivity(
+                context, CampaignNotifications.SUMMARY_NOTIFICATION_ID, intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            val style = NotificationCompat.InboxStyle()
+            items.forEach { style.addLine(notificationLine(it)) }
+            val summary = NotificationCompat.Builder(context, CampaignNotifications.CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_stat_campaign)
+                .setContentTitle(notificationTitle(items))
+                .setStyle(style)
+                .setContentIntent(pending)
+                .setAutoCancel(true)
+                .setGroup(CampaignNotifications.GROUP_KEY)
+                .setGroupSummary(true)
+                .build()
+            manager.notify(CampaignNotifications.SUMMARY_NOTIFICATION_ID, summary)
+        }
         return true
     }
 }
