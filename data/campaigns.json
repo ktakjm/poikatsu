@@ -1,6 +1,6 @@
 {
   "schema_version": 13,
-  "updated_at": "2026-08-21",
+  "updated_at": "2026-08-22",
   "campaigns": [
     {
       "id": "smcc_combini_restaurant",
@@ -733,38 +733,6 @@
       "verified_date": "2026-07-18"
     },
     {
-      "id": "rakuten_pay_matsuya_60th_2026_07",
-      "type": "promotion",
-      "benefit_type": "rebate",
-      "store_scope": "managed",
-      "operator": "楽天ペイ",
-      "payment_method_id": "rakuten_pay",
-      "name": "松屋創業60周年記念！楽天ペイ決済で15%ポイント還元 第2弾",
-      "payment_instruction": "松弁ネット・松屋モバイルオーダー・松弁デリバリーから楽天ペイで事前決済する",
-      "rate_base": 15.0,
-      "period_start": "2026-07-01",
-      "period_end": "2026-07-15",
-      "min_purchase": 800,
-      "period_total_cap": 10000,
-      "requires_entry": true,
-      "ineligible_notes": [
-        "店頭(券売機・セルフレジ)での楽天ペイ決済は対象外(対象は松弁ネット・松屋モバイルオーダー・松弁デリバリーでの事前決済のみ)"
-      ],
-      "memo": [
-        "公式の「松のや・マイカリー食堂等のグループブランドも対象」は各ブランドの merchant_rules に反映済み(#62 でブランドを独立 merchant 化)"
-      ],
-      "merchant_rules": [
-        { "merchant_id": "matsuya" },
-        { "merchant_id": "matsunoya" },
-        { "merchant_id": "mycurry_shokudo" },
-        { "merchant_id": "steakya_matsu" },
-        { "merchant_id": "matsuken_chuka" },
-        { "merchant_id": "sushi_matsu" }
-      ],
-      "detail_url": "https://www.matsuyafoods.co.jp/matsuya/whatsnew/campaign/160563.html",
-      "verified_date": "2026-07-13"
-    },
-    {
       "id": "paypay_landrin_drug_2026_08",
       "type": "promotion",
       "benefit_type": "rebate",
@@ -1386,7 +1354,7 @@
         { "merchant_id": "ksdenki" }
       ],
       "detail_url": "https://media.aupay.wallet.auone.jp/articles/5150",
-      "verified_date": "2026-08-09"
+      "verified_date": "2026-08-21"
     },
     {
       "id": "aupay_ksdenki_coupon_2026_09",
@@ -1414,7 +1382,7 @@
         { "merchant_id": "ksdenki" }
       ],
       "detail_url": "https://media.aupay.wallet.auone.jp/articles/5150",
-      "verified_date": "2026-08-09"
+      "verified_date": "2026-08-21"
     },
     {
       "id": "aupay_ksdenki_quick_2026_08",
@@ -1457,7 +1425,7 @@
         }
       ],
       "detail_url": "https://media.aupay.wallet.auone.jp/articles/5150",
-      "verified_date": "2026-08-09"
+      "verified_date": "2026-08-21"
     },
     {
       "id": "aupay_ksdenki_quick_2026_09",
@@ -1500,7 +1468,7 @@
         }
       ],
       "detail_url": "https://media.aupay.wallet.auone.jp/articles/5150",
-      "verified_date": "2026-08-09"
+      "verified_date": "2026-08-21"
     },
     {
       "id": "aupay_tanuki_lottery",
@@ -1526,33 +1494,6 @@
       ],
       "detail_url": "https://aupay.auone.jp/contents/lp/tanuki-lottery/index.html",
       "verified_date": "2026-08-09"
-    },
-    {
-      "id": "suginami_paypay_2026_06",
-      "type": "municipal",
-      "benefit_type": "rebate",
-      "store_scope": "external",
-      "operator": "PayPay",
-      "payment_method_id": "paypay",
-      "name": "杉並区でお買い物！最大20%戻ってくるキャンペーン",
-      "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイント・PayPayデビットで支払う",
-      "rate_base": 20.0,
-      "period_start": "2026-06-01",
-      "period_end": "2026-07-10",
-      "per_transaction_cap": 1000,
-      "period_total_cap": 4000,
-      "may_end_early": true,
-      "region": {
-        "name": "杉並区",
-        "prefecture": "東京都"
-      },
-      "detail_url": "https://paypay.ne.jp/event/tokyo-suginami-city-20260601/",
-      "store_search_url": null,
-      "ineligible_notes": [
-        "PayPay商品券・クレジットカードは対象外"
-      ],
-      "merchant_rules": [],
-      "verified_date": "2026-06-30"
     },
     {
       "id": "kanagawa_kanatoku_2026_06",
@@ -1621,10 +1562,10 @@
       ],
       "memo": [
         "還元はau PAY残高(不課税)",
-        "au PAYの自治体一覧では終了日を2026/9/6と表示(2026-08-09確認)。神奈川県公式・au PAY詳細LP・PayPay側はいずれも「予算上限に達するまで」で終了日の記載が無いため period_end は null のまま。要再確認"
+        "au PAYの自治体一覧では終了日を2026/9/6と表示するが、au PAY記事(articles/5060)・PayPay公式はいずれも「6月19日〜予算上限まで」で終了日の記載が無い(2026-08-21再確認)。一覧側の9/6は予算消化見込みの目安と判断し period_end は null のまま"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-08-09"
+      "verified_date": "2026-08-21"
     },
     {
       "id": "kanagawa_kanatoku_dpay_2026_06",
@@ -1977,6 +1918,7 @@
       "store_scope": "external",
       "operator": "au PAY",
       "payment_method_id": "aupay",
+      "point_currency_id": "aupay_balance",
       "name": "千葉市キャッシュレスキャンペーン 第2弾（最大5%戻ってくる）",
       "payment_instruction": "au PAYのコード支払いで支払う",
       "rate_base": 5.0,
@@ -1990,7 +1932,7 @@
         "name": "千葉市",
         "prefecture": "千葉県"
       },
-      "detail_url": "https://www.city.chiba.jp/keizainosei/keizai/kikaku/2026_cashlesscampaign.html",
+      "detail_url": "https://media.aupay.wallet.auone.jp/dominant/lp/202608_city_chiba/",
       "store_search_url": null,
       "eligible_notes": [
         "千葉県キャンペーンと併用可（合わせて最大15%）"
@@ -1998,8 +1940,11 @@
       "ineligible_notes": [
         "公共料金・納税・たばこ・金券類・オンライン決済(ネット販売/モバイルオーダー)・自動販売機は対象外"
       ],
+      "memo": [
+        "還元はau PAY残高(不課税)。付与時期は2026年10月末頃までに(au PAY詳細LPで2026-08-21確認)"
+      ],
       "merchant_rules": [],
-      "verified_date": "2026-08-09"
+      "verified_date": "2026-08-21"
     },
     {
       "id": "chiba_city_dpay_2026_08",
@@ -2276,7 +2221,7 @@
       "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイントで支払う",
       "rate_base": 20.0,
       "period_start": "2026-08-01",
-      "period_end": "2026-09-30",
+      "period_end": "2026-08-25",
       "per_transaction_cap": 1000,
       "period_total_cap": 5000,
       "may_end_early": true,
@@ -2290,8 +2235,11 @@
         "松原市とPayPayが指定する市内加盟店以外は対象外",
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
+      "memo": [
+        "予算到達により2026-08-25 23:59で早期終了(PayPay公式イベントページで2026-08-21確認。当初は8/1〜9/30)"
+      ],
       "merchant_rules": [],
-      "verified_date": "2026-08-09"
+      "verified_date": "2026-08-21"
     },
     {
       "id": "kakogawa_paypay_2026_08",
@@ -2389,39 +2337,7 @@
       "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイント・PayPayデビットで支払う",
       "rate_base": 20.0,
       "period_start": "2026-08-17",
-      "period_end": "2026-09-18",
-      "per_transaction_cap": 2000,
-      "period_total_cap": 5000,
-      "cap_note": "決済サービスごとに適用(4サービス合計で最大20,000円相当)",
-      "may_end_early": true,
-      "region": {
-        "name": "岩手県",
-        "prefecture": "岩手県"
-      },
-      "detail_url": "https://iwate-premiumpoint.pref.iwate.jp/",
-      "store_search_url": null,
-      "eligible_notes": [
-        "岩手県外在住でも対象"
-      ],
-      "ineligible_notes": [
-        "コンビニ・医療機関・調剤薬局・デリバリー専門店等は対象外店舗",
-        "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
-      ],
-      "merchant_rules": [],
-      "verified_date": "2026-08-09"
-    },
-    {
-      "id": "iwate_pref_aupay_2026_08",
-      "type": "municipal",
-      "benefit_type": "rebate",
-      "store_scope": "external",
-      "operator": "au PAY",
-      "payment_method_id": "aupay",
-      "name": "いわて県民応援！プレミアムポイント還元キャンペーン",
-      "payment_instruction": "au PAYのコード支払いで支払う",
-      "rate_base": 20.0,
-      "period_start": "2026-08-17",
-      "period_end": "2026-09-18",
+      "period_end": "2026-08-25",
       "per_transaction_cap": 2000,
       "period_total_cap": 5000,
       "cap_note": "決済サービスごとに適用(4サービス合計で最大20,000円相当)",
@@ -2440,55 +2356,24 @@
         "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
       ],
       "memo": [
-        "特設サイト(iwate-premiumpoint.pref.iwate.jp)はrobots.txtが403のためツール不アクセス。事実は岩手県公式ページ(www.pref.iwate.jp/sangyoukoyou/sangyoushinkou/chiiki/1100074.html)で照合"
+        "県公式が2026-08-20更新で早期終了(予算上限10億円到達見込み)を告知し期間を8/17〜9/18から8/17〜8/25へ変更。各決済サービス側のページは2026-08-21時点で9/18のまま未追随のため県公式(一次情報)を採用"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-08-09"
+      "verified_date": "2026-08-21"
     },
     {
-      "id": "iwate_pref_dpay_2026_08",
+      "id": "iwate_pref_aupay_2026_08",
       "type": "municipal",
       "benefit_type": "rebate",
       "store_scope": "external",
-      "operator": "d払い",
-      "payment_method_id": "dpay",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "point_currency_id": "aupay_balance",
       "name": "いわて県民応援！プレミアムポイント還元キャンペーン",
-      "payment_instruction": "d払いのコード決済で支払う",
+      "payment_instruction": "au PAYのコード支払いで支払う",
       "rate_base": 20.0,
       "period_start": "2026-08-17",
-      "period_end": "2026-09-18",
-      "per_transaction_cap": 2000,
-      "period_total_cap": 5000,
-      "cap_note": "決済サービスごとに適用(4サービス合計で最大20,000円相当)",
-      "may_end_early": true,
-      "region": {
-        "name": "岩手県",
-        "prefecture": "岩手県"
-      },
-      "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/iwate_03/",
-      "store_search_url": null,
-      "eligible_notes": [
-        "岩手県外在住でも対象"
-      ],
-      "ineligible_notes": [
-        "コンビニ・医療機関・調剤薬局・デリバリー専門店等は対象外店舗",
-        "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
-      ],
-      "merchant_rules": [],
-      "verified_date": "2026-08-09"
-    },
-    {
-      "id": "iwate_pref_rakuten_pay_2026_08",
-      "type": "municipal",
-      "benefit_type": "rebate",
-      "store_scope": "external",
-      "operator": "楽天ペイ",
-      "payment_method_id": "rakuten_pay",
-      "name": "いわて県民応援！プレミアムポイント還元キャンペーン",
-      "payment_instruction": "楽天ペイのコード・QR・セルフ払いで支払う",
-      "rate_base": 20.0,
-      "period_start": "2026-08-17",
-      "period_end": "2026-09-18",
+      "period_end": "2026-08-25",
       "per_transaction_cap": 2000,
       "period_total_cap": 5000,
       "cap_note": "決済サービスごとに適用(4サービス合計で最大20,000円相当)",
@@ -2506,8 +2391,322 @@
         "コンビニ・医療機関・調剤薬局・デリバリー専門店等は対象外店舗",
         "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
       ],
+      "memo": [
+        "特設サイト(iwate-premiumpoint.pref.iwate.jp)はrobots.txtが403のためツール不アクセス。事実は岩手県公式ページ(www.pref.iwate.jp/sangyoukoyou/sangyoushinkou/chiiki/1100074.html)で照合",
+        "還元はau PAY残高(不課税)。付与時期は8月決済分が2026年9月末頃・9月決済分が2026年10月末頃(au PAY詳細LPで2026-08-21確認)",
+        "県公式が2026-08-20更新で早期終了(予算上限10億円到達見込み)を告知し期間を8/17〜9/18から8/17〜8/25へ変更。PayPay側イベントページ・北上商工会議所ページは2026-08-21時点で9/18のまま未追随、au PAY詳細LPも9/18表示のため県公式(一次情報)を採用"
+      ],
       "merchant_rules": [],
-      "verified_date": "2026-08-09"
+      "verified_date": "2026-08-21"
+    },
+    {
+      "id": "iwate_pref_dpay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "d払い",
+      "payment_method_id": "dpay",
+      "name": "いわて県民応援！プレミアムポイント還元キャンペーン",
+      "payment_instruction": "d払いのコード決済で支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-17",
+      "period_end": "2026-08-25",
+      "per_transaction_cap": 2000,
+      "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用(4サービス合計で最大20,000円相当)",
+      "may_end_early": true,
+      "region": {
+        "name": "岩手県",
+        "prefecture": "岩手県"
+      },
+      "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/iwate_03/",
+      "store_search_url": null,
+      "eligible_notes": [
+        "岩手県外在住でも対象"
+      ],
+      "ineligible_notes": [
+        "コンビニ・医療機関・調剤薬局・デリバリー専門店等は対象外店舗",
+        "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
+      ],
+      "memo": [
+        "県公式が2026-08-20更新で早期終了(予算上限10億円到達見込み)を告知し期間を8/17〜9/18から8/17〜8/25へ変更。各決済サービス側のページは2026-08-21時点で9/18のまま未追随のため県公式(一次情報)を採用"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-08-21"
+    },
+    {
+      "id": "iwate_pref_rakuten_pay_2026_08",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "楽天ペイ",
+      "payment_method_id": "rakuten_pay",
+      "name": "いわて県民応援！プレミアムポイント還元キャンペーン",
+      "payment_instruction": "楽天ペイのコード・QR・セルフ払いで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-08-17",
+      "period_end": "2026-08-25",
+      "per_transaction_cap": 2000,
+      "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用(4サービス合計で最大20,000円相当)",
+      "may_end_early": true,
+      "region": {
+        "name": "岩手県",
+        "prefecture": "岩手県"
+      },
+      "detail_url": "https://iwate-premiumpoint.pref.iwate.jp/",
+      "store_search_url": null,
+      "eligible_notes": [
+        "岩手県外在住でも対象"
+      ],
+      "ineligible_notes": [
+        "コンビニ・医療機関・調剤薬局・デリバリー専門店等は対象外店舗",
+        "インターネット販売・公共料金・タバコ・金券類・電子マネーチャージは対象外"
+      ],
+      "memo": [
+        "県公式が2026-08-20更新で早期終了(予算上限10億円到達見込み)を告知し期間を8/17〜9/18から8/17〜8/25へ変更。各決済サービス側のページは2026-08-21時点で9/18のまま未追随のため県公式(一次情報)を採用"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-08-21"
+    },
+    {
+      "id": "yurihonjo_dpay_2026_09",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "d払い",
+      "payment_method_id": "dpay",
+      "name": "由利本荘市 一般店で最大20％、大型店で最大5％が戻ってくるキャンペーン",
+      "payment_instruction": "d払いのコード決済で支払う",
+      "rate_base": 20.0,
+      "rate_rules": [
+        { "condition": "一般店", "rate": 20.0 },
+        { "condition": "大型店(店舗面積1,000㎡超)", "rate": 5.0 }
+      ],
+      "period_start": "2026-09-01",
+      "period_end": "2026-12-31",
+      "per_transaction_cap": 1000,
+      "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
+      "may_end_early": true,
+      "region": {
+        "name": "由利本荘市",
+        "prefecture": "秋田県"
+      },
+      "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/yurihonjo_05/",
+      "store_search_url": null,
+      "ineligible_notes": [
+        "コンビニ・医療機関・薬局・風俗営業等は対象外店舗",
+        "インターネット販売・有価証券/商品券/切手・タバコ・電子マネーチャージ・分割決済は対象外"
+      ],
+      "memo": [
+        "還元はdポイント(期間・用途限定。利用決済月の翌月末以降に進呈・有効期限は進呈から6か月)"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-08-22"
+    },
+    {
+      "id": "yurihonjo_aupay_2026_09",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "point_currency_id": "aupay_balance",
+      "name": "由利本荘市 一般店で最大20％、大型店で最大5％が戻ってくるキャンペーン",
+      "payment_instruction": "au PAYのコード支払いで支払う",
+      "rate_base": 20.0,
+      "rate_rules": [
+        { "condition": "一般店", "rate": 20.0 },
+        { "condition": "大型店(店舗面積1,000㎡超)", "rate": 5.0 }
+      ],
+      "period_start": "2026-09-01",
+      "period_end": "2026-12-31",
+      "per_transaction_cap": 1000,
+      "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
+      "may_end_early": true,
+      "region": {
+        "name": "由利本荘市",
+        "prefecture": "秋田県"
+      },
+      "detail_url": "https://yurihonjo-cashless.jp/",
+      "store_search_url": null,
+      "ineligible_notes": [
+        "コンビニ・医療機関・薬局・風俗営業等は対象外店舗",
+        "インターネット販売・有価証券/商品券/切手・タバコ・電子マネーチャージ・分割決済は対象外"
+      ],
+      "memo": [
+        "還元はau PAY残高(不課税。支払い月の翌月末頃までに反映)。特設サイトの消費者向けページ(yurihonjo-cashless.jp/forcustomer/)で2026-08-22確認"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-08-22"
+    },
+    {
+      "id": "yurihonjo_rakuten_pay_2026_09",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "楽天ペイ",
+      "payment_method_id": "rakuten_pay",
+      "name": "由利本荘市 一般店で最大20％、大型店で最大5％が戻ってくるキャンペーン",
+      "payment_instruction": "楽天ペイのコード・QR・セルフ払いで支払う",
+      "rate_base": 20.0,
+      "rate_rules": [
+        { "condition": "一般店", "rate": 20.0 },
+        { "condition": "大型店(店舗面積1,000㎡超)", "rate": 5.0 }
+      ],
+      "period_start": "2026-09-01",
+      "period_end": "2026-12-31",
+      "per_transaction_cap": 1000,
+      "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
+      "may_end_early": true,
+      "region": {
+        "name": "由利本荘市",
+        "prefecture": "秋田県"
+      },
+      "detail_url": "https://yurihonjo-cashless.jp/",
+      "store_search_url": null,
+      "ineligible_notes": [
+        "コンビニ・医療機関・薬局・風俗営業等は対象外店舗",
+        "インターネット販売・有価証券/商品券/切手・タバコ・電子マネーチャージ・分割決済は対象外"
+      ],
+      "memo": [
+        "還元は楽天ポイント(通常ポイント。2027年2月末頃までに進呈)"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-08-22"
+    },
+    {
+      "id": "yurihonjo_aeon_pay_2026_09",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "AEON Pay",
+      "payment_method_id": "aeon_pay",
+      "name": "由利本荘市 一般店で最大20％、大型店で最大5％が戻ってくるキャンペーン",
+      "payment_instruction": "AEON Payのコード決済で支払う",
+      "rate_base": 20.0,
+      "rate_rules": [
+        { "condition": "一般店", "rate": 20.0 },
+        { "condition": "大型店(店舗面積1,000㎡超)", "rate": 5.0 }
+      ],
+      "period_start": "2026-09-01",
+      "period_end": "2026-12-31",
+      "per_transaction_cap": 1000,
+      "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
+      "may_end_early": true,
+      "region": {
+        "name": "由利本荘市",
+        "prefecture": "秋田県"
+      },
+      "detail_url": "https://yurihonjo-cashless.jp/",
+      "store_search_url": null,
+      "ineligible_notes": [
+        "コンビニ・医療機関・薬局・風俗営業等は対象外店舗",
+        "インターネット販売・有価証券/商品券/切手・タバコ・電子マネーチャージ・分割決済は対象外"
+      ],
+      "memo": [
+        "還元はAEON Pay残高(2027年2月末頃までに反映)"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-08-22"
+    },
+    {
+      "id": "makurazaki_dpay_2026_09",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "d払い",
+      "payment_method_id": "dpay",
+      "name": "枕崎市キャッシュレスキャンペーン第6弾！",
+      "payment_instruction": "d払いのコード決済で支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-09-01",
+      "period_end": "2026-09-30",
+      "per_transaction_cap": 6000,
+      "period_total_cap": 12000,
+      "cap_note": "決済サービスごとに適用",
+      "may_end_early": true,
+      "region": {
+        "name": "枕崎市",
+        "prefecture": "鹿児島県"
+      },
+      "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/makurazaki_06/",
+      "store_search_url": null,
+      "ineligible_notes": [
+        "枕崎市が指定する市内の対象店舗以外は対象外"
+      ],
+      "memo": [
+        "還元はdポイント(通常。10月末以降順次進呈)"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-08-22"
+    },
+    {
+      "id": "makurazaki_aupay_2026_09",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "au PAY",
+      "payment_method_id": "aupay",
+      "point_currency_id": "aupay_balance",
+      "name": "枕崎市キャッシュレスキャンペーン第6弾！",
+      "payment_instruction": "au PAYのコード支払いで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-09-01",
+      "period_end": "2026-09-30",
+      "per_transaction_cap": 6000,
+      "period_total_cap": 12000,
+      "cap_note": "決済サービスごとに適用",
+      "may_end_early": true,
+      "region": {
+        "name": "枕崎市",
+        "prefecture": "鹿児島県"
+      },
+      "detail_url": "https://www.city.makurazaki.lg.jp/soshiki/kikaku/29581.html",
+      "store_search_url": null,
+      "ineligible_notes": [
+        "枕崎市が指定する市内の対象店舗以外は対象外"
+      ],
+      "memo": [
+        "還元はau PAY残高(10月末頃までに一括付与)。枕崎市公式で2026-08-22確認"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-08-22"
+    },
+    {
+      "id": "makurazaki_rakuten_pay_2026_09",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "operator": "楽天ペイ",
+      "payment_method_id": "rakuten_pay",
+      "name": "枕崎市キャッシュレスキャンペーン第6弾！",
+      "payment_instruction": "楽天ペイのコード・QR・セルフ払いで支払う",
+      "rate_base": 20.0,
+      "period_start": "2026-09-01",
+      "period_end": "2026-09-30",
+      "per_transaction_cap": 6000,
+      "period_total_cap": 12000,
+      "cap_note": "決済サービスごとに適用",
+      "may_end_early": true,
+      "region": {
+        "name": "枕崎市",
+        "prefecture": "鹿児島県"
+      },
+      "detail_url": "https://www.city.makurazaki.lg.jp/soshiki/kikaku/29581.html",
+      "store_search_url": null,
+      "ineligible_notes": [
+        "枕崎市が指定する市内の対象店舗以外は対象外"
+      ],
+      "memo": [
+        "還元は楽天ポイント(通常ポイント。11月末日までに進呈)"
+      ],
+      "merchant_rules": [],
+      "verified_date": "2026-08-22"
     },
     {
       "id": "yurihonjo_paypay_2026_09",
@@ -2521,12 +2720,13 @@
       "rate_base": 20.0,
       "rate_rules": [
         { "condition": "一般店", "rate": 20.0 },
-        { "condition": "大型店", "rate": 5.0 }
+        { "condition": "大型店(店舗面積1,000㎡超)", "rate": 5.0 }
       ],
       "period_start": "2026-09-01",
       "period_end": "2026-12-31",
       "per_transaction_cap": 1000,
       "period_total_cap": 5000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "由利本荘市",
@@ -2535,11 +2735,12 @@
       "detail_url": "https://paypay.ne.jp/notice/20260715/cp-jichitai/",
       "store_search_url": null,
       "ineligible_notes": [
-        "由利本荘市とPayPayが指定する市内加盟店以外は対象外",
+        "コンビニ・医療機関・薬局・風俗営業等は対象外店舗",
+        "インターネット販売・有価証券/商品券/切手・タバコ・電子マネーチャージ・分割決済は対象外",
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-08-09"
+      "verified_date": "2026-08-21"
     },
     {
       "id": "asaka_paypay_2026_09",
@@ -2639,6 +2840,7 @@
       "period_end": "2026-09-30",
       "per_transaction_cap": 6000,
       "period_total_cap": 12000,
+      "cap_note": "決済サービスごとに適用",
       "may_end_early": true,
       "region": {
         "name": "枕崎市",
@@ -2647,11 +2849,11 @@
       "detail_url": "https://paypay.ne.jp/notice/20260715/cp-jichitai/",
       "store_search_url": null,
       "ineligible_notes": [
-        "枕崎市とPayPayが指定する市内加盟店以外は対象外",
+        "枕崎市が指定する市内の対象店舗以外は対象外",
         "クレジットカード(PayPayクレジット以外)の併用は対象外"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-08-09"
+      "verified_date": "2026-08-21"
     },
     {
       "id": "erimo_dpay_2026_08",
@@ -2664,7 +2866,7 @@
       "payment_instruction": "d払いのコード決済で支払う",
       "rate_base": 30.0,
       "period_start": "2026-08-01",
-      "period_end": "2026-08-31",
+      "period_end": "2026-08-21",
       "per_transaction_cap": 1000,
       "period_total_cap": 10000,
       "may_end_early": true,
@@ -2680,10 +2882,11 @@
       ],
       "memo": [
         "還元はdポイント(期間・用途限定。利用決済月の翌月末頃に付与)",
-        "施策名は日高山脈襟裳十勝国立公園を冠するが、公式は対象を「北海道えりも町の対象店舗にて」と明記(2026-07-31確認)"
+        "施策名は日高山脈襟裳十勝国立公園を冠するが、公式は対象を「北海道えりも町の対象店舗にて」と明記(2026-07-31確認)",
+        "ポイント予算到達により2026-08-21 23:59で早期終了(d払い公式で2026-08-21確認。当初は8/1〜8/31)"
       ],
       "merchant_rules": [],
-      "verified_date": "2026-08-09"
+      "verified_date": "2026-08-21"
     },
     {
       "id": "toyota_dpay_2026_08",

@@ -2366,17 +2366,6 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
-    fun `実データ_楽天ペイ松屋プロモーションのQR判定`() {
-        val matsuya = data.merchants.first { it.id == "matsuya" }
-        val julyToday = LocalDate.of(2026, 7, 10)
-        val results = engine.judgeQr(matsuya, julyToday, setOf("rakuten_pay"))
-        assertTrue("松屋で楽天ペイの判定が出る", results.any { it.campaign.paymentMethodId == "rakuten_pay" })
-        val qr = results.first { it.campaign.paymentMethodId == "rakuten_pay" }
-        assertEquals(15.0, qr.effectiveRate!!, 0.001)
-        assertEquals(800, qr.minPurchase)
-    }
-
-    @Test
     fun `実データ_おトクタブ用_6月30日にactiveとupcomingが存在する`() {
         val june30 = LocalDate.of(2026, 6, 30)
         val active = engine.activeCampaigns(june30).filter { it.campaignType != CampaignType.CARD_PROGRAM }
@@ -2501,6 +2490,23 @@ class TestDataIntegrityTest {
         assertTrue("campaigns が空", data.campaigns.isNotEmpty())
         assertTrue("cards が空", data.cards.isNotEmpty())
         assertTrue("card_brands が空", data.cardBrands.isNotEmpty())
+    }
+
+    /**
+     * managed な QR promotion が、対象チェーンの判定に率と最低購入額つきで出ること。
+     * 旧「実データ_楽天ペイ松屋プロモーションのQR判定」を data-test へ移した(#83)。
+     * 実データ側は期間終了した施策を 30 日で削除する運用なので、特定の施策を名指しする
+     * テストは削除のたびに落ちる。ショーケースは常時安定な data-test 側で固定する。
+     */
+    @Test
+    fun `テストデータ_managedなQR施策が対象チェーンの判定に率と最低購入額つきで出る`() {
+        val engine = JudgmentEngine(data)
+        val drugstore = data.merchants.first { it.id == "test_drugstore" }
+        val judgments = engine.judgeQr(drugstore, LocalDate.of(2026, 7, 10), setOf("test_paypay"))
+        val judgment = judgments.first { it.campaign.id == "test_product_scope" }
+        assertEquals("test_paypay", judgment.campaign.paymentMethodId)
+        assertEquals(30.0, judgment.effectiveRate!!, 0.001)
+        assertEquals(3000, judgment.minPurchase)
     }
 
     @Test
