@@ -375,6 +375,14 @@ data class CampaignsFile(
 data class PointMultiplier(
     val label: String,
     val factor: Double,
+    /**
+     * ユーザーが選べる倍率の選択肢(#83)。空 = 選択の余地なし(ウエル活のように条件が一意で
+     * factor が固定のもの)。2 つ以上あると設定画面に倍率ピッカーが出る。`factor` は未選択時の
+     * 既定値を兼ねるため選択肢の最小値(保守側)にする(整合性テストで強制)。
+     * 「乗り継ぎルートで 1.3 倍」のようなユーザー個人の恒常的な増価は選択肢では表せないため、
+     * 自由入力は [PointValueConfig](1pt 価値)側が担う
+     */
+    @SerialName("factor_options") val factorOptions: List<Double> = emptyList(),
     /** バッジ等に使う識別色(例: ウエルシアのコーポレートカラー)。"#RRGGBB" 形式 */
     val color: String? = null,
     @SerialName("badge_label") val badgeLabel: String = "",
@@ -437,6 +445,13 @@ data class PointCurrency(
     @SerialName("point_multiplier") val pointMultiplier: PointMultiplier? = null,
     /** 1pt 価値の設定定義(任意)。label/note は J-POINT のように説明が要る通貨だけ持つ。#13 で通貨単位へ移設 */
     @SerialName("point_value") val pointValueConfig: PointValueConfig? = null,
+    /**
+     * 円建てで 1pt 価値が固定の通貨か(au PAY残高等。#83)。true の通貨は増価の概念が無く
+     * ユーザーが調整する余地も無いため、設定画面「ポイント」のリストに出さず、マージで
+     * valueYen を 1.0 に固定する(DataStore に残った値も無視)。#58「設定の余地があるものだけを
+     * 置く」と同じ判断。判定では払い出し通貨を Ponta 等と区別するためだけに存在する
+     */
+    @SerialName("value_fixed") val valueFixed: Boolean = false,
     /** 実行時フラグ: ユーザーがこの通貨の倍率表示を有効にしているか。マージで設定し JSON には現れない */
     @Transient val multiplierEnabled: Boolean = false,
     /** 実行時: ユーザー設定の 1pt 価値(円)。マージで設定し JSON には現れない。既定 1.0 円 */

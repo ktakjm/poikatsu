@@ -1,6 +1,6 @@
 {
-  "schema_version": 10,
-  "updated_at": "2026-08-19",
+  "schema_version": 11,
+  "updated_at": "2026-08-21",
   "card_brands": [
     { "name": "Visa", "color": "#1A1F71" },
     { "name": "Mastercard", "color": "#EB001B" },
@@ -20,6 +20,27 @@
       "name": "テストプログラム",
       "brand_color": "#8E24AA",
       "membership_program": true
+    },
+    {
+      "id": "test_exchange",
+      "name": "テスト交換所ポイント",
+      "brand_color": "#EB5505",
+      "membership_program": true,
+      "point_multiplier": {
+        "label": "テスト交換所を使うときの還元率を表示(倍率選択の検証用)",
+        "factor": 1.1,
+        "factor_options": [1.1, 1.5],
+        "color": "#EB5505",
+        "badge_label": "テスト交換所",
+        "applied_note": "還元率はテスト交換所で交換したときの実質還元率"
+      }
+    },
+    {
+      "id": "test_balance",
+      "name": "テスト残高",
+      "brand_color": "#FF5722",
+      "membership_program": false,
+      "value_fixed": true
     },
     {
       "id": "test_jpoint",
@@ -84,7 +105,8 @@
         { "package": "jp.auone.wallet", "label": "テストauPAY" }
       ],
       "store_search_label": "テストauPAY対象店舗を探す",
-      "enabled_default": false
+      "enabled_default": false,
+      "point_currency_id": "test_exchange"
     }
   ]
 }

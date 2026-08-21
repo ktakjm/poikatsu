@@ -699,6 +699,18 @@ internal fun CapRow(perTransaction: Int?, periodTotal: Int?, capNote: String?) {
     Text("上限: $text", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
 }
 
+/**
+ * rebate の払い出し通貨(「還元: Pontaポイント」)。au PAY のように同じ決済手段で通貨が
+ * 施策ごとに分かれる(Pontaポイント / au PAY残高)ものを画面で見分けられるようにする。
+ * 体裁は [CapRow] と揃える(「上限:」の次の行に同じ色・同じサイズで置く前提)。
+ * ラベルが「ポイント:」でないのは、au PAY残高・AEON Pay残高のような円建ての払い出しも入るため。
+ */
+@Composable
+internal fun PayoutCurrencyRow(currencyName: String?) {
+    if (currencyName == null) return
+    Text("還元: $currencyName", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+}
+
 internal fun buildCapText(perTransaction: Int?, periodTotal: Int?): String? {
     if (perTransaction == null && periodTotal == null) return null
     return buildString {

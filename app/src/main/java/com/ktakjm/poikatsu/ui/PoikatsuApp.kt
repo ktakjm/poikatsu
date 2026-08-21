@@ -459,6 +459,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                         onQrEnabledChange = viewModel::onSetQrEnabled,
                         onPointProgramMemberChange = viewModel::onSetPointProgramMembership,
                         onPointMultiplierChange = viewModel::onSetPointMultiplierEnabled,
+                        onPointMultiplierFactorChange = viewModel::onSetPointMultiplierFactor,
                         onPointValueChange = viewModel::onSetPointCurrencyValue,
                         onPointBalanceChange = viewModel::onSetPointBalance,
                     )

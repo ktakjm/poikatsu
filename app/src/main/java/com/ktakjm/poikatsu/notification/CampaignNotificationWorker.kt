@@ -96,6 +96,7 @@ class CampaignNotificationWorker(
             customCampaigns = settings.activeCustomCampaigns,
             enabledPointMultipliers = settings.enabledPointMultipliers,
             pointCurrencyValues = settings.pointCurrencyValues,
+            pointMultiplierFactors = settings.pointMultiplierFactors,
         )
         val targets = notificationTargets(
             campaigns = merged.engineData.campaigns,

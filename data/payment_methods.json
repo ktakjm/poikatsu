@@ -1,6 +1,6 @@
 {
-  "schema_version": 10,
-  "updated_at": "2026-08-19",
+  "schema_version": 11,
+  "updated_at": "2026-08-21",
   "card_brands": [
     { "name": "Visa", "color": "#1A1F71" },
     { "name": "Mastercard", "color": "#EB001B" },
@@ -31,7 +31,22 @@
       "id": "ponta",
       "name": "Pontaポイント",
       "brand_color": "#F39800",
-      "membership_program": true
+      "membership_program": true,
+      "point_multiplier": {
+        "label": "au PAY マーケットのポイント交換所を使うときの還元率を表示",
+        "factor": 1.1,
+        "factor_options": [1.1, 1.5],
+        "color": "#EB5505",
+        "badge_label": "ポイント交換所",
+        "applied_note": "還元率はau PAY マーケットのポイント交換所で交換したときの実質還元率"
+      }
+    },
+    {
+      "id": "aupay_balance",
+      "name": "au PAY残高",
+      "brand_color": "#FF5722",
+      "membership_program": false,
+      "value_fixed": true
     },
     {
       "id": "paypay_point",

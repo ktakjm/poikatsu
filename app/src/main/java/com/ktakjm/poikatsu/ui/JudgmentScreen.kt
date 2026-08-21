@@ -65,6 +65,7 @@ import com.ktakjm.poikatsu.domain.formatBenefit
 import com.ktakjm.poikatsu.domain.isCustom
 import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.recurrenceLabel
+import com.ktakjm.poikatsu.domain.multiplierBadgeLabel
 import com.ktakjm.poikatsu.domain.trimRate
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningColor
@@ -480,9 +481,10 @@ private fun CampaignJudgmentCardBody(
                 ) {
                     BrandBadge(judgment.badgeLabel, brandColor)
                     val pm = judgment.pointMultiplier
-                    if (pm != null && pm.badgeLabel.isNotBlank()) {
-                        val pmColor = parseBrandColor(pm.color) ?: MaterialTheme.colorScheme.tertiary
-                        BrandBadge(pm.badgeLabel, pmColor)
+                    // 倍率の併記は実際に適用されているときだけ(#83。multiplierBadgeLabel 参照)
+                    multiplierBadgeLabel(pm, judgment.welcatsuApplied)?.let { label ->
+                        val pmColor = parseBrandColor(pm?.color) ?: MaterialTheme.colorScheme.tertiary
+                        BrandBadge(label, pmColor)
                     }
                     if (campaign.isCustom) {
                         CustomCampaignBadge()
@@ -570,6 +572,7 @@ private fun CampaignJudgmentCardBody(
             Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
         }
         CapRow(judgment.perTransactionCap, judgment.periodTotalCap, judgment.capNote)
+        PayoutCurrencyRow(judgment.payoutCurrencyName)
         Column {
             judgment.storeSearchUrl?.let { url ->
                 ExternalLinkButton("対象のお店を確認") { uriHandler.openUri(url) }

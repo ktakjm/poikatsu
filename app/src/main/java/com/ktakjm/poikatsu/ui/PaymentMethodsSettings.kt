@@ -83,6 +83,7 @@ internal fun PaymentMethodsSettingsPage(
     onQrEnabledChange: (String, Boolean) -> Unit,
     onPointProgramMemberChange: (String, Boolean) -> Unit,
     onPointMultiplierChange: (String, Boolean) -> Unit,
+    onPointMultiplierFactorChange: (String, Double) -> Unit,
     onPointValueChange: (String, Double?) -> Unit,
     onPointBalanceChange: (String, PointBalance?) -> Unit,
 ) {
@@ -279,6 +280,22 @@ internal fun PaymentMethodsSettingsPage(
                                     onPointMultiplierChange(currency.id, !currency.multiplierEnabled)
                                 },
                             )
+                            // 倍率の選択(#83)。選択肢が複数ある通貨(Ponta のポイント交換所 1.1/1.5 等)
+                            // だけに出す。ウエル活のように条件が一意な通貨は選ぶ余地が無いので出さない
+                            if (pm.factorOptions.size > 1) {
+                                ListItem(
+                                    headlineContent = { Text("倍率") },
+                                    trailingContent = {
+                                        PointMultiplierFactorDropdown(
+                                            options = pm.factorOptions,
+                                            selected = pm.factor,
+                                            onChange = { onPointMultiplierFactorChange(currency.id, it) },
+                                        )
+                                    },
+                                    colors = transparentListItemColors(),
+                                    modifier = Modifier.padding(start = 48.dp),
+                                )
+                            }
                         }
                         // 1pt の価値(#13: 全通貨でユーザー設定可能。既定 1.0 円)
                         ListItem(
@@ -295,6 +312,25 @@ internal fun PaymentMethodsSettingsPage(
                             modifier = Modifier.padding(start = 24.dp)
                                 .clickable { editingValueCurrency = currency },
                         )
+                        // 1pt価値と倍率の両方を持つ通貨の注記(#83)。この 2 つは積になるため、
+                        // 別々の行を見ただけでは合成に気付けない。実際に合成されているときは
+                        // 合成後の値まで出す(禁止も排他もせず、判断はユーザーに残す)
+                        if (currency.pointMultiplier != null) {
+                            val composite = currency.compositeValueYen
+                            Text(
+                                if (composite == null) {
+                                    "1ptの価値と倍率は掛け合わされます"
+                                } else {
+                                    "1ptの価値と倍率は掛け合わされます" +
+                                        "(1pt=${trimRate(currency.valueYen)}円 × " +
+                                        "×${trimRate(currency.pointMultiplier.factor)} = " +
+                                        "実質 1pt=${trimRate(composite)}円相当)"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 40.dp, end = 16.dp, bottom = 8.dp),
+                            )
+                        }
                         // 期間限定ポイントの残高・失効日(#13: 通貨ごとに1件=直近失効分)
                         ListItem(
                             headlineContent = { Text("期間限定ポイント") },
@@ -714,6 +750,37 @@ private fun CardSettingItem(
             },
             onDismiss = { showBrandRequiredDialog = false },
         )
+    }
+}
+
+/**
+ * ポイント倍率の選択(#83)。選択肢はカタログ(point_multiplier.factor_options)から出す。
+ * 自由入力を置かないのは、発行体が定めた離散的な条件だけを選ばせる枠だから
+ * (乗り継ぎルートのような任意倍率は「1ptの価値」側で入れる)。
+ */
+@Composable
+private fun PointMultiplierFactorDropdown(
+    options: List<Double>,
+    selected: Double,
+    onChange: (Double) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { expanded = true }) {
+            Text("×${trimRate(selected)}")
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { factor ->
+                DropdownMenuItem(
+                    text = { Text("×${trimRate(factor)}") },
+                    onClick = {
+                        onChange(factor)
+                        expanded = false
+                    },
+                )
+            }
+        }
     }
 }
 

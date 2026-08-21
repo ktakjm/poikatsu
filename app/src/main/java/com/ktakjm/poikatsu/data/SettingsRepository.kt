@@ -264,6 +264,12 @@ data class AppSettings(
      */
     val enabledPointMultipliers: Set<String> = emptySet(),
     /**
+     * ユーザーが選んだポイント倍率(通貨 id → 倍率)。#83。選択肢(point_multiplier.factor_options)を
+     * 持つ通貨だけが値を持ち、無い通貨・選択肢外の値はマージで無視してカタログの factor に落ちる。
+     * 「乗り継ぎで 1.3 倍」のような自由な値は選択肢では表せないため [pointCurrencyValues] 側で入れる。
+     */
+    val pointMultiplierFactors: Map<String, Double> = emptyMap(),
+    /**
      * 会員になっているポイントプログラムの通貨 id(#39)。プログラム会員提示型施策
      * (point_program_id)の判定フィルタに使う(所有カードと同じ opt-in の構図)。
      */
@@ -369,6 +375,9 @@ class SettingsRepository(private val context: Context) {
         /** ポイント倍率(ウエル活等)を有効にしている通貨 id の Set(#39)。旧 CardOverride.welcatsu は移行せず廃止 */
         val ENABLED_POINT_MULTIPLIERS = stringPreferencesKey("enabled_point_multipliers")
 
+        /** ユーザーが選んだポイント倍率。通貨 id → 倍率の Map(#83) */
+        val POINT_MULTIPLIER_FACTORS = stringPreferencesKey("point_multiplier_factors")
+
         /** 会員になっているポイントプログラムの通貨 id の Set(#39) */
         val POINT_PROGRAM_MEMBERSHIPS = stringPreferencesKey("point_program_memberships")
 
@@ -408,6 +417,7 @@ class SettingsRepository(private val context: Context) {
             enabledQrPaymentIds = prefs.decodeQrEnabled(),
             ownedBrands = prefs.decodeOwnedBrands(),
             enabledPointMultipliers = prefs.decodeIdSet(Keys.ENABLED_POINT_MULTIPLIERS),
+            pointMultiplierFactors = prefs.decodeDoubleMap(Keys.POINT_MULTIPLIER_FACTORS),
             pointProgramMemberships = prefs.decodeIdSet(Keys.POINT_PROGRAM_MEMBERSHIPS),
             pointCurrencyValues = prefs.decodeCurrencyValues(),
             pointBalances = prefs.decodePointBalances(),
@@ -440,6 +450,7 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.QR_ENABLED] = json.encodeToString(settings.enabledQrPaymentIds)
             prefs[Keys.OWNED_BRANDS] = json.encodeToString(settings.ownedBrands)
             prefs[Keys.ENABLED_POINT_MULTIPLIERS] = json.encodeToString(settings.enabledPointMultipliers)
+            prefs[Keys.POINT_MULTIPLIER_FACTORS] = json.encodeToString(settings.pointMultiplierFactors)
             prefs[Keys.POINT_PROGRAM_MEMBERSHIPS] = json.encodeToString(settings.pointProgramMemberships)
             prefs[Keys.POINT_CURRENCY_VALUES] = json.encodeToString(settings.pointCurrencyValues)
             prefs[Keys.POINT_BALANCES] = json.encodeToString(settings.pointBalances)
@@ -573,6 +584,19 @@ class SettingsRepository(private val context: Context) {
             val current = prefs.decodeIdSet(Keys.ENABLED_POINT_MULTIPLIERS).toMutableSet()
             if (enabled) current.add(currencyId) else current.remove(currencyId)
             prefs[Keys.ENABLED_POINT_MULTIPLIERS] = json.encodeToString(current)
+        }
+    }
+
+    /**
+     * ポイント倍率の選択(#83)。選択肢(factor_options)を持つ通貨だけで意味を持ち、
+     * null で既定(カタログの factor = 選択肢の最小値)に戻す。倍率の ON/OFF とは直交で、
+     * OFF のまま選び直せる(次に ON にしたとき選択が残っている方が自然)
+     */
+    suspend fun setPointMultiplierFactor(currencyId: String, factor: Double?) {
+        context.settingsDataStore.edit { prefs ->
+            val current = prefs.decodeDoubleMap(Keys.POINT_MULTIPLIER_FACTORS).toMutableMap()
+            if (factor == null) current.remove(currencyId) else current[currencyId] = factor
+            prefs[Keys.POINT_MULTIPLIER_FACTORS] = json.encodeToString(current)
         }
     }
 
@@ -735,10 +759,13 @@ class SettingsRepository(private val context: Context) {
             ?.let { runCatching { json.decodeFromString<Set<String>>(it) }.getOrNull() }
             ?: emptySet()
 
-    private fun Preferences.decodeCurrencyValues(): Map<String, Double> =
-        this[Keys.POINT_CURRENCY_VALUES]
+    private fun Preferences.decodeDoubleMap(key: Preferences.Key<String>): Map<String, Double> =
+        this[key]
             ?.let { runCatching { json.decodeFromString<Map<String, Double>>(it) }.getOrNull() }
             ?: emptyMap()
+
+    private fun Preferences.decodeCurrencyValues(): Map<String, Double> =
+        decodeDoubleMap(Keys.POINT_CURRENCY_VALUES)
 
     private fun Preferences.decodePointBalances(): Map<String, PointBalance> =
         this[Keys.POINT_BALANCES]

@@ -47,6 +47,13 @@ data class CampaignJudgment(
     val appLinks: List<AppLink> = emptyList(),
     val pointMultiplier: PointMultiplier?,
     /**
+     * rebate の払い出し通貨名(「還元: Pontaポイント」行に出す)。[payoutCurrency] が解決できた
+     * ときだけ非 null で、倍率の有無とは独立。discount(即時割引)・lottery には通貨の概念が
+     * 無いため常に null、カタログに `point_currency_id` の無い発行体(MUFG・エポス等)も null
+     * ——誤った通貨名を出すより行を省く。
+     */
+    val payoutCurrencyName: String? = null,
+    /**
      * 表示中の [effectiveRate] に条件付き倍率(ウエル活等)が実際に掛かっているか。
      * 払い出し通貨の倍率が有効で、率のある施策のときだけ true(適用時注記の表示条件)。
      */
@@ -731,6 +738,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
         nominalRate: Double?,
         discountAmount: Int?,
         pointMultiplier: PointMultiplier?,
+        payoutCurrencyName: String?,
         welcatsuApplied: Boolean,
         appLinks: List<AppLink>,
         today: LocalDate,
@@ -768,6 +776,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
             detailUrl = campaign.detailUrl,
             appLinks = appLinks,
             pointMultiplier = pointMultiplier,
+            payoutCurrencyName = payoutCurrencyName,
             welcatsuApplied = welcatsuApplied,
             mayEndEarly = campaign.mayEndEarly,
             todayIsTarget = todayIsTarget,
@@ -836,6 +845,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
                     nominalRate = nominal,
                     discountAmount = campaign.discountAmount,
                     pointMultiplier = currency?.pointMultiplier,
+                    payoutCurrencyName = currency?.name,
                     // 「実質還元率」の適用時注記は、倍率が実際に掛かった率を表示したときだけ出す
                     welcatsuApplied = currency?.multiplierEnabled == true &&
                         currency.pointMultiplier != null && nominal != null,
@@ -874,6 +884,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
                     nominalRate = nominal,
                     discountAmount = campaign.discountAmount,
                     pointMultiplier = currency?.pointMultiplier,
+                    payoutCurrencyName = currency?.name,
                     welcatsuApplied = currency?.multiplierEnabled == true &&
                         currency.pointMultiplier != null && nominal != null,
                     appLinks = qr.appLinks,
@@ -912,6 +923,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
                     nominalRate = nominal,
                     discountAmount = campaign.discountAmount,
                     pointMultiplier = currency?.pointMultiplier,
+                    payoutCurrencyName = currency?.name,
                     welcatsuApplied = currency?.multiplierEnabled == true &&
                         currency.pointMultiplier != null && nominal != null,
                     appLinks = emptyList(),

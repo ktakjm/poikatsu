@@ -1,6 +1,6 @@
 {
-  "schema_version": 12,
-  "updated_at": "2026-08-18",
+  "schema_version": 13,
+  "updated_at": "2026-08-21",
   "campaigns": [
     {
       "id": "test_store_rate_program",
@@ -430,6 +430,7 @@
       "store_scope": "external",
       "operator": "テストauPAY",
       "payment_method_id": "test_aupay",
+      "point_currency_id": "test_balance",
       "name": "テスト広島市キャッシュレスキャンペーン（テストauPAYで15%還元）",
       "payment_instruction": "テストauPAY残高で支払う",
       "rate_base": 15.0,
@@ -450,6 +451,28 @@
       ],
       "merchant_rules": [],
       "verified_date": "2026-07-10"
+    },
+    {
+      "id": "test_exchange_rebate",
+      "type": "promotion",
+      "benefit_type": "rebate",
+      "store_scope": "managed",
+      "operator": "テストauPAY",
+      "payment_method_id": "test_aupay",
+      "name": "テストauPAYで10%のテスト交換所ポイントを還元（倍率選択の検証用）",
+      "payment_instruction": "テストauPAYのコード支払いで支払う",
+      "rate_base": 10.0,
+      "period_start": "2026-07-01",
+      "period_end": "2026-09-30",
+      "detail_url": "https://example.com/test-exchange-rebate",
+      "memo": [
+        "払い出し通貨は QR 既定の継承(test_aupay -> test_exchange)。設定→ポイントで倍率を ON にし ×1.1/×1.5 を切り替えると、この施策の率だけが動き、同じテストauPAYの広島市施策(test_balance = 円建て)は動かないことを確認できる"
+      ],
+      "merchant_rules": [
+        { "merchant_id": "test_combini" },
+        { "merchant_id": "test_fastfood" }
+      ],
+      "verified_date": "2026-08-21"
     }
   ]
 }

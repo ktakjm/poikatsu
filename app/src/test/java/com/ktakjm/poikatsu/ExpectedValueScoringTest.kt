@@ -11,12 +11,14 @@ import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.BestPaymentOption
 import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.breakevenAmount
+import com.ktakjm.poikatsu.domain.compositeValueYen
 import com.ktakjm.poikatsu.domain.currencyValueFactor
 import com.ktakjm.poikatsu.domain.nominalRateNote
 import com.ktakjm.poikatsu.domain.effectiveValueRate
 import com.ktakjm.poikatsu.domain.expiringPointNotices
 import com.ktakjm.poikatsu.domain.fixedBenefitAdvice
 import com.ktakjm.poikatsu.domain.isExpired
+import com.ktakjm.poikatsu.domain.multiplierBadgeLabel
 import com.ktakjm.poikatsu.domain.stackedRate
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
@@ -49,6 +51,54 @@ class ExpectedValueScoringTest {
             ),
             1e-9,
         )
+    }
+
+    @Test
+    fun `合成後の1pt価値は1pt価値と倍率の両方が効いているときだけ返る`() {
+        // 設定画面の注記用(#83)。1pt価値と倍率は積になるため、両方が中立でないときは
+        // 合成後の値を出して二重適用を黙らせない
+        assertEquals(
+            0.75,
+            compositeValueYen(
+                PointCurrency(id = "c", name = "", valueYen = 0.5, pointMultiplier = multiplier, multiplierEnabled = true),
+            )!!,
+            1e-9,
+        )
+        // 1pt価値が等価なら合成値は倍率そのもので、説明する数字が無い
+        assertNull(
+            compositeValueYen(
+                PointCurrency(id = "c", name = "", valueYen = 1.0, pointMultiplier = multiplier, multiplierEnabled = true),
+            ),
+        )
+        // 倍率OFF・倍率定義なしはそもそも合成されない
+        assertNull(
+            compositeValueYen(
+                PointCurrency(id = "c", name = "", valueYen = 0.5, pointMultiplier = multiplier, multiplierEnabled = false),
+            ),
+        )
+        assertNull(compositeValueYen(PointCurrency(id = "c", name = "", valueYen = 0.5)))
+    }
+
+    @Test
+    fun `倍率バッジは実際に適用されているときだけ倍率を併記する`() {
+        // 選択肢を持つ通貨(Ponta の交換所 1.1/1.5)では、未設定のまま既定値が併記されると
+        // ユーザーが選んでいない倍率を提示してしまう。併記の条件は「表示中の率に実際に
+        // 掛かっているか」= appliedNote と同じ不変条件に揃える
+        val exchange = PointMultiplier(
+            label = "ポイント交換所を利用時の還元率を表示",
+            factor = 1.1,
+            factorOptions = listOf(1.1, 1.5),
+            badgeLabel = "ポイント交換所",
+        )
+        assertEquals("ポイント交換所 ×1.1", multiplierBadgeLabel(exchange, applied = true))
+        assertEquals("ポイント交換所", multiplierBadgeLabel(exchange, applied = false))
+        // 選択肢を持たない通貨(ウエル活)も同じ扱い: OFF なら倍率を出さない
+        val welcatsu = PointMultiplier(label = "ウエル活", factor = 1.5, badgeLabel = "ウエル活利用可")
+        assertEquals("ウエル活利用可 ×1.5", multiplierBadgeLabel(welcatsu, applied = true))
+        assertEquals("ウエル活利用可", multiplierBadgeLabel(welcatsu, applied = false))
+        // バッジ文言が無い / 通貨が無いならバッジ自体を出さない
+        assertNull(multiplierBadgeLabel(PointMultiplier(label = "x", factor = 1.5), applied = true))
+        assertNull(multiplierBadgeLabel(null, applied = true))
     }
 
     @Test

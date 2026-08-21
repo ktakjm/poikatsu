@@ -1,6 +1,6 @@
 {
-  "schema_version": 12,
-  "updated_at": "2026-08-18",
+  "schema_version": 13,
+  "updated_at": "2026-08-21",
   "campaigns": [
     {
       "id": "smcc_combini_restaurant",
@@ -460,6 +460,7 @@
       "store_scope": "external",
       "operator": "au PAY",
       "payment_method_id": "aupay",
+      "point_currency_id": "aupay_balance",
       "name": "湯沢市キャッシュレスで買い物キャンペーン",
       "payment_instruction": "au PAYのコード支払いで支払う",
       "rate_base": 10.0,
@@ -612,6 +613,7 @@
       "store_scope": "external",
       "operator": "au PAY",
       "payment_method_id": "aupay",
+      "point_currency_id": "aupay_balance",
       "name": "おおだキャッシュレスキャンペーン（最大20%戻ってくる）",
       "payment_instruction": "au PAYのコード支払いで支払う",
       "rate_base": 20.0,
@@ -1593,6 +1595,7 @@
       "store_scope": "external",
       "operator": "au PAY",
       "payment_method_id": "aupay",
+      "point_currency_id": "aupay_balance",
       "name": "かながわトクトクキャンペーン『かなトク！』（最大20%戻ってくる）",
       "payment_instruction": "au PAYのコード支払いで支払う",
       "rate_base": 20.0,
@@ -1808,6 +1811,7 @@
       "store_scope": "external",
       "operator": "au PAY",
       "payment_method_id": "aupay",
+      "point_currency_id": "aupay_balance",
       "name": "千葉県キャッシュレス決済キャンペーン 第3弾（最大10%戻ってくる）",
       "payment_instruction": "au PAYのコード支払いで支払う",
       "rate_base": 10.0,
@@ -2132,6 +2136,7 @@
       "store_scope": "external",
       "operator": "au PAY",
       "payment_method_id": "aupay",
+      "point_currency_id": "aupay_balance",
       "name": "令和8年度 岐阜市物価高騰支援事業20％還元キャンペーン",
       "payment_instruction": "au PAYのコード支払いで支払う",
       "rate_base": 20.0,

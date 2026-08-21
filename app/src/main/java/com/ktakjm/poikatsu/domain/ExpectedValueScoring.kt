@@ -3,6 +3,7 @@ package com.ktakjm.poikatsu.domain
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_TRANSACTION
 import com.ktakjm.poikatsu.data.PointBalance
 import com.ktakjm.poikatsu.data.PointCurrency
+import com.ktakjm.poikatsu.data.PointMultiplier
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.ceil
@@ -15,6 +16,19 @@ fun currencyValueFactor(currency: PointCurrency?): Double {
     if (currency == null) return 1.0
     val factor = currency.takeIf { it.multiplierEnabled }?.pointMultiplier?.factor ?: 1.0
     return currency.valueYen * factor
+}
+
+/**
+ * 1pt 価値と倍率の**両方**が効いているときだけ、合成後の 1pt 価値(円)を返す(#83)。
+ * この 2 つは [currencyValueFactor] で積になるため、乗り継ぎルートで 1pt=1.3円 に設定した
+ * 通貨の倍率も ON だと 1.43 になる。重ねられるルートは実在するので禁止も排他もしないが、
+ * 設定画面が両方を別の行に出すだけだとユーザーが気付けないため、合成値を注記に出す。
+ * どちらかが中立(倍率 OFF・factor 1.0・1pt=1円)なら説明する数字が無いので null。
+ */
+fun compositeValueYen(currency: PointCurrency): Double? {
+    val factor = currency.takeIf { it.multiplierEnabled }?.pointMultiplier?.factor ?: return null
+    if (factor == 1.0 || currency.valueYen == 1.0) return null
+    return currencyValueFactor(currency)
 }
 
 /** 実質%(スコア) = 名目還元率 × 通貨価値係数 */
@@ -30,6 +44,19 @@ fun nominalRateNote(nominalRate: Double?, effectiveRate: Double?): String? {
     if (nominalRate == null || effectiveRate == null) return null
     if (nominalRate == effectiveRate) return null
     return "額面${trimRate(nominalRate)}%"
+}
+
+/**
+ * 倍率バッジの文言。`×{factor}` を併記するのは **[applied] が true のとき、つまり表示中の率に
+ * その倍率が実際に掛かっているときだけ**(判定詳細の適用時注記と同じ不変条件)。
+ * 選択肢を持つ通貨(Ponta の交換所 ×1.1/×1.5)では、倍率 OFF のまま既定値を併記すると
+ * ユーザーが選んでいない片方の倍率を提示してしまうため。OFF でもバッジ自体は出す——
+ * 「この通貨は条件次第で増価する」事実の告知で、率が動いていないことは倍率の非表示で伝わる。
+ * バッジ文言が空の倍率定義・倍率なしは null(バッジを出さない)。
+ */
+fun multiplierBadgeLabel(multiplier: PointMultiplier?, applied: Boolean): String? {
+    val label = multiplier?.badgeLabel?.takeIf { it.isNotBlank() } ?: return null
+    return if (applied) "$label ×${trimRate(multiplier.factor)}" else label
 }
 
 /** 失効通知を出す残り日数のしきい値(この日数以内で表示) */

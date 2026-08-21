@@ -33,6 +33,7 @@ fun mergeUserData(
     customCampaigns: List<CustomCampaign>,
     enabledPointMultipliers: Set<String> = emptySet(),
     pointCurrencyValues: Map<String, Double> = emptyMap(),
+    pointMultiplierFactors: Map<String, Double> = emptyMap(),
 ): MergedUserData {
     val baseCards = base.cards
 
@@ -40,11 +41,26 @@ fun mergeUserData(
     // 通貨単位で決まる。有効フラグを立てた通貨マスタをエンジン・表示の両方へ渡し、
     // 率への円換算(judgeCards/judgeQr/judgePrograms)とバッジ表示が同じ状態を参照するようにする。
     // 1pt 価値(#13)も同じく通貨単位: ユーザー設定(pointCurrencyValues)→カタログの
-    // pointValueConfig.default → 1.0円 の順で解決し valueYen に載せる
+    // pointValueConfig.default → 1.0円 の順で解決し valueYen に載せる。
+    // 倍率が選択肢を持つ通貨(factor_options。#83)は、選んだ倍率をカタログの factor に
+    // 差し替える形で載せる——スコア層(currencyValueFactor)に「ユーザー選択があれば」の分岐を
+    // 足さずに済み、バッジ・注記も同じ値を読む(#13 の円換算一本化を維持)。
     val mergedCurrencies = base.pointCurrencies.map { currency ->
+        // 選択肢外の値は無視(カタログ改定で選択肢が減った後に DataStore に残った値への防御)。
+        // 選択肢を持たない通貨(ウエル活)は選択の余地が無いので常にカタログ値
+        val chosenFactor = pointMultiplierFactors[currency.id]
+            ?.takeIf { it in currency.pointMultiplier?.factorOptions.orEmpty() }
         currency.copy(
             multiplierEnabled = currency.pointMultiplier != null && currency.id in enabledPointMultipliers,
-            valueYen = pointCurrencyValues[currency.id] ?: currency.pointValueConfig?.default ?: 1.0,
+            pointMultiplier = chosenFactor
+                ?.let { currency.pointMultiplier?.copy(factor = it) }
+                ?: currency.pointMultiplier,
+            // 円建て通貨(value_fixed)は設定画面に出さないため、保存済みの値も効かせない
+            valueYen = if (currency.valueFixed) {
+                1.0
+            } else {
+                pointCurrencyValues[currency.id] ?: currency.pointValueConfig?.default ?: 1.0
+            },
         )
     }
 

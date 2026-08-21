@@ -136,6 +136,24 @@ class SettingsBackupTest {
         assertEquals("2026-09-01", restored.pointBalances["rakuten_point"]!!.expiryDate)
     }
 
+    // 選択した倍率も機種変更で失われないこと(#83)。既存キーの追加なのでスキーマ版は上げない
+    @Test
+    fun `選択した倍率がバックアップに含まれ復元できる`() {
+        val settings = AppSettings(
+            enabledPointMultipliers = setOf("ponta"),
+            pointMultiplierFactors = mapOf("ponta" to 1.5),
+        )
+        val restored = roundTrip(settings)
+        assertEquals(setOf("ponta"), restored.enabledPointMultipliers)
+        assertEquals(1.5, restored.pointMultiplierFactors["ponta"]!!, 0.0)
+    }
+
+    @Test
+    fun `選択した倍率が無いバックアップは空で読める`() {
+        val restored = decodeSettingsBackup("""{"schemaVersion":3,"ownedBrands":["JCB"]}""")!!.toSettings()
+        assertTrue(restored.pointMultiplierFactors.isEmpty())
+    }
+
     // 旧 v2 ファイルは新フィールド無しで読める。CardOverride.pointValue は #13 の移行のために
     // 残置されているため、v2 ファイルにあれば読み込み時点ではそのまま復元される(通貨側への
     // 移行は次回 rebuild 時に migrateCardPointValues が行う)

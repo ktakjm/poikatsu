@@ -56,6 +56,7 @@ import com.ktakjm.poikatsu.domain.appLinks
 import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.campaignsInGroup
+import com.ktakjm.poikatsu.domain.compositeValueYen
 import com.ktakjm.poikatsu.domain.effectiveValueRate
 import com.ktakjm.poikatsu.domain.expiringPointNotices
 import com.ktakjm.poikatsu.domain.filterCampaignsByArea
@@ -567,11 +568,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         /** 会員チェックを出すか(カード/アプリ提示の会員プログラムがある通貨) */
         val membershipProgram: Boolean,
         val member: Boolean,
-        /** ポイント倍率チェックの定義(null ならチェックを出さない) */
+        /**
+         * ポイント倍率チェックの定義(null ならチェックを出さない)。factor は
+         * ユーザーが選んだ倍率で差し替え済み(マージ層。#83)なので、UI はそのまま表示すればよい
+         */
         val pointMultiplier: PointMultiplier?,
         val multiplierEnabled: Boolean,
-        /** 倍率が掛かるカード名(この通貨を稼ぐ所有カード)。有効時の「○○の還元率を×1.5で表示中」注記に使う */
+        /** 倍率が掛かる決済手段名(この通貨を稼ぐ所有カード・利用中QR)。有効時の「○○の還元率を×1.5で表示中」注記に使う */
         val multiplierCardNames: List<String> = emptyList(),
+        /**
+         * 1pt 価値と倍率の合成後の 1pt 価値(円)。両方が効いているときだけ非 null(#83)。
+         * 積になることに気付けるよう設定画面の注記に出す
+         */
+        val compositeValueYen: Double? = null,
         /** 1pt の価値(円)。上書きがあれば上書き値、無ければカタログ既定(#13: 通貨単位・全通貨で設定可能) */
         val valueYen: Double = 1.0,
         /** 1pt 価値の設定定義(カタログ)。label/note は J-POINT のように説明が要る通貨だけ持つ。null でも設定行は出す */
@@ -910,6 +919,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             customCampaigns = settings.activeCustomCampaigns,
             enabledPointMultipliers = settings.enabledPointMultipliers,
             pointCurrencyValues = settings.pointCurrencyValues,
+            pointMultiplierFactors = settings.pointMultiplierFactors,
         )
         val newEngine = JudgmentEngine(merged.engineData)
         engine = newEngine
@@ -1048,9 +1058,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
         // 設定画面「ポイント」: 会員登録・倍率チェック・1pt価値の3役を担うセクション(#39/#13)。
         // 1pt価値はカタログの membership_program・point_multiplier・point_value 定義の有無に
-        // 依存せず全通貨で編集可能(既定 1.0 円)なため、フィルタせず全通貨を並べる
-        // (membership/multiplier 行は各通貨の定義有無で個別に出し分ける。下の forEach 参照)
-        val pointCurrencySettings = loaded.data.pointCurrencies
+        // 依存せず全通貨で編集可能(既定 1.0 円)なため、定義でフィルタはしない
+        // (membership/multiplier 行は各通貨の定義有無で個別に出し分ける)。
+        // 唯一の例外は円建て通貨(value_fixed。au PAY残高等。#83): 増価の概念が無く調整の余地も
+        // 無いため行自体を出さない(#58「設定の余地があるものだけを置く」と同じ判断)。
+        // マージ済みの通貨マスタから組むので factor はユーザー選択が反映済み・valueYen は
+        // 円建てなら 1.0 に固定済みで、判定と設定表示が同じ値を見る
+        val pointCurrencySettings = merged.engineData.pointCurrencies
+            .filterNot { it.valueFixed }
             .map { currency ->
                 PointCurrencySetting(
                     id = currency.id,
@@ -1059,12 +1074,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     membershipProgram = currency.membershipProgram,
                     member = currency.id in settings.pointProgramMemberships,
                     pointMultiplier = currency.pointMultiplier,
-                    multiplierEnabled = currency.id in settings.enabledPointMultipliers,
+                    multiplierEnabled = currency.multiplierEnabled,
+                    // カードだけでなく QR も見る。Ponta のように「稼ぐ手段が QR だけ」の通貨で
+                    // 適用中の注記が出ないため(#83)
                     multiplierCardNames = merged.engineData.cards
                         .filter { it.pointCurrencyId == currency.id }
-                        .map { it.cardName },
-                    valueYen = settings.pointCurrencyValues[currency.id]
-                        ?: currency.pointValueConfig?.default ?: 1.0,
+                        .map { it.cardName } +
+                        merged.engineData.qrPayments
+                            .filter { it.pointCurrencyId == currency.id && it.id in settings.enabledQrPaymentIds }
+                            .map { it.name },
+                    compositeValueYen = compositeValueYen(currency),
+                    valueYen = currency.valueYen,
                     pointValueConfig = currency.pointValueConfig,
                     valueIsDefault = currency.id !in settings.pointCurrencyValues,
                     balance = settings.pointBalances[currency.id],
@@ -2173,6 +2193,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // judgeCards/judgeQr と同じ条件(#39): 倍率バッジは払い出し通貨が倍率を持てば出す。
                 // 「実質還元率」注記は倍率が実際に掛かった率を表示したときだけ
                 pointMultiplier = currency?.pointMultiplier,
+                    payoutCurrencyName = currency?.name,
                 welcatsuApplied = currency?.multiplierEnabled == true &&
                     currency.pointMultiplier != null && nominalRate != null,
                 mayEndEarly = campaign.mayEndEarly,
@@ -2425,6 +2446,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onSetPointMultiplierEnabled(currencyId: String, enabled: Boolean) =
         viewModelScope.launch { settingsRepo.setPointMultiplierEnabled(currencyId, enabled) }
+
+    // 倍率の選択(#83)。選択肢(factor_options)を持つ通貨だけで意味を持つ
+    fun onSetPointMultiplierFactor(currencyId: String, factor: Double) =
+        viewModelScope.launch { settingsRepo.setPointMultiplierFactor(currencyId, factor) }
 
     fun onSetPointProgramMembership(currencyId: String, member: Boolean) =
         viewModelScope.launch { settingsRepo.setPointProgramMembership(currencyId, member) }

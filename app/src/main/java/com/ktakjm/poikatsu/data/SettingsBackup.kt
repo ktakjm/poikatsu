@@ -51,6 +51,8 @@ data class SettingsBackup(
     val enabledQrPaymentIds: Set<String> = emptySet(),
     val ownedBrands: Set<String> = emptySet(),
     val enabledPointMultipliers: Set<String> = emptySet(),
+    /** ユーザーが選んだポイント倍率(通貨 id → 倍率。#83) */
+    val pointMultiplierFactors: Map<String, Double> = emptyMap(),
     val pointProgramMemberships: Set<String> = emptySet(),
     /** 1pt の価値(円)。通貨単位(#13) */
     val pointCurrencyValues: Map<String, Double> = emptyMap(),
@@ -76,6 +78,7 @@ fun AppSettings.toBackup(exportedAt: String, appVersion: String): SettingsBackup
     enabledQrPaymentIds = enabledQrPaymentIds,
     ownedBrands = ownedBrands,
     enabledPointMultipliers = enabledPointMultipliers,
+    pointMultiplierFactors = pointMultiplierFactors,
     pointProgramMemberships = pointProgramMemberships,
     pointCurrencyValues = pointCurrencyValues,
     pointBalances = pointBalances,
@@ -100,6 +103,8 @@ fun SettingsBackup.toSettings(): AppSettings = AppSettings(
     enabledQrPaymentIds = enabledQrPaymentIds,
     ownedBrands = ownedBrands,
     enabledPointMultipliers = enabledPointMultipliers,
+    // 選択肢に無い倍率はマージが弾くが、負の値は意味を持たないためここで落とす
+    pointMultiplierFactors = pointMultiplierFactors.filterValues { it > 0.0 },
     pointProgramMemberships = pointProgramMemberships,
     // 手で書き換えられる可能性があるため範囲外の値は落とす(負の価値・負の残高は意味を持たない)
     pointCurrencyValues = pointCurrencyValues.filterValues { it >= 0.0 },

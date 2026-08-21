@@ -31,10 +31,13 @@ import com.ktakjm.poikatsu.domain.allStoreListsExhaustive
 import com.ktakjm.poikatsu.domain.WALLET_APP_PACKAGE
 import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
+import com.ktakjm.poikatsu.domain.currencyValueFactor
+import com.ktakjm.poikatsu.domain.effectiveValueRate
 import com.ktakjm.poikatsu.domain.formatBenefit
 import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.mergeUserData
 import com.ktakjm.poikatsu.domain.nextTargetDay
+import com.ktakjm.poikatsu.domain.payoutCurrency
 import com.ktakjm.poikatsu.domain.recurrenceLabel
 import com.ktakjm.poikatsu.domain.resolveCardCampaignRate
 import com.ktakjm.poikatsu.util.JapaneseText
@@ -1289,6 +1292,39 @@ class JudgmentEngineTest {
     }
 
     @Test
+    fun `rebate施策の判定は払い出し通貨名を持つ`() {
+        // 「還元: Pontaポイント」行の出所。倍率の有無と独立で、通貨が解決できれば必ず載る
+        val promo = campaignWithPeriod(type = CampaignType.PROMOTION, rateBase = 15.0)
+        val engine = periodTestEngine(
+            promo,
+            cards = listOf(testCard.copy(pointCurrencyId = "vp")),
+            pointCurrencies = listOf(vpointLike.copy(multiplierEnabled = false)),
+        )
+        assertEquals("テストVポイント", engine.judgeAll(testMerchant, today).judgments.single().payoutCurrencyName)
+    }
+
+    @Test
+    fun `通貨が解決できないrebate施策は払い出し通貨名を持たない`() {
+        // カタログに point_currency_id が無い発行体(MUFG・エポス等)。誤った通貨名を出すより行を省く
+        val promo = campaignWithPeriod(type = CampaignType.PROMOTION, rateBase = 15.0)
+        val engine = periodTestEngine(promo, cards = listOf(testCard), pointCurrencies = listOf(vpointLike))
+        assertNull(engine.judgeAll(testMerchant, today).judgments.single().payoutCurrencyName)
+    }
+
+    @Test
+    fun `discount施策の判定は払い出し通貨名を持たない`() {
+        // 即時割引にポイント還元先は無い(「還元:」行を出すと誤り)
+        val discount = campaignWithPeriod(type = CampaignType.PROMOTION, rateBase = 15.0)
+            .copy(benefitType = "discount")
+        val engine = periodTestEngine(
+            discount,
+            cards = listOf(testCard.copy(pointCurrencyId = "vp")),
+            pointCurrencies = listOf(vpointLike),
+        )
+        assertNull(engine.judgeAll(testMerchant, today).judgments.single().payoutCurrencyName)
+    }
+
+    @Test
     fun `card_brand施策は明示のpoint_currency_idがあるときだけ倍率が掛かる`() {
         // 継承元が無いため明示必須: resolveCard がブランド一致で返すカードは「支払いに使うカード」で
         // 払い出し元ではない(報酬通貨は施策が決める)
@@ -1802,6 +1838,52 @@ class JudgmentEngineRealDataTest {
             c.pointProgramId?.let {
                 assertTrue("${c.id}: point_program_id '$it' が point_currencies に無い", it in currencyIds)
             }
+        }
+    }
+
+    @Test
+    fun `実データ_倍率のfactorはfactor_optionsの最小値と一致する`() {
+        // 未選択時の既定は保守側(#83)。カタログの factor がそのまま既定値になるため、
+        // 選択肢を持つ通貨では最小値と一致していないと好条件側に倒れる
+        data.pointCurrencies.forEach { cur ->
+            val pm = cur.pointMultiplier ?: return@forEach
+            if (pm.factorOptions.isEmpty()) return@forEach
+            assertTrue("${cur.id}: factor_options は factor を含む必要がある", pm.factor in pm.factorOptions)
+            assertEquals(
+                "${cur.id}: factor は factor_options の最小値(保守側)にする",
+                pm.factorOptions.min(),
+                pm.factor,
+                0.0,
+            )
+        }
+    }
+
+    @Test
+    fun `実データ_au PAY残高還元の施策はaupay_balanceを払い出す`() {
+        // au PAY は施策ごとに Ponta ポイントと au PAY残高に分かれる(#83)。残高は円建てで
+        // 増価しないため、Ponta のまま放置すると交換所倍率が残高還元にも掛かってしまう
+        val currencies = data.pointCurrencies
+        val balanceCampaigns = data.campaigns.filter { c ->
+            c.paymentMethodId == "aupay" && c.memo.any { it.contains("還元はau PAY残高") }
+        }
+        assertTrue("au PAY残高還元の施策が実データに無い(検出条件が古い可能性)", balanceCampaigns.isNotEmpty())
+        balanceCampaigns.forEach { c ->
+            val qr = data.qrPayments.first { it.id == "aupay" }
+            assertEquals(
+                "${c.id}: memo が au PAY残高還元と言っているので point_currency_id を aupay_balance にする",
+                "aupay_balance",
+                payoutCurrency(c, currencies, card = null, qr = qr)?.id,
+            )
+        }
+    }
+
+    @Test
+    fun `実データ_円建て通貨は倍率も1pt価値の定義も持たない`() {
+        // value_fixed は「ユーザーが調整する余地が無い」ことの表明(#83)。増価の定義が
+        // 同居すると設定画面に出さない方針と矛盾する
+        data.pointCurrencies.filter { it.valueFixed }.forEach { cur ->
+            assertNull("${cur.id}: value_fixed の通貨に point_multiplier は持たせない", cur.pointMultiplier)
+            assertNull("${cur.id}: value_fixed の通貨に point_value は持たせない", cur.pointValueConfig)
         }
     }
 
@@ -2419,6 +2501,31 @@ class TestDataIntegrityTest {
         assertTrue("campaigns が空", data.campaigns.isNotEmpty())
         assertTrue("cards が空", data.cards.isNotEmpty())
         assertTrue("card_brands が空", data.cardBrands.isNotEmpty())
+    }
+
+    @Test
+    fun `テストデータ_同じQRの2施策が倍率で片方だけ動くショーケースが成立している`() {
+        // #83 のショーケース: test_aupay は既定で test_exchange(選択式倍率)を稼ぐが、
+        // 広島市施策だけは test_balance(円建て)を明示している。倍率 ON で前者の実質率だけが
+        // 動くことが実機で確認できる状態を CI で守る
+        val currencies = mergeUserData(
+            base = data,
+            cardOverrides = emptyMap(),
+            ownedBrands = emptySet(),
+            customCards = emptyList(),
+            customCampaigns = emptyList(),
+            enabledPointMultipliers = setOf("test_exchange"),
+            pointMultiplierFactors = mapOf("test_exchange" to 1.5),
+        ).engineData.pointCurrencies
+        val qr = data.qrPayments.first { it.id == "test_aupay" }
+        val byId = data.campaigns.associateBy { it.id }
+        val exchange = byId.getValue("test_exchange_rebate")
+        val balance = byId.getValue("test_municipal_hiroshima_aupay")
+
+        assertEquals(15.0, effectiveValueRate(balance.rateBase, payoutCurrency(balance, currencies, null, qr))!!, 1e-9)
+        assertEquals(15.0, effectiveValueRate(exchange.rateBase, payoutCurrency(exchange, currencies, null, qr))!!, 1e-9)
+        // 同じ 15% でも成り立ちが違う: 残高は名目そのまま、交換所は 10% × 1.5
+        assertEquals(10.0, exchange.rateBase!!, 0.0)
     }
 
     @Test
@@ -3108,6 +3215,98 @@ class PointCurrencyMergeTest {
             .judgeAll(testMerchant, LocalDate.of(2026, 6, 28)).bestOption!!
         assertEquals(10.5, best.rate!!, 1e-9)
         assertEquals(7.0, best.nominalRate!!, 0.0)
+    }
+}
+
+/**
+ * ポイント倍率のユーザー選択(factor_options。#83)と円建て通貨(value_fixed)のマージ。
+ * 倍率は「発行体が定めた離散的な条件付き増価」なので選択肢から選ぶ形で、自由入力は
+ * 恒常的な 1pt 価値(point_value)側が担う。選択値はカタログの factor を差し替える形で
+ * 載せ、スコア層(currencyValueFactor)に分岐を足さない(#13 の一本化を維持)。
+ */
+class PointMultiplierFactorMergeTest {
+
+    /** 交換所倍率 1.1(既定=保守側) / 1.5 の二択を持つ Ponta 相当 */
+    private val ponta = PointCurrency(
+        id = "pt",
+        name = "テストPontaポイント",
+        pointMultiplier = PointMultiplier(
+            label = "ポイント交換所を利用時の還元率を表示",
+            factor = 1.1,
+            factorOptions = listOf(1.1, 1.5),
+        ),
+    )
+
+    private fun merged(
+        enabled: Set<String> = setOf("pt"),
+        factors: Map<String, Double> = emptyMap(),
+        values: Map<String, Double> = emptyMap(),
+        currencies: List<PointCurrency> = listOf(ponta),
+    ) = mergeUserData(
+        PoikatsuData(
+            merchants = emptyList(),
+            campaigns = emptyList(),
+            cards = emptyList(),
+            pointCurrencies = currencies,
+            updatedAt = "",
+        ),
+        cardOverrides = emptyMap(),
+        ownedBrands = emptySet(),
+        customCards = emptyList(),
+        customCampaigns = emptyList(),
+        enabledPointMultipliers = enabled,
+        pointCurrencyValues = values,
+        pointMultiplierFactors = factors,
+    ).engineData.pointCurrencies.single()
+
+    @Test
+    fun `選択した倍率がマージ後の通貨のfactorになる`() {
+        assertEquals(1.5, merged(factors = mapOf("pt" to 1.5)).pointMultiplier!!.factor, 0.0)
+    }
+
+    @Test
+    fun `倍率未選択ならカタログのfactorが既定になる`() {
+        // カタログの factor は factor_options の最小値(保守側)に揃える約束(整合性テストで強制)
+        assertEquals(1.1, merged().pointMultiplier!!.factor, 0.0)
+    }
+
+    @Test
+    fun `factor_optionsに無い選択倍率は無視してカタログのfactorに落ちる`() {
+        // DataStore に残った選択肢外の値(カタログ改定で選択肢が減った等)への防御
+        assertEquals(1.1, merged(factors = mapOf("pt" to 3.0)).pointMultiplier!!.factor, 0.0)
+    }
+
+    @Test
+    fun `factor_optionsを持たない通貨は選択倍率を無視する`() {
+        // ウエル活(単一 factor)は従来どおり ON/OFF だけ。選択の余地が無いものに値を効かせない
+        val welcatsu = listOf(
+            PointCurrency(
+                id = "pt",
+                name = "テストVポイント",
+                pointMultiplier = PointMultiplier(label = "ウエル活", factor = 1.5),
+            ),
+        )
+        val currency = merged(factors = mapOf("pt" to 1.1), currencies = welcatsu)
+        assertEquals(1.5, currency.pointMultiplier!!.factor, 0.0)
+    }
+
+    @Test
+    fun `倍率OFFなら選択倍率は価値係数に効かない`() {
+        val currency = merged(enabled = emptySet(), factors = mapOf("pt" to 1.5))
+        assertEquals(1.0, currencyValueFactor(currency), 0.0)
+    }
+
+    @Test
+    fun `value_fixedの通貨は保存済みの1pt価値を無視して1円になる`() {
+        // au PAY残高のような円建て通貨(#83)。設定画面にも出さないため、DataStore に
+        // 残った値(通貨が円建てに変わる前の設定等)を効かせない
+        val balance = listOf(PointCurrency(id = "pt", name = "テストau PAY残高", valueFixed = true))
+        assertEquals(1.0, merged(values = mapOf("pt" to 1.5), currencies = balance).valueYen, 0.0)
+    }
+
+    @Test
+    fun `value_fixedでない通貨は保存済みの1pt価値がそのまま載る`() {
+        assertEquals(1.5, merged(values = mapOf("pt" to 1.5)).valueYen, 0.0)
     }
 }
 
