@@ -138,6 +138,8 @@
       ] },
     { "id": "tobu_store", "name": "東武ストア", "reading": "とうぶすとあ", "aliases": [], "category": "スーパー" },
     { "id": "domy", "name": "ドミー", "reading": "どみー", "aliases": [], "category": "スーパー" },
+    { "id": "seiyu", "name": "西友", "reading": "せいゆう", "aliases": ["SEIYU"], "category": "スーパー" },
+    { "id": "beisia", "name": "ベイシア", "reading": "べいしあ", "aliases": ["Beisia"], "category": "スーパー" },
     { "id": "hanamasa", "name": "肉のハナマサ", "reading": "にくのはなまさ", "aliases": ["ハナマサ"], "category": "スーパー" },
     { "id": "japan_meat", "name": "ジャパンミート", "reading": "じゃぱんみーと", "aliases": [], "category": "スーパー",
       "banners": [
@@ -241,7 +243,23 @@
     { "id": "bariyasu_sakaba", "name": "バリヤス酒場", "reading": "ばりやすさかば", "aliases": [], "category": "居酒屋" },
     { "id": "kamifusen", "name": "かみふうせん", "reading": "かみふうせん", "aliases": [], "category": "居酒屋" },
     { "id": "keyuca", "name": "KEYUCA", "reading": "けゆか", "aliases": ["ケユカ"], "category": "生活雑貨", "yolp_search": "keyword", "yolp_keyword": "ケユカ" },
-    { "id": "sundrug", "name": "サンドラッグ", "reading": "さんどらっぐ", "aliases": [], "category": "ドラッグストア" },
+    { "id": "sundrug", "name": "サンドラッグ", "reading": "さんどらっぐ", "aliases": [], "category": "ドラッグストア",
+      "group_label": "サンドラッググループ",
+      "banners": [
+        { "id": "drug_tops", "name": "ドラッグトップス", "reading": "どらっぐとっぷす" },
+        { "id": "big_drug", "name": "ビッグドラッグ", "reading": "びっぐどらっぐ" },
+        { "id": "sa_drug", "name": "エスエードラッグ", "reading": "えすえーどらっぐ" },
+        { "id": "drug_you", "name": "ドラッグ・ユー", "reading": "どらっぐゆー" }
+      ] },
+    { "id": "seims", "name": "ドラッグセイムス", "reading": "どらっぐせいむす", "aliases": ["セイムス"], "category": "ドラッグストア",
+      "group_label": "富士薬品グループ",
+      "banners": [
+        { "id": "drug_yutaka", "name": "ドラッグユタカ", "reading": "どらっぐゆたか" },
+        { "id": "super_drug_kirin", "name": "スーパードラッグキリン", "reading": "すーぱーどらっぐきりん" },
+        { "id": "drug_store_ace", "name": "ドラッグストアエース", "reading": "どらっぐすとあえーす" },
+        { "id": "kyumeido", "name": "くすりの救命堂", "reading": "くすりのきゅうめいどう" }
+      ] },
+    { "id": "daikoku_drug", "name": "ダイコクドラッグ", "reading": "だいこくどらっぐ", "aliases": [], "category": "ドラッグストア" },
     { "id": "cocokara_fine", "name": "ココカラファイン", "reading": "ここからふぁいん", "aliases": ["ココカラ"], "category": "ドラッグストア",
       "group_label": "ココカラファイングループ",
       "banners": [
