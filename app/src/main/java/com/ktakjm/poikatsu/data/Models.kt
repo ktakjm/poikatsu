@@ -383,6 +383,13 @@ data class PointMultiplier(
      * 自由入力は [PointValueConfig](1pt 価値)側が担う
      */
     @SerialName("factor_options") val factorOptions: List<Double> = emptyList(),
+    /**
+     * 倍率グループ(任意。#84)。同じ事実(ウエル活 ×1.5)を複数通貨(Vポイント・WAON POINT)が
+     * 持つとき、同じグループ id を振って ON/OFF を連動させる——倍率改定・切り替えの際に
+     * 片方だけ直す事故を防ぐ。同一グループの倍率定義は完全一致させる(整合性テストで強制)。
+     * マージは「グループの誰かが有効なら全員有効」、設定画面のトグルはグループ全員の id を書く
+     */
+    val group: String? = null,
     /** バッジ等に使う識別色(例: ウエルシアのコーポレートカラー)。"#RRGGBB" 形式 */
     val color: String? = null,
     @SerialName("badge_label") val badgeLabel: String = "",

@@ -5,6 +5,7 @@ import com.ktakjm.poikatsu.data.CustomCampaign
 import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.CustomPayment
 import com.ktakjm.poikatsu.data.PaymentCard
+import com.ktakjm.poikatsu.data.PointCurrency
 import com.ktakjm.poikatsu.data.PoikatsuData
 
 // 同梱データ(カタログ)とユーザー設定(DataStore 差分)のマージ。MainViewModel.rebuild から
@@ -24,6 +25,21 @@ data class MergedUserData(
      */
     val displayData: PoikatsuData,
 )
+
+/**
+ * ポイント倍率のトグルで DataStore に書く通貨 id の集合(#84)。倍率グループを持つ通貨は
+ * 同一グループの全通貨を返し、設定画面のどの通貨のチェックから切り替えても
+ * ON/OFF が連動する(マージ側の「誰か有効なら全員有効」と対で、常に全員そろった状態を保つ)。
+ * グループ無し・カタログに無い id は自分だけ(空集合だと DataStore から消せなくなる)。
+ */
+fun multiplierToggleIds(currencies: List<PointCurrency>, currencyId: String): Set<String> {
+    val group = currencies.firstOrNull { it.id == currencyId }?.pointMultiplier?.group
+        ?: return setOf(currencyId)
+    return currencies
+        .filter { it.pointMultiplier?.group == group }
+        .map { it.id }
+        .toSet()
+}
 
 fun mergeUserData(
     base: PoikatsuData,
@@ -45,13 +61,22 @@ fun mergeUserData(
     // 倍率が選択肢を持つ通貨(factor_options。#83)は、選んだ倍率をカタログの factor に
     // 差し替える形で載せる——スコア層(currencyValueFactor)に「ユーザー選択があれば」の分岐を
     // 足さずに済み、バッジ・注記も同じ値を読む(#13 の円換算一本化を維持)。
+    // 倍率グループ(#84): グループの誰かが有効なら全員有効。設定画面のトグルは
+    // multiplierToggleIds でグループ全員の id を書くが、グループ導入前の DataStore に
+    // 片方の id しか残っていない状態でもここで連動させる(片方だけ有効の状態を作らない)
+    val enabledMultiplierGroups = base.pointCurrencies
+        .filter { it.id in enabledPointMultipliers }
+        .mapNotNull { it.pointMultiplier?.group }
+        .toSet()
     val mergedCurrencies = base.pointCurrencies.map { currency ->
         // 選択肢外の値は無視(カタログ改定で選択肢が減った後に DataStore に残った値への防御)。
         // 選択肢を持たない通貨(ウエル活)は選択の余地が無いので常にカタログ値
         val chosenFactor = pointMultiplierFactors[currency.id]
             ?.takeIf { it in currency.pointMultiplier?.factorOptions.orEmpty() }
         currency.copy(
-            multiplierEnabled = currency.pointMultiplier != null && currency.id in enabledPointMultipliers,
+            multiplierEnabled = currency.pointMultiplier != null &&
+                (currency.id in enabledPointMultipliers ||
+                    currency.pointMultiplier.group?.let { it in enabledMultiplierGroups } == true),
             pointMultiplier = chosenFactor
                 ?.let { currency.pointMultiplier?.copy(factor = it) }
                 ?: currency.pointMultiplier,

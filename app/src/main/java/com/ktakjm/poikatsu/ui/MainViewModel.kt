@@ -62,6 +62,7 @@ import com.ktakjm.poikatsu.domain.expiringPointNotices
 import com.ktakjm.poikatsu.domain.filterCampaignsByArea
 import com.ktakjm.poikatsu.domain.googlePayIneligibleWarning
 import com.ktakjm.poikatsu.domain.mergeUserData
+import com.ktakjm.poikatsu.domain.multiplierToggleIds
 import com.ktakjm.poikatsu.domain.municipalCampaignsForAreas
 import com.ktakjm.poikatsu.domain.municipalCampaignsForLocation
 import com.ktakjm.poikatsu.domain.isCustom
@@ -2444,8 +2445,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onSetCardBrand(cardId: String, brand: String) =
         viewModelScope.launch { settingsRepo.setBrand(cardId, brand) }
 
-    fun onSetPointMultiplierEnabled(currencyId: String, enabled: Boolean) =
-        viewModelScope.launch { settingsRepo.setPointMultiplierEnabled(currencyId, enabled) }
+    // 倍率グループ(#84)を持つ通貨(ウエル活の Vポイント・WAON POINT 等)はグループ全員の id を
+    // まとめて書き、どの通貨のチェックから切り替えても ON/OFF が連動する
+    fun onSetPointMultiplierEnabled(currencyId: String, enabled: Boolean) {
+        val ids = multiplierToggleIds(displayData?.pointCurrencies.orEmpty(), currencyId)
+        viewModelScope.launch { settingsRepo.setPointMultipliersEnabled(ids, enabled) }
+    }
 
     // 倍率の選択(#83)。選択肢(factor_options)を持つ通貨だけで意味を持つ
     fun onSetPointMultiplierFactor(currencyId: String, factor: Double) =

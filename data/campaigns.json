@@ -2515,6 +2515,7 @@
       "store_scope": "external",
       "operator": "AEON Pay",
       "payment_method_id": "aeon_pay",
+      "point_currency_id": "waon_point",
       "name": "令和8年度 岐阜市物価高騰支援事業20％還元キャンペーン",
       "payment_instruction": "AEON Payのコード決済で支払う",
       "rate_base": 20.0,

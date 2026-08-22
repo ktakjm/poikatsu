@@ -36,6 +36,7 @@ import com.ktakjm.poikatsu.domain.effectiveValueRate
 import com.ktakjm.poikatsu.domain.formatBenefit
 import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.mergeUserData
+import com.ktakjm.poikatsu.domain.multiplierToggleIds
 import com.ktakjm.poikatsu.domain.nextTargetDay
 import com.ktakjm.poikatsu.domain.payoutCurrency
 import com.ktakjm.poikatsu.domain.recurrenceLabel
@@ -1906,6 +1907,102 @@ class JudgmentEngineRealDataTest {
     }
 
     @Test
+    fun `実データ_同一グループの倍率定義は完全一致する`() {
+        // 倍率グループ(#84)は「同じ事実を複数通貨が持つ」ときの重複を許容する仕組み。
+        // 定義がずれると改定時に片方だけ直す事故がそのまま出荷されるため、完全一致を強制する
+        data.pointCurrencies
+            .filter { it.pointMultiplier?.group != null }
+            .groupBy { it.pointMultiplier!!.group }
+            .forEach { (group, members) ->
+                assertTrue("グループ '$group' は2通貨以上で使う(1通貨ならグループ不要)", members.size >= 2)
+                assertEquals(
+                    "グループ '$group' の倍率定義は全通貨で完全一致させる: ${members.map { it.id }}",
+                    1,
+                    members.map { it.pointMultiplier }.distinct().size,
+                )
+            }
+    }
+
+    @Test
+    fun `実データ_ウエル活の倍率はWAON POINTとVポイントが同一グループで持つ`() {
+        // ウエル活 ×1.5 は WAON POINT の価値特性で、Vポイントは等価交換の連鎖で同じ倍率になる
+        // (#84)。両通貨が同一グループで持ち、設定の ON/OFF・倍率改定が連動することを保証する
+        val vpoint = data.pointCurrencies.first { it.id == "vpoint" }
+        val waon = data.pointCurrencies.firstOrNull { it.id == "waon_point" }
+        assertNotNull("point_currencies に waon_point が無い", waon)
+        assertNotNull("vpoint のウエル活倍率に group が無い", vpoint.pointMultiplier!!.group)
+        assertEquals(vpoint.pointMultiplier!!.group, waon!!.pointMultiplier?.group)
+    }
+
+    @Test
+    fun `実データ_AEON Pay残高還元の施策はaeon_pay_balanceを払い出す`() {
+        // AEON Pay は au PAY と同じ「1決済手段・2通貨」構造(#84)。多数派の残高を
+        // qr_payments 側の既定にし、memo が残高還元と言う施策は継承で aeon_pay_balance になる
+        val currencies = data.pointCurrencies
+        val qr = data.qrPayments.first { it.id == "aeon_pay" }
+        val balanceCampaigns = data.campaigns.filter { c ->
+            c.paymentMethodId == "aeon_pay" && c.memo.any { it.contains("還元はAEON Pay残高") }
+        }
+        assertTrue("AEON Pay残高還元の施策が実データに無い(検出条件が古い可能性)", balanceCampaigns.isNotEmpty())
+        balanceCampaigns.forEach { c ->
+            assertEquals(
+                "${c.id}: memo が AEON Pay残高還元と言っているので払い出しは aeon_pay_balance にする",
+                "aeon_pay_balance",
+                payoutCurrency(c, currencies, card = null, qr = qr)?.id,
+            )
+        }
+    }
+
+    @Test
+    fun `実データ_WAON POINT還元のAEON Pay施策はwaon_pointを払い出す`() {
+        // 岐阜市だけ WAON POINT 付与(一次情報確認済み 2026-08-22)。既定(aeon_pay_balance)の
+        // 例外なので施策側に point_currency_id を明示する(「多数派を既定・例外を明示」の規則。#83/#84)
+        val currencies = data.pointCurrencies
+        val qr = data.qrPayments.first { it.id == "aeon_pay" }
+        val waonCampaigns = data.campaigns.filter { c ->
+            c.paymentMethodId == "aeon_pay" && c.memo.any { it.contains("還元はWAON POINT") }
+        }
+        assertTrue("WAON POINT還元の施策が実データに無い(検出条件が古い可能性)", waonCampaigns.isNotEmpty())
+        waonCampaigns.forEach { c ->
+            assertEquals(
+                "${c.id}: memo が WAON POINT還元と言っているので point_currency_id を waon_point にする",
+                "waon_point",
+                payoutCurrency(c, currencies, card = null, qr = qr)?.id,
+            )
+        }
+    }
+
+    @Test
+    fun `実データ_メルカリポイント還元の施策はmercari_pointを払い出す`() {
+        // かなトク等のメルペイ施策はメルカリポイント付与(かなトク公式で確認 2026-08-22)。
+        // qr_payments.merpay の既定継承で解決される
+        val currencies = data.pointCurrencies
+        val qr = data.qrPayments.first { it.id == "merpay" }
+        val campaigns = data.campaigns.filter { c ->
+            c.paymentMethodId == "merpay" && c.memo.any { it.contains("還元はメルカリポイント") }
+        }
+        assertTrue("メルカリポイント還元の施策が実データに無い(検出条件が古い可能性)", campaigns.isNotEmpty())
+        campaigns.forEach { c ->
+            assertEquals(
+                "${c.id}: 払い出しは mercari_point(merpay の既定継承)にする",
+                "mercari_point",
+                payoutCurrency(c, currencies, card = null, qr = qr)?.id,
+            )
+        }
+    }
+
+    @Test
+    fun `実データ_三菱UFJカードはグローバルポイントを稼ぐ`() {
+        // ポイントアッププログラムの払い出しはグローバルポイント(公式で確認 2026-08-22)。
+        // 収録率は 1pt=5円相当の交換先基準で、キャッシュバック等は 3〜5円に変動するため
+        // point_value の説明(label/note)を持たせてユーザーが調整できるようにする
+        assertEquals("global_point", data.cards.first { it.id == "mufg" }.pointCurrencyId)
+        val currency = data.pointCurrencies.firstOrNull { it.id == "global_point" }
+        assertNotNull("point_currencies に global_point が無い", currency)
+        assertNotNull("global_point は価値が交換先で変動するため point_value の説明が要る", currency!!.pointValueConfig)
+    }
+
+    @Test
     fun `実データ_カード直下に旧point_multiplierが残っていない`() {
         // #39 で cards[].point_multiplier → point_currencies[].point_multiplier へ移設。
         // ignoreUnknownKeys のため旧位置のキーはパース時に黙って捨てられる(静かに壊れる)ので構造で検出する
@@ -2532,6 +2629,41 @@ class TestDataIntegrityTest {
         assertEquals(15.0, effectiveValueRate(exchange.rateBase, payoutCurrency(exchange, currencies, null, qr))!!, 1e-9)
         // 同じ 15% でも成り立ちが違う: 残高は名目そのまま、交換所は 10% × 1.5
         assertEquals(10.0, exchange.rateBase!!, 0.0)
+    }
+
+    @Test
+    fun `テストデータ_倍率グループのショーケースが成立している`() {
+        // #84 のショーケース: test_point と test_waon が同一グループの倍率(ウエル活相当)を持ち、
+        // 設定画面でどちらのチェックを入れても両方の倍率が連動して有効になることを実機で
+        // 確認できる状態を CI で守る(定義の完全一致は実データと同じ整合性ルール)
+        val groups = data.pointCurrencies
+            .filter { it.pointMultiplier?.group != null }
+            .groupBy { it.pointMultiplier!!.group }
+        assertTrue("倍率グループのショーケース(同一グループの2通貨)が data-test に無い", groups.isNotEmpty())
+        groups.forEach { (group, members) ->
+            assertTrue("グループ '$group' は2通貨以上で使う", members.size >= 2)
+            assertEquals(
+                "グループ '$group' の倍率定義は全通貨で完全一致させる: ${members.map { it.id }}",
+                1,
+                members.map { it.pointMultiplier }.distinct().size,
+            )
+        }
+        // 片方の id だけ有効化しても全員有効になる(マージのグループ連動)
+        val (group, members) = groups.entries.first()
+        val merged = mergeUserData(
+            base = data,
+            cardOverrides = emptyMap(),
+            ownedBrands = emptySet(),
+            customCards = emptyList(),
+            customCampaigns = emptyList(),
+            enabledPointMultipliers = setOf(members.first().id),
+        ).engineData.pointCurrencies
+        members.forEach { member ->
+            assertTrue(
+                "グループ '$group' の ${member.id} が連動して有効になっていない",
+                merged.first { it.id == member.id }.multiplierEnabled,
+            )
+        }
     }
 
     @Test
@@ -3313,6 +3445,86 @@ class PointMultiplierFactorMergeTest {
     @Test
     fun `value_fixedでない通貨は保存済みの1pt価値がそのまま載る`() {
         assertEquals(1.5, merged(values = mapOf("pt" to 1.5)).valueYen, 0.0)
+    }
+}
+
+/**
+ * 倍率グループ(#84)。ウエル活 ×1.5 のように同じ事実を複数通貨(Vポイント・WAON POINT)が
+ * 持つとき、point_multiplier.group で束ねて ON/OFF を連動させる——片方だけ切り替える事故を
+ * 構造的に防ぐ。マージは「グループの誰かが有効なら全員有効」(グループ導入前の DataStore に
+ * 片方の id しか残っていない状態への防御を兼ねる)、設定画面のトグルは multiplierToggleIds で
+ * グループ全員の id を書く。
+ */
+class PointMultiplierGroupTest {
+
+    private fun welcatsu(group: String?) = PointMultiplier(label = "ウエル活", factor = 1.5, group = group)
+
+    private val vpoint = PointCurrency(id = "vp", name = "テストVポイント", pointMultiplier = welcatsu("welcia"))
+    private val waon = PointCurrency(id = "wp", name = "テストWAON POINT", pointMultiplier = welcatsu("welcia"))
+    private val solo = PointCurrency(id = "solo", name = "テスト単独倍率", pointMultiplier = welcatsu(null))
+
+    private fun merged(
+        enabled: Set<String>,
+        currencies: List<PointCurrency> = listOf(vpoint, waon, solo),
+    ): Map<String, PointCurrency> = mergeUserData(
+        PoikatsuData(
+            merchants = emptyList(),
+            campaigns = emptyList(),
+            cards = emptyList(),
+            pointCurrencies = currencies,
+            updatedAt = "",
+        ),
+        cardOverrides = emptyMap(),
+        ownedBrands = emptySet(),
+        customCards = emptyList(),
+        customCampaigns = emptyList(),
+        enabledPointMultipliers = enabled,
+    ).engineData.pointCurrencies.associateBy { it.id }
+
+    @Test
+    fun `同一グループは片方の有効化で全員有効になる`() {
+        val currencies = merged(enabled = setOf("vp"))
+        assertTrue(currencies.getValue("vp").multiplierEnabled)
+        assertTrue(currencies.getValue("wp").multiplierEnabled)
+    }
+
+    @Test
+    fun `グループ外の通貨は他通貨の有効化に影響されない`() {
+        val currencies = merged(enabled = setOf("vp"))
+        assertFalse(currencies.getValue("solo").multiplierEnabled)
+    }
+
+    @Test
+    fun `誰も有効でなければグループ全員が無効のまま`() {
+        val currencies = merged(enabled = emptySet())
+        assertFalse(currencies.getValue("vp").multiplierEnabled)
+        assertFalse(currencies.getValue("wp").multiplierEnabled)
+    }
+
+    @Test
+    fun `倍率を持たない通貨は同名グループがあっても有効にならない`() {
+        // group は point_multiplier の中のフィールドなので倍率なし通貨には付かないが、
+        // 「有効な誰か」の巻き添えで multiplierEnabled が立たないことを保証する
+        val plain = PointCurrency(id = "plain", name = "テスト無倍率")
+        val currencies = merged(enabled = setOf("vp"), currencies = listOf(vpoint, waon, plain))
+        assertFalse(currencies.getValue("plain").multiplierEnabled)
+    }
+
+    @Test
+    fun `multiplierToggleIdsはグループ全員のidを返す`() {
+        assertEquals(setOf("vp", "wp"), multiplierToggleIds(listOf(vpoint, waon, solo), "vp"))
+        assertEquals(setOf("vp", "wp"), multiplierToggleIds(listOf(vpoint, waon, solo), "wp"))
+    }
+
+    @Test
+    fun `multiplierToggleIdsはグループ無しなら自分だけ`() {
+        assertEquals(setOf("solo"), multiplierToggleIds(listOf(vpoint, waon, solo), "solo"))
+    }
+
+    @Test
+    fun `multiplierToggleIdsはカタログに無いidでも自分を返す`() {
+        // カタログ改定で通貨が消えた直後の防御(空集合だと DataStore から消せなくなる)
+        assertEquals(setOf("gone"), multiplierToggleIds(listOf(vpoint, waon), "gone"))
     }
 }
 

@@ -1,6 +1,6 @@
 {
-  "schema_version": 11,
-  "updated_at": "2026-08-21",
+  "schema_version": 12,
+  "updated_at": "2026-08-22",
   "card_brands": [
     { "name": "Visa", "color": "#1A1F71" },
     { "name": "Mastercard", "color": "#EB001B" },
@@ -13,7 +13,14 @@
       "name": "テストポイント",
       "brand_color": "#0F3F8F",
       "membership_program": false,
-      "point_multiplier": { "label": "テスト倍率デーで表示(ウエル活相当)", "factor": 1.5, "color": "#00A0E9", "badge_label": "倍率デー利用可", "applied_note": "還元率は倍率デー利用時の実質還元率" }
+      "point_multiplier": { "label": "テスト倍率デーで表示(ウエル活相当)", "factor": 1.5, "group": "test_welcia", "color": "#00A0E9", "badge_label": "倍率デー利用可", "applied_note": "還元率は倍率デー利用時の実質還元率" }
+    },
+    {
+      "id": "test_waon",
+      "name": "テストWAONポイント",
+      "brand_color": "#B60081",
+      "membership_program": false,
+      "point_multiplier": { "label": "テスト倍率デーで表示(ウエル活相当)", "factor": 1.5, "group": "test_welcia", "color": "#00A0E9", "badge_label": "倍率デー利用可", "applied_note": "還元率は倍率デー利用時の実質還元率" }
     },
     {
       "id": "test_program",

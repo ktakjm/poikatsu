@@ -578,11 +578,15 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    /** ポイント倍率(ウエル活等)の有効/無効。通貨単位(#39。旧カード単位の setWelcatsu を置換) */
-    suspend fun setPointMultiplierEnabled(currencyId: String, enabled: Boolean) {
+    /**
+     * ポイント倍率(ウエル活等)の有効/無効。通貨単位(#39。旧カード単位の setWelcatsu を置換)。
+     * 倍率グループ(#84)を持つ通貨は同一グループ全員の id をまとめて書くため Set で受ける
+     * (呼び出し側が multiplierToggleIds で解決する)
+     */
+    suspend fun setPointMultipliersEnabled(currencyIds: Set<String>, enabled: Boolean) {
         context.settingsDataStore.edit { prefs ->
             val current = prefs.decodeIdSet(Keys.ENABLED_POINT_MULTIPLIERS).toMutableSet()
-            if (enabled) current.add(currencyId) else current.remove(currencyId)
+            if (enabled) current.addAll(currencyIds) else current.removeAll(currencyIds)
             prefs[Keys.ENABLED_POINT_MULTIPLIERS] = json.encodeToString(current)
         }
     }
