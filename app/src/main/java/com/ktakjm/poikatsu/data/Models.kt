@@ -252,6 +252,39 @@ data class Recurrence(
     @SerialName("days_of_month") val daysOfMonth: List<Int> = emptyList(),
 )
 
+/**
+ * 施策の店舗スコープ(#86)。managed=収録チェーン(merchant_rules)で判定する通常施策、
+ * external=お店を列挙できない全店型(おトクタブ専用。お店・地図の判定には出ない)。
+ */
+enum class StoreScope(val jsonValue: String) {
+    MANAGED("managed"),
+    EXTERNAL("external");
+
+    companion object {
+        fun fromString(s: String): StoreScope = entries.find { it.jsonValue == s } ?: MANAGED
+    }
+}
+
+/**
+ * 施策の帰属先(#86)。card_id / card_brand / payment_method_id / point_program_id は
+ * 「ちょうど1つ non-null」の排他(整合性テストで強制)で、その和を型で表す。
+ * 分岐はこの型への when で書き、網羅チェックを効かせる。JSON スキーマ側は従来の
+ * 4 nullable フィールドのまま(パース後の導出のみ)。
+ */
+sealed interface Attribution {
+    /** カード帰属(payment_methods.json cards.id)。card_program / promotion */
+    data class Card(val id: String) : Attribution
+
+    /** 国際ブランド帰属(イシュアー不問。例: Amex 30% OFF) */
+    data class Brand(val name: String) : Attribution
+
+    /** QR 決済帰属(qr_payments.id) */
+    data class Qr(val id: String) : Attribution
+
+    /** ポイントプログラム帰属(point_currencies.id。提示型 #39) */
+    data class Program(val id: String) : Attribution
+}
+
 @Serializable
 data class Campaign(
     val id: String,
@@ -356,8 +389,21 @@ data class Campaign(
     val region: Region? = null,
     @SerialName("detail_url") val detailUrl: String? = null,
     @SerialName("store_search_url") val storeSearchUrl: String? = null,
-    @SerialName("store_scope") val storeScope: String = "managed",
-)
+    /** store_scope の生値(JSON との写像)。分岐には導出の [storeScope] を使う */
+    @SerialName("store_scope") val storeScopeRaw: String = "managed",
+) {
+    val storeScope: StoreScope get() = StoreScope.fromString(storeScopeRaw)
+
+    /** 帰属先の導出(#86)。排他が壊れたデータでは cardId → cardBrand → paymentMethodId → pointProgramId の優先順 */
+    val attribution: Attribution?
+        get() = when {
+            cardId != null -> Attribution.Card(cardId)
+            cardBrand != null -> Attribution.Brand(cardBrand)
+            paymentMethodId != null -> Attribution.Qr(paymentMethodId)
+            pointProgramId != null -> Attribution.Program(pointProgramId)
+            else -> null
+        }
+}
 
 @Serializable
 data class CampaignsFile(
@@ -626,15 +672,12 @@ data class PoikatsuData(
      * 施策側に色を持たせないのは、同一発行体の施策間で色がぶれる(例: 三井住友の2種の緑が
      * 混在する)のを防ぐため。
      */
-    fun brandColorOf(campaign: Campaign): String? = when {
-        campaign.cardId != null -> cards.firstOrNull { it.id == campaign.cardId }?.brandColor
-        campaign.cardBrand != null ->
-            cardBrands.firstOrNull { it.name.equals(campaign.cardBrand, ignoreCase = true) }?.color
-        campaign.paymentMethodId != null ->
-            qrPayments.firstOrNull { it.id == campaign.paymentMethodId }?.brandColor
-        campaign.pointProgramId != null ->
-            pointCurrencies.firstOrNull { it.id == campaign.pointProgramId }?.brandColor
-        else -> null
+    fun brandColorOf(campaign: Campaign): String? = when (val a = campaign.attribution) {
+        is Attribution.Card -> cards.firstOrNull { it.id == a.id }?.brandColor
+        is Attribution.Brand -> cardBrands.firstOrNull { it.name.equals(a.name, ignoreCase = true) }?.color
+        is Attribution.Qr -> qrPayments.firstOrNull { it.id == a.id }?.brandColor
+        is Attribution.Program -> pointCurrencies.firstOrNull { it.id == a.id }?.brandColor
+        null -> null
     }
 }
 

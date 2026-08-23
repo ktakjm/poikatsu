@@ -20,6 +20,7 @@ import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.YolpClient
 import com.ktakjm.poikatsu.data.YolpSearchConfig
 import com.ktakjm.poikatsu.data.AppSettings
+import com.ktakjm.poikatsu.data.Attribution
 import com.ktakjm.poikatsu.data.CustomCampaign
 import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.ExcludedStorePair
@@ -29,6 +30,7 @@ import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PointBalance
 import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.PointValueConfig
+import com.ktakjm.poikatsu.data.StoreScope
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.RegisteredArea
@@ -936,7 +938,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val payoutCurrencyOf = { c: Campaign -> newEngine.payoutCurrencyOf(c) }
         val campaignPersonalRates = (campaignsActive + campaignsUpcoming)
             .mapNotNull { c ->
-                val resolved = if (c.cardId != null) resolveCardCampaignRate(c, newOwnedCardsById[c.cardId]) else null
+                val resolved = (c.attribution as? Attribution.Card)
+                    ?.let { resolveCardCampaignRate(c, newOwnedCardsById[it.id]) }
                 val nominal = resolved?.effectiveRate ?: c.rateBase
                 val effective = effectiveValueRate(nominal, payoutCurrencyOf(c))
                 when {
@@ -953,15 +956,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // 解決するため、所有カードの card_program はクラス加算を合成した名目率に払い出し通貨の
         // 円価値を掛けた値、未所有・QR は収録値を同じ係数で換算した値になる(#39/#13)
         val campaignStoreRates = (campaignsActive + campaignsUpcoming)
-            .filter { c -> c.storeScope == "managed" && c.merchantRules.any { it.rateOverride != null } }
+            .filter { c -> c.storeScope == StoreScope.MANAGED && c.merchantRules.any { it.rateOverride != null } }
             .associate { c ->
                 val currency = payoutCurrencyOf(c)
                 c.id to c.merchantRules.mapNotNull { r ->
-                    val resolved = if (c.cardId != null) {
-                        resolveCardCampaignRate(c, newOwnedCardsById[c.cardId], r.rateOverride)
-                    } else {
-                        null
-                    }
+                    val resolved = (c.attribution as? Attribution.Card)
+                        ?.let { resolveCardCampaignRate(c, newOwnedCardsById[it.id], r.rateOverride) }
                     val nominal = if (resolved != null) resolved.effectiveRate else (r.rateOverride ?: c.rateBase)
                     effectiveValueRate(nominal, currency)?.let { r.merchantId to it }
                 }.toMap()
@@ -981,11 +981,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         ).mapNotNull { it.region?.name }.distinct()
 
         // 設定画面「マイカード」カタログ: 未所有カードも含む全候補 + 現在の上書き値
-        val hasBrandCampaign = loaded.data.campaigns.any { it.cardBrand != null }
+        val hasBrandCampaign = loaded.data.campaigns.any { it.attribution is Attribution.Brand }
         val cardSettings = baseCards.map { card ->
             val ov = settings.cardOverrides[card.id]
             // 1カード:N施策なので、紐づくどれかの施策に ineligible_brands ルールがあればブランド選択を出す
-            val cardCampaigns = loaded.data.campaigns.filter { it.cardId == card.id }
+            val cardCampaigns = loaded.data.campaigns.filter { it.attribution == Attribution.Card(card.id) }
             val ineligibleBrands = cardCampaigns
                 .flatMap { c -> c.merchantRules.flatMap { it.ineligibleBrands } }
                 .distinct()
@@ -1020,7 +1020,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // 設定画面「国際ブランド」: カタログ(card_brands)の選択肢を常時出す。事前に登録しておけば
         // ブランド施策の開始と同時に(設定画面を見なくても)判定に現れる。施策側が参照しているのに
         // カタログに無いブランドがあれば防御的に追加する(データ不整合時も登録手段を失わないように)
-        val brandSettings = (loaded.data.cardBrands.map { it.name } + loaded.data.campaigns.mapNotNull { it.cardBrand })
+        val brandSettings = (
+            loaded.data.cardBrands.map { it.name } +
+                loaded.data.campaigns.mapNotNull { (it.attribution as? Attribution.Brand)?.name }
+            )
             .distinct()
             .map { brand ->
                 BrandSetting(

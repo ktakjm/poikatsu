@@ -61,12 +61,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.ktakjm.poikatsu.data.Attribution
 import com.ktakjm.poikatsu.data.BannerSelection
 import com.ktakjm.poikatsu.data.CustomCampaign
 import com.ktakjm.poikatsu.data.CustomPayment
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_PERIOD_TOTAL
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_TRANSACTION
 import com.ktakjm.poikatsu.data.Merchant
+import com.ktakjm.poikatsu.data.attribution
 import com.ktakjm.poikatsu.domain.trimRate
 import java.time.Instant
 import java.time.LocalDate
@@ -86,19 +88,18 @@ internal data class PaymentOptionUi(
 ) {
     /** 選択状態の同一性キー(CustomPayment と相互変換できる形) */
     val key: String
-        get() = when {
-            cardId != null -> "card:$cardId"
-            qrPaymentId != null -> "qr:$qrPaymentId"
-            else -> "brand:$cardBrand"
-        }
+        get() = toPayment().attribution.selectionKey()
 
     fun toPayment() = CustomPayment(cardId = cardId, qrPaymentId = qrPaymentId, cardBrand = cardBrand)
 }
 
-private fun CustomPayment.optionKey(): String = when {
-    cardId != null -> "card:$cardId"
-    qrPaymentId != null -> "qr:$qrPaymentId"
-    else -> "brand:$cardBrand"
+/** 選択状態の同一性キー(PaymentOptionUi と CustomPayment の相互照合用)。null は旧 else 分岐と同値 */
+private fun Attribution?.selectionKey(): String = when (this) {
+    is Attribution.Card -> "card:$id"
+    is Attribution.Qr -> "qr:$id"
+    is Attribution.Brand -> "brand:$name"
+    is Attribution.Program -> "program:$id" // CustomPayment には現れない(網羅性のためだけの分岐)
+    null -> "brand:null"
 }
 
 /** 対象日(recurrence)の入力モード */
@@ -132,7 +133,7 @@ internal fun CustomCampaignEditorScreen(
     // 紐付け先が消えている(カスタムカード削除等)ものは候補に無いので選択から落ちる
     var selectedPaymentKeys by remember {
         val optionKeys = paymentOptions.map { it.key }.toSet()
-        mutableStateOf(initial?.payments.orEmpty().map { it.optionKey() }.filter { it in optionKeys }.toSet())
+        mutableStateOf(initial?.payments.orEmpty().map { it.attribution.selectionKey() }.filter { it in optionKeys }.toSet())
     }
     var merchantIds by remember { mutableStateOf(initial?.merchantIds.orEmpty().toSet()) }
     var bannerSelections by remember { mutableStateOf(initial?.bannerSelections.orEmpty().toSet()) }

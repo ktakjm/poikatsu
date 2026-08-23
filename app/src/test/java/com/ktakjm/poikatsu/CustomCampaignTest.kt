@@ -11,6 +11,7 @@ import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.QrPayment
 import com.ktakjm.poikatsu.data.YolpConfig
 import com.ktakjm.poikatsu.data.YolpSearchConfig
+import com.ktakjm.poikatsu.data.StoreScope
 import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.domain.CampaignType
@@ -151,7 +152,7 @@ class CustomCampaignTest {
         ).copy(allStores = true)
         val campaign = allStores.toCampaigns(::operatorFor).single()
 
-        assertEquals("external", campaign.storeScope)
+        assertEquals(StoreScope.EXTERNAL, campaign.storeScope)
         assertTrue(campaign.merchantRules.isEmpty())
         // 自由入力店名の合成 Merchant も作らない(地図の YOLP 検索対象に入れない)
         assertTrue(buildCustomMerchants(listOf(allStores)).isEmpty())
@@ -163,7 +164,7 @@ class CustomCampaignTest {
     @Test
     fun `お店指定ありは従来どおりmanaged`() {
         val campaign = custom(merchantIds = listOf("mcdonalds")).toCampaigns(::operatorFor).single()
-        assertEquals("managed", campaign.storeScope)
+        assertEquals(StoreScope.MANAGED, campaign.storeScope)
     }
 
     @Test

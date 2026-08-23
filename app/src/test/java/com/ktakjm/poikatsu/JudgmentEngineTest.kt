@@ -10,6 +10,7 @@ import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.OfficialStoreList
 import com.ktakjm.poikatsu.data.PaymentCard
+import com.ktakjm.poikatsu.data.StoreScope
 import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.PointValueConfig
 import com.ktakjm.poikatsu.data.PointCurrency
@@ -552,7 +553,7 @@ class JudgmentEngineTest {
         start: String? = null,
         end: String? = null,
         type: CampaignType = CampaignType.CARD_PROGRAM,
-        storeScope: String = "managed",
+        storeScope: StoreScope = StoreScope.MANAGED,
         benefitType: BenefitType = BenefitType.REBATE,
         // 施策の帰属は cardId / cardBrand / paymentMethodId のちょうど1つ: 他を使うときは cardId = null を渡す
         cardId: String? = "test_card",
@@ -582,7 +583,7 @@ class JudgmentEngineTest {
         periodStart = start,
         periodEnd = end,
         type = type.jsonValue,
-        storeScope = storeScope,
+        storeScopeRaw = storeScope.jsonValue,
         benefitType = benefitType.jsonValue,
         paymentMethodId = paymentMethodId,
         discountAmount = discountAmount,
@@ -748,14 +749,14 @@ class JudgmentEngineTest {
 
     @Test
     fun `store_scope_external は judge に含まれない`() {
-        val campaign = campaignWithPeriod(storeScope = "external", type = CampaignType.MUNICIPAL)
+        val campaign = campaignWithPeriod(storeScope = StoreScope.EXTERNAL, type = CampaignType.MUNICIPAL)
         val engine = periodTestEngine(campaign)
         assertTrue(engine.judgeCards(testMerchant, today).isEmpty())
     }
 
     @Test
     fun `store_scope_managed は judge に含まれる`() {
-        val campaign = campaignWithPeriod(storeScope = "managed")
+        val campaign = campaignWithPeriod(storeScope = StoreScope.MANAGED)
         val engine = periodTestEngine(campaign)
         assertEquals(1, engine.judgeCards(testMerchant, today).size)
     }
@@ -2079,7 +2080,7 @@ class JudgmentEngineRealDataTest {
         data.campaigns.forEach { c ->
             assertTrue("${c.id}: invalid type '${c.type}'", c.type in validTypes)
             assertTrue("${c.id}: invalid benefitType '${c.benefitType}'", c.benefitType in validBenefitTypes)
-            assertTrue("${c.id}: invalid storeScope '${c.storeScope}'", c.storeScope in validScopes)
+            assertTrue("${c.id}: invalid storeScope '${c.storeScopeRaw}'", c.storeScopeRaw in validScopes)
         }
     }
 
@@ -2353,7 +2354,7 @@ class JudgmentEngineRealDataTest {
     @Test
     fun `実データ_常設施策はcard_program_managed`() {
         data.campaigns.filter { it.campaignType == CampaignType.CARD_PROGRAM }.forEach { c ->
-            assertTrue("${c.id}: card_program should be managed", c.storeScope == "managed")
+            assertTrue("${c.id}: card_program should be managed", c.storeScope == StoreScope.MANAGED)
             assertNull("${c.id}: card_program should not have period_end", c.periodEnd)
         }
     }
@@ -2363,7 +2364,7 @@ class JudgmentEngineRealDataTest {
         val municipal = data.campaigns.filter { it.campaignType == CampaignType.MUNICIPAL }
         assertTrue("自治体施策が1件以上存在する", municipal.isNotEmpty())
         municipal.forEach { c ->
-            assertTrue("${c.id}: municipal should be external", c.storeScope == "external")
+            assertTrue("${c.id}: municipal should be external", c.storeScope == StoreScope.EXTERNAL)
             assertNotNull("${c.id}: municipal should have region", c.region)
             assertNotNull("${c.id}: municipal should have period_start", c.periodStart)
             // 終了日は明示されるか、未定なら早期終了型(予算上限到達で終了=かなトク等)であること
@@ -2447,12 +2448,12 @@ class JudgmentEngineRealDataTest {
         assertTrue("promotion が1件以上存在する", promotions.isNotEmpty())
         promotions.forEach { c ->
             when (c.storeScope) {
-                "managed" -> {
+                StoreScope.MANAGED -> {
                     assertNotNull("${c.id}: managed promotion should have period_start", c.periodStart)
                     assertNotNull("${c.id}: managed promotion should have period_end", c.periodEnd)
                     assertTrue("${c.id}: managed promotion should have merchant_rules", c.merchantRules.isNotEmpty())
                 }
-                "external" -> {
+                StoreScope.EXTERNAL -> {
                     assertTrue(
                         "${c.id}: external promotion should not have merchant_rules",
                         c.merchantRules.isEmpty(),
@@ -2914,7 +2915,7 @@ class TestDataIntegrityTest {
         data.campaigns.forEach { c ->
             assertTrue("${c.id}: invalid type '${c.type}'", c.type in validTypes)
             assertTrue("${c.id}: invalid benefitType '${c.benefitType}'", c.benefitType in validBenefitTypes)
-            assertTrue("${c.id}: invalid storeScope '${c.storeScope}'", c.storeScope in validScopes)
+            assertTrue("${c.id}: invalid storeScope '${c.storeScopeRaw}'", c.storeScopeRaw in validScopes)
         }
     }
 }

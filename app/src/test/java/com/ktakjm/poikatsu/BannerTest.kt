@@ -97,7 +97,7 @@ class BannerMatchTest {
         operator = "PayPay",
         name = id,
         type = "promotion",
-        storeScope = "managed",
+        storeScopeRaw = "managed",
         paymentMethodId = "paypay",
         paymentInstruction = "PayPayで支払う",
         rateBase = 10.0,

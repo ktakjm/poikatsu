@@ -81,6 +81,15 @@ data class CustomPayment(
     val cardBrand: String? = null,
 )
 
+/** カスタム決済手段の帰属先(#86)。campaigns.json 側と同じ [Attribution] に写して分岐を共用する */
+val CustomPayment.attribution: Attribution?
+    get() = when {
+        cardId != null -> Attribution.Card(cardId)
+        qrPaymentId != null -> Attribution.Qr(qrPaymentId)
+        cardBrand != null -> Attribution.Brand(cardBrand)
+        else -> null
+    }
+
 /**
  * カスタムキャンペーンの業態(看板)単位の選択1件(#60)。系列まるごとではなく
  * 「杏林堂薬局だけ」のような対象を表す。bannerId は merchants.json の banners[].id

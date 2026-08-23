@@ -60,6 +60,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.core.content.ContextCompat
+import com.ktakjm.poikatsu.data.Attribution
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.DataSource
 import com.ktakjm.poikatsu.data.Merchant
@@ -68,6 +69,7 @@ import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_PERIOD_TOTAL
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_TRANSACTION
 import com.ktakjm.poikatsu.data.RegisteredArea
 import com.ktakjm.poikatsu.data.SettingsBackup
+import com.ktakjm.poikatsu.data.StoreScope
 import com.ktakjm.poikatsu.data.ThemeMode
 import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.CampaignType
@@ -781,7 +783,7 @@ internal fun campaignTargetLabelGroups(
     storeRates: Map<String, Double> = emptyMap(),
 ): List<TargetLabelGroup> {
     val labeled = campaigns
-        .filter { it.storeScope == "managed" }
+        .filter { it.storeScope == StoreScope.MANAGED }
         .flatMap { it.merchantRules }
         .flatMap { rule -> ruleTargetLabels(rule, merchants).map { label -> label to storeRates[rule.merchantId] } }
     val distinctRates = labeled.mapNotNull { it.second }.distinct()
@@ -1050,16 +1052,12 @@ private fun effectiveRates(campaigns: List<Campaign>, personalRates: Map<String,
  * 同一 point_program_id の常設プログラム提示施策(#39)も同じ扱い。
  * 1件だけのカード(dカード特約店等)は従来表示のまま。
  */
-internal fun isCardProgramBundle(campaigns: List<Campaign>): Boolean =
-    campaigns.size >= 2 &&
-        campaigns.all { it.campaignType == CampaignType.CARD_PROGRAM } &&
-        (
-            (campaigns.all { it.cardId != null } && campaigns.mapTo(HashSet()) { it.cardId }.size == 1) ||
-                (
-                    campaigns.all { it.pointProgramId != null } &&
-                        campaigns.mapTo(HashSet()) { it.pointProgramId }.size == 1
-                    )
-            )
+internal fun isCardProgramBundle(campaigns: List<Campaign>): Boolean {
+    if (campaigns.size < 2 || campaigns.any { it.campaignType != CampaignType.CARD_PROGRAM }) return false
+    // 「全施策が同一の card_id(または point_program_id)」= 帰属が単一の Card / Program に畳める
+    val attribution = campaigns.mapTo(HashSet()) { it.attribution }.singleOrNull()
+    return attribution is Attribution.Card || attribution is Attribution.Program
+}
 
 /**
  * 発行体束ねカードの内訳サブ行。「モンテローザ優待 / KEYUCA優待 / カラオケ館優待 ほか2件」。

@@ -1,5 +1,6 @@
 package com.ktakjm.poikatsu.domain
 
+import com.ktakjm.poikatsu.data.Attribution
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.MunicipalityMaster
 import com.ktakjm.poikatsu.data.PaymentCard
@@ -84,13 +85,12 @@ private fun backedByUserPayments(
     ownedCards: List<PaymentCard>,
     enabledQrIds: Set<String>,
     memberships: Set<String>,
-): Boolean = when {
-    campaign.paymentMethodId != null -> campaign.paymentMethodId in enabledQrIds
-    campaign.cardId != null -> ownedCards.any { it.id == campaign.cardId }
-    campaign.cardBrand != null ->
-        ownedCards.any { it.brand.equals(campaign.cardBrand, ignoreCase = true) }
-    campaign.pointProgramId != null -> campaign.pointProgramId in memberships
-    else -> true // 決済手段の紐付けが無い施策は決済側の条件では絞らない
+): Boolean = when (val a = campaign.attribution) {
+    is Attribution.Qr -> a.id in enabledQrIds
+    is Attribution.Card -> ownedCards.any { it.id == a.id }
+    is Attribution.Brand -> ownedCards.any { it.brand.equals(a.name, ignoreCase = true) }
+    is Attribution.Program -> a.id in memberships
+    null -> true // 決済手段の紐付けが無い施策は決済側の条件では絞らない
 }
 
 /**

@@ -3,7 +3,9 @@ package com.ktakjm.poikatsu.domain
 import com.ktakjm.poikatsu.data.CardOverride
 import com.ktakjm.poikatsu.data.CustomCampaign
 import com.ktakjm.poikatsu.data.CustomCard
+import com.ktakjm.poikatsu.data.Attribution
 import com.ktakjm.poikatsu.data.CustomPayment
+import com.ktakjm.poikatsu.data.attribution
 import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PointCurrency
 import com.ktakjm.poikatsu.data.PoikatsuData
@@ -150,7 +152,12 @@ fun mergeUserData(
             base.qrPayments.map { it.id to it.name }
         ).toMap()
     val operatorFor = { p: CustomPayment ->
-        p.cardBrand ?: paymentNames[p.cardId ?: p.qrPaymentId] ?: "カスタム"
+        when (val a = p.attribution) {
+            is Attribution.Brand -> a.name
+            is Attribution.Card -> paymentNames[a.id] ?: "カスタム"
+            is Attribution.Qr -> paymentNames[a.id] ?: "カスタム"
+            else -> "カスタム"
+        }
     }
     val customMerchants = buildCustomMerchants(customCampaigns)
     val convertedCustomCampaigns = customCampaigns.flatMap { it.toCampaigns(operatorFor) }

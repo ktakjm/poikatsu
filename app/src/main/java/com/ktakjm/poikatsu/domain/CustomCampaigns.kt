@@ -7,6 +7,7 @@ import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.ProductScope
 import com.ktakjm.poikatsu.data.Recurrence
+import com.ktakjm.poikatsu.data.StoreScope
 import com.ktakjm.poikatsu.util.JapaneseText
 
 // カスタムキャンペーン(#7)の変換。DataStore の登録内容(CustomCampaign)を既存の
@@ -121,7 +122,7 @@ fun CustomCampaign.toCampaigns(operatorFor: (CustomPayment) -> String): List<Cam
             detailUrl = detailUrl?.trim()?.takeIf { it.isNotEmpty() },
             merchantRules = merchantRules,
             type = "promotion",
-            storeScope = if (allStores) "external" else "managed",
+            storeScopeRaw = (if (allStores) StoreScope.EXTERNAL else StoreScope.MANAGED).jsonValue,
         )
     }
 }

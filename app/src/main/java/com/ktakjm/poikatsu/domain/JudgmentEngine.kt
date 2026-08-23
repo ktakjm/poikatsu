@@ -1,5 +1,6 @@
 package com.ktakjm.poikatsu.domain
 
+import com.ktakjm.poikatsu.data.Attribution
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.ExcludedStorePair
 import com.ktakjm.poikatsu.data.Merchant
@@ -10,6 +11,7 @@ import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.QrPayment
 import com.ktakjm.poikatsu.data.Recurrence
+import com.ktakjm.poikatsu.data.StoreScope
 import com.ktakjm.poikatsu.util.JapaneseText
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -233,9 +235,12 @@ fun payoutCurrency(
 ): PointCurrency? {
     if (BenefitType.fromString(campaign.benefitType) != BenefitType.REBATE) return null
     val id = campaign.pointCurrencyId
-        ?: campaign.pointProgramId
-        ?: (if (campaign.cardId != null) card?.pointCurrencyId else null)
-        ?: (if (campaign.paymentMethodId != null) qr?.pointCurrencyId else null)
+        ?: when (val a = campaign.attribution) {
+            is Attribution.Program -> a.id
+            is Attribution.Card -> card?.pointCurrencyId
+            is Attribution.Qr -> qr?.pointCurrencyId
+            is Attribution.Brand, null -> null
+        }
         ?: return null
     return currencies.firstOrNull { it.id == id }
 }
@@ -697,8 +702,8 @@ class JudgmentEngine(private val data: PoikatsuData) {
      */
     fun activeManagedMerchantIds(today: LocalDate): Set<String> =
         activeCampaigns(today)
-            .filter { it.storeScope == "managed" && isTargetDay(it, today) }
-            .filter { it.paymentMethodId != null || resolveCard(it) != null }
+            .filter { it.storeScope == StoreScope.MANAGED && isTargetDay(it, today) }
+            .filter { it.attribution is Attribution.Qr || resolveCard(it) != null }
             .flatMap { it.merchantRules }
             .map { it.merchantId }
             .toSet()
@@ -784,7 +789,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
             perTransactionCap = campaign.perTransactionCap,
             periodTotalCap = campaign.periodTotalCap,
             capNote = campaign.capNote,
-            storeSearchUrl = if (campaign.storeScope == "external") campaign.storeSearchUrl else null,
+            storeSearchUrl = if (campaign.storeScope == StoreScope.EXTERNAL) campaign.storeSearchUrl else null,
             detailUrl = campaign.detailUrl,
             appLinks = appLinks,
             pointMultiplier = pointMultiplier,
@@ -810,10 +815,9 @@ class JudgmentEngine(private val data: PoikatsuData) {
      * 持っているか」の判定で、複数一致しても判定は施策につき1件(バッジはブランド名を出すため
      * どのカードが解決されたかは表示に影響しない)。
      */
-    private fun resolveCard(campaign: Campaign): PaymentCard? = when {
-        campaign.cardId != null -> data.cards.firstOrNull { it.id == campaign.cardId }
-        campaign.cardBrand != null ->
-            data.cards.firstOrNull { it.brand.equals(campaign.cardBrand, ignoreCase = true) }
+    private fun resolveCard(campaign: Campaign): PaymentCard? = when (val a = campaign.attribution) {
+        is Attribution.Card -> data.cards.firstOrNull { it.id == a.id }
+        is Attribution.Brand -> data.cards.firstOrNull { it.brand.equals(a.name, ignoreCase = true) }
         else -> null
     }
 
@@ -890,8 +894,8 @@ class JudgmentEngine(private val data: PoikatsuData) {
     fun judgeCards(merchant: Merchant, today: LocalDate, bannerId: String? = null): List<CampaignJudgment> =
         data.campaigns
             .filter { campaignStatus(it, today) == CampaignStatus.ACTIVE && isTargetDay(it, today) }
-            .filter { it.storeScope == "managed" }
-            .filter { it.paymentMethodId == null }
+            .filter { it.storeScope == StoreScope.MANAGED }
+            .filter { it.attribution !is Attribution.Qr }
             .mapNotNull { campaign ->
                 val rule = campaign.ruleFor(merchant, bannerId) ?: return@mapNotNull null
                 val card = resolveCard(campaign) ?: return@mapNotNull null
@@ -936,8 +940,8 @@ class JudgmentEngine(private val data: PoikatsuData) {
     ): List<CampaignJudgment> =
         data.campaigns
             .filter { campaignStatus(it, today) == CampaignStatus.ACTIVE && isTargetDay(it, today) }
-            .filter { it.storeScope == "managed" }
-            .filter { it.paymentMethodId != null && it.paymentMethodId in enabledQrIds }
+            .filter { it.storeScope == StoreScope.MANAGED }
+            .filter { val a = it.attribution; a is Attribution.Qr && a.id in enabledQrIds }
             .mapNotNull { campaign ->
                 val rule = campaign.ruleFor(merchant, bannerId) ?: return@mapNotNull null
                 val qr = qrPaymentMap[campaign.paymentMethodId] ?: return@mapNotNull null
@@ -975,8 +979,8 @@ class JudgmentEngine(private val data: PoikatsuData) {
     ): List<CampaignJudgment> =
         data.campaigns
             .filter { campaignStatus(it, today) == CampaignStatus.ACTIVE && isTargetDay(it, today) }
-            .filter { it.storeScope == "managed" }
-            .filter { it.pointProgramId != null && it.pointProgramId in memberships }
+            .filter { it.storeScope == StoreScope.MANAGED }
+            .filter { val a = it.attribution; a is Attribution.Program && a.id in memberships }
             .mapNotNull { campaign ->
                 val rule = campaign.ruleFor(merchant, bannerId) ?: return@mapNotNull null
                 val program = data.pointCurrencies.firstOrNull { it.id == campaign.pointProgramId }

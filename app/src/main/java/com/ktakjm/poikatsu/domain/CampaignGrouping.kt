@@ -1,5 +1,6 @@
 package com.ktakjm.poikatsu.domain
 
+import com.ktakjm.poikatsu.data.Attribution
 import com.ktakjm.poikatsu.data.Campaign
 
 /**
@@ -19,15 +20,18 @@ import com.ktakjm.poikatsu.data.Campaign
  * 束ねない。通知は card_program を丸ごと対象外にしている([notificationTargets])のでこの分岐は
  * 通知の畳み込みに影響しない。
  */
-fun campaignGroupKey(campaign: Campaign): String = when {
-    campaign.campaignType == CampaignType.MUNICIPAL -> "municipal:" + (campaign.region?.name ?: campaign.id)
-    campaign.isCustom -> customCampaignBaseId(campaign.id)
-    campaign.campaignType == CampaignType.CARD_PROGRAM && campaign.cardId != null && !campaign.isTimeLimited ->
-        "cardProgram:" + campaign.cardId
-    // 常設のプログラム提示施策(#39)もプログラム単位に束ねる(発行体単位の束ねと同じ理由)
-    campaign.campaignType == CampaignType.CARD_PROGRAM && campaign.pointProgramId != null && !campaign.isTimeLimited ->
-        "pointProgram:" + campaign.pointProgramId
-    else -> campaign.id
+fun campaignGroupKey(campaign: Campaign): String {
+    val attribution = campaign.attribution
+    return when {
+        campaign.campaignType == CampaignType.MUNICIPAL -> "municipal:" + (campaign.region?.name ?: campaign.id)
+        campaign.isCustom -> customCampaignBaseId(campaign.id)
+        campaign.campaignType == CampaignType.CARD_PROGRAM && attribution is Attribution.Card && !campaign.isTimeLimited ->
+            "cardProgram:" + attribution.id
+        // 常設のプログラム提示施策(#39)もプログラム単位に束ねる(発行体単位の束ねと同じ理由)
+        campaign.campaignType == CampaignType.CARD_PROGRAM && attribution is Attribution.Program && !campaign.isTimeLimited ->
+            "pointProgram:" + attribution.id
+        else -> campaign.id
+    }
 }
 
 /**

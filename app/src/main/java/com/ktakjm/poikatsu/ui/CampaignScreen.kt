@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.Merchant
+import com.ktakjm.poikatsu.data.StoreScope
 import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.domain.CampaignType
@@ -456,7 +457,7 @@ internal fun CampaignDetail(
     // グループは promotion なら1施策なので、実質その施策の merchant_rules を解決した一覧
     val campaigns = judgments.map { it.campaign }
     val chainIds = campaigns
-        .filter { it.storeScope == "managed" }
+        .filter { it.storeScope == StoreScope.MANAGED }
         .flatMap { c -> c.merchantRules.map { it.merchantId } }
         .distinct()
     // 発行体束ね(#81)の詳細は「対象:」を最上部で合成せず各施策カード内に出す(複数施策の
@@ -513,7 +514,7 @@ internal fun CampaignDetail(
         if (chainIds.isNotEmpty()) {
             item {
                 TargetChainSection(
-                    campaign = judgments.first { it.campaign.storeScope == "managed" }.campaign,
+                    campaign = judgments.first { it.campaign.storeScope == StoreScope.MANAGED }.campaign,
                     chainIds = chainIds,
                     targetGroups = targetGroups,
                     onFindChains = onFindChains,
