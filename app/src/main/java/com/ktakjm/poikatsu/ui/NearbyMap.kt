@@ -55,6 +55,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -130,7 +131,7 @@ data class MapMarker(
  */
 @OptIn(MapsComposeExperimentalApi::class) // rememberClusterManager/Renderer(minClusterSize 変更のため)
 @Composable
-fun NearbyMap(
+internal fun NearbyMap(
     center: MapPoint,
     /** 現在地(my-location レイヤーへ流し込む位置。ViewModel の継続購読に追従)。null なら青ドット非表示 */
     userLocation: MapPoint?,
@@ -139,6 +140,14 @@ fun NearbyMap(
     /** 検索完了ごとに変わる世代スタンプ。center が同値の再検索でもカメラを寄せ直すためのキー */
     searchStamp: Int,
     selectedPoint: MapPoint?,
+    /**
+     * 選択中(プレビュー)のカメラズームの退避値。詳細画面(全画面)から戻ると本 Composable ごと
+     * 作り直されてカメラ状態が失われるため、選択中は初期カメラをこの値で復元する
+     * (無ければ従来どおり [initialZoom]=検索時ズーム)。
+     */
+    selectionZoom: Double?,
+    /** 選択中にカメラが停止したときのズーム報告(→ NearbyUi.selectionZoom へ退避) */
+    onSelectionZoomChanged: (Double) -> Unit,
     onSearchHere: (MapPoint, Int, Double) -> Unit,
     onSearchMyLocation: () -> Unit,
     /**
@@ -148,14 +157,9 @@ fun NearbyMap(
      */
     onClusterOpen: (markers: List<MapMarker>, sameSpot: Boolean) -> Unit,
     loadingMessage: String?,
-    // 地名検索(起点コントロール)
-    originName: String?,
-    geocodeCandidates: List<MainViewModel.GeocodedPlace>,
-    isGeocoding: Boolean,
-    onGeocode: (String) -> Unit,
-    onSelectCandidate: (MainViewModel.GeocodedPlace) -> Unit,
-    onClearOrigin: () -> Unit,
-    onDismissSearch: () -> Unit,
+    // 地名検索(起点コントロール)。7 引数の素通しを state + actions の対に束ねている(#88)
+    placeSearch: PlaceSearchState,
+    placeSearchActions: PlaceSearchActions,
     /** 検索中心の所在自治体で自治体施策が開催中のときのお知らせピル文言。null なら出さない */
     municipalNoticeText: String? = null,
     onMunicipalNoticeClick: () -> Unit = {},
@@ -178,7 +182,10 @@ fun NearbyMap(
         )
     }
 
-    val initialCamera = CameraPosition.fromLatLngZoom((selectedPoint ?: center).toLatLng(), initialZoom.toFloat())
+    // 選択中(selectedPoint あり)は選択店を選択時のズーム(selectionZoom)で復元する。検索時ズーム
+    // (initialZoom)に戻すと、ピンタップの寄り(SELECTION_MIN_ZOOM)より引きの見え方になるため
+    val initialCameraZoom = (if (selectedPoint != null) selectionZoom ?: initialZoom else initialZoom).toFloat()
+    val initialCamera = CameraPosition.fromLatLngZoom((selectedPoint ?: center).toLatLng(), initialCameraZoom)
     val cameraPositionState = rememberCameraPositionState { position = initialCamera }
 
     // ズームが寄り(POI_SUPPRESS_ZOOM 以上)のときだけ Google 標準 POI ラベルを消す(定義側コメント参照)。
@@ -243,6 +250,14 @@ fun NearbyMap(
                 CameraUpdateFactory.newLatLngZoom(selectedPoint.toLatLng(), targetZoom),
             )
         }
+    }
+
+    // 選択中はカメラが停止するたびにズームを退避する(寄せアニメーションの着地と手動ピンチの両方を拾う)。
+    // snapshotFlow は値の変化時だけ流れる(isMoving 中は null で1回だけ)ため毎フレームの報告にはならない
+    LaunchedEffect(selectedPoint) {
+        if (selectedPoint == null) return@LaunchedEffect
+        snapshotFlow { if (cameraPositionState.isMoving) null else cameraPositionState.position.zoom }
+            .collect { zoom -> if (zoom != null) onSelectionZoomChanged(zoom.toDouble()) }
     }
 
     // 「このエリアを検索」の表示条件:
@@ -371,21 +386,21 @@ fun NearbyMap(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             PlaceSearchBar(
-                originName = originName,
+                originName = placeSearch.originName,
                 active = searchActive,
                 query = searchQuery,
-                isGeocoding = isGeocoding,
+                isGeocoding = placeSearch.isGeocoding,
                 onActivate = {
                     searchActive = true
                     searchQuery = ""
                     searchSubmitted = false
-                    onDismissSearch()
+                    placeSearchActions.onDismiss()
                 },
                 onQueryChange = { searchQuery = it; searchSubmitted = false },
                 onSearch = {
                     if (searchQuery.isNotBlank()) {
                         searchSubmitted = true
-                        onGeocode(searchQuery)
+                        placeSearchActions.onGeocode(searchQuery)
                         focusManager.clearFocus()
                     }
                 },
@@ -393,13 +408,13 @@ fun NearbyMap(
                     searchActive = false
                     searchQuery = ""
                     searchSubmitted = false
-                    onClearOrigin()
+                    placeSearchActions.onClearOrigin()
                 },
                 onDismiss = {
                     searchActive = false
                     searchQuery = ""
                     searchSubmitted = false
-                    onDismissSearch()
+                    placeSearchActions.onDismiss()
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -407,7 +422,7 @@ fun NearbyMap(
             )
 
             // 候補リスト(検索バーが活性でジオコーディング完了後に表示)
-            if (searchActive && (geocodeCandidates.isNotEmpty() || (searchSubmitted && !isGeocoding))) {
+            if (searchActive && (placeSearch.candidates.isNotEmpty() || (searchSubmitted && !placeSearch.isGeocoding))) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -417,7 +432,7 @@ fun NearbyMap(
                     shadowElevation = 3.dp,
                 ) {
                     Column {
-                        if (geocodeCandidates.isEmpty() && searchSubmitted && !isGeocoding) {
+                        if (placeSearch.candidates.isEmpty() && searchSubmitted && !placeSearch.isGeocoding) {
                             Text(
                                 "場所が見つかりませんでした",
                                 style = MaterialTheme.typography.bodyMedium,
@@ -425,7 +440,7 @@ fun NearbyMap(
                                 modifier = Modifier.padding(16.dp),
                             )
                         }
-                        geocodeCandidates.forEach { place ->
+                        placeSearch.candidates.forEach { place ->
                             ListItem(
                                 headlineContent = {
                                     val display = if (place.fullAddress.isNotBlank() &&
@@ -449,7 +464,7 @@ fun NearbyMap(
                                     searchQuery = ""
                                     searchSubmitted = false
                                     focusManager.clearFocus()
-                                    onSelectCandidate(place)
+                                    placeSearchActions.onSelectCandidate(place)
                                 },
                             )
                         }
