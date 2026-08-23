@@ -729,9 +729,15 @@ class JudgmentEngine(private val data: PoikatsuData) {
         campaign.usageLimitNote
             ?: campaign.usageLimit?.let { "お一人様${it}回まで" }
 
+    /**
+     * 判定 DTO の組み立て共通部。merchant/rule が非 null なら店舗文脈(お店・地図の判定カード)、
+     * どちらも null なら施策全体ビュー(おトクタブの施策詳細。#85)として、注記の連結・網羅性の
+     * 判定基準を切り替える。catalog は識別色の解決元(施策全体ビューは未所有カードも表示する
+     * ため、所有カードのみの engine 保有データでなく表示用の全カタログを渡す)。
+     */
     private fun buildJudgment(
         campaign: Campaign,
-        merchant: Merchant,
+        merchant: Merchant?,
         rule: MerchantRule?,
         badgeLabel: String,
         effectiveRate: Double?,
@@ -742,25 +748,31 @@ class JudgmentEngine(private val data: PoikatsuData) {
         welcatsuApplied: Boolean,
         appLinks: List<AppLink>,
         today: LocalDate,
+        catalog: PoikatsuData = data,
     ): CampaignJudgment {
         val days = daysRemaining(campaign, today)
         val benefitType = BenefitType.fromString(campaign.benefitType)
         val isLottery = benefitType == BenefitType.LOTTERY
         val todayIsTarget = isTargetDay(campaign, today)
+        val isOverview = merchant == null
         return CampaignJudgment(
             campaign = campaign,
             badgeLabel = badgeLabel,
-            brandColor = data.brandColorOf(campaign),
+            brandColor = catalog.brandColorOf(campaign),
             benefitType = benefitType,
             // 抽選は確定還元ではないので率・額を持たせない(ソート・最良比較に混ざらないように)
             effectiveRate = effectiveRate.takeUnless { isLottery },
             nominalRate = nominalRate.takeUnless { isLottery },
             discountAmount = discountAmount.takeUnless { isLottery },
             daysRemaining = days,
-            // 出どころ(施策全体か店舗固有か)は読者には関係ないため、レベル横断で連結して1セクションずつにする
+            // 出どころ(施策全体か店舗固有か)は読者には関係ないため、レベル横断で連結して1セクションずつにする。
+            // 施策全体ビュー専用の注記(収録範囲の説明等。#52)は overview でだけ連結する
+            // (店舗判定カードには出さない。特定のお店を見ているユーザーには無関係な情報のため)
             eligibleNotes = campaign.eligibleNotes + rule?.eligibleNotes.orEmpty(),
-            ineligibleNotes = campaign.ineligibleNotes + rule?.ineligibleNotes.orEmpty() +
-                listOfNotNull(rule?.let { bannerScopeNote(merchant, it) }),
+            ineligibleNotes = campaign.ineligibleNotes +
+                (if (isOverview) campaign.overviewIneligibleNotes else emptyList()) +
+                rule?.ineligibleNotes.orEmpty() +
+                listOfNotNull(if (merchant != null && rule != null) bannerScopeNote(merchant, rule) else null),
             storeListUrl = rule?.storeListUrl,
             warnings = buildList {
                 if (days != null && days <= 3) add("残り${days}日")
@@ -781,7 +793,14 @@ class JudgmentEngine(private val data: PoikatsuData) {
             mayEndEarly = campaign.mayEndEarly,
             todayIsTarget = todayIsTarget,
             nextTargetDate = if (todayIsTarget) null else nextTargetDay(campaign, today),
-            exhaustiveStoreList = rule?.officialStoreList?.listIsExhaustive == true,
+            // 網羅性は店舗文脈ならそのチェーンの rule 単位、施策全体ビューなら施策単位(#64)
+            exhaustiveStoreList = if (isOverview) {
+                campaign.allStoreListsExhaustive
+            } else {
+                rule?.officialStoreList?.listIsExhaustive == true
+            },
+            // 施策全体ビューは最大値の率を出すため、店舗別レートがばらつく施策は「最大」を冠する(#81)
+            rateVariesByStore = isOverview && campaign.storeRatesVary,
         )
     }
 
@@ -796,6 +815,56 @@ class JudgmentEngine(private val data: PoikatsuData) {
         campaign.cardBrand != null ->
             data.cards.firstOrNull { it.brand.equals(campaign.cardBrand, ignoreCase = true) }
         else -> null
+    }
+
+    /**
+     * 施策の払い出し通貨を engine 保有データで解決する(#85)。[payoutCurrency] の引数
+     * (card_id→所有カード / payment_method_id→QR)の引き当てを呼び出し側で複製しないための入口。
+     */
+    fun payoutCurrencyOf(campaign: Campaign): PointCurrency? =
+        payoutCurrency(campaign, data.pointCurrencies, resolveCard(campaign), qrPaymentMap[campaign.paymentMethodId])
+
+    /**
+     * 店舗文脈なし(merchant/rule 抜き)の判定を組み立てる(#85)。おトクタブの施策詳細カード用で、
+     * merchant 未特定のため店舗固有の注記・rate_override は乗らず、施策全体に一様に効く事実だけが出る。
+     * 率の基準は judgeCards/judgeQr と同じ(resolveCardCampaignRate + 払い出し通貨の円換算)。
+     * catalog には表示用の全カタログ(displayData)を渡す——おトクタブは未所有カードの施策も表示する
+     * ため、識別色を所有カードのみの engine 保有データでは解決できない。
+     */
+    fun judgeCampaignOverview(
+        group: List<Campaign>,
+        today: LocalDate,
+        catalog: PoikatsuData = data,
+    ): List<CampaignJudgment> = group.map { campaign ->
+        val qr = qrPaymentMap[campaign.paymentMethodId]
+        // カード施策の率はお店タブと同じ基準で名目率を解決する: 所有カードの card_program は
+        // ユーザー実効率、未所有は施策側の率へフォールバック。QR・自治体・ブランド施策
+        // (cardId 無し)は従来どおり施策側の率。円換算はスコア層で一度だけ掛ける(#13)
+        val resolved = if (campaign.cardId != null) resolveCardCampaignRate(campaign, resolveCard(campaign)) else null
+        val currency = payoutCurrencyOf(campaign)
+        val nominalRate = if (resolved != null) resolved.effectiveRate else campaign.rateBase
+        // 提示施策(point_program_id)のバッジはプログラム名(dポイント等)を出す
+        val programName = campaign.pointProgramId?.let { id ->
+            data.pointCurrencies.firstOrNull { it.id == id }?.name
+        }
+        buildJudgment(
+            campaign = campaign,
+            merchant = null,
+            rule = null,
+            // ブランド施策はイシュアー不問なので、バッジは運営者でなくブランド名を出す
+            badgeLabel = qr?.name ?: campaign.cardBrand ?: programName ?: campaign.operator,
+            effectiveRate = effectiveValueRate(nominalRate, currency),
+            nominalRate = nominalRate,
+            discountAmount = campaign.discountAmount,
+            pointMultiplier = currency?.pointMultiplier,
+            payoutCurrencyName = currency?.name,
+            // 「実質還元率」の適用時注記は、倍率が実際に掛かった率を表示したときだけ出す(#39)
+            welcatsuApplied = currency?.multiplierEnabled == true &&
+                currency.pointMultiplier != null && nominalRate != null,
+            appLinks = qr?.appLinks.orEmpty().ifEmpty { listOfNotNull(campaign.walletAppLink) },
+            today = today,
+            catalog = catalog,
+        )
     }
 
     /**

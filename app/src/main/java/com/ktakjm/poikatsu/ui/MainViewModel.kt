@@ -50,9 +50,7 @@ import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.FixedBenefitAdvice
 import com.ktakjm.poikatsu.domain.StackedRate
 import com.ktakjm.poikatsu.domain.StoreVerdict
-import com.ktakjm.poikatsu.domain.allStoreListsExhaustive
 import com.ktakjm.poikatsu.domain.allowsManualRate
-import com.ktakjm.poikatsu.domain.appLinks
 import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.campaignsInGroup
@@ -60,7 +58,6 @@ import com.ktakjm.poikatsu.domain.compositeValueYen
 import com.ktakjm.poikatsu.domain.effectiveValueRate
 import com.ktakjm.poikatsu.domain.expiringPointNotices
 import com.ktakjm.poikatsu.domain.filterCampaignsByArea
-import com.ktakjm.poikatsu.domain.googlePayIneligibleWarning
 import com.ktakjm.poikatsu.domain.mergeUserData
 import com.ktakjm.poikatsu.domain.multiplierToggleIds
 import com.ktakjm.poikatsu.domain.municipalCampaignsForAreas
@@ -68,13 +65,8 @@ import com.ktakjm.poikatsu.domain.municipalCampaignsForLocation
 import com.ktakjm.poikatsu.domain.isCustom
 import com.ktakjm.poikatsu.domain.isExpired
 import com.ktakjm.poikatsu.domain.isPrefectureWide
-import com.ktakjm.poikatsu.domain.isTargetDay
 import com.ktakjm.poikatsu.domain.isTimeLimited
-import com.ktakjm.poikatsu.domain.nextTargetDay
-import com.ktakjm.poikatsu.domain.payoutCurrency
 import com.ktakjm.poikatsu.domain.resolveCardCampaignRate
-import com.ktakjm.poikatsu.domain.storeRatesVary
-import com.ktakjm.poikatsu.domain.walletAppLink
 import com.ktakjm.poikatsu.notification.CampaignNotifications
 import com.ktakjm.poikatsu.util.GeoMath
 import java.io.File
@@ -666,14 +658,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     @Volatile
     private var displayData: PoikatsuData? = null
 
-    /**
-     * 所有カードの id → マージ済みカード(rebuild で構築)。ユーザー設定の実効率
-     * (ウエル活 ON なら倍率適用済み)を持ち、おトクタブの card_program 表示レート解決
-     * (resolveCardCampaignRate)に使う。未所有カードは含まない(施策側の率へフォールバック)。
-     */
-    @Volatile
-    private var ownedCardsById: Map<String, PaymentCard> = emptyMap()
-
     private var lastFetchSucceededAt = 0L
 
     /** 起動後の通知ジョブ突き合わせ([CampaignNotifications.ensureScheduled])を 1 回だけにするフラグ */
@@ -926,8 +910,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         engine = newEngine
         val newDisplayData = merged.displayData
         displayData = newDisplayData
+        // 所有カードの id → マージ済みカード。ユーザー設定の実効率を持ち、おトクタブの
+        // card_program 表示レート解決(resolveCardCampaignRate)に使う。未所有は施策側の率へフォールバック
         val newOwnedCardsById = merged.engineData.cards.associateBy { it.id }
-        ownedCardsById = newOwnedCardsById
 
         val today = LocalDate.now()
         // おトクタブの一覧。登録エリアがあれば既定で絞り込む(「すべて表示」トグルで解除可)
@@ -947,10 +932,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // 期間限定ポイントの失効通知(#13): 施策・お店と独立の内容のためどのお店の判定画面でも
         // 同じ一覧を出す(設計書 §4)。判定(Selection)には手を入れず UiState 側で持つ
         val expiringNotices = expiringPointNotices(settings.pointBalances, mergedCurrencies, today)
-        val qrPaymentsById = loaded.data.qrPayments.associateBy { it.id }
-        val payoutCurrencyOf = { c: Campaign ->
-            payoutCurrency(c, mergedCurrencies, c.cardId?.let { newOwnedCardsById[it] }, qrPaymentsById[c.paymentMethodId])
-        }
+        // 払い出し通貨の引数解決(cardId→所有カード / paymentMethodId→QR)は engine に一本化(#85)
+        val payoutCurrencyOf = { c: Campaign -> newEngine.payoutCurrencyOf(c) }
         val campaignPersonalRates = (campaignsActive + campaignsUpcoming)
             .mapNotNull { c ->
                 val resolved = if (c.cardId != null) resolveCardCampaignRate(c, newOwnedCardsById[c.cardId]) else null
@@ -2133,79 +2116,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onSelectCampaignGroup(group: List<Campaign>) {
         val e = engine ?: return
-        val today = LocalDate.now()
-        // カスタムカードの識別色も引けるよう統合データ(displayData)から解決する
-        val catalog = displayData
-        val qrMap = catalog?.qrPayments?.associateBy { it.id }.orEmpty()
-        val judgments = group.map { campaign ->
-            val qr = campaign.paymentMethodId?.let { qrMap[it] }
-            val benefitType = com.ktakjm.poikatsu.domain.BenefitType.fromString(campaign.benefitType)
-            val isLottery = benefitType == com.ktakjm.poikatsu.domain.BenefitType.LOTTERY
-            val todayIsTarget = isTargetDay(campaign, today)
-            // カード施策の率はお店タブと同じ基準(resolveCardCampaignRate)で名目率を解決する:
-            // 所有カードの card_program はユーザー実効率、未所有は施策側の率へフォールバック。
-            // QR・自治体・ブランド施策(cardId 無し)は従来どおり施策側の率。
-            // 円換算(1pt価値 × 倍率)はスコア層で一度だけ掛ける(#13。judgeCards/judgeQr と同じ基準)
-            val ownedCard = campaign.cardId?.let { ownedCardsById[it] }
-            val resolved = if (campaign.cardId != null) resolveCardCampaignRate(campaign, ownedCard) else null
-            val currency = payoutCurrency(
-                campaign,
-                catalog?.pointCurrencies.orEmpty(),
-                ownedCard,
-                qr,
-            )
-            val nominalRate = if (resolved != null) resolved.effectiveRate else campaign.rateBase
-            val effectiveRate = effectiveValueRate(nominalRate, currency)
-            // 提示施策(point_program_id)のバッジはプログラム名(dポイント等)を出す
-            val programName = campaign.pointProgramId?.let { id ->
-                catalog?.pointCurrencies?.firstOrNull { it.id == id }?.name
-            }
-            CampaignJudgment(
-                campaign = campaign,
-                // ブランド施策はイシュアー不問なので、バッジは運営者でなくブランド名を出す
-                badgeLabel = qr?.name ?: campaign.cardBrand ?: programName ?: campaign.operator,
-                // 未所有カードの施策もおトクタブには出るため、色は全カタログから引く
-                brandColor = catalog?.brandColorOf(campaign),
-                benefitType = benefitType,
-                effectiveRate = effectiveRate.takeUnless { isLottery },
-                nominalRate = nominalRate.takeUnless { isLottery },
-                discountAmount = campaign.discountAmount.takeUnless { isLottery },
-                daysRemaining = e.daysRemaining(campaign, today),
-                // merchant 未特定のため店舗固有分は乗らず、campaign 直下(施策全体に一様に効く事実)だけが出る。
-                // 施策全体ビュー専用の注記(収録範囲の説明等。#52)はここでだけ連結する
-                // (店舗判定カードには出さない。特定のお店を見ているユーザーには無関係な情報のため)
-                eligibleNotes = campaign.eligibleNotes,
-                ineligibleNotes = campaign.ineligibleNotes + campaign.overviewIneligibleNotes,
-                storeListUrl = null,
-                warnings = buildList {
-                    val days = e.daysRemaining(campaign, today)
-                    if (days != null && days <= 3) add("残り${days}日")
-                    campaign.googlePayIneligibleWarning?.let { add(it) }
-                },
-                minPurchase = campaign.minPurchase,
-                usageLimitText = campaign.usageLimitNote
-                    ?: campaign.usageLimit?.let { "お一人様${it}回まで" },
-                perTransactionCap = campaign.perTransactionCap,
-                periodTotalCap = campaign.periodTotalCap,
-                capNote = campaign.capNote,
-                storeSearchUrl = if (campaign.storeScope == "external") campaign.storeSearchUrl else null,
-                detailUrl = campaign.detailUrl,
-                appLinks = qr?.appLinks.orEmpty().ifEmpty { listOfNotNull(campaign.walletAppLink) },
-                // judgeCards/judgeQr と同じ条件(#39): 倍率バッジは払い出し通貨が倍率を持てば出す。
-                // 「実質還元率」注記は倍率が実際に掛かった率を表示したときだけ
-                pointMultiplier = currency?.pointMultiplier,
-                    payoutCurrencyName = currency?.name,
-                welcatsuApplied = currency?.multiplierEnabled == true &&
-                    currency.pointMultiplier != null && nominalRate != null,
-                mayEndEarly = campaign.mayEndEarly,
-                todayIsTarget = todayIsTarget,
-                nextTargetDate = if (todayIsTarget) null else nextTargetDay(campaign, today),
-                // チェーン非依存のビューなので施策単位の網羅性(全ルール網羅)で判定する
-                exhaustiveStoreList = campaign.allStoreListsExhaustive,
-                // 施策全体ビューは最大値の率を出すため、店舗別レートがばらつく施策は「最大」を冠する(#81)
-                rateVariesByStore = campaign.storeRatesVary,
-            )
-        }
+        // 店舗文脈なしの判定組み立ては JudgmentEngine に一本化(#85)。
+        // カスタムカード・未所有カードの識別色も引けるよう統合データ(displayData)を渡す
+        val catalog = displayData ?: return
+        val judgments = e.judgeCampaignOverview(group, LocalDate.now(), catalog)
         // 地図タブ横画面のお知らせピルは、判定詳細のサイドシート表示中も押せる(非モーダル。#57)。
         // 開いていた判定詳細・店舗判定は施策詳細に置き換える(残すと全画面オーバーレイ・サイドシート
         // とも when の優先順で判定詳細側が最前面になり、開いたはずの施策詳細が見えないため)
