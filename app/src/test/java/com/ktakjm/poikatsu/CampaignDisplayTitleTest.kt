@@ -5,10 +5,10 @@ import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.Region
-import com.ktakjm.poikatsu.ui.campaignGroupDisplayTitle
-import com.ktakjm.poikatsu.ui.cardProgramBundleSubtitle
-import com.ktakjm.poikatsu.ui.isCardProgramBundle
-import com.ktakjm.poikatsu.ui.municipalRegionsLabel
+import com.ktakjm.poikatsu.domain.campaignGroupDisplayTitle
+import com.ktakjm.poikatsu.domain.cardProgramBundleSubtitle
+import com.ktakjm.poikatsu.domain.isCardProgramBundle
+import com.ktakjm.poikatsu.domain.municipalRegionsLabel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

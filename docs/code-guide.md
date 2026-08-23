@@ -105,7 +105,7 @@ poikatsu/
     │   │                   # PaymentMethodsSettings, MunicipalitySettings,
     │   │                   # CampaignScreen, JudgmentScreen, UiHelpers,
     │   │                   # NearbyMap, theme/
-    │   ├── domain/         # JudgmentEngine（純 Kotlin）
+    │   ├── domain/         # JudgmentEngine, CampaignDisplay ほか（純 Kotlin）
     │   ├── data/           # Models, DataRepository, GithubRawClient,
     │   │                   # YolpClient, LocationProvider, SettingsRepository
     │   └── util/           # JapaneseText, GeoMath（純 Kotlin）

@@ -4,7 +4,7 @@ import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.RateRule
 import com.ktakjm.poikatsu.domain.storeRatesVary
-import com.ktakjm.poikatsu.ui.campaignGroupMaxBenefit
+import com.ktakjm.poikatsu.domain.campaignGroupMaxBenefit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

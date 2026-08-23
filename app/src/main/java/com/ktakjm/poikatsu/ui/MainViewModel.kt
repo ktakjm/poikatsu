@@ -64,6 +64,7 @@ import com.ktakjm.poikatsu.domain.mergeUserData
 import com.ktakjm.poikatsu.domain.multiplierToggleIds
 import com.ktakjm.poikatsu.domain.municipalCampaignsForAreas
 import com.ktakjm.poikatsu.domain.municipalCampaignsForLocation
+import com.ktakjm.poikatsu.domain.municipalRegionsLabel
 import com.ktakjm.poikatsu.domain.isCustom
 import com.ktakjm.poikatsu.domain.isExpired
 import com.ktakjm.poikatsu.domain.isPrefectureWide

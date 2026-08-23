@@ -60,6 +60,8 @@ import com.ktakjm.poikatsu.domain.FixedBenefitAdvice
 import com.ktakjm.poikatsu.domain.StackedRate
 import com.ktakjm.poikatsu.domain.StoreEligibility
 import com.ktakjm.poikatsu.domain.StoreVerdict
+import com.ktakjm.poikatsu.domain.TargetLabelGroup
+import com.ktakjm.poikatsu.domain.groupLabelOf
 import com.ktakjm.poikatsu.domain.nominalRateNote
 import com.ktakjm.poikatsu.domain.formatBenefit
 import com.ktakjm.poikatsu.domain.isCustom

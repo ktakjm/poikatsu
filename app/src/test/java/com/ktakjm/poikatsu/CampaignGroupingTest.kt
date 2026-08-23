@@ -4,7 +4,7 @@ import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.domain.campaignGroupKey
 import com.ktakjm.poikatsu.domain.campaignsInGroup
-import com.ktakjm.poikatsu.ui.isCardProgramBundle
+import com.ktakjm.poikatsu.domain.isCardProgramBundle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue

@@ -12,7 +12,7 @@ import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.QrPayment
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.toCampaigns
-import com.ktakjm.poikatsu.ui.campaignTargetLabels
+import com.ktakjm.poikatsu.domain.campaignTargetLabels
 import com.ktakjm.poikatsu.util.JapaneseText
 import java.io.File
 import java.time.LocalDate

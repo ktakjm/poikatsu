@@ -119,7 +119,9 @@ import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.ExpiringPointNotice
+import com.ktakjm.poikatsu.domain.campaignGroupDisplayTitle
 import com.ktakjm.poikatsu.domain.customCampaignBaseId
+import com.ktakjm.poikatsu.domain.groupLabelOf
 import com.ktakjm.poikatsu.domain.isCustom
 import com.ktakjm.poikatsu.ui.theme.AppIcons
 import com.ktakjm.poikatsu.util.GeoMath
