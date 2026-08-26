@@ -153,12 +153,13 @@ erDiagram
         string type "card_program/promotion/municipal"
         string benefit_type "rebate/discount/lottery"
         string store_scope "managed/external"
-        string operator "運営者(カード会社/決済事業者)"
+        string operator "運営者(任意。省略時は帰属先カタログ名から導出。#89)"
         string card_id "カードID(4帰属で排他)"
         string card_brand "ブランド施策の対象ブランド(4帰属で排他)"
         string point_program_id "会員提示施策の帰属プログラム(4帰属で排他。presentation_only必須。#39)"
         string point_currency_id "rebateの払い出し通貨(任意。倍率適用の判定。#39)"
-        string payment_instruction "支払い方法の説明"
+        string payment_instruction "支払い方法の説明(municipalは空ならサービス既定で補完。#89)"
+        PaymentVariant_list payment_variants "municipalの決済手段別差分(JSON記述形のみ。展開後は空。#89)"
         double rate_base "基準還元率(定率時)"
         int discount_amount "割引額(定額時)"
         string period_start "開始日(ISO8601・nullで常設)"
@@ -178,10 +179,21 @@ erDiagram
         string_list ineligible_notes "施策全体の対象外・限定の言い切り(warning面表示)"
         string_list overview_ineligible_notes "おトクタブのキャンペーン詳細だけに出す注記(店舗判定には連結しない。#52)"
         string_list memo "収集時の内部メモ(UI非表示。照合台帳・付与時期等)"
-        string payment_method_id "QR決済ID(カード施策はnull)"
-        string detail_url "施策の詳細ページURL"
-        string store_search_url "対象店舗検索URL"
-        string verified_date "最終確認日"
+        string payment_method_id "QR決済ID(カード施策は省略。municipalはvariant側)"
+        string detail_url "施策の詳細ページURL(municipalはvariant側)"
+        string store_search_url "対象店舗検索URL(municipalはvariant側)"
+        string verified_date "最終確認日(municipalはvariant側)"
+    }
+    PAYMENT_VARIANT {
+        string payment_method_id FK "決済サービス(qr_payments.id)。キャンペーン内で一意"
+        string detail_url "このサービスの公式ページ(必須)"
+        string verified_date "このサービスのページを確認した日(必須)"
+        string point_currency_id "払い出し通貨の例外(任意)"
+        string payment_instruction "サービス既定と違うときだけ上書き(任意)"
+        string store_search_url "任意"
+        string_list eligible_notes "このサービスだけの対象(共通側の後ろに連結)"
+        string_list ineligible_notes "このサービスだけの対象外差分行(共通側の後ろに連結)"
+        string_list memo "このサービスだけのメモ(連結)"
     }
     REGION {
         string name "自治体名(municipalities.jsonと一致させる)"
@@ -256,6 +268,7 @@ erDiagram
         string store_search_label "対象店舗検索の表示名"
         bool enabled_default
         string point_currency_id "このサービスが稼ぐ通貨(任意。#39)"
+        MunicipalDefaults municipal_defaults "自治体施策の既定文言(payment_instruction / ineligible_notes。municipalにのみ適用。#89)"
     }
     YOLP_CONFIG {
         int max_keyword_sources "keyword上限"
@@ -271,6 +284,8 @@ erDiagram
     PAYMENT_METHODS ||--o{ QR_PAYMENT : "qr_payments[]"
     PAYMENT_METHODS ||--o{ POINT_CURRENCY : "point_currencies[](#39)"
     CAMPAIGN ||--o{ MERCHANT_RULE : "merchant_rules[]"
+    CAMPAIGN ||--o{ PAYMENT_VARIANT : "payment_variants[](municipal必須。読み込み時に1施策=1決済手段へ展開。#89)"
+    PAYMENT_VARIANT }o--|| QR_PAYMENT : "payment_method_id で参照"
     CAMPAIGN ||--o| REGION : "region(自治体施策のみ)"
     MERCHANT ||--o{ BANNER : "banners[](系列と看板の2階層。#60)"
     MERCHANT ||--o| LOCATION_HINT : "location_hint(自販機等)"
@@ -294,6 +309,8 @@ erDiagram
 - `payment_methods.json` — 決済手段カタログ（カード `cards` + QR 決済 `qr_payments`）+ **ポイント通貨マスタ**（`point_currencies`。#39）。ユーザー固有値は持たず（差分は DataStore）、merchants/campaigns と同様にリモート更新・テストデータ切替の対象。**ポイント倍率**（`PointMultiplier`。例: ウエル活 ×1.5）は通貨の価値特性として `point_currencies[].point_multiplier` に持ち、カード・QR は `point_currency_id` でその通貨を「稼ぐ手段」として参照する。倍率の ON/OFF は通貨単位のユーザー設定（`enabled_point_multipliers`）で、ON 時はその通貨で払い出される率（通貨を稼ぐカードの実効率と、施策側の rebate 率の両方）が `× factor` される（§5.4）。`membership_program: true` の通貨（dポイント等）は提示型施策（`point_program_id`）の帰属先で、会員かどうかもユーザー設定（`point_program_memberships`）。**1pt 価値**（`point_value`。使い道で変動するポイント通貨の価値。J-POINT は 0.7〜1円）は `point_currencies[].point_value` に持つ（#13。カードは `point_currency_id` でその通貨を参照するだけで、カード側に `point_value` は持たない）。`default` は全通貨共通の既定 1.0 円で、`point_value` 定義自体は説明（label/note）が要る通貨だけに置く。**倍率が一意でない通貨**（Ponta の au PAY マーケット ポイント交換所は 1.1〜1.5）は `point_multiplier.factor_options` に選択肢を持ち、ユーザーが設定画面のピッカーで選ぶ（DataStore `point_multiplier_factors`。#83）。選択値はマージ層でカタログの `factor` を差し替える形で載せるため、スコア層・バッジ・注記はどれも同じ 1 つの値を読む。`factor` は未選択時の既定を兼ねるので**選択肢の最小値**（保守側）にする（整合性テストで強制）。**同じ事実の倍率を複数通貨が持つとき**（ウエル活 ×1.5 は WAON POINT の価値特性で、Vポイントは等価交換の連鎖で同倍率。#84）は `point_multiplier.group` に同じグループ id を振って ON/OFF を連動させる——マージは「グループの誰かが有効なら全員有効」（`UserDataMerge`）、設定画面のトグルは `multiplierToggleIds` でグループ全員の id を DataStore に書き、倍率改定・切り替えで片方だけ直す事故を防ぐ。同一グループの倍率定義は完全一致させる（整合性テストで強制）。自由入力を `factor_options` に足さないのは役割分担で、**発行体が定めた離散的な条件付き増価は `factor_options`、ユーザー個人のルート**（複数の共通ポイントを経由して 1.3 倍等）**による恒常的な増価は `point_value`** が担う。この 2 つは `currencyValueFactor` で積になるため、両方を持つ通貨は設定画面に掛け合わせの注記を出す（`compositeValueYen`）。**円建ての通貨**（au PAY残高等）は `value_fixed: true` を立てて設定画面のリストから外し、マージで 1pt=1.0 円に固定する（増価の概念が無く調整の余地が無いため。#58「設定の余地があるものだけを置く」と同じ判断）。`card_classes`（同一製品内のグレード差。JCB CARD W/S 等。#52）と合わせ、どのクラスか・1pt をいくらとみなすかをユーザー設定（`CardOverride.cardClass` / 通貨単位の 1pt 価値設定）で持つ。マージ時に合成するのは `(率 + クラス加算)` の**名目率**まで（店舗別レート用の `rateBonus` もマージ後カードに載る）で、**1pt 価値・倍率の円換算は判定時のスコア層**（`ExpectedValueScoring`。#13）に一本化している（§5.4 参照）
 
 パースは `PoikatsuJson.parse()` に集約。`ignoreUnknownKeys = true` + `coerceInputValues = true` により、スキーマに後からフィールドを追加しても旧アプリが壊れない（前方互換）。
+
+**記述形と解決済みの形の分離（#89）**: campaigns.json は「書きやすさ」に寄せた記述形で、`PoikatsuJson.parse()` が `domain/CampaignResolution.kt` の `resolveCampaigns()` を 1 度だけ呼んで、エンジン・UI が前提にする「1 施策 = 1 決済手段・全フィールド解決済み」の `Campaign` 列へ変換する。手順は (1) municipal の `payment_variants` を展開（`expandPaymentVariants`。id は `{施策id}_{payment_method_id}`、notes/memo は共通側の後ろに variant 分を連結、単値は variant 側が non-null なら上書き）→ (2) QR サービス既定の補完（`applyMunicipalDefaults`。`qr_payments[].municipal_defaults` を **municipal にだけ**掛け、`payment_instruction` は空なら既定、`ineligible_notes` は末尾に連結・同文は重複排除）→ (3) `operator` の導出（`deriveOperator`。帰属先のカタログ名。明示値があればそのまま）。カスタムキャンペーンの operator（`UserDataMerge.operatorFor`）も同じ `deriveOperator` を使う。展開後の `Campaign` は `paymentVariants` が常に空で、`JudgmentEngine` 以降のコードは記述形を知らない。記述形の規約（municipal は variants で書く・operator は導出値と違うときだけ・明示 null 禁止）は整合性テスト `assertCampaignAuthoringRules`（実データ・テストデータ共通）が生 JSON を走査して強制する。
 
 ## 4. データ取得戦略（data/DataRepository.kt）
 

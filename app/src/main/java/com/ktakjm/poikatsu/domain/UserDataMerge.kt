@@ -3,7 +3,6 @@ package com.ktakjm.poikatsu.domain
 import com.ktakjm.poikatsu.data.CardOverride
 import com.ktakjm.poikatsu.data.CustomCampaign
 import com.ktakjm.poikatsu.data.CustomCard
-import com.ktakjm.poikatsu.data.Attribution
 import com.ktakjm.poikatsu.data.CustomPayment
 import com.ktakjm.poikatsu.data.attribution
 import com.ktakjm.poikatsu.data.PaymentCard
@@ -145,19 +144,11 @@ fun mergeUserData(
     // カスタムキャンペーン(#7): 登録内容を Campaign(決済手段ごとに展開) / 合成 Merchant に
     // 変換して同梱データへ合流させる。以降は同梱施策と同じ経路で判定・表示される
     // (お店/地図/おトク)。operator には紐付け先決済手段の表示名を入れる
-    // (おトクタブ詳細のバッジに使われる。ブランド指定はブランド名がバッジになるため未使用)
-    val paymentNames = (
-        baseCards.map { it.id to it.cardName } +
-            customCards.map { it.id to it.name } +
-            base.qrPayments.map { it.id to it.name }
-        ).toMap()
+    // (おトクタブ詳細のバッジに使われる。ブランド指定はブランド名がバッジになるため未使用)。
+    // 導出規則は同梱施策の operator 省略時(resolveCampaigns)と同じ deriveOperator を使う
     val operatorFor = { p: CustomPayment ->
-        when (val a = p.attribution) {
-            is Attribution.Brand -> a.name
-            is Attribution.Card -> paymentNames[a.id] ?: "カスタム"
-            is Attribution.Qr -> paymentNames[a.id] ?: "カスタム"
-            else -> "カスタム"
-        }
+        deriveOperator(p.attribution, baseCards + customPaymentCards, base.qrPayments, base.pointCurrencies)
+            ?: "カスタム"
     }
     val customMerchants = buildCustomMerchants(customCampaigns)
     val convertedCustomCampaigns = customCampaigns.flatMap { it.toCampaigns(operatorFor) }

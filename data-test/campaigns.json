@@ -1,20 +1,17 @@
 {
-  "schema_version": 13,
-  "updated_at": "2026-08-21",
+  "schema_version": 14,
+  "updated_at": "2026-08-26",
   "campaigns": [
     {
       "id": "test_store_rate_program",
       "type": "card_program",
       "benefit_type": "rebate",
       "store_scope": "managed",
-      "operator": "テストJCB発行会社",
       "card_id": "test_card_jcb",
       "name": "テスト店舗別レートプログラム（お店ごとに率が異なる）",
       "display_name": "テストJCB 店舗別レート",
       "payment_instruction": "事前のポイントアップ登録をして、テストJCBカードで支払う",
       "rate_base": 10.0,
-      "period_start": null,
-      "period_end": null,
       "requires_entry": true,
       "ineligible_notes": [
         "事前のポイントアップ登録なしで支払った分は対象外(検証用)"
@@ -37,14 +34,11 @@
       "type": "card_program",
       "benefit_type": "rebate",
       "store_scope": "managed",
-      "operator": "テストカード発行会社",
       "card_id": "test_card",
       "name": "テスト常設施策（7%還元）",
       "payment_instruction": "テストカードのタッチ決済で支払う",
       "eligible_wallets": ["apple_pay", "google_pay"],
       "rate_base": 7.0,
-      "period_start": null,
-      "period_end": null,
       "cap_note": "月間ポイント上限なし。ただし1万円超はタッチ決済不可",
       "ineligible_notes": [
         "テストカード現物のタッチ決済・差し込みは対象外(スマホのタッチ決済のみ対象)",
@@ -72,7 +66,6 @@
       "type": "promotion",
       "benefit_type": "rebate",
       "store_scope": "managed",
-      "operator": "テストカード発行会社",
       "card_id": "test_card",
       "name": "テスト期間限定施策（10%・バーガーのみ15%還元）",
       "payment_instruction": "テストカードのタッチ決済で支払う",
@@ -93,7 +86,6 @@
       "type": "promotion",
       "benefit_type": "discount",
       "store_scope": "managed",
-      "operator": "テスト国際ブランド",
       "card_brand": "Visa",
       "name": "テストブランド施策（Visaで30% OFF）",
       "payment_instruction": "Visaブランドのカードで支払う",
@@ -112,7 +104,6 @@
       "type": "promotion",
       "benefit_type": "rebate",
       "store_scope": "managed",
-      "operator": "テストカード発行会社",
       "card_id": "test_card",
       "name": "テスト曜日限定施策（毎週金土20%還元）",
       "payment_instruction": "テストカードのタッチ決済で支払う",
@@ -130,7 +121,6 @@
       "type": "promotion",
       "benefit_type": "rebate",
       "store_scope": "managed",
-      "operator": "テストカード発行会社",
       "card_id": "test_card",
       "name": "テスト日付限定施策（5・20・30日は12%還元）",
       "payment_instruction": "テストカードのタッチ決済で支払う",
@@ -148,7 +138,6 @@
       "type": "promotion",
       "benefit_type": "lottery",
       "store_scope": "managed",
-      "operator": "テストカード発行会社",
       "card_id": "test_card",
       "name": "テスト抽選施策（1/4の確率で最大全額還元）",
       "payment_instruction": "テストカードのタッチ決済で支払う",
@@ -169,7 +158,6 @@
       "type": "promotion",
       "benefit_type": "discount",
       "store_scope": "managed",
-      "operator": "テストPayPay",
       "payment_method_id": "test_paypay",
       "name": "テスト即時定額クーポン（300円引き）",
       "payment_instruction": "テストPayPayのコード決済で支払う",
@@ -189,7 +177,6 @@
       "type": "promotion",
       "benefit_type": "discount",
       "store_scope": "managed",
-      "operator": "テストPayPay",
       "payment_method_id": "test_paypay",
       "name": "テスト網羅リスト限定クーポン（対象2店舗のみ20%割引）",
       "payment_instruction": "テストPayPayのコード決済で支払う",
@@ -218,7 +205,6 @@
       "type": "promotion",
       "benefit_type": "rebate",
       "store_scope": "managed",
-      "operator": "テストPayPay",
       "payment_method_id": "test_paypay",
       "name": "テスト後日定額還元（500円還元）",
       "payment_instruction": "テストPayPayのコード決済で支払う",
@@ -239,7 +225,6 @@
       "type": "promotion",
       "benefit_type": "rebate",
       "store_scope": "managed",
-      "operator": "テストPayPay",
       "payment_method_id": "test_paypay",
       "name": "テストメーカー商品の購入で30%戻ってくる（対象商品限定）",
       "display_name": "テストメーカー×ドラッグ/スーパー",
@@ -264,7 +249,6 @@
       "type": "card_program",
       "benefit_type": "discount",
       "store_scope": "managed",
-      "operator": "テストエポス発行会社",
       "card_id": "test_card_epos",
       "name": "テスト決済型割引優待（決済で最大30%OFF・ルーム料金のみ）",
       "display_name": "テストエポス 決済割引優待",
@@ -292,7 +276,6 @@
       "type": "card_program",
       "benefit_type": "discount",
       "store_scope": "managed",
-      "operator": "テストカード発行会社",
       "card_id": "test_card",
       "name": "テストカード優待（カード提示で10%OFF・提示のみ）",
       "payment_instruction": "テストカードを提示(支払いは任意の支払い方法でOK)",
@@ -310,7 +293,6 @@
       "type": "card_program",
       "benefit_type": "rebate",
       "store_scope": "managed",
-      "operator": "テストプログラム運営会社",
       "point_program_id": "test_program",
       "name": "テストプログラム提示特典（会員証提示で3%還元・提示のみ）",
       "payment_instruction": "テストプログラムの会員証を提示(支払いは任意の支払い方法でOK)",
@@ -331,7 +313,6 @@
       "type": "promotion",
       "benefit_type": "rebate",
       "store_scope": "managed",
-      "operator": "テストカード発行会社",
       "card_id": "test_card",
       "name": "テストUPCOMING施策（25%還元・常時未開始）",
       "payment_instruction": "テストカードのタッチ決済で支払う",
@@ -351,7 +332,6 @@
       "type": "promotion",
       "benefit_type": "rebate",
       "store_scope": "managed",
-      "operator": "テストカード発行会社",
       "card_id": "test_card",
       "name": "テスト終了間近施策（15%還元・残り3日警告）",
       "payment_instruction": "テストカードのタッチ決済で支払う",
@@ -363,15 +343,12 @@
         { "merchant_id": "test_combini" }
       ]
     },
-    {
+{
       "id": "test_municipal",
       "type": "municipal",
       "benefit_type": "rebate",
       "store_scope": "external",
-      "operator": "テストPayPay",
-      "payment_method_id": "test_paypay",
       "name": "テスト札幌市キャッシュレスキャンペーン（20%還元）",
-      "payment_instruction": "テストPayPay残高・テストPayPayクレジットで支払う",
       "rate_base": 20.0,
       "period_start": "2026-07-01",
       "period_end": "2026-09-30",
@@ -382,27 +359,41 @@
         "name": "札幌市",
         "prefecture": "北海道"
       },
-      "detail_url": "https://example.com/municipal-campaign",
-      "store_search_url": "https://example.com/municipal-stores",
-      "eligible_notes": [
-        "市外在住でも対象"
-      ],
+      "eligible_notes": ["市外在住でも対象"],
       "ineligible_notes": [
         "中小企業・小規模事業者の店舗以外は対象外",
         "大手チェーン店は対象外"
       ],
-      "merchant_rules": [],
-      "verified_date": "2026-07-07"
+      "memo": [
+        "テストPayPay側の対象外注記(クレジット併用不可)は qr_payments の municipal_defaults から補われる"
+      ],
+      "payment_variants": [
+        {
+          "payment_method_id": "test_paypay",
+          "payment_instruction": "テストPayPay残高・テストPayPayクレジット・テストPayPayポイントで支払う",
+          "detail_url": "https://example.com/municipal-campaign/paypay",
+          "store_search_url": "https://example.com/municipal-stores/paypay",
+          "ineligible_notes": ["テストPayPay商品券での支払いは対象外"],
+          "verified_date": "2026-07-07"
+        },
+        {
+          "payment_method_id": "test_aupay",
+          "point_currency_id": "test_balance",
+          "detail_url": "https://example.com/municipal-campaign/aupay",
+          "store_search_url": "https://example.com/municipal-stores/aupay",
+          "memo": [
+            "還元はテストauPAY残高(既定文言 payment_instruction はサービス既定を継承)"
+          ],
+          "verified_date": "2026-07-07"
+        }
+      ]
     },
-    {
-      "id": "test_municipal_hiroshima_paypay",
+{
+      "id": "test_municipal_hiroshima_a",
       "type": "municipal",
       "benefit_type": "rebate",
       "store_scope": "external",
-      "operator": "テストPayPay",
-      "payment_method_id": "test_paypay",
       "name": "テスト広島市キャッシュレスキャンペーン（テストPayPayで最大25%還元）",
-      "payment_instruction": "テストPayPay残高・テストPayPayクレジットで支払う",
       "rate_base": 25.0,
       "rate_rules": [
         { "condition": "中小企業・小規模企業の店舗", "rate": 25.0 },
@@ -418,21 +409,16 @@
         "name": "広島市",
         "prefecture": "広島県"
       },
-      "detail_url": "https://example.com/municipal-hiroshima-paypay",
-      "store_search_url": "https://example.com/municipal-hiroshima-paypay-stores",
-      "merchant_rules": [],
-      "verified_date": "2026-07-10"
+      "payment_variants": [
+        { "payment_method_id": "test_paypay", "detail_url": "https://example.com/municipal-hiroshima-paypay", "store_search_url": "https://example.com/municipal-hiroshima-paypay-stores", "verified_date": "2026-07-10" }
+      ]
     },
-    {
-      "id": "test_municipal_hiroshima_aupay",
+{
+      "id": "test_municipal_hiroshima_b",
       "type": "municipal",
       "benefit_type": "rebate",
       "store_scope": "external",
-      "operator": "テストauPAY",
-      "payment_method_id": "test_aupay",
-      "point_currency_id": "test_balance",
       "name": "テスト広島市キャッシュレスキャンペーン（テストauPAYで15%還元）",
-      "payment_instruction": "テストauPAY残高で支払う",
       "rate_base": 15.0,
       "period_start": "2026-07-01",
       "period_end": "2026-09-30",
@@ -443,21 +429,19 @@
         "name": "広島市",
         "prefecture": "広島県"
       },
-      "detail_url": "https://example.com/municipal-hiroshima-aupay",
-      "store_search_url": "https://example.com/municipal-hiroshima-aupay-stores",
       "ineligible_notes": [
         "中小企業・小規模事業者の店舗以外は対象外",
         "大手チェーン店は対象外"
       ],
-      "merchant_rules": [],
-      "verified_date": "2026-07-10"
+      "payment_variants": [
+        { "payment_method_id": "test_aupay", "point_currency_id": "test_balance", "detail_url": "https://example.com/municipal-hiroshima-aupay", "store_search_url": "https://example.com/municipal-hiroshima-aupay-stores", "verified_date": "2026-07-10" }
+      ]
     },
     {
       "id": "test_exchange_rebate",
       "type": "promotion",
       "benefit_type": "rebate",
       "store_scope": "managed",
-      "operator": "テストauPAY",
       "payment_method_id": "test_aupay",
       "name": "テストauPAYで10%のテスト交換所ポイントを還元（倍率選択の検証用）",
       "payment_instruction": "テストauPAYのコード支払いで支払う",

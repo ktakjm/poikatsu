@@ -8,12 +8,22 @@
 
 | 種別 | パターン | 例 |
 |---|---|---|
-| 自治体 | `{自治体ローマ字}_{決済id}_{YYYY_MM}`(開始月) | `yuzawa_paypay_2026_07` |
+| 自治体 | `{自治体ローマ字}_{YYYY_MM}`(開始月。決済 id は入れない=`payment_variants` で持つ) | `yuzawa_2026_07`(展開後は `yuzawa_2026_07_paypay` 等) |
 | 県全域 | `{県名ローマ字}_{愛称等}_{YYYY_MM}` | `kanagawa_kanatoku_2026_06` |
 | キャンペーン(promotion・特定チェーン) | `{決済/カードid}_{チェーン}_{内容}_{YYYY_MM}` | `rakuten_pay_matsuya_60th_2026_07` |
 | 全加盟店対象(promotion + external) | `{決済/カードid}_{内容}`(常設は年月なし。期限ありは `_{YYYY_MM}` を付ける) | `aupay_tanuki_lottery` |
 
-同一自治体×複数決済手段は決済 id 部分だけ変えて 1 施策 1 エントリ(湯沢市方式)。
+同一自治体×複数決済手段は **1 キャンペーン 1 エントリ**で、決済サービス別の違いは `payment_variants` に持つ(#89。旧「湯沢市方式」=決済 id 別に 1 エントリずつ複製、は廃止)。
+
+## 自治体施策の payment_variants(municipal 必須)
+
+municipal は施策直下に `payment_method_id` / `detail_url` / `verified_date` / `point_currency_id` / `store_search_url` を**書かず**、`payment_variants: [{ ... }]` に決済サービスごとに 1 要素(1 手段でも 1 要素)で持つ。アプリが読み込み時に「1 施策 = 1 決済手段」へ展開する(展開後 id `{施策id}_{payment_method_id}`)。スキーマの正本は data/README.md。収集時の判定:
+
+- **施策直下に書くもの**(全サービス共通のはず): name・rate_base/rate_rules・period・cap・cap_note・may_end_early・region・全サービスに共通する eligible/ineligible_notes・memo。**率・上限・期間がサービスで違うなら variant にまとめず別施策**(variant は共通項を上書きできない)
+- **variant に書くもの**: `payment_method_id`(必須)・`detail_url`(必須。そのサービスの公式ページ)・`verified_date`(必須。そのサービスのページを確認した日。サービスごとにずれてよい)・`point_currency_id`(au PAY 残高等の例外時)・`store_search_url`・**そのサービスだけに効く** `ineligible_notes` / `eligible_notes` / `memo`(共通側の後ろに連結される)
+- **書かないもの**: `payment_instruction` はサービス既定(payment_methods.json `qr_payments[].municipal_defaults.payment_instruction`)と同じなら省略し、違うときだけ variant に上書きを書く(PayPay の対象決済が「残高・クレジット・ポイント・デビット」まで広い施策は既定「残高・クレジット」より広いので上書きを書く——**既定は狭い側**にしてあり、上書き忘れが対象を過大に見せる方向に倒れないようにしている)。サービス共通規約の対象外(PayPay の他社クレジットカード併用不可・楽天ペイの請求書払い/ポイントカード払い)は `municipal_defaults.ineligible_notes` が補うので variant に書かない
+- 既定文言を増やす・変えるときは**そのサービスの自治体施策の公式ページを全件確認**してから(promotion には効かない設計。d払いの「クーポン利用分は対象外」は 3/11 件のみで既定化していない)
+- 単一手段の自治体でも `payment_variants` 1 要素で書く(整合性テストで強制)。`operator` は書かない(下記)
 
 ## display_name(多チェーン promotion と card_program)
 
@@ -31,7 +41,7 @@
 - `promotion` + `external` は `merchant_rules` を**持たせない**(空必須)。期間は任意で、両方 null なら常設(たぬきの抽選会等)としておトクタブの「常設」セクションに出る。お店/地図タブの判定には出ない「おトクタブ専用施策」(#44 で許容済み)
 - 帰属は **`card_id` / `card_brand` / `payment_method_id` のちょうど 1 つ**。QR 決済の id: `paypay` / `aupay` / `dpay` / `rakuten_pay` / `aeon_pay` / `merpay`。カード: `smcc` / `mufg`。ブランド施策(Amex 等): `card_brand`
 - メーカー×小売×決済連動キャンペーン(ドラッグストア×花王等)のうち「**ポイントカード提示でも対象**」の変種(楽天・d払いに実例)は QR サービスに帰属させ、提示でも OK の旨は `eligible_notes` に書く。**メーカー主催のレシート応募型**(決済不問)は帰属先が無いため収録しない(見送り一覧へ)
-- `operator` は施策の運営者名(表示フォールバック用。例: "PayPay"、"楽天ペイ")
+- `operator` は**書かない**(#89)。帰属先のカタログ名(`cards[].card_name` / ブランド名 / `qr_payments[].name` / `point_currencies[].name`)からアプリが導出する。導出値で困る場合だけ明示し、導出値と同じ明示は整合性テストで落ちる(現状ゼロ件)
 
 ## benefit_type と金額系フィールド
 
@@ -83,7 +93,8 @@
 - `presentation_only`: カード現物の提示のみで受けられる特典(エポス優待等)なら true。**提示要件を notes の文章だけで持たない**(フラグが最良比較からの分離・バッジ・注記を担う)。文言規則・分離ルールは「提示と決済の分離」参照
 - `usage_limit`: 回数上限(null = 無制限)。補足は `usage_limit_note`(数値と重複する文章は書かない)
 - `eligible_wallets` / `ineligible_wallets`: 公式がウォレット単位で対象/対象外を**言い切っている場合のみ**(値: `apple_pay` / `google_pay`)。未掲載 = 書かない
-- `payment_instruction`: 「◯◯で支払う」形の 1 文(既存エントリの文体に合わせる)。**必須・空文字にしない**(CI が検証。同名ブランドで対象決済手段が別物になり得るため: au PAY(QR) と au PAY カード)
+- `payment_instruction`: 「◯◯で支払う」形の 1 文(既存エントリの文体に合わせる)。**必須・空文字にしない**(CI が検証。同名ブランドで対象決済手段が別物になり得るため: au PAY(QR) と au PAY カード)。**municipal はサービス既定**(`qr_payments[].municipal_defaults`)**と同じなら書かず、違うときだけ variant に上書き**(上記「自治体施策の payment_variants」)
+- **明示 `null` を書かない**(#89)。値が無いフィールドはキーごと省く(`"store_search_url": null` 等は CI で落ちる)
 
 ## 対象/対象外(eligible_notes / ineligible_notes)と memo の線引き
 
@@ -97,8 +108,8 @@
 - `memo`(UI 非表示) — 表示フィールドに行き場の無い補足(付与時期・集計期間・還元通貨・操作のコツ等)。メンテ(Phase 1)の照合台帳を兼ねる。**対象外/のみ対象の言い切りを memo に置かない**(CI が検証。別フィールドに反映済みの総括文だけは「〜に反映済み」注記付きで置いてよい)
 - 数値・構造で表せるものは専用フィールドへ(上限 → cap 系、率内訳 → `rate_rules`、エントリー → `requires_entry`)。**数値と重複する文章を notes / memo に書かない**。上限の数値化できない但し書き(「決済サービスごとに適用」等)は `cap_note`
 - **階層の使い分け**: 施策全体に一様に効く事実は campaign 直下、店舗ごとに実態・呼び名が異なる情報は似た文言でも `merchant_rules` 側に店舗別で持つ(集約しすぎない)
-- **同一キャンペーンの決済手段バリアント**(かなトク×6 等)は eligible/ineligible_notes・cap_note を同一内容に揃える(手段固有の差分のみ追記)。複数手段バリアントのある自治体の cap_note は定型「決済サービスごとに適用」(+合算等の実質情報があれば追記)。単一手段の自治体には書かない
-  - **情報源(各決済会社ページ)の書きぶりの違いをそのまま差分にしない**。キャンペーン共通の対象外(自治体が決める店舗・商品の除外)は自治体側一次情報のリストに全バリアント統一する。差分行として残すのは (a) サービス固有機能の除外(PayPay商品券・d払いクーポン利用分・楽天の請求書払い/ポイントカード払い等)と (b) そのサービスの公式だけが言い切っていて自治体共通と断定できない事実(例: 大田市のタバコ・自販機は d払い/PayPay 側のみ記載)だけ
+- **同一キャンペーンの決済手段バリアント**(かなトク×6 等)は 1 エントリの `payment_variants` で持つ(#89)ため、キャンペーン共通の eligible/ineligible_notes・cap_note は施策直下に 1 度だけ書く。複数手段バリアントのある自治体の cap_note は定型「決済サービスごとに適用」(+合算等の実質情報があれば追記)。単一手段の自治体には書かない
+  - **情報源(各決済会社ページ)の書きぶりの違いをそのまま差分にしない**。キャンペーン共通の対象外(自治体が決める店舗・商品の除外)は自治体側一次情報のリストで施策直下に書く。variant 側の `ineligible_notes` 差分行として残すのは (a) サービス固有機能の除外のうち**既定化されていないもの**(PayPay商品券・d払いクーポン利用分・岐阜市の WAON POINT 付与対象外カード等。PayPay の他社クレジットカード併用不可・楽天ペイの請求書払い/ポイントカード払いは `municipal_defaults` が補うので書かない)と (b) そのサービスの公式だけが言い切っていて自治体共通と断定できない事実(例: 大田市のタバコ・自販機は d払い/PayPay 側のみ記載)だけ
 
 ## 期間・繰り返し
 
@@ -138,7 +149,7 @@
 
 ## メタ情報
 
-- `verified_date`: スキル実行日を入れる。ただし報告のチェックリストで「コミット前に人間が公式ページを目視確認」を必ず促す(この日付の意味は「人間が公式を見た日」)
+- `verified_date`: スキル実行日を入れる。ただし報告のチェックリストで「コミット前に人間が公式ページを目視確認」を必ず促す(この日付の意味は「人間が公式を見た日」)。municipal は `payment_variants[].verified_date`(サービスごと)に書く
 - `detail_url`: ユーザーに案内する公式ページ。楽天ペイ施策では**加盟店側 URL**を使う(楽天ドメイン URL は入れない)
 - campaigns.json 先頭の `updated_at` を実行日に更新
 

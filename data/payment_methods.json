@@ -1,6 +1,6 @@
 {
-  "schema_version": 12,
-  "updated_at": "2026-08-22",
+  "schema_version": 13,
+  "updated_at": "2026-08-26",
   "card_brands": [
     { "name": "Visa", "color": "#1A1F71" },
     { "name": "Mastercard", "color": "#EB001B" },
@@ -144,7 +144,11 @@
       ],
       "store_search_label": "PayPayアプリの「近くのおトク」で対象店舗を確認",
       "enabled_default": false,
-      "point_currency_id": "paypay_point"
+      "point_currency_id": "paypay_point",
+      "municipal_defaults": {
+        "payment_instruction": "PayPay残高・PayPayクレジットで支払う",
+        "ineligible_notes": ["クレジットカード(PayPayクレジット以外)の併用は対象外"]
+      }
     },
     {
       "id": "aupay",
@@ -155,7 +159,10 @@
       ],
       "store_search_label": "au PAYアプリで対象店舗を確認",
       "enabled_default": false,
-      "point_currency_id": "ponta"
+      "point_currency_id": "ponta",
+      "municipal_defaults": {
+        "payment_instruction": "au PAYのコード支払いで支払う"
+      }
     },
     {
       "id": "dpay",
@@ -166,7 +173,10 @@
       ],
       "store_search_label": "d払いアプリで対象店舗を確認",
       "enabled_default": false,
-      "point_currency_id": "dpoint"
+      "point_currency_id": "dpoint",
+      "municipal_defaults": {
+        "payment_instruction": "d払いのコード決済で支払う"
+      }
     },
     {
       "id": "rakuten_pay",
@@ -177,7 +187,11 @@
       ],
       "store_search_label": "楽天ペイアプリで対象店舗を確認",
       "enabled_default": false,
-      "point_currency_id": "rakuten_point"
+      "point_currency_id": "rakuten_point",
+      "municipal_defaults": {
+        "payment_instruction": "楽天ペイのコード・QR・セルフ払いで支払う",
+        "ineligible_notes": ["楽天ペイアプリ内の請求書払い・楽天ポイントカード払いは対象外"]
+      }
     },
     {
       "id": "aeon_pay",
@@ -189,7 +203,10 @@
       ],
       "store_search_label": "AEON Payアプリで対象店舗を確認",
       "enabled_default": false,
-      "point_currency_id": "aeon_pay_balance"
+      "point_currency_id": "aeon_pay_balance",
+      "municipal_defaults": {
+        "payment_instruction": "AEON Payのコード決済で支払う"
+      }
     },
     {
       "id": "merpay",
@@ -200,7 +217,10 @@
       ],
       "store_search_label": "メルカリアプリで対象店舗を確認",
       "enabled_default": false,
-      "point_currency_id": "mercari_point"
+      "point_currency_id": "mercari_point",
+      "municipal_defaults": {
+        "payment_instruction": "メルペイのコード決済で支払う"
+      }
     }
   ]
 }

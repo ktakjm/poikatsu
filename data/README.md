@@ -18,8 +18,11 @@
   - `"promotion"`: カード/QR 会社のキャンペーン。`store_scope` で 2 形(整合性テストで強制。#44):
     - `managed`(特定チェーン対象): `merchant_rules` で管理、「お店」「地図」タブにも表示。`period_start`/`period_end` と `merchant_rules` が必須(書き忘れると判定に一切出ない死にデータになるため)
     - `external`(全加盟店対象): 抽選会・全員対象キャンペーン等、チェーンを列挙できないもの。`merchant_rules` は持たせない(空必須)・期間は任意(両方 null なら常設)。**おトクタブ専用**(お店/地図タブの判定エンジンは managed のみ対象)
-  - `"municipal"`: 自治体施策(店舗データなし)。おトクタブにのみ表示(`detail_url`/`store_search_url` で公式ページへリンク)
-- `operator` — 施策の運営者(カード会社・QR 決済事業者)。バッジ表示のフォールバックに使う
+  - `"municipal"`: 自治体施策(店舗データなし)。おトクタブにのみ表示(`detail_url`/`store_search_url` で公式ページへリンク)。**帰属は `payment_variants` で持つ**(下記。施策直下に `payment_method_id` を書かない)
+- `payment_variants`(municipal 専用・必須。#89) — 1 キャンペーンを決済サービス別に複製せず、共通項(名称・率・期間・上限・region・共通の notes/memo)を施策直下に 1 度だけ書き、**サービス別に本当に違うものだけ**を `[{ payment_method_id, detail_url, verified_date, point_currency_id?, payment_instruction?, store_search_url?, eligible_notes?, ineligible_notes?, memo? }]` に持つ(1 手段でも 1 要素)。アプリは読み込み時(`resolveCampaigns`)に従来の「1 施策 = 1 決済手段」へ展開し、判定エンジン・UI は展開後しか見ない。展開後の id は **`{施策id}_{payment_method_id}`**(施策 id は `{自治体}_{YYYY_MM}`。例: `yuzawa_2026_07` → `yuzawa_2026_07_paypay`)。variant の `eligible_notes` / `ineligible_notes` / `memo` は共通側の**後ろに連結**、それ以外は variant 側が non-null なら**上書き**(`detail_url` と `verified_date` は variant 必須=整合性テスト。サービスごとに確認日がずれるため)。同一自治体でも率・上限がサービスで違うものは別施策にする(variant は共通項を上書きできない)
+  - **サービス既定の文言**(`payment_methods.json` の `qr_payments[].municipal_defaults`): 自治体キャンペーンはサービス側の共通規約で対象決済・対象外機能が決まる(PayPay の「PayPayクレジット以外のクレジットカード併用は対象外」、楽天ペイの「請求書払い・楽天ポイントカード払いは対象外」等)ため、施策側に毎回書かずサービス側に 1 度だけ持つ。展開時に `payment_instruction` は施策側が空なら既定で補い、`ineligible_notes` は施策側の末尾に既定を連結する(同文は重複排除)。**municipal にのみ適用**(promotion はキャンペーンごとに条件が違う。例: PayPay×ネイチャーラボは他社クレジットカードも対象)。施策側には既定と違う上書き・既定に無い差分行だけを書く。既定に入れる文言は**公式ページで全件確認できたものだけ**(2026-08-26 確認: PayPay 自治体 18 件すべて・楽天ペイ 8/9 件+楽天ペイ公式 FAQ「地域限定還元キャンペーン」の共通ルール。d払いの「クーポン利用分は対象外」は 11 件中 3 件にしか無いため既定にせず施策側に残す)
+- `operator` — (任意)施策の運営者。バッジ表示のフォールバック・通知の「PayPay ほか4件」・card_program 束ねタイトルに使う。**省略時は帰属先のカタログ名から導出**する(`card_id`→`cards[].card_name`、`card_brand`→ブランド名、`payment_method_id`→`qr_payments[].name`、`point_program_id`→`point_currencies[].name`。#89)。導出値で困る場合だけ明示する(明示値 == 導出値 は整合性テストで禁止。現状ゼロ件)
+- **明示 `null` を書かない**(省略 = null。#89)。`"store_search_url": null` / `"period_end": null` のような行は書かず、値が無いフィールドはキーごと省く(整合性テストが campaigns.json / payment_methods.json / merchants.json の JsonNull を検出する)。「null = 常設」のような意味は省略で表す
 - `display_name` — (任意)おトクタブのカード表示用の短いタイトル。**多チェーン promotion と card_program 用**(単一チェーン promotion は merchant 名、自治体系は region タイトルが使われるため不要。municipal には持たせない=整合性テストで検証)。`name` は公式表記の写し(メンテ時の照合キー+判定詳細の説明文)の役割を持つため、「ウエル/スギ」のような**略記の編集判断はこちらに分離**する。未指定時のフォールバック: card_program は `name`(常設プログラムは固有名で呼ぶ) → 単一チェーンは merchant 名 → 複数チェーンは「{先頭チェーン} 他Nチェーン」の自動生成。系列の 1 看板だけが対象の施策(`banner_ids` が 1 看板。例: くすりの福太郎限定クーポン)は**コード側がその看板名を出す**ので `display_name` での手当ては不要(#69)。登録規則(`{メーカー/運営}×{対象の略}` 形式・15 文字目安・率と期間は入れない。card_program は `{発行体名} {プログラム略称}`)は collect-campaigns スキルの mapping.md 参照
 - 施策の帰属は **`card_id` / `card_brand` / `payment_method_id` / `point_program_id` のちょうど 1 つ**(残りは null。整合性テストで強制):
   - `card_id` — 紐づくカード(payment_methods.json の `cards[].id`)。card_program / promotion で使う。1 カードに複数施策を紐づけられる
@@ -36,7 +39,7 @@
   - `"managed"`: `merchant_rules` で管理。「お店」「地図」タブに表示
   - `"external"`: 店舗データを持たない(自治体施策・全加盟店対象の promotion)。おトクタブにのみ表示
 - `period_start` / `period_end` — 開催期間(YYYY-MM-DD)。**両方 null は常設**(card_program と external promotion のみ許容)で、おトクタブの「常設」セクションに出る。managed promotion は両方必須(整合性テスト)
-- `payment_method_id` — QR 決済の識別子(payment_methods.json の `qr_payments[].id` と対応)。カード施策は null
+- `payment_method_id` — QR 決済の識別子(payment_methods.json の `qr_payments[].id` と対応)。カード施策は書かない。**municipal は施策直下でなく `payment_variants[].payment_method_id` に書く**(展開後の Campaign では従来どおりこのフィールドに入る)
 - `rate_base` — 定率の場合の率(%)。定額の場合は null。常設カード施策では現実的な基準還元率。`rate_rules`(段階制)がある施策では**必ずその最大値**を入れる(整合性テストで強制)
 - `rate_rules` — 店舗に紐づかない**条件別の還元率**(段階制)。`[{ "condition": "中小企業・小規模企業の店舗", "rate": 20.0 }, ...]`。managed の `merchant_rules[].rate_override`(店舗キーの上書き)と対になる、条件キーの構造。かなトク(中小20%/大手10%)のような external 施策で使う
   - **登録規則(データ収集時)**: 公式に複数の率がある施策は、全条件と率をここに列挙し、`rate_base` にはその**最大値**を入れる。単一率の施策では書かない(空/省略)。「base に入れる値の判断」を推論に委ねないための無条件規則で、`rate_base == rate_rules の最大値` を CI(整合性テスト)が検証する
@@ -58,7 +61,7 @@
   - `ineligible_wallets` に `google_pay` → 判定詳細に「Google Pay での支払いは還元対象外」警告を表示(Android ユーザーが自然に Google Pay でタッチして還元を取り逃すのを防ぐ)。このとき `apple_pay` が eligible なら「(Apple Payは対象)」を付記する(MUFG のような非対称ケース)
   - どちらにも無い → 何も出さない(`payment_instruction` の文章が担う)
   - `apple_pay` エントリは起動リンクには使わず、上記の警告付記にのみ使う。sources と同じ「検証済み事実の記録」として断定できるものだけ書く(プラットフォーム非依存の施策側の事実。Android 固有の消費はコード側に閉じる)
-- `eligible_notes` / `ineligible_notes`(施策レベル) — 施策全体に一様に効く「対象/対象外」の言い切り(`[String]`)。判定詳細・おトクタブ詳細で、店舗側(`merchant_rules[].eligible_notes`/`ineligible_notes`)と**レベル横断で連結**して「対象」(通常ロール)/「対象外」(warning 面 1 コンテナに箇条書き)の 2 セクションに表示する。線引きは**「見落とすとユーザーが損するか」**:
+- `eligible_notes` / `ineligible_notes`(施策レベル) — 施策全体に一様に効く「対象/対象外」の言い切り(`[String]`)。municipal ではサービス固有の差分行を `payment_variants[]` 側に、サービス共通規約の定型を `qr_payments[].municipal_defaults` に分け、施策直下には全サービス共通の行だけを書く(展開時に「共通 → variant → 既定」の順で連結される)。判定詳細・おトクタブ詳細で、店舗側(`merchant_rules[].eligible_notes`/`ineligible_notes`)と**レベル横断で連結**して「対象」(通常ロール)/「対象外」(warning 面 1 コンテナに箇条書き)の 2 セクションに表示する。線引きは**「見落とすとユーザーが損するか」**:
   - `ineligible_notes` = 対象外の言い切り + **対象範囲の限定**。限定は対象外リスクが伝わる形で登録する(例: 「対象店舗はキャンペーンツール掲出店」→「キャンペーンツール掲出店以外は対象外」。ただし「一部店舗のみ対象」のように公式表現がそれ自体でリスクを伝えるならそのまま使い、冗長な言い換えをしない)。参加店舗限定の記載がある施策は `store_search_url` で店舗検索へ誘導する
   - `eligible_notes` = 対象の**拡張・追加・明確化のみ**(「〜も含む」「県内在住・在勤を問わず対象」)。見落としても損しない安心情報。既定値どおりの事実(「事前エントリー不要」等)は書かない
   - 店舗ごとに実態・呼び名が異なる情報は、似た文言でも `merchant_rules` 側に店舗別で持つ(集約しすぎない)。**単一チェーン promotion のチャネル限定は施策レベルに書く**(merchant 側だとおトクタブ詳細で見えない)
@@ -70,8 +73,8 @@
   - **県全域施策**(かながわトクトクキャンペーン等)は `name` に都道府県名をそのまま入れる(例: `{ "name": "神奈川県", "prefecture": "神奈川県" }`)。`name == prefecture` が県全域のマーカー(`Region.isPrefectureWide`)で、地域フィルタ・お知らせバナーは「その県の自治体を1つでも登録していれば表示」、地図タブのピルは「地点がその県内なら表示」になる
   - 政令指定都市はマスタが市単位のため `name` は市名で入れる(例: 横浜市)。行政区名(例: 金沢区)でも登録自体は可能で、地図タブのピルはその区でのみ出るが、マスタに区が無いため登録地域との突合(バナー・地域フィルタ)は効かない(フィルタは防御的全通し=全員に表示)
 - `detail_url` — 施策の詳細ページ URL（全タイプ共通。ユーザーに「詳細はこちら」として案内する先）
-- `store_search_url` — 対象店舗検索ページ URL(PayPay 等の公式)
-- `period_start` / `period_end` — 施策期間(ISO 8601 日付)。null = 常設
+- `store_search_url` — 対象店舗検索ページ URL(PayPay 等の公式)。municipal は `payment_variants[]` 側(サービスごとに検索ページが違うため)
+- `period_start` / `period_end` — 施策期間(ISO 8601 日付)。省略 = 常設(明示 null は書かない)
 - `merchant_rules[].rate_override` — その店だけ還元率が異なる場合の上書き値(%)。非 null ならその merchant では `rate_base` の代わりに使う(自治体系の「中小20%/大手10%」、Visa 系の「基礎+特定店で追加」等)。判定と一覧の「最良特典」計算に反映され、おトクタブのサマリーは rate_base と rate_override の最大値を「最大○%」として出す。
   - **card_program の店舗別レート(#52)**: J-POINT パートナーのように 1 施策内で店舗ごとに率が異なる常設プログラムでは、**基準構成(カタログ既定クラス・1pt=既定価値)の絶対%を全ルールに収録**し(1 つでも rate_override を使うなら省略不可)、`rate_base` と発行体カタログの `effective_rate_default` を**その最大値**にする(整合性テストで強制)。判定時にアプリが `(rate_override + クラス加算) × 1pt価値` でユーザー設定(`card_classes`・通貨単位の 1pt 価値。#13)を合成する。rate_override の無い従来の card_program(SMCC/MUFG)は従来どおりユーザー実効率の単一値
   - 施策詳細の対象チェーン列挙は、rate_override の率が 2 種類以上あると**率別グルーピング**(「10%: マクドナルド・ガスト / 1.5%: セブン-イレブン」)で表示される
@@ -115,7 +118,8 @@
 - `brands` — そのカード製品で**選べるブランドの選択肢**(カタログの事実。例: 三菱UFJカードは Visa/Mastercard/JCB/Amex)。**ユーザーが実際に持っているブランドはカタログに置かず** `CardOverride.brand`(DataStore)で持つ。`brands` が単一なら自動確定、複数なら未選択(空)から設定画面で選ぶ。未選択の間は**好条件側に倒さない**: `card_brand` 施策には一致せず(特典を出さない)、`ineligible_brands` はそのカードが除外ブランドを取りうる限り除外側に倒す。加えて、ブランドが判定に効くカードは有効化時にブランド選択を必須にしている
 - `card_classes`(任意) — 同一カード製品内の**グレード差の選択肢**(#52)。`[{ id, label, rate_bonus }]`。`rate_bonus` は店舗別レート(rate_override)と実効率既定値に**加算**する率(%。例: JCB CARD W はパートナー店で S より +1pt/200円 = +0.5)。どのクラスを持っているかはユーザー設定(`CardOverride.cardClass`)で、未選択は**先頭**が既定になるため**保守側(加算の小さい方)を先頭に置く**。JCBオリジナルシリーズ(S / W)に設定
 - **設定画面の還元率行は手入力に意味があるカード(単一率プログラム=SMCC/MUFG)だけに出す**。クラスを持つカード(JCB)は率が設定からの導出値 `(effective_rate_default + rate_bonus)` の名目率(判定時にさらに稼ぐ通貨=`point_currency_id` の 1pt 価値で円換算される。#13)、店舗別レートプログラム(`rate_override`)のカード(dカード)は率が店舗ごとの収録値で決まり、どちらも設定の余地が無いため行自体を出さず、保存済みの手入力値もマージで無視する(`allowsManualRate`。#58)
-- `qr_payments` — 利用中の QR 決済サービスのカタログ。`{ id, name, brand_color, app_packages, store_search_label, enabled_default, point_currency_id }`。設定画面でチェックした QR 決済が判定エンジンのフィルタに使われる。DataStore に差分保存。`point_currency_id` はこのサービスが稼ぐ通貨(任意。rebate の払い出し通貨の既定継承元)。
+- `qr_payments` — 利用中の QR 決済サービスのカタログ。`{ id, name, brand_color, app_packages, store_search_label, enabled_default, point_currency_id, municipal_defaults }`。設定画面でチェックした QR 決済が判定エンジンのフィルタに使われる。DataStore に差分保存。`point_currency_id` はこのサービスが稼ぐ通貨(任意。rebate の払い出し通貨の既定継承元)。`name` は帰属施策の `operator` 省略時の導出元(#89)。
+  - `municipal_defaults`(任意。#89) — `{ payment_instruction, ineligible_notes }`。このサービスの**自治体施策**に共通する既定文言(サービス側の共通規約)。展開時に施策側が空/未記載のときだけ補われる(詳細は campaigns.json の `payment_variants` 参照)。**municipal にのみ適用**され promotion には効かない。文言は公式ページで全件確認できた事実だけを入れる
   - `app_packages` — そのサービスで決済できるアプリのリスト `[{ package, label }]`(優先順)。1 サービスを複数アプリが担える(AEON Pay = 単独アプリ / iAEON の 2 本立て)ため 1:N で持ち、判定詳細の起動リンクは候補全部をボタンで出す。`label` は起動先アプリの実名(サービス名と一致するとは限らない。メルペイ → メルカリ)。**パッケージ名は app の AndroidManifest `<queries>` と対で管理**(宣言が無いと Android 11+ でインストール済みでも起動 Intent が取れず Play ストア送りになる。リモート JSON で追加してもアプリ更新が要る)
 
 ### merchants.json — 系列と看板(banners)
@@ -218,9 +222,9 @@
 | `test_discount_card_program` | **決済型の即時定率割引** discount+card_program(カラオケ館相当。#59): カード `test_card_epos` の決済条件付き最大30%OFF。`rate_rules`(ルーム30%/フリータイム25%の内訳)+`product_scope`(対象料金限定)+`rate_override`。rebate 施策と混ざったとき「最大30% OFF(対象商品)」表示になり、最良比較から分離される(テストバーガーの最良が変わらない)ことを確認 | 常時安定 |
 | `test_upcoming` | **UPCOMING** 状態(常時未開始)、`requires_entry` | 常時安定 |
 | `test_ending_soon` | **残り 3 日警告**(検証日に `period_end` を手直し) | **要手直し** |
-| `test_municipal` | 自治体施策(`municipal`+`external`)、`region`(北海道札幌市=実在自治体。地域フィルタ・お知らせ表示の実機検証用)、`store_search_url`、施策レベルの `eligible_notes`/`ineligible_notes`(対象/対象外セクション+店舗検索誘導)、`per_transaction_cap`+`period_total_cap`、`may_end_early` | 常時安定 |
-| `test_municipal_hiroshima_paypay` | 同一自治体・複数決済手段の 1 本目(広島県広島市 × テストPayPay 最大25%)。自治体グルーピング(1 カードにストライプ 2 色)と `rate_rules`(段階制。中小25%/大手10%→「最大」表示+内訳)の検証用 | 常時安定 |
-| `test_municipal_hiroshima_aupay` | 同一自治体・複数決済手段の 2 本目(広島県広島市 × テストauPAY 15%) | 常時安定 |
+| `test_municipal` | 自治体施策(`municipal`+`external`)、`region`(北海道札幌市=実在自治体。地域フィルタ・お知らせ表示の実機検証用)、**`payment_variants` 2 手段のショーケース**(#89。展開後 id は `test_municipal_test_paypay` / `test_municipal_test_aupay`): 共通項の継承、variant の `payment_instruction` 上書き(テストPayPay)とサービス既定の継承(テストauPAY。`qr_payments[].municipal_defaults`)、variant 固有の `ineligible_notes` 差分行+既定注記の連結(テストPayPay)、variant 別 `detail_url`/`store_search_url`/`point_currency_id`、施策レベルの `eligible_notes`/`ineligible_notes`(対象/対象外セクション+店舗検索誘導)、`per_transaction_cap`+`period_total_cap`、`may_end_early` | 常時安定 |
+| `test_municipal_hiroshima_a` | 同一自治体・率の違う複数決済手段の 1 本目(広島県広島市 × テストPayPay 最大25%。展開後 id `test_municipal_hiroshima_a_test_paypay`)。率・上限がサービスで違うため variant にまとめず**別施策**にする例。自治体グルーピング(1 カードにストライプ 2 色)と `rate_rules`(段階制。中小25%/大手10%→「最大」表示+内訳)の検証用 | 常時安定 |
+| `test_municipal_hiroshima_b` | 同一自治体・率の違う複数決済手段の 2 本目(広島県広島市 × テストauPAY 15%。展開後 id `test_municipal_hiroshima_b_test_aupay`) | 常時安定 |
 
 #### 複数施策競合の確認
 
@@ -244,14 +248,15 @@
 
 - `data/` のスキーマ変更時は `data-test/` も同時に更新する(同一コミット)
 - `data/municipalities.json` を再生成したら `data-test/municipalities.json` にも同じものをコピーする(内容は常に同一)
-- CI の整合性テスト(`TestDataIntegrityTest`)がパース成功・参照切れ・フィールド排他を検証する
+- CI の整合性テスト(`TestDataIntegrityTest`)がパース成功・参照切れ・フィールド排他・記述形の規約(municipal の `payment_variants`・`operator` 省略・明示 null 不在)を検証する
 - 日付依存パターンは 2 種類: 常時安定(期間を極端な未来/過去に設定)と検証時要手直し(残り 3 日警告等)。前者を基本とする
 
 ## 更新ルール
 
 - 月 1 回、`sources` の公式 URL を確認して `verified_date` を更新する。
 - 施策の改定があったら率・店舗リストを直し、`updated_at` を更新する。
-- 整合性チェック: merchant_id / banner_ids の参照切れ・照合キー(name/reading/aliases/banners)の衝突がないこと(`./gradlew :app:testDebugUnitTest` の実データテストが検証する)。
+- 整合性チェック: merchant_id / banner_ids の参照切れ・照合キー(name/reading/aliases/banners)の衝突がないこと、municipal が `payment_variants` で書かれていること、`operator` が導出値と同じなら書かれていないこと、明示 `null` が無いこと(`./gradlew :app:testDebugUnitTest` の実データテストが検証する)。
+- 自治体施策の改定(率・期間・上限)は施策直下を 1 箇所直せば全サービスに効く。サービス別の確認は `payment_variants[].verified_date` を個別に更新する。
 
 ### 常設 card_program の収録基準(#58)
 

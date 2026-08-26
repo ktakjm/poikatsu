@@ -1,5 +1,6 @@
 package com.ktakjm.poikatsu.data
 
+import com.ktakjm.poikatsu.domain.resolveCampaigns
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
@@ -285,11 +286,41 @@ sealed interface Attribution {
     data class Program(val id: String) : Attribution
 }
 
+/**
+ * 自治体施策(municipal)の決済手段バリアント(#89)。1 キャンペーンを決済サービス別に複製せず、
+ * 共通項(名称・率・期間・上限・region・共通 notes)を Campaign 直下に 1 度だけ書き、サービス別に
+ * 本当に違うものだけをここに持つ。読み込み時([resolveCampaigns])に従来の「1 施策 = 1 決済手段」
+ * の Campaign へ展開され(id は `{施策id}_{payment_method_id}`)、判定エンジン・UI は展開後しか見ない。
+ * notes / memo は共通側への**追記**、payment_instruction / detail_url / store_search_url /
+ * point_currency_id / verified_date は**上書き**(null なら共通側の値)。
+ */
+@Serializable
+data class PaymentVariant(
+    @SerialName("payment_method_id") val paymentMethodId: String,
+    @SerialName("detail_url") val detailUrl: String? = null,
+    @SerialName("store_search_url") val storeSearchUrl: String? = null,
+    /** このサービスのページを確認した日。サービスごとに確認日がずれるため variant 側に持つ */
+    @SerialName("verified_date") val verifiedDate: String = "",
+    @SerialName("point_currency_id") val pointCurrencyId: String? = null,
+    /** サービス既定(qr_payments[].municipal_defaults)と違うときだけ書く上書き */
+    @SerialName("payment_instruction") val paymentInstruction: String? = null,
+    @SerialName("eligible_notes") val eligibleNotes: List<String> = emptyList(),
+    /** このサービスだけに効く対象外(サービス既定にも共通側にも無い差分行のみ) */
+    @SerialName("ineligible_notes") val ineligibleNotes: List<String> = emptyList(),
+    val memo: List<String> = emptyList(),
+)
+
 @Serializable
 data class Campaign(
     val id: String,
-    /** 施策の運営者(カード会社・QR決済事業者・自治体キャンペーンの決済事業者)。バッジ表示のフォールバックに使う */
-    val operator: String,
+    /**
+     * 施策の運営者(カード会社・QR決済事業者・自治体キャンペーンの決済事業者)。バッジ表示の
+     * フォールバック・通知の「PayPay ほか4件」・card_program 束ねタイトルに使う。JSON では任意で、
+     * 省略時は帰属先のカタログ名(cards.card_name / card_brand / qr_payments.name /
+     * point_currencies.name)から読み込み時に導出する([resolveCampaigns]。#89)。導出値で困る場合
+     * だけ明示する(明示値 == 導出値 は整合性テストで禁止)
+     */
+    val operator: String = "",
     /** 紐づくカード(payment_methods.json の cards.id)。card_program / promotion で使い、card_brand / payment_method_id と排他 */
     @SerialName("card_id") val cardId: String? = null,
     /** ブランド施策(イシュアー不問。例: Amex 30% OFF)の対象ブランド。card_id / payment_method_id / point_program_id と排他 */
@@ -317,6 +348,10 @@ data class Campaign(
      * 登録規則(率・期間は入れない等)は collect-campaigns スキルの mapping.md 参照。
      */
     @SerialName("display_name") val displayName: String? = null,
+    /**
+     * 「◯◯で支払う」形の 1 文。municipal は省略可で、空なら帰属 QR サービスの
+     * municipal_defaults.payment_instruction を読み込み時に補う(#89)。それ以外は必須(整合性テスト)
+     */
     @SerialName("payment_instruction") val paymentInstruction: String = "",
     @SerialName("rate_base") val rateBase: Double? = null,
     /** 条件別の還元率(段階制)。非空なら rate_base はこの最大値で、表示は「最大○%」+内訳になる */
@@ -351,6 +386,12 @@ data class Campaign(
     /** 特典の型: "rebate"(後日還元) | "discount"(即時割引) | "lottery"(抽選。最良特典比較には載せない) */
     @SerialName("benefit_type") val benefitType: String = "rebate",
     @SerialName("payment_method_id") val paymentMethodId: String? = null,
+    /**
+     * municipal の決済手段バリアント(#89)。JSON の municipal は必ずこれで帰属を持ち(1 手段でも
+     * 1 要素)、施策直下に payment_method_id を書かない。読み込み時に展開されるため、展開後の
+     * Campaign(エンジン・UI が見るもの)では常に空
+     */
+    @SerialName("payment_variants") val paymentVariants: List<PaymentVariant> = emptyList(),
     @SerialName("per_transaction_cap") val perTransactionCap: Int? = null,
     @SerialName("period_total_cap") val periodTotalCap: Int? = null,
     @SerialName("cap_note") val capNote: String? = null,
@@ -573,6 +614,21 @@ data class QrPayment(
     @SerialName("enabled_default") val enabledDefault: Boolean = false,
     /** このサービスが稼ぐポイント通貨(point_currencies.id)。null = 通貨マスタ未収録 */
     @SerialName("point_currency_id") val pointCurrencyId: String? = null,
+    /**
+     * 自治体施策でのこのサービスの既定文言(#89)。自治体キャンペーンはサービス側の共通規約で
+     * 対象決済・対象外機能が決まる(PayPay の他社クレジットカード併用不可、楽天ペイの請求書払い・
+     * ポイントカード払い対象外等)ため、施策側に毎回書かずここに 1 度だけ持つ。**municipal にのみ
+     * 適用**する(promotion はキャンペーンごとに条件が異なる。例: PayPay×ネイチャーラボは他社
+     * クレジットカードも対象)。null = 既定なし
+     */
+    @SerialName("municipal_defaults") val municipalDefaults: MunicipalDefaults? = null,
+)
+
+/** [QrPayment.municipalDefaults] の中身。施策側は空/未記載のときだけ補われ、ineligible_notes は末尾に連結(同文は重複排除) */
+@Serializable
+data class MunicipalDefaults(
+    @SerialName("payment_instruction") val paymentInstruction: String = "",
+    @SerialName("ineligible_notes") val ineligibleNotes: List<String> = emptyList(),
 )
 
 /** 決済手段カタログ(payment_methods.json)。カードと QR 決済のマスタで、ユーザー差分は DataStore に持つ */
@@ -691,9 +747,17 @@ object PoikatsuJson {
         val merchantsFile = json.decodeFromString<MerchantsFile>(merchantsJson)
         val campaignsFile = json.decodeFromString<CampaignsFile>(campaignsJson)
         val paymentMethodsFile = json.decodeFromString<PaymentMethodsFile>(paymentMethodsJson)
+        // 施策は JSON の記述形(municipal の payment_variants・operator 省略・municipal_defaults)から
+        // エンジン・UI が見る「1 施策 = 1 決済手段・全フィールド解決済み」の形へここで展開する(#89)
+        val campaigns = resolveCampaigns(
+            campaigns = campaignsFile.campaigns,
+            cards = paymentMethodsFile.cards,
+            qrPayments = paymentMethodsFile.qrPayments,
+            pointCurrencies = paymentMethodsFile.pointCurrencies,
+        )
         return PoikatsuData(
             merchants = merchantsFile.merchants,
-            campaigns = campaignsFile.campaigns,
+            campaigns = campaigns,
             cards = paymentMethodsFile.cards,
             cardBrands = paymentMethodsFile.cardBrands,
             qrPayments = paymentMethodsFile.qrPayments,

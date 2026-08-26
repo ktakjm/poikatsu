@@ -1776,14 +1776,113 @@ class JudgmentEngineTest {
  * リポジトリ直下 data/ の実データを読み込み、パース成功・構造整合性・
  * 施策固有の振る舞いを検証する。ロジック自体の網羅は JudgmentEngineTest で行う。
  */
+/** JSON 文字列中の明示 null を再帰的に探す(#89 の「明示 null を書かない」規約の検証用) */
+private fun findJsonNulls(element: kotlinx.serialization.json.JsonElement, path: String, out: MutableList<String>) {
+    when (element) {
+        is kotlinx.serialization.json.JsonNull -> out.add(path)
+        is kotlinx.serialization.json.JsonObject -> element.forEach { (k, v) -> findJsonNulls(v, "$path.$k", out) }
+        is kotlinx.serialization.json.JsonArray -> element.forEachIndexed { i, v -> findJsonNulls(v, "$path[$i]", out) }
+        else -> Unit
+    }
+}
+
+private fun jsonNullPaths(raw: String): List<String> =
+    mutableListOf<String>().also { findJsonNulls(kotlinx.serialization.json.Json.parseToJsonElement(raw), "$", it) }
+
+/** campaigns.json の生の施策オブジェクト(展開前の記述形。payment_variants / operator 省略の検証用) */
+private fun rawCampaignObjects(campaignsRaw: String): List<kotlinx.serialization.json.JsonObject> =
+    kotlinx.serialization.json.Json.parseToJsonElement(campaignsRaw).jsonObject.getValue("campaigns").jsonArray
+        .map { it.jsonObject }
+
+private fun kotlinx.serialization.json.JsonObject.str(key: String): String? =
+    (this[key] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content
+
+/**
+ * #89 の記述形の規約(実データ・テストデータ共通):
+ * - municipal は payment_variants(1 件以上)で帰属を持ち、施策直下に手段固有フィールドを書かない
+ * - variant の payment_method_id はキャンペーン内で一意・カタログに存在し、detail_url / verified_date を持つ
+ * - municipal 以外は payment_variants を持たない
+ * - operator は導出値(帰属先のカタログ名)と違うときだけ明示する
+ * - 明示 null を書かない(省略 = null)
+ * - 展開後の id は一意で、operator / payment_instruction は全件解決されている
+ */
+private fun assertCampaignAuthoringRules(
+    label: String,
+    campaignsRaw: String,
+    paymentMethodsRaw: String,
+    merchantsRaw: String,
+    data: PoikatsuData,
+) {
+    val qrIds = data.qrPayments.map { it.id }.toSet()
+    val variantOnlyKeys = listOf("payment_method_id", "detail_url", "store_search_url", "verified_date", "point_currency_id")
+    rawCampaignObjects(campaignsRaw).forEach { c ->
+        val id = c.str("id")
+        val variants = c["payment_variants"]?.jsonArray
+        if (c.str("type") == "municipal") {
+            assertTrue("$label $id: municipal は payment_variants を 1 件以上持つ", !variants.isNullOrEmpty())
+            variantOnlyKeys.forEach { k ->
+                assertFalse("$label $id: municipal の施策直下に $k を書かない(payment_variants 側に持つ)", c.containsKey(k))
+            }
+            val pms = variants!!.map { v ->
+                val vo = v.jsonObject
+                val pm = vo.str("payment_method_id")
+                assertTrue("$label $id: variant の payment_method_id がカタログに無い($pm)", pm in qrIds)
+                assertTrue("$label $id/$pm: variant は detail_url を持つ", !vo.str("detail_url").isNullOrBlank())
+                assertTrue("$label $id/$pm: variant は verified_date を持つ", !vo.str("verified_date").isNullOrBlank())
+                pm
+            }
+            assertEquals("$label $id: payment_variants の決済手段が重複", pms.size, pms.distinct().size)
+        } else {
+            assertFalse("$label $id: municipal 以外は payment_variants を持たない", c.containsKey("payment_variants"))
+        }
+        c.str("operator")?.let { explicit ->
+            val resolved = data.campaigns.first { it.id == id || it.id.startsWith("${id}_") }
+            val derived = com.ktakjm.poikatsu.domain.deriveOperator(
+                resolved.attribution, data.cards, data.qrPayments, data.pointCurrencies,
+            )
+            assertTrue("$label $id: operator「$explicit」は導出値と同じなので書かない(例外だけ明示する)", explicit != derived)
+        }
+    }
+    listOf("campaigns.json" to campaignsRaw, "payment_methods.json" to paymentMethodsRaw, "merchants.json" to merchantsRaw)
+        .forEach { (name, raw) ->
+            assertEquals("$label $name: 明示 null を書かない(省略 = null)", emptyList<String>(), jsonNullPaths(raw))
+        }
+    val ids = data.campaigns.map { it.id }
+    assertEquals("$label: 展開後の施策 id が重複", ids.size, ids.distinct().size)
+    data.campaigns.forEach { c ->
+        assertTrue("$label ${c.id}: operator が解決されていない", c.operator.isNotBlank())
+        assertTrue("$label ${c.id}: 展開後に payment_variants が残っている", c.paymentVariants.isEmpty())
+    }
+}
+
 class JudgmentEngineRealDataTest {
 
     private val campaignsRaw = File("../data/campaigns.json").readText()
+    private val merchantsRaw = File("../data/merchants.json").readText()
+    private val paymentMethodsRaw = File("../data/payment_methods.json").readText()
     private val data = PoikatsuJson.parse(
-        merchantsJson = File("../data/merchants.json").readText(),
+        merchantsJson = merchantsRaw,
         campaignsJson = campaignsRaw,
-        paymentMethodsJson = File("../data/payment_methods.json").readText(),
+        paymentMethodsJson = paymentMethodsRaw,
     )
+
+    @Test
+    fun `実データ_記述形の規約_payment_variants_operator省略_null不在`() {
+        assertCampaignAuthoringRules("実データ", campaignsRaw, paymentMethodsRaw, merchantsRaw, data)
+    }
+
+    @Test
+    fun `実データ_自治体施策はサービス既定の文言が補われている`() {
+        // 既定を持つサービス(PayPay・楽天ペイ)の自治体施策は、施策側に書かなくても既定注記を持つ
+        val municipal = data.campaigns.filter { it.campaignType == CampaignType.MUNICIPAL }
+        assertTrue(municipal.isNotEmpty())
+        municipal.forEach { c ->
+            val defaults = data.qrPayments.first { it.id == c.paymentMethodId }.municipalDefaults
+            defaults?.ineligibleNotes?.forEach { note ->
+                assertTrue("${c.id}: 既定注記「$note」が展開後に無い", note in c.ineligibleNotes)
+            }
+        }
+    }
     private val engine = JudgmentEngine(data)
     private val today = LocalDate.of(2026, 6, 28)
 
@@ -2576,11 +2675,50 @@ class JudgmentEngineRealDataTest {
 class TestDataIntegrityTest {
 
     private val campaignsRaw = File("../data-test/campaigns.json").readText()
+    private val merchantsRaw = File("../data-test/merchants.json").readText()
+    private val paymentMethodsRaw = File("../data-test/payment_methods.json").readText()
     private val data = PoikatsuJson.parse(
-        merchantsJson = File("../data-test/merchants.json").readText(),
+        merchantsJson = merchantsRaw,
         campaignsJson = campaignsRaw,
-        paymentMethodsJson = File("../data-test/payment_methods.json").readText(),
+        paymentMethodsJson = paymentMethodsRaw,
     )
+
+    @Test
+    fun `テストデータ_記述形の規約_payment_variants_operator省略_null不在`() {
+        assertCampaignAuthoringRules("テストデータ", campaignsRaw, paymentMethodsRaw, merchantsRaw, data)
+    }
+
+    /**
+     * 2 手段の payment_variants ショーケース(#89): 共通項の継承・サービス既定の補完(payment_instruction
+     * は空なら既定、ineligible_notes は末尾に連結)・variant 側の上書きが展開後の Campaign に出ること。
+     */
+    @Test
+    fun `テストデータ_payment_variantsが2手段に展開され既定と上書きが効く`() {
+        val byId = data.campaigns.associateBy { it.id }
+        val paypay = byId.getValue("test_municipal_test_paypay")
+        val aupay = byId.getValue("test_municipal_test_aupay")
+        assertEquals(paypay.name, aupay.name)
+        assertEquals(paypay.rateBase, aupay.rateBase)
+        assertEquals("test_paypay", paypay.paymentMethodId)
+        assertEquals("test_aupay", aupay.paymentMethodId)
+        // 上書き: PayPay 側は施策固有の文言、au PAY 側はサービス既定を継承
+        assertEquals("テストPayPay残高・テストPayPayクレジット・テストPayPayポイントで支払う", paypay.paymentInstruction)
+        assertEquals("テストauPAY残高で支払う", aupay.paymentInstruction)
+        // 連結: 共通 notes → variant 差分 → サービス既定
+        assertEquals(
+            listOf(
+                "中小企業・小規模事業者の店舗以外は対象外",
+                "大手チェーン店は対象外",
+                "テストPayPay商品券での支払いは対象外",
+                "テストPayPayクレジット以外のクレジットカードの併用は対象外",
+            ),
+            paypay.ineligibleNotes,
+        )
+        assertEquals(listOf("中小企業・小規模事業者の店舗以外は対象外", "大手チェーン店は対象外"), aupay.ineligibleNotes)
+        assertEquals("test_balance", aupay.pointCurrencyId)
+        assertEquals("テストPayPay", paypay.operator)
+        assertEquals("テストauPAY", aupay.operator)
+    }
 
     @Test
     fun `テストデータ_パースに成功する`() {
@@ -2624,7 +2762,7 @@ class TestDataIntegrityTest {
         val qr = data.qrPayments.first { it.id == "test_aupay" }
         val byId = data.campaigns.associateBy { it.id }
         val exchange = byId.getValue("test_exchange_rebate")
-        val balance = byId.getValue("test_municipal_hiroshima_aupay")
+        val balance = byId.getValue("test_municipal_hiroshima_b_test_aupay")
 
         assertEquals(15.0, effectiveValueRate(balance.rateBase, payoutCurrency(balance, currencies, null, qr))!!, 1e-9)
         assertEquals(15.0, effectiveValueRate(exchange.rateBase, payoutCurrency(exchange, currencies, null, qr))!!, 1e-9)
