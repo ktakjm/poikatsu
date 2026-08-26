@@ -1687,7 +1687,7 @@
       "name": "千葉県キャッシュレス決済キャンペーン 第3弾（最大10%戻ってくる）",
       "rate_base": 10.0,
       "period_start": "2026-08-07",
-      "period_end": "2026-08-30",
+      "period_end": "2026-08-27",
       "per_transaction_cap": 3000,
       "period_total_cap": 3000,
       "cap_note": "決済サービスごとに適用",
@@ -1700,6 +1700,9 @@
       "ineligible_notes": [
         "コンビニ・行政機関・金融機関・保険会社・医療機関・風俗店等は対象外店舗",
         "公共料金・たばこ・金券類・宝くじ・旅行券・インターネット購入・自動販売機は対象外"
+      ],
+      "memo": [
+        "県公式特設サイト(chibaken-cashless.jp)が2026-08-21告知で還元額上限到達見込みのため2026-08-27 23:59に早期終了(全決済サービス共通)。当初期間は8/7〜8/30。2026-08-26確認"
       ],
       "payment_variants": [
         {
@@ -2272,7 +2275,13 @@
         "専用キャンペーンページが公開されたら detail_url を差し替える"
       ],
       "payment_variants": [
-        { "payment_method_id": "paypay", "payment_instruction": "PayPayのコード支払いで支払う", "detail_url": "https://paypay.ne.jp/notice/20260807/cp-jichitai/", "verified_date": "2026-08-09" }
+        {
+          "payment_method_id": "paypay",
+          "payment_instruction": "PayPay残高・PayPayクレジット・PayPay商品券で支払う",
+          "detail_url": "https://paypay.ne.jp/notice/20260807/cp-jichitai/",
+          "memo": ["PayPayお知らせページ(2026-08-07付)で対象は残高・PayPayクレジット・PayPay商品券と明記(他自治体と異なりPayPay商品券が対象)。専用ページ公開後に照合"],
+          "verified_date": "2026-08-09"
+        }
       ]
     }
   ]
