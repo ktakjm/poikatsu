@@ -1,5 +1,6 @@
 package com.ktakjm.poikatsu.domain
 
+import com.ktakjm.poikatsu.data.AppSettings
 import com.ktakjm.poikatsu.data.CardOverride
 import com.ktakjm.poikatsu.data.CustomCampaign
 import com.ktakjm.poikatsu.data.CustomCard
@@ -41,6 +42,21 @@ fun multiplierToggleIds(currencies: List<PointCurrency>, currencyId: String): Se
         .map { it.id }
         .toSet()
 }
+
+/**
+ * ユーザー設定([AppSettings])からマージに必要な項目を取り出して [mergeUserData] に渡す。
+ * アプリ本体(MainViewModel.rebuild)と通知ジョブ(CampaignNotificationWorker)が同じ引数の組み合わせで呼ぶための入口
+ */
+fun mergeUserData(base: PoikatsuData, settings: AppSettings): MergedUserData = mergeUserData(
+    base = base,
+    cardOverrides = settings.cardOverrides,
+    ownedBrands = settings.ownedBrands,
+    customCards = settings.customCards,
+    customCampaigns = settings.activeCustomCampaigns,
+    enabledPointMultipliers = settings.enabledPointMultipliers,
+    pointCurrencyValues = settings.pointCurrencyValues,
+    pointMultiplierFactors = settings.pointMultiplierFactors,
+)
 
 fun mergeUserData(
     base: PoikatsuData,

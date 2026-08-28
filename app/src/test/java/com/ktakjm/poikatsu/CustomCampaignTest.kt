@@ -217,16 +217,6 @@ class CustomCampaignTest {
     }
 
     @Test
-    fun `旧スキーマ(単一決済フィールド)は normalized で payments へ折り畳まれる`() {
-        val legacy = CustomCampaign(id = "custom:old", name = "旧形式", cardId = "smcc").normalized()
-        assertEquals(listOf(CustomPayment(cardId = "smcc")), legacy.payments)
-        assertNull(legacy.cardId)
-        // 新形式はそのまま
-        val current = custom()
-        assertEquals(current, current.normalized())
-    }
-
-    @Test
     fun `同じ店名は正規化して1つの合成 Merchant に集約される`() {
         val merchants = buildCustomMerchants(
             listOf(

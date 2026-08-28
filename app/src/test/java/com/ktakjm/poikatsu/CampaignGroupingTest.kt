@@ -1,7 +1,6 @@
 package com.ktakjm.poikatsu
 
 import com.ktakjm.poikatsu.data.Campaign
-import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.domain.campaignGroupKey
 import com.ktakjm.poikatsu.domain.campaignsInGroup
 import com.ktakjm.poikatsu.domain.isCardProgramBundle
@@ -9,7 +8,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /**
  * おトクタブ一覧・通知で共有するグルーピングキー(campaignGroupKey)を検証する。
@@ -107,11 +105,7 @@ class CampaignGroupingTest {
 /** 実データ(data/campaigns.json)でのグルーピングを検証する */
 class CampaignGroupingRealDataTest {
 
-    private val data = PoikatsuJson.parse(
-        merchantsJson = File("../data/merchants.json").readText(),
-        campaignsJson = File("../data/campaigns.json").readText(),
-        paymentMethodsJson = File("../data/payment_methods.json").readText(),
-    )
+    private val data = RealData.production.data
 
     @Test
     fun `実データ_エポスの常設5施策は1グループに束なる`() {

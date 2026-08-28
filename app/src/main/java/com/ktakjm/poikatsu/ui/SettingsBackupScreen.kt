@@ -98,7 +98,7 @@ internal fun BackupSettingsPage(
         )
         // 自動バックアップとの関係の説明。選べる項目ではないので ListItem にせず、
         // 通知サブページと同じく末尾の説明段落として出す
-        SettingsSectionHeader("自動バックアップとの関係")
+        SectionHeader("自動バックアップとの関係")
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),

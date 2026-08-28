@@ -111,6 +111,18 @@ class DataRepositoryTest {
         assertEquals(DataSource.BUNDLED, repo.loadLocal().source)
     }
 
+    // 新しいアプリ向けに schema_version を上げたデータは、旧アプリでは知らないキーが ignoreUnknownKeys で
+    // 黙って落ちて壊れた判定になり得る。パースを通さずキャッシュにも残さない(同梱/既存キャッシュで動き続ける)
+    @Test
+    fun `対応版より新しい schema_version のリモートデータはキャッシュせず null`() {
+        val repo = repository { name ->
+            assetTexts.getValue(name).replace("\"schema_version\": 1", "\"schema_version\": 999")
+        }
+        assertNull(repo.refresh())
+        assertFalse(File(tempFolder.root, "remote_data/${DataRepository.CAMPAIGNS}").exists())
+        assertEquals(DataSource.BUNDLED, repo.loadLocal().source)
+    }
+
     @Test
     fun `同梱直読はキャッシュがあっても assets を読む`() {
         // リモート取得成功でキャッシュを作る(updated_at = 2099-01-01)

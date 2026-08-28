@@ -53,6 +53,10 @@ import com.ktakjm.poikatsu.domain.campaignType
 import com.ktakjm.poikatsu.domain.cardProgramBundleSubtitle
 import com.ktakjm.poikatsu.domain.isCardProgramBundle
 import com.ktakjm.poikatsu.domain.customCampaignBaseId
+import com.ktakjm.poikatsu.domain.daysRemaining
+import com.ktakjm.poikatsu.domain.daysUntilStart
+import com.ktakjm.poikatsu.domain.formatPeriodLabel
+import com.ktakjm.poikatsu.domain.isEndingSoon
 import com.ktakjm.poikatsu.domain.isCustom
 import com.ktakjm.poikatsu.domain.isTargetDay
 import com.ktakjm.poikatsu.domain.isTimeLimited
@@ -63,7 +67,6 @@ import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningColor
 import com.ktakjm.poikatsu.ui.theme.warningContainerColor
 import java.time.LocalDate
-import java.time.temporal.ChronoUnit
 
 // ==================== 一覧画面 ====================
 
@@ -307,7 +310,7 @@ private fun CampaignSummaryCard(
     val latestEnd = allEnds.maxOrNull()
     // 常設(期間限定でない)グループは「常設」セクションの見出しが期間の説明を兼ねるため、
     // 日付が一切無ければ期間行を出さない(「終了日未定」は may_end_early=期間限定側の表現)
-    val periodLabel = buildPeriodLabel(earliestStart, latestEnd)
+    val periodLabel = formatPeriodLabel(earliestStart, latestEnd, openEnded = hasTimeLimited)
         .takeUnless { !hasTimeLimited && earliestStart == null && latestEnd == null }
     val daysInfo = daysInfo(status, today, earliestStart, latestEnd)
 
@@ -608,16 +611,6 @@ private fun TargetChainSection(
 
 // ==================== 共通ヘルパー ====================
 
-/** 一覧カードの期間ラベル。開始・終了とも無ければ「終了日未定」(「〜」だけの表示にしない) */
-private fun buildPeriodLabel(earliestStart: LocalDate?, latestEnd: LocalDate?): String {
-    if (earliestStart == null && latestEnd == null) return "終了日未定"
-    return buildString {
-        if (earliestStart != null) append(formatPeriodDate(earliestStart))
-        append("〜")
-        if (latestEnd != null) append(formatPeriodDate(latestEnd))
-    }
-}
-
 /**
  * recurrence 施策のサマリー表示(「対象日: 毎週金・土曜 | 今日は対象日」等)。
  * グループ内に recurrence 施策が無い、または開催前なら null。Boolean は「今日が対象日」か。
@@ -639,16 +632,14 @@ private fun recurrenceInfo(
     }
 }
 
+/**
+ * 残り日数/開始までの日数の表示(グループの最遅終了・最早開始を基準。判定カードの「残りN日」は
+ * 施策単位なので複数施策グループでは値が異なり得る)。Boolean は警告色にするか(終了間近)
+ */
 private fun daysInfo(status: CampaignStatus, today: LocalDate, earliestStart: LocalDate?, latestEnd: LocalDate?): Pair<String, Boolean>? =
     when (status) {
-        CampaignStatus.ACTIVE -> latestEnd?.let { end ->
-            val days = ChronoUnit.DAYS.between(today, end).toInt()
-            if (days >= 0) "残り${days}日" to (days <= 3) else null
-        }
-        CampaignStatus.UPCOMING -> earliestStart?.let { start ->
-            val days = ChronoUnit.DAYS.between(today, start).toInt()
-            if (days > 0) "あと${days}日で開始" to false else null
-        }
+        CampaignStatus.ACTIVE -> daysRemaining(latestEnd, today)?.let { days -> "残り${days}日" to isEndingSoon(days) }
+        CampaignStatus.UPCOMING -> daysUntilStart(earliestStart, today)?.let { days -> "あと${days}日で開始" to false }
         else -> null
     }
 

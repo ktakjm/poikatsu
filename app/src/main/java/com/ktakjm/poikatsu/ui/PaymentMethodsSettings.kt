@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,14 +22,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -41,10 +37,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +52,8 @@ import com.ktakjm.poikatsu.domain.trimRate
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningContainerColor
 import java.time.LocalDate
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /**
  * お支払い方法サブページ(#47)。マイカード / 国際ブランド / コード決済 / ポイントの 4 セクションを
@@ -99,7 +95,7 @@ internal fun PaymentMethodsSettingsPage(
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         // --- マイカード ---
-        SettingsSectionHeader("マイカード")
+        SectionHeader("マイカード")
         Text(
             "持っているカードにチェックを入れてください。",
             style = MaterialTheme.typography.bodySmall,
@@ -160,7 +156,7 @@ internal fun PaymentMethodsSettingsPage(
 
         // --- 国際ブランド(イシュアー不問のブランド施策向け。事前登録できるよう常時出す) ---
         if (brands.isNotEmpty()) {
-            SettingsSectionHeader("国際ブランド")
+            SectionHeader("国際ブランド")
             Text(
                 "マイカード以外で持っているカードの国際ブランドにチェックを入れてください。",
                 style = MaterialTheme.typography.bodySmall,
@@ -185,7 +181,7 @@ internal fun PaymentMethodsSettingsPage(
         }
 
         // --- コード決済 ---
-        SettingsSectionHeader("コード決済")
+        SectionHeader("コード決済")
         if (qrPayments.isEmpty()) {
             Text(
                 "利用可能なコード決済がありません",
@@ -217,7 +213,7 @@ internal fun PaymentMethodsSettingsPage(
 
         // --- ポイント(#39: 通貨単位の会員登録・ポイント倍率) ---
         if (pointCurrencies.isNotEmpty()) {
-            SettingsSectionHeader("ポイント")
+            SectionHeader("ポイント")
             Text(
                 "会員になっているポイントにチェックを入れてください。カード提示型の特典の表示に使われます。" +
                     "1ptの価値を設定すると、判定が実質還元率で比較されます。",
@@ -474,32 +470,10 @@ private fun normalizeHexColor(text: String): String? {
     return if (digits.matches(Regex("[0-9a-fA-F]{6}"))) "#${digits.uppercase()}" else null
 }
 
-/** カスタムカードの識別色スウォッチ(未選択はデフォルト色)。 */
+/** カスタムカードの識別色スウォッチ(leading 用)。未選択はデフォルト色で必ず描く(NameWithColorDot とは違い省かない) */
 @Composable
 private fun CustomCardColorDot(color: String?) {
-    Box(
-        Modifier
-            .size(24.dp)
-            .clip(CircleShape)
-            .background(parseBrandColor(color ?: CustomCard.DEFAULT_COLOR) ?: Color.Gray),
-    )
-}
-
-/**
- * 名前の左に発行体の識別色のドットを添えた headline。チェックボックス付きの行(カード・
- * ブランド・QR 決済)は leading が埋まっているため、名前側に色を併記する。
- * サイズはカスタムカード行の leading ドット([CustomCardColorDot])と同じ 24dp に揃える。
- * 色未定義(null)の項目はドットを出さない(グレー等で埋めると誤った識別色に見えるため)。
- */
-@Composable
-private fun NameWithColorDot(name: String, color: String?) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        parseBrandColor(color)?.let { parsed ->
-            Box(Modifier.size(24.dp).clip(CircleShape).background(parsed))
-            Spacer(Modifier.width(8.dp))
-        }
-        Text(name)
-    }
+    ColorDot(parseBrandColor(color ?: CustomCard.DEFAULT_COLOR) ?: Color.Gray)
 }
 
 /**
@@ -626,24 +600,12 @@ private fun ColorSwatch(hex: String, selected: Boolean, onClick: () -> Unit) {
 /** ブランド選択(「なし」も選べる)。選択肢はカタログ(payment_methods.json の card_brands)から出す。 */
 @Composable
 private fun OptionalBrandDropdown(brand: String, options: List<String>, onChange: (String) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        TextButton(onClick = { expanded = true }) {
-            Text(brand.ifBlank { "なし" })
-            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            (listOf("") + options).forEach { b ->
-                DropdownMenuItem(
-                    text = { Text(b.ifBlank { "なし" }) },
-                    onClick = {
-                        onChange(b)
-                        expanded = false
-                    },
-                )
-            }
-        }
-    }
+    SimpleDropdown(
+        buttonLabel = brand.ifBlank { "なし" },
+        options = listOf("") + options,
+        itemLabel = { it.ifBlank { "なし" } },
+        onSelect = onChange,
+    )
 }
 
 /** カード1枚分の設定行: 所有チェック + (所有時) ブランド選択 / 還元率 / ウエル活。 */
@@ -764,24 +726,12 @@ private fun PointMultiplierFactorDropdown(
     selected: Double,
     onChange: (Double) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        TextButton(onClick = { expanded = true }) {
-            Text("×${trimRate(selected)}")
-            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            options.forEach { factor ->
-                DropdownMenuItem(
-                    text = { Text("×${trimRate(factor)}") },
-                    onClick = {
-                        onChange(factor)
-                        expanded = false
-                    },
-                )
-            }
-        }
-    }
+    SimpleDropdown(
+        buttonLabel = "×${trimRate(selected)}",
+        options = options,
+        itemLabel = { "×${trimRate(it)}" },
+        onSelect = onChange,
+    )
 }
 
 /** カードクラス選択(JCB CARD W/S 等)。選択肢はカタログ(payment_methods.json の card_classes)から出す。 */
@@ -791,48 +741,19 @@ private fun CardClassDropdown(
     selectedId: String?,
     onChange: (String) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
     val selected = classes.firstOrNull { it.id == selectedId } ?: classes.firstOrNull()
-    Box {
-        TextButton(onClick = { expanded = true }) {
-            Text(selected?.label ?: "選択")
-            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            classes.forEach { c ->
-                DropdownMenuItem(
-                    text = { Text(c.label) },
-                    onClick = {
-                        onChange(c.id)
-                        expanded = false
-                    },
-                )
-            }
-        }
-    }
+    SimpleDropdown(
+        buttonLabel = selected?.label ?: "選択",
+        options = classes,
+        itemLabel = { it.label },
+        onSelect = { onChange(it.id) },
+    )
 }
 
 /** ブランド選択。選択肢はカタログ(payment_methods.json の brands)から出す。 */
 @Composable
 private fun BrandDropdown(brand: String, options: List<String>, onChange: (String) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        TextButton(onClick = { expanded = true }) {
-            Text(brand.ifBlank { "選択" })
-            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            options.forEach { b ->
-                DropdownMenuItem(
-                    text = { Text(b) },
-                    onClick = {
-                        onChange(b)
-                        expanded = false
-                    },
-                )
-            }
-        }
-    }
+    SimpleDropdown(buttonLabel = brand.ifBlank { "選択" }, options = options, itemLabel = { it }, onSelect = onChange)
 }
 
 /** ブランドが判定に効くカードを有効化するとき、実ブランドの選択を求めるダイアログ。 */

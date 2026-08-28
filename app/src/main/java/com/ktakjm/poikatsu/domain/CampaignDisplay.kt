@@ -12,6 +12,13 @@ import com.ktakjm.poikatsu.data.StoreScope
  * ui/UiHelpers.kt 側)。domain は純 Kotlin 維持のため Android/Compose を import しない。
  */
 
+/**
+ * 段階制(rate_rules)の施策か。rate_base は段階の最大値なので、表示する率には「最大」を冠する
+ * (施策詳細 BenefitDisplay とおトクタブ [campaignGroupMaxBenefit] の共通条件。他の「最大」条件は
+ * 施策単位/グループ単位で異なるため各所で追加する)
+ */
+val Campaign.hasTieredRate: Boolean get() = rateRules.isNotEmpty()
+
 // ---- タイトル解決 ----
 
 /**
@@ -188,7 +195,7 @@ fun campaignGroupMaxBenefit(
     // 収録値(rate_override + rate_base)側で判定する(Campaign.storeRatesVary。施策詳細の「最大」と共通)
     val storeRatesVary = subset.any { it.storeRatesVary }
     val ratesVary = allRates.distinct().size > 1 || storeRatesVary || byType.size > 1 ||
-        subset.any { it.rateRules.isNotEmpty() || it.productScope != null }
+        subset.any { it.hasTieredRate || it.productScope != null }
     return if (maxRate != null && ratesVary) "最大$label" else label
 }
 

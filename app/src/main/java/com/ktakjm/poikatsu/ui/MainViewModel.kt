@@ -6,9 +6,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ktakjm.poikatsu.BuildConfig
 import com.ktakjm.poikatsu.data.Campaign
-import com.ktakjm.poikatsu.data.DataRepository
 import com.ktakjm.poikatsu.data.DataSource
-import com.ktakjm.poikatsu.data.GithubRawClient
+import com.ktakjm.poikatsu.data.createDataRepository
+import com.ktakjm.poikatsu.data.dataDirFor
+import com.ktakjm.poikatsu.data.loadMunicipalityMaster
 import com.ktakjm.poikatsu.data.LoadedData
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.AppSettings
@@ -18,13 +19,11 @@ import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.ExcludedStorePair
 import com.ktakjm.poikatsu.data.MunicipalityMaster
 import com.ktakjm.poikatsu.data.CardClass
-import com.ktakjm.poikatsu.data.PaymentCard
 import com.ktakjm.poikatsu.data.PointBalance
 import com.ktakjm.poikatsu.data.PointMultiplier
 import com.ktakjm.poikatsu.data.PointValueConfig
 import com.ktakjm.poikatsu.data.StoreScope
 import com.ktakjm.poikatsu.data.PoikatsuData
-import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.RegisteredArea
 import com.ktakjm.poikatsu.data.SETTINGS_BACKUP_SCHEMA_VERSION
 import com.ktakjm.poikatsu.data.SettingsBackup
@@ -38,6 +37,7 @@ import com.ktakjm.poikatsu.domain.BenefitLabel
 import com.ktakjm.poikatsu.domain.BestPaymentOption
 import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.CampaignStatus
+import com.ktakjm.poikatsu.domain.DEFAULT_NOTIFY_TIME_MINUTES
 import com.ktakjm.poikatsu.domain.ExpiringPointNotice
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.FixedBenefitAdvice
@@ -58,7 +58,6 @@ import com.ktakjm.poikatsu.domain.isExpired
 import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.resolveCardCampaignRate
 import com.ktakjm.poikatsu.notification.CampaignNotifications
-import java.io.File
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -450,7 +449,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         /** キャンペーン通知(#6)の ON/OFF */
         val notificationsEnabled: Boolean = false,
         /** キャンペーン通知の時刻(0時からの分。既定 8:00)。UI は15分刻みで編集する */
-        val notificationTimeMinutes: Int = 8 * 60,
+        val notificationTimeMinutes: Int = DEFAULT_NOTIFY_TIME_MINUTES,
         /** 設定画面の「マイカード」用カタログ(未所有カードも含む全候補) */
         val cardSettings: List<CardSetting> = emptyList(),
         val pointCurrencySettings: List<PointCurrencySetting> = emptyList(),
@@ -622,14 +621,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private var pendingNotificationGroupKey: String? = null
 
-    private val repository = DataRepository(
-        readAsset = { path ->
-            app.assets.open(path).bufferedReader().use { it.readText() }
-        },
-        cacheDir = File(app.filesDir, "remote_data"),
-        fetchRemote = { fileName, ref, dataDir -> GithubRawClient.fetch(fileName, ref, dataDir) },
-        resolveSha = { ref -> GithubRawClient.resolveCommitSha(ref) },
-    )
+    // 通知ジョブ(CampaignNotificationWorker)と同じ構成(data/AppDataSources.kt)
+    private val repository = createDataRepository(app)
 
     private val settingsRepo = SettingsRepository(app)
 
@@ -682,19 +675,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // 自治体マスタ(assets 同梱)は起動時に読む。設定画面のピッカーに加え、おトクタブの
     // 地域フィルタ(rebuild)がグループ展開に使うため遅延ロードにしない。読めなければ空のまま
-    // =フィルタ無効(全表示)に倒す。リモート取得の対象外だが data/⇔data-test/ の切替には追従する
-    private val masterLoad: Job = loadMunicipalityMaster()
-
-    private fun loadMunicipalityMaster(): Job = viewModelScope.launch(Dispatchers.IO) {
-        val path = "${dataDir()}/municipalities.json"
-        val master = try {
-            val app = getApplication<Application>()
-            val text = app.assets.open(path).bufferedReader().use { it.readText() }
-            PoikatsuJson.parseMunicipalities(text)
-        } catch (e: Exception) {
-            Timber.w(e, "$path の読み込みに失敗")
-            MunicipalityMaster()
-        }
+    // =フィルタ無効(全表示)に倒す。リモート取得の対象外で、テストデータ利用中も data/ を読む(#90)
+    private val masterLoad: Job = viewModelScope.launch(Dispatchers.IO) {
+        val master = loadMunicipalityMaster(app)
         _state.update { it.copy(municipalityMaster = master) }
         rebuild() // マスタ到着後にフィルタを適用し直す
     }
@@ -717,7 +700,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     CampaignNotifications.ensureScheduled(app, new.notificationTimeMinutes)
                 }
             }
-            if (testDataChanged) loadMunicipalityMaster() // マスタも data/⇔data-test/ を読み分ける
             when {
                 // 同梱モード中はリモートを見ない。ON 直後と ON 中の data/⇔data-test/ 切替は assets 再読
                 new.useBundledData && (bundledChanged || testDataChanged) -> loadBundled()
@@ -774,7 +756,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** データ取得元のディレクトリ。リモート(GitHub raw)・同梱 assets とも同じ構造で切り替わる */
-    private fun dataDir() = if (lastSettings.useTestData) "data-test" else "data"
+    private fun dataDir() = dataDirFor(lastSettings.useTestData)
 
     companion object {
         // 施策データの更新は月数回程度なので、自動再取得は1時間に1回で十分
@@ -873,14 +855,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun applyData(loaded: LoadedData) {
         lastLoaded = loaded
         rebuild()
-        // 旧カード単位の 1pt 価値を通貨単位へ移行(#13)。対応表はカタログから引く。
-        // 何度呼んでも安全な処理(migrateCardPointValues 参照)なのでデータロードのたびに発火してよい
-        viewModelScope.launch { settingsRepo.migrateCardPointValues(cardToCurrencyMap(loaded)) }
     }
-
-    /** カード→ポイント通貨 ID の対応表をカタログから作る(applyData と onConfirmSettingsImport で共用)。 */
-    private fun cardToCurrencyMap(loaded: LoadedData): Map<String, String> =
-        loaded.data.cards.mapNotNull { c -> c.pointCurrencyId?.let { c.id to it } }.toMap()
 
     /**
      * 直近のデータ(lastLoaded)とユーザー設定(lastSettings)からエンジンを作り直し状態へ反映する。
@@ -894,16 +869,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
         // カタログ+ユーザー設定のマージは通知ジョブ(CampaignNotificationWorker)と共通の
         // 純関数に委譲する(アプリの表示と通知の判定基準を揃える。詳細は domain/UserDataMerge.kt)
-        val merged = mergeUserData(
-            base = loaded.data,
-            cardOverrides = settings.cardOverrides,
-            ownedBrands = settings.ownedBrands,
-            customCards = settings.customCards,
-            customCampaigns = settings.activeCustomCampaigns,
-            enabledPointMultipliers = settings.enabledPointMultipliers,
-            pointCurrencyValues = settings.pointCurrencyValues,
-            pointMultiplierFactors = settings.pointMultiplierFactors,
-        )
+        val merged = mergeUserData(loaded.data, settings)
         val newEngine = JudgmentEngine(merged.engineData)
         engine = newEngine
         val newDisplayData = merged.displayData
@@ -1444,13 +1410,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val imported =
             if (notificationsDropped) restored.copy(notificationsEnabled = false) else restored
         settingsRepo.importSettings(imported)
-        // v2 バックアップは CardOverride.pointValue を復元し得るが、旧カード単位→通貨単位の移行
-        // (migrateCardPointValues)は applyData(次回データロード)でしか発火しない。復元直後にも
-        // 発火させ、値が次回起動まで宙に浮くのを防ぐ。lastLoaded が null(カタログ未ロード)なら
-        // 何もしない(次回ロードで自然に移行される)
-        lastLoaded?.let { loaded ->
-            settingsRepo.migrateCardPointValues(cardToCurrencyMap(loaded))
-        }
         val app = getApplication<Application>()
         if (imported.notificationsEnabled) {
             CampaignNotifications.schedule(app, imported.notificationTimeMinutes)

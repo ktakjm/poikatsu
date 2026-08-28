@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -26,7 +25,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.calculateEndPadding
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -39,27 +37,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.BottomSheetScaffold
-import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.InputChip
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -68,7 +58,6 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -84,26 +73,19 @@ import androidx.compose.material3.adaptive.layout.PaneScaffoldDirective
 import androidx.compose.material3.adaptive.layout.ThreePaneScaffoldDestinationItem
 import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirective
 import androidx.compose.material3.adaptive.layout.calculateThreePaneScaffoldValue
-import androidx.compose.material3.rememberBottomSheetScaffoldState
-import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -113,7 +95,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
-import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.CustomCampaign
 import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.Merchant
@@ -124,7 +105,8 @@ import com.ktakjm.poikatsu.domain.customCampaignBaseId
 import com.ktakjm.poikatsu.domain.groupLabelOf
 import com.ktakjm.poikatsu.domain.isCustom
 import com.ktakjm.poikatsu.ui.theme.AppIcons
-import com.ktakjm.poikatsu.util.GeoMath
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3AdaptiveApi::class)
 @Composable
@@ -1102,14 +1084,6 @@ internal fun CategoryFilterChips(
     }
 }
 
-/** 判定詳細のタイトル。全画面時の TopAppBar と二ペインの詳細ペインヘッダで共用する。 */
-internal fun selectionTitle(selection: MainViewModel.Selection): String =
-    selection.displayName ?: selection.merchant.name
-
-/** 店舗判定のタイトル。全画面時の TopAppBar と二ペインの詳細ペインヘッダで共用する。 */
-internal fun storeCheckTitle(storeCheck: MainViewModel.StoreCheckState): String =
-    "${storeCheck.merchant.name} 対象判定"
-
 /**
  * データ再取得の入口。取得中はスピナーに差し替える。スピナーは IconButton(48dp)と枠を揃えて
  * 高さブレを防ぎ、アイコンはタッチ領域 48dp を保ったまま見た目だけ 20dp に抑える。
@@ -1138,9 +1112,8 @@ private fun RefreshAction(refreshing: Boolean, onRefresh: () -> Unit) {
  * 窓が二ペイン相当(directive.maxHorizontalPartitions > 1)のときだけ呼ばれ、判定詳細(selection)と
  * 店舗判定(storeCheck)を全画面オーバーレイでなく右の詳細ペインに出す。店舗判定は詳細ペイン内で
  * 判定詳細と置き換わる(戻る/←で判定詳細へ)。全画面時に TopAppBar が担っていたタイトルと
- * 閉じる/戻るは DetailPaneHeader がペイン内で肩代わりする。
+ * 閉じる/戻るは PaneHeader がペイン内で肩代わりする(ui/DetailPanes.kt)。
  */
-@OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 private fun SearchListDetail(
     selection: MainViewModel.Selection?,
@@ -1156,75 +1129,28 @@ private fun SearchListDetail(
     onRestoreExcludedStore: (campaignId: String) -> Unit,
     expiringNotices: List<ExpiringPointNotice>,
 ) {
-    ListDetailPaneScaffold(
+    TabListDetailScaffold(
         directive = directive,
-        value = calculateThreePaneScaffoldValue(
-            maxHorizontalPartitions = directive.maxHorizontalPartitions,
-            adaptStrategies = ListDetailPaneScaffoldDefaults.adaptStrategies(),
-            // この Composable は二ペイン時にしか呼ばれず List/Detail とも常時 Expanded になるため
-            // destination は固定でよい(一ペインへ縮んだ瞬間は外側の全画面オーバーレイ分岐が受ける)
-            currentDestination = ThreePaneScaffoldDestinationItem<Nothing>(ListDetailPaneScaffoldRole.Detail),
-        ),
-        listPane = {
-            AnimatedPane {
-                // 画面端の側だけ 16dp の余白(縦画面の PaddedColumn と同じ)。ペイン間は
-                // ライブラリの gutter が空ける
-                PaddedColumn(PaddingValues(start = 16.dp)) { listPane() }
-            }
-        },
-        detailPane = {
-            AnimatedPane {
-                DetailPaneSurface {
-                    when {
-                        storeCheck != null -> {
-                            PaneHeader(
-                                title = storeCheckTitle(storeCheck),
-                                leading = {
-                                    IconButton(onClick = onCloseStoreCheck) {
-                                        Icon(
-                                            Icons.AutoMirrored.Filled.ArrowBack,
-                                            contentDescription = "判定詳細に戻る",
-                                        )
-                                    }
-                                },
-                            )
-                            StoreCheckScreen(
-                                storeCheck = storeCheck,
-                                onBack = onCloseStoreCheck,
-                                onStoreNameChange = onStoreNameChange,
-                            )
-                        }
-                        selection != null -> {
-                            PaneHeader(
-                                title = selectionTitle(selection),
-                                trailing = {
-                                    IconButton(onClick = onBack) {
-                                        Icon(Icons.Default.Close, contentDescription = "詳細を閉じる")
-                                    }
-                                },
-                            )
-                            JudgmentDetail(
-                                selection = selection,
-                                onBack = onBack,
-                                onOpenStoreCheck = onOpenStoreCheck,
-                                onFindNearby = onFindNearby,
-                                onExcludeStore = onExcludeStore,
-                                onRestoreExcludedStore = onRestoreExcludedStore,
-                                expiringNotices = expiringNotices,
-                            )
-                        }
-                        else -> Centered {
-                            Text(
-                                "お店を選ぶと、おトクな支払い方法をここに表示します。",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.outline,
-                            )
-                        }
-                    }
-                }
-            }
-        },
-    )
+        listPane = { PaddedColumn(PaddingValues(start = 16.dp)) { listPane() } },
+    ) {
+        when {
+            storeCheck != null -> StoreCheckPane(
+                storeCheck = storeCheck,
+                onClose = onCloseStoreCheck,
+                onStoreNameChange = onStoreNameChange,
+            )
+            selection != null -> JudgmentDetailPane(
+                selection = selection,
+                onClose = onBack,
+                onOpenStoreCheck = onOpenStoreCheck,
+                onFindNearby = onFindNearby,
+                onExcludeStore = onExcludeStore,
+                onRestoreExcludedStore = onRestoreExcludedStore,
+                expiringNotices = expiringNotices,
+            )
+            else -> PanePlaceholder("お店を選ぶと、おトクな支払い方法をここに表示します。")
+        }
+    }
 }
 
 /**
@@ -1235,7 +1161,6 @@ private fun SearchListDetail(
  * カスタムキャンペーンの編集(CustomCampaignEditorScreen)は verticalScroll 付き全画面フォームで
  * 横画面でも成立しているため、二ペイン化せず従来どおり全画面オーバーレイのまま(#55 の追記)。
  */
-@OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 private fun CampaignsListDetail(
     selectedGroup: List<CampaignJudgment>?,
@@ -1248,57 +1173,27 @@ private fun CampaignsListDetail(
     onEditCustom: (() -> Unit)?,
     onDeleteCustom: (() -> Unit)?,
 ) {
-    ListDetailPaneScaffold(
+    TabListDetailScaffold(
         directive = directive,
-        value = calculateThreePaneScaffoldValue(
-            maxHorizontalPartitions = directive.maxHorizontalPartitions,
-            adaptStrategies = ListDetailPaneScaffoldDefaults.adaptStrategies(),
-            // 二ペイン時にしか呼ばれず List/Detail とも常時 Expanded になるため destination は固定
-            // でよい(SearchListDetail と同じ理由)
-            currentDestination = ThreePaneScaffoldDestinationItem<Nothing>(ListDetailPaneScaffoldRole.Detail),
-        ),
-        listPane = {
-            AnimatedPane {
-                PaddedColumn(PaddingValues(start = 16.dp)) { listPane() }
-            }
-        },
-        detailPane = {
-            AnimatedPane {
-                DetailPaneSurface {
-                    if (selectedGroup != null) {
-                        PaneHeader(
-                            title = campaignGroupDisplayTitle(selectedGroup.map { it.campaign }, merchants),
-                            trailing = {
-                                IconButton(onClick = onBack) {
-                                    Icon(Icons.Default.Close, contentDescription = "詳細を閉じる")
-                                }
-                            },
-                        )
-                        CampaignDetail(
-                            judgments = selectedGroup,
-                            merchants = merchants,
-                            storeRates = storeRates,
-                            onBack = onBack,
-                            onFindChains = onFindChains,
-                            onEditCustom = onEditCustom,
-                            onDeleteCustom = onDeleteCustom,
-                            // FAB(キャンペーンを自分で登録)は二ペインでも Scaffold 側に出したままの
-                            // ため、末尾まで送っても FAB に隠れない高さを空ける(一覧側と同じ 88dp)
-                            contentPadding = PaddingValues(bottom = 88.dp),
-                        )
-                    } else {
-                        Centered {
-                            Text(
-                                "キャンペーンを選ぶと、詳細をここに表示します。",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.outline,
-                            )
-                        }
-                    }
-                }
-            }
-        },
-    )
+        listPane = { PaddedColumn(PaddingValues(start = 16.dp)) { listPane() } },
+    ) {
+        if (selectedGroup != null) {
+            CampaignDetailPane(
+                group = selectedGroup,
+                merchants = merchants,
+                storeRates = storeRates,
+                onClose = onBack,
+                onFindChains = onFindChains,
+                onEditCustom = onEditCustom,
+                onDeleteCustom = onDeleteCustom,
+                // FAB(キャンペーンを自分で登録)は二ペインでも Scaffold 側に出したままの
+                // ため、末尾まで送っても FAB に隠れない高さを空ける(一覧側と同じ 88dp)
+                contentPadding = PaddingValues(bottom = 88.dp),
+            )
+        } else {
+            PanePlaceholder("キャンペーンを選ぶと、詳細をここに表示します。")
+        }
+    }
 }
 
 /**
@@ -1321,7 +1216,6 @@ private fun customCampaignSource(
  * 1 階層目のサブページは右端の✕で選択解除(未選択のプレースホルダに戻る)、2 階層目
  * (ライセンス・取得した地図データ)は左端の←で親カテゴリへ戻る(ペイン内置換)。
  */
-@OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 private fun SettingsListDetail(
     subpage: SettingsSubpage?,
@@ -1330,69 +1224,84 @@ private fun SettingsListDetail(
     onClose: () -> Unit,
     subpageContent: @Composable (SettingsSubpage) -> Unit,
 ) {
+    TabListDetailScaffold(
+        directive = directive,
+        listPane = {
+            Column(Modifier.fillMaxSize()) {
+                PaneHeader(title = "設定", modifier = Modifier.padding(start = 16.dp))
+                listPane()
+            }
+        },
+        // ListItem が自前で 16dp の余白を持つため、面の内側パディングは 0 にして
+        // 見出し行だけ ListItem のテキスト位置に合わせて寄せる(縦画面と同じ扱い)
+        detailContentPadding = PaddingValues(),
+    ) {
+        if (subpage != null) {
+            // 2 階層目は親カテゴリへ戻る←(TopAppBar 様式)、1 階層目は選択解除の✕
+            // (カード様式)。全画面時に TopAppBar が担っていた操作の置き換え
+            if (subpage.parent != null) {
+                PaneHeader(
+                    title = subpage.title,
+                    modifier = Modifier.padding(start = 4.dp),
+                    leading = {
+                        IconButton(onClick = onClose) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "${subpage.parent!!.title}に戻る",
+                            )
+                        }
+                    },
+                )
+            } else {
+                PaneHeader(
+                    title = subpage.title,
+                    modifier = Modifier.padding(start = 16.dp, end = 4.dp),
+                    trailing = {
+                        IconButton(onClick = onClose) {
+                            Icon(Icons.Default.Close, contentDescription = "閉じる")
+                        }
+                    },
+                )
+            }
+            subpageContent(subpage)
+        } else {
+            PanePlaceholder("設定したい項目を選ぶと、ここに表示します。")
+        }
+    }
+}
+
+/**
+ * お店/おトク/設定タブ共通の list-detail 骨格(#54/#55/#56。重複していた 3 実装を #90 で集約)。
+ * 二ペイン相当の窓でしか呼ばれず List/Detail とも常時 Expanded になるため destination は Detail 固定でよい
+ * (一ペインへ縮んだ瞬間は外側の全画面オーバーレイ分岐が受ける)。一覧ペインの余白・見出しは
+ * タブごとに違うため [listPane] 側が持ち、詳細ペインは [DetailPaneSurface] の面に [detailPane] を載せる。
+ */
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
+@Composable
+private fun TabListDetailScaffold(
+    directive: PaneScaffoldDirective,
+    listPane: @Composable () -> Unit,
+    detailContentPadding: PaddingValues = PaddingValues(horizontal = 16.dp),
+    detailPane: @Composable ColumnScope.() -> Unit,
+) {
     ListDetailPaneScaffold(
         directive = directive,
         value = calculateThreePaneScaffoldValue(
             maxHorizontalPartitions = directive.maxHorizontalPartitions,
             adaptStrategies = ListDetailPaneScaffoldDefaults.adaptStrategies(),
-            // 二ペイン時にしか呼ばれず List/Detail とも常時 Expanded になるため destination は固定
-            // でよい(SearchListDetail と同じ理由)
             currentDestination = ThreePaneScaffoldDestinationItem<Nothing>(ListDetailPaneScaffoldRole.Detail),
         ),
-        listPane = {
-            AnimatedPane {
-                Column(Modifier.fillMaxSize()) {
-                    PaneHeader(title = "設定", modifier = Modifier.padding(start = 16.dp))
-                    listPane()
-                }
-            }
-        },
-        detailPane = {
-            AnimatedPane {
-                // ListItem が自前で 16dp の余白を持つため、面の内側パディングは 0 にして
-                // 見出し行だけ ListItem のテキスト位置に合わせて寄せる(縦画面と同じ扱い)
-                DetailPaneSurface(contentPadding = PaddingValues()) {
-                    if (subpage != null) {
-                        // 2 階層目は親カテゴリへ戻る←(TopAppBar 様式)、1 階層目は選択解除の✕
-                        // (カード様式)。全画面時に TopAppBar が担っていた操作の置き換え
-                        if (subpage.parent != null) {
-                            PaneHeader(
-                                title = subpage.title,
-                                modifier = Modifier.padding(start = 4.dp),
-                                leading = {
-                                    IconButton(onClick = onClose) {
-                                        Icon(
-                                            Icons.AutoMirrored.Filled.ArrowBack,
-                                            contentDescription = "${subpage.parent!!.title}に戻る",
-                                        )
-                                    }
-                                },
-                            )
-                        } else {
-                            PaneHeader(
-                                title = subpage.title,
-                                modifier = Modifier.padding(start = 16.dp, end = 4.dp),
-                                trailing = {
-                                    IconButton(onClick = onClose) {
-                                        Icon(Icons.Default.Close, contentDescription = "閉じる")
-                                    }
-                                },
-                            )
-                        }
-                        subpageContent(subpage)
-                    } else {
-                        Centered {
-                            Text(
-                                "設定したい項目を選ぶと、ここに表示します。",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.outline,
-                            )
-                        }
-                    }
-                }
-            }
-        },
+        listPane = { AnimatedPane { listPane() } },
+        detailPane = { AnimatedPane { DetailPaneSurface(detailContentPadding, detailPane) } },
     )
+}
+
+/** 詳細ペインの未選択プレースホルダ(面の中に入れ、空の面で二ペイン構造を常時見せる) */
+@Composable
+private fun PanePlaceholder(text: String) {
+    Centered {
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+    }
 }
 
 /**
@@ -1419,34 +1328,6 @@ private fun DetailPaneSurface(
         shape = RoundedCornerShape(16.dp),
     ) {
         Column(Modifier.fillMaxSize().padding(contentPadding), content = content)
-    }
-}
-
-/**
- * ペインの見出し行(#54)。全画面時に TopAppBar が担うタイトルと操作をペイン内で置き換える。
- * 一覧ペインはタイトル+再取得(trailing)、判定詳細は右端の✕(ペインを閉じる=カード様式)、
- * 店舗判定は左端の←(1 段深い画面から判定詳細へ戻る=TopAppBar 様式)。
- * [modifier] は [PaddedColumn] に入れない設定タブ(#56)が端の余白を自分で当てるためのもの。
- */
-@Composable
-internal fun PaneHeader(
-    title: String,
-    modifier: Modifier = Modifier,
-    leading: @Composable () -> Unit = {},
-    trailing: @Composable () -> Unit = {},
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
-    ) {
-        leading()
-        Text(
-            title,
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.weight(1f),
-        )
-        trailing()
     }
 }
 

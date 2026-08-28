@@ -104,17 +104,26 @@ poikatsu/
     │   ├── ui/             # MainViewModel(+NearbyController), PoikatsuApp,
     │   │                   # SettingsScreen, PaymentMethodsSettings,
     │   │                   # MunicipalitySettings, CampaignScreen, JudgmentScreen,
-    │   │                   # UiHelpers, NearbyScreen, NearbyMap, theme/
-    │   ├── domain/         # JudgmentEngine, CampaignDisplay ほか（純 Kotlin）
-    │   ├── data/           # Models, DataRepository, GithubRawClient,
-    │   │                   # YolpClient, LocationProvider, SettingsRepository
+    │   │                   # UiHelpers(小物部品), DetailPanes(横画面の詳細ペイン部品),
+    │   │                   # NearbyScreen, NearbyMap, theme/
+    │   ├── domain/         # JudgmentEngine, JudgmentModels(判定の共有型), CampaignPeriod(期間判定・期間文言),
+    │   │                   # ExpectedValueScoring, CampaignDisplay, NotificationPlanner ほか（純 Kotlin）
+    │   ├── data/           # Models, DataRepository, AppDataSources(データ源のファクトリ), GithubRawClient,
+    │   │                   # YolpClient, LocationProvider,
+    │   │                   # SettingsModels / SettingsCodec / SettingsRepository / SettingsBackup(設定)
     │   └── util/           # JapaneseText, GeoMath（純 Kotlin）
     └── test/java/com/ktakjm/poikatsu/
-        ├── JudgmentEngineTest.kt        # フィクスチャで検索・判定ロジックを検証（48 件）
-        ├── JudgmentEngineRealDataTest.kt # 実データの整合性・施策固有の振る舞い検証（18 件）
+        ├── RealData.kt                   # 実データ(data/)・テストデータ(data-test/)の共有フィクスチャ（1 回だけ読む）
+        ├── CampaignAuthoringRules.kt     # campaigns.json の記述規約(#89)の検証ヘルパー（実データ・テストデータ共通）
+        ├── JudgmentEngineTest.kt         # フィクスチャで検索・判定ロジックを検証
+        ├── JudgmentEngineRealDataTest.kt # 実データの整合性・施策固有の振る舞い検証
+        ├── TestDataIntegrityTest.kt      # data-test/ のショーケースデータの整合性
+        ├── UserDataMergeTest.kt          # カタログ+ユーザー設定のマージ（カードクラス・通貨・倍率）
+        ├── SettingsCodecTest.kt          # AppSettings ⇄ Preferences の往復（設定項目追加時の同期漏れ検出）
+        ├── CampaignPeriodTest.kt         # 期間判定・期間文言の境界
         ├── BannerTest.kt                 # 系列と看板の2階層（照合・看板スコープ・実データの取りこぼし/誤爆検知。#60）
-        ├── DataRepositoryTest.kt         # ロード戦略のテスト（8 件、インライン JSON フィクスチャ）
-        └── NearbyTest.kt                 # チェーン特定・YOLP パース・密度クリップ・YolpSearchConfig（25 件）
+        ├── DataRepositoryTest.kt         # ロード戦略のテスト（インライン JSON フィクスチャ。schema_version ガード含む）
+        └── NearbyTest.kt ほか            # チェーン特定・YOLP パース・密度クリップ・YolpSearchConfig 等
 ```
 
 ポイント: `data/` はリポジトリ直下にあり、`app/build.gradle.kts` の `assets.srcDir(rootProject.file("data"))` で **そのまま assets として同梱** される。同じファイルが GitHub raw 配信のソースでもあるため、「同梱データ」「リモートデータ」「テストデータ」が常に単一ソースで一致する。
@@ -346,6 +355,8 @@ flowchart TD
 - **「成功した場合のみキャッシュ」**: 取得した生テキストをまずパースし、成功したものだけ `writeText` する。壊れた JSON でキャッシュを汚染しない
 - **データソースの可視化**: `DataSource`（REMOTE / CACHE / BUNDLED）を UI まで運び、「最新データ取得済み / 前回取得データ(オフライン？)」と表示してデータ鮮度をユーザーに伝える
 
+**schema_version ガード（#90）**: `PoikatsuJson.parse` は 3 ファイルの `schema_version` を `MerchantsFile` / `CampaignsFile` / `PaymentMethodsFile` の `SUPPORTED_SCHEMA_VERSION` と比べ、**対応版より新しければ `UnsupportedSchemaVersionException`** を投げる。`refresh()` はこれを取得失敗と同じに扱い（null を返しキャッシュにも書かない）、アプリは同梱／既存キャッシュで動き続ける。`ignoreUnknownKeys` のせいで新スキーマのキーが黙って落ちて壊れた判定になるのを防ぐためのもので、データ側の版を上げるときは Kotlin 側の定数も同時に上げる（data/README.md「更新ルール」。上げ忘れは実データテストが落ちる）。
+
 ### 同梱データ直読モード（開発者向け、#36）
 
 設定 → 開発者向け → 開発者モード ON → 「同梱データを使う」を ON にすると `loadBundled(dataDir)` が assets を直読し、キャッシュ・リモート取得を両方バイパスする。データ（data/*.json、municipalities.json 含む）をローカル編集 → `installDebug` するだけで **push せずに実機検証**できる。仕組み:
@@ -370,7 +381,9 @@ flowchart TD
 
 リモート取得は `init` ではなく **Lifecycle の ON_START 起点**（`PoikatsuApp` の `LifecycleEventObserver` → `onAppForeground()`）。初回起動でも必ず一度走り、フォアグラウンド復帰のたびに試行されるが、直近 1 時間以内に成功していればスキップする（施策データの更新は月数回なので十分）。`initialLoad.join()` でローカルロード完了を待ってからリモート結果を適用し、表示順序の競合を防いでいる。自動更新は設定でオフにでき（その場合フォアグラウンド時の自動取得をしない／手動更新は可）。
 
-### 設定の永続化（data/SettingsRepository.kt）
+### 設定の永続化（data/SettingsModels.kt / SettingsCodec.kt / SettingsRepository.kt）
+
+設定まわりは 3 ファイルに分かれる（#90）: **SettingsModels.kt** が保存する型（`ThemeMode` / `CardOverride` / `CustomCard` / `CustomPayment` / `BannerSelection` / `CustomCampaign` / `ExcludedStorePair` / `PointBalance` / `RegisteredArea`）と集約スナップショット `AppSettings`、**SettingsCodec.kt** がキー定義 `SettingsKeys` と `Preferences.readSettings()` / `MutablePreferences.writeSettings()`（純 JVM。`SettingsCodecTest` が全フィールド非既定のスナップショットで往復を検証し、設定項目を足したときの同期漏れをテストで捕まえる）、**SettingsRepository.kt** が DataStore への個別更新（setter）。旧フィールド `CustomCampaign.cardId/qrPaymentId`（単一決済）と `CardOverride.pointValue`（カード単位の 1pt 価値）は #90 で移行コードごと削除し、保存済み JSON・旧バックアップの残存値は `ignoreUnknownKeys` で読み捨てる。
 
 テーマ・データ取得・マイカード・QR 決済・ポイント・自治体の設定は **DataStore Preferences**（`SettingsRepository`）に保存する。テーマ／dynamic color／自動更新は型付きキー、カード差分（`CardOverride`：所有・還元率・ブランド。旧 welcatsu は #39 で通貨単位へ正規化し廃止＝移行せず再設定）はカード id（payment_methods.json の `cards[].id`）をキーにした Map を JSON 文字列として 1 キーに格納する（キー数が可変でも Preferences のキーを増やさない）。QR 決済の有効 ID（`Set<String>`）・カタログ外カードの保有ブランド（`owned_brands`: `Set<String>`。card_brand 施策の仮想カード合成に使う）・**ポイント倍率の有効通貨**（`enabled_point_multipliers`: `Set<通貨id>`。ウエル活等。#39）・**選択した倍率**（`point_multiplier_factors`: `Map<通貨id, 倍率>`。選択肢を持つ通貨のみ。#83）・**プログラム会員**（`point_program_memberships`: `Set<通貨id>`。提示型施策のフィルタ。#39）・登録エリア（`registered_areas`: `List<RegisteredArea>`。自治体単体かグループを type+code で持ち、おトクタブの地域フィルタに使う）・ユーザー登録の対象外ペア（`excluded_store_pairs`: `List<ExcludedStorePair>`。#63。詳細は 5.4）も同様に JSON 文字列として格納する。カスタムキャンペーン（`custom_campaigns` / `custom_campaigns_test`。#65）と対象外ペア（`excluded_store_pairs` / `excluded_store_pairs_test`。#68）は通常データ用とテストデータ用の 2 キーに分かれ、`useTestData` に応じた側だけを読み書きする（「開発者モード」節参照）。`MainViewModel` は `settings` Flow を購読し、変更のたびに **payment_methods.json（カタログ＝既定値）へユーザー差分を重ねて**エンジンを作り直す（マージは VM 層、`JudgmentEngine` は純 Kotlin のまま）。payment_methods.json 自体は書き換えない。テーマは描画前に必要なので `MainActivity` が `state.themeMode`/`dynamicColor` を `PoikatsuTheme` に渡す（6.1 参照）。
 
@@ -435,9 +448,9 @@ adb uninstall com.ktakjm.poikatsu                       # アンインストー�
 3. 記号除去（スペース・中点・各種ハイフン等。長音「ー」は読みの一部なので残す）
 4. カタカナ→ひらがな（コードポイントを `-0x60` シフト）
 
-### 5.3 期間フィルタ（campaignStatus / daysRemaining）
+### 5.3 期間フィルタ（campaignStatus / daysRemaining。domain/CampaignPeriod.kt）
 
-`judge` に `today: LocalDate` パラメータを追加し、期間フィルタを適用する。`today` は外から渡す（`LocalDate.now()` をドメイン内で呼ばない＝純 Kotlin 維持）。
+`judge` に `today: LocalDate` パラメータを追加し、期間フィルタを適用する。`today` は外から渡す（`LocalDate.now()` をドメイン内で呼ばない＝純 Kotlin 維持）。境界の定義は日付ベースの純関数 `campaignStatus(start, end, today)` / `daysRemaining(end, today)` / `daysUntilStart(start, today)`（**domain/CampaignPeriod.kt**。#90）に 1 本化し、`JudgmentEngine` の `Campaign` 版はこれに委譲、通知（`NotificationPlanner`）とおトクタブの一覧カード（グループの最遅終了・最早開始）も同じ関数を呼ぶ。「終了間近」のしきい値 `ENDS_SOON_DAYS`（3 日）と `isEndingSoon(days)`、期間文言 `formatPeriodLabel(start, end, openEnded)`（「2026/07/01〜2026/07/31」／両方なしは「終了日未定」または「常設」）も同ファイル。
 
 ```kotlin
 enum class CampaignStatus { ACTIVE, UPCOMING, EXPIRED }
@@ -449,7 +462,7 @@ enum class CampaignStatus { ACTIVE, UPCOMING, EXPIRED }
 | UPCOMING | `period_start` > today（未来開始） | おトクタブにのみ表示（Phase C）。`judgeCards` には含まれない |
 | EXPIRED | `period_end` < today（期限切れ） | **UI に一切表示しない** |
 
-`daysRemaining(campaign, today)` は残り日数を返す（`period_end` null なら null）。残り 3 日以下で `CampaignJudgment.warnings` に警告を追加する。
+`daysRemaining(campaign, today)` は残り日数を返す（`period_end` null なら null）。`ENDS_SOON_DAYS`（3 日）以下で `CampaignJudgment.warnings` に警告を追加し、判定画面・おトクタブの「残りN日」の警告色と通知（ENDS_SOON）も同じ定数を見る。
 
 ### 5.4 チェーン判定（judgeCards / judgeQr / judgeAll）と店舗単位の対象判定（checkStore）
 
@@ -500,7 +513,7 @@ flowchart LR
 
 ### 5.5 統一判定型 CampaignJudgment と統合判定（judgeAll）
 
-`judgeCards` と `judgeQr` はどちらも統一型 `CampaignJudgment` を返す。カード決済・QR 決済・キャンペーン詳細で共用でき、各フィールドが null / 空なら UI 側で非表示になるため、カード種別ごとの分岐は不要。
+`judgeCards` と `judgeQr` はどちらも統一型 `CampaignJudgment` を返す。`CampaignJudgment` / `BenefitType` / `BestPaymentOption` / `BenefitLabel`・`formatBenefit`・`trimRate` は **domain/JudgmentModels.kt** にあり（#90）、依存は JudgmentModels ← ExpectedValueScoring ← JudgmentEngine の一方向（`JudgmentResult` はスコアリングの結果型 `StackedRate` / `FixedBenefitAdvice` を抱えるためエンジン側）。カード決済・QR 決済・キャンペーン詳細で共用でき、各フィールドが null / 空なら UI 側で非表示になるため、カード種別ごとの分岐は不要。
 
 ```kotlin
 data class CampaignJudgment(
@@ -707,19 +720,20 @@ sequenceDiagram
 
 ## 8. テスト戦略
 
-`./gradlew :app:testDebugUnitTest` で全 147 テストが JVM 上で実行される（エミュレータ不要。件数は 2026-07-08 時点）。
+`./gradlew :app:testDebugUnitTest` で全 512 テストが JVM 上で実行される（エミュレータ不要。件数は 2026-08-29 時点）。
 
-テストは **ロジックテスト**（フィクスチャデータで自己完結）と **実データ整合性テスト**（`実データ_` プレフィックス、`*RealDataTest` クラス）に分離されている。ロジックテストは実データの更新で壊れず、実データテストは `data/*.json` のパース成功・構造整合性・施策固有の振る舞いを検証する。
+テストは **ロジックテスト**（フィクスチャデータで自己完結）と **実データ整合性テスト**（`実データ_` プレフィックス、`*RealDataTest` クラス／`TestDataIntegrityTest`）に分離されている。ロジックテストは実データの更新で壊れず、実データテストは `data/*.json` のパース成功・構造整合性・施策固有の振る舞いを検証する。実データ・テストデータの読み込みは **`RealData` フィクスチャ**（`RealData.production` / `RealData.test` / `RealData.municipalities`。#90）に集約し、各テストクラスが 3 ファイルを個別に読まない（CWD は app/ なので `../data/…`）。
 
-| テスト | 件数 | 対象 | データソース |
-|---|---|---|---|
-| `JudgmentEngineTest` | 54 | 検索・正規化・判定・店舗対象判定・近隣除外・期間フィルタ・store_scope・QR判定・judgeAll・BenefitType・formatBenefit 4象限・bestBenefitLabel | **フィクスチャ**（Kotlin コード内定義） |
-| `JudgmentEngineRealDataTest` | 18 | merchant_id 参照切れ・プロファイル参照整合・アカチャンホンポ 3 状態・実データの新フィールド検証 | **実データ**（`data/*.json`） |
-| `MunicipalitiesTest`（3）+ `JapaneseTextTest`（3） | 6 | 47 都道府県・23 区の検証、シリアライズ往復、日本語正規化 | フィクスチャ |
-| `DataRepositoryTest` | 8 | ロード戦略（キャッシュあり/なし/破損、リモート成功/失敗、同梱直読・dataDir 切替） | **フィクスチャ**（インライン JSON） |
-| `StoreMatchTest`（9）+ `YolpSearchConfigTest`（4） | 13 | チェーン特定・施設テナント除外・gc_group スキップ・maxPages | **フィクスチャ** |
-| `YolpSearchConfigRealDataTest` | 3 | gc グループ・キーワードの等価性検証 | **実データ** |
-| その他（`YolpParseTest`・`YolpClipTest`・`GeoMathTest`） | 9 | YOLP パース・密度差クリップ・距離計算 | 固定 JSON フィクスチャ |
+| テスト | 対象 | データソース |
+|---|---|---|
+| `JudgmentEngineTest`（+`CampaignFlagsTest`・`ResolveCardCampaignRateTest`） | 検索・正規化・判定・店舗対象判定・近隣除外・期間フィルタ・store_scope・QR判定・judgeAll・formatBenefit・bestBenefitLabel | **フィクスチャ**（Kotlin コード内定義） |
+| `JudgmentEngineRealDataTest` | merchant_id 参照切れ・カタログ参照整合・記述規約（`CampaignAuthoringRules`）・実データ固有の振る舞い | **実データ**（`data/*.json`） |
+| `TestDataIntegrityTest` | data-test/ のショーケースデータの整合性（実データと同じ規約） | **テストデータ**（`data-test/*.json`） |
+| `UserDataMergeTest`（4 クラス） | カタログ+ユーザー設定のマージ（カードクラス・通貨・倍率選択・倍率グループ） | フィクスチャ |
+| `SettingsCodecTest` / `SettingsBackupTest` | AppSettings ⇄ Preferences の往復・バックアップ JSON の往復と防御 | フィクスチャ |
+| `CampaignPeriodTest` / `NotificationPlannerTest` | 期間判定の境界・通知の対象絞り込みと文言 | フィクスチャ |
+| `DataRepositoryTest` | ロード戦略（キャッシュあり/なし/破損、リモート成功/失敗、同梱直読・dataDir 切替・schema_version ガード） | **フィクスチャ**（インライン JSON） |
+| `BannerTest` / `NearbyTest` / `RegionFilterTest` / `MunicipalitySearchTest` ほか | 看板照合・チェーン特定・YOLP・地域フィルタ・自治体検索 | フィクスチャ+実データ |
 
 **データ更新（JSON 編集）だけの変更でも `*RealDataTest` が参照切れやエイリアス衝突を検出できる**。GitHub Actions CI（main push / PR）で自動実行される。
 

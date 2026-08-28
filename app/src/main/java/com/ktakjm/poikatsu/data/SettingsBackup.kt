@@ -1,5 +1,7 @@
 package com.ktakjm.poikatsu.data
 
+import com.ktakjm.poikatsu.domain.DEFAULT_NOTIFY_TIME_MINUTES
+import com.ktakjm.poikatsu.domain.clampNotifyTimeMinutes
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -10,8 +12,10 @@ import kotlinx.serialization.json.Json
  * これより新しいファイルは「新しいアプリで書き出したファイル」として読み込みを断る。
  * 履歴: 2 = CardOverride.welcatsu(カード単位)を廃止し enabledPointMultipliers(通貨単位)へ
  * 正規化(#39)。旧ファイル(1)は読めるが welcatsu は復元されない(再設定)。
- * 3 = 1pt 価値の通貨単位化(pointCurrencyValues)+期間限定ポイント残高(pointBalances)を追加、
- * CardOverride.pointValue は移行用の残置(#13)。
+ * 3 = 1pt 価値の通貨単位化(pointCurrencyValues)+期間限定ポイント残高(pointBalances)を追加(#13)。
+ * 版は据え置きのまま #90 で旧フィールドを削除: CardOverride.pointValue(v2 以前の 1pt 価値)と
+ * CustomCampaign.cardId / qrPaymentId(v1 の単一決済)。旧ファイルは読めるがこれらの値は復元されない
+ * (ignoreUnknownKeys で読み捨て。1pt 価値・カスタムキャンペーンの決済手段は再設定)。
  */
 const val SETTINGS_BACKUP_SCHEMA_VERSION = 3
 
@@ -46,7 +50,7 @@ data class SettingsBackup(
     val dynamicColor: Boolean = true,
     val autoRefresh: Boolean = true,
     val notificationsEnabled: Boolean = false,
-    val notificationTimeMinutes: Int = 8 * 60,
+    val notificationTimeMinutes: Int = DEFAULT_NOTIFY_TIME_MINUTES,
     val cardOverrides: Map<String, CardOverride> = emptyMap(),
     val enabledQrPaymentIds: Set<String> = emptySet(),
     val ownedBrands: Set<String> = emptySet(),
@@ -98,7 +102,7 @@ fun SettingsBackup.toSettings(): AppSettings = AppSettings(
     dynamicColor = dynamicColor,
     autoRefresh = autoRefresh,
     notificationsEnabled = notificationsEnabled,
-    notificationTimeMinutes = notificationTimeMinutes.coerceIn(0, 24 * 60 - 1),
+    notificationTimeMinutes = clampNotifyTimeMinutes(notificationTimeMinutes),
     cardOverrides = cardOverrides,
     enabledQrPaymentIds = enabledQrPaymentIds,
     ownedBrands = ownedBrands,
@@ -111,7 +115,7 @@ fun SettingsBackup.toSettings(): AppSettings = AppSettings(
     pointBalances = pointBalances.filterValues { it.balancePt >= 0 },
     registeredAreas = registeredAreas.distinctBy { it.type to it.code },
     customCards = customCards.distinctBy { it.id },
-    customCampaigns = customCampaigns.distinctBy { it.id }.map { it.normalized() },
+    customCampaigns = customCampaigns.distinctBy { it.id },
     excludedStorePairs = excludedStorePairs
         .distinctBy { Triple(it.campaignId, it.merchantId, it.storeName) },
 )

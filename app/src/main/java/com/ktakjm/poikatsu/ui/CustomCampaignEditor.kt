@@ -2,7 +2,6 @@ package com.ktakjm.poikatsu.ui
 
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,9 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -51,13 +48,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -69,10 +63,14 @@ import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_PERIOD_TOTAL
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_TRANSACTION
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.attribution
+import com.ktakjm.poikatsu.domain.formatPeriodDate
 import com.ktakjm.poikatsu.domain.trimRate
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /**
  * カスタムキャンペーンの紐付け先候補1件。カード(所有カタログ+カスタム)・QR 決済・
@@ -792,14 +790,10 @@ private fun parseDaysOfMonth(text: String): List<Int>? {
     return days.filterNotNull().distinct().sorted()
 }
 
+/** フォーム内の見出し(横余白は PaddedColumn 側が持つ) */
 @Composable
 private fun EditorSectionHeader(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
-    )
+    SectionHeader(text, PaddingValues(top = 16.dp, bottom = 4.dp))
 }
 
 /** 日付欄1行(ラベル+選択ボタン+クリア)。開始日・終了日で共用 */
@@ -853,7 +847,7 @@ private fun PaymentPickerDropdown(
         ) {
             options.forEach { option ->
                 DropdownMenuItem(
-                    text = { NameWithColorDotItem(option.label, option.color) },
+                    text = { NameWithColorDot(option.label, option.color, dotSize = 16.dp) },
                     leadingIcon = {
                         Checkbox(
                             checked = option.key in selectedKeys,
@@ -864,18 +858,6 @@ private fun PaymentPickerDropdown(
                 )
             }
         }
-    }
-}
-
-/** 名前+識別色ドット(ピッカーの行用)。色未定義はドットなし。 */
-@Composable
-private fun NameWithColorDotItem(name: String, color: String?) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        parseBrandColor(color)?.let { parsed ->
-            Box(Modifier.size(16.dp).clip(CircleShape).background(parsed))
-            Spacer(Modifier.width(8.dp))
-        }
-        Text(name)
     }
 }
 
@@ -896,62 +878,30 @@ private fun ChainPickerDropdown(
     onToggle: (String) -> Unit,
     onToggleBanner: (BannerSelection) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
     // groupBy はカテゴリの出現順(データ定義順)を保つ
     val grouped = remember(chains) {
         chains.groupBy { it.category }.mapValues { (_, members) -> members.sortedBy { it.reading } }
     }
-
-    @Composable
-    fun pickerRow(label: String, checked: Boolean, indent: Boolean = false, onClick: () -> Unit) {
-        DropdownMenuItem(
-            text = { Text(label) },
-            leadingIcon = {
-                Checkbox(
-                    checked = checked,
-                    onCheckedChange = null, // 行タップに委ねる(タッチ領域を行全体にする)
-                )
-            },
-            onClick = onClick,
-            modifier = if (indent) Modifier.padding(start = 16.dp) else Modifier,
-        )
-    }
-    Box {
-        AssistChip(
-            onClick = { expanded = true },
-            label = { Text("お店を選択") },
-            trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-        )
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.heightIn(max = 400.dp),
-        ) {
-            grouped.forEach { (category, members) ->
-                Text(
-                    category,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                )
-                members.forEach { merchant ->
-                    if (merchant.banners.isEmpty()) {
-                        pickerRow(merchant.name, checked = merchant.id in selectedIds) {
-                            onToggle(merchant.id)
-                        }
-                    } else {
-                        pickerRow("${merchant.name} 全て", checked = merchant.id in selectedIds) {
-                            onToggle(merchant.id)
-                        }
-                        // 代表看板も業態行として出す(「ウエルシアだけ」の選択もできるように)
-                        (listOf(merchant.id to merchant.name) + merchant.banners.map { it.id to it.name })
-                            .forEach { (bannerId, bannerName) ->
-                                val sel = BannerSelection(merchant.id, bannerId)
-                                pickerRow(bannerName, checked = sel in selectedBanners, indent = true) {
-                                    onToggleBanner(sel)
-                                }
-                            }
+    PickerChipMenu(chipLabel = "お店を選択", menuModifier = Modifier.heightIn(max = 400.dp)) {
+        grouped.forEach { (category, members) ->
+            SectionHeader(category, PaddingValues(horizontal = 16.dp, vertical = 6.dp))
+            members.forEach { merchant ->
+                if (merchant.banners.isEmpty()) {
+                    CheckboxMenuRow(merchant.name, checked = merchant.id in selectedIds) {
+                        onToggle(merchant.id)
                     }
+                } else {
+                    CheckboxMenuRow("${merchant.name} 全て", checked = merchant.id in selectedIds) {
+                        onToggle(merchant.id)
+                    }
+                    // 代表看板も業態行として出す(「ウエルシアだけ」の選択もできるように)
+                    (listOf(merchant.id to merchant.name) + merchant.banners.map { it.id to it.name })
+                        .forEach { (bannerId, bannerName) ->
+                            val sel = BannerSelection(merchant.id, bannerId)
+                            CheckboxMenuRow(bannerName, checked = sel in selectedBanners, indent = true) {
+                                onToggleBanner(sel)
+                            }
+                        }
                 }
             }
         }

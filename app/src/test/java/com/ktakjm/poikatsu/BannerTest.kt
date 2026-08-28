@@ -8,13 +8,11 @@ import com.ktakjm.poikatsu.data.CustomPayment
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.PoikatsuData
-import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.QrPayment
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.toCampaigns
 import com.ktakjm.poikatsu.domain.campaignTargetLabels
 import com.ktakjm.poikatsu.util.JapaneseText
-import java.io.File
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -276,11 +274,7 @@ class BannerMatchTest {
  */
 class BannerRealDataTest {
 
-    private val data = PoikatsuJson.parse(
-        merchantsJson = File("../data/merchants.json").readText(),
-        campaignsJson = File("../data/campaigns.json").readText(),
-        paymentMethodsJson = File("../data/payment_methods.json").readText(),
-    )
+    private val data = RealData.production.data
     private val engine = JudgmentEngine(data)
 
     @Test
@@ -442,11 +436,7 @@ class BannerRealDataTest {
  */
 class BannerTestDataTest {
 
-    private val data = PoikatsuJson.parse(
-        merchantsJson = File("../data-test/merchants.json").readText(),
-        campaignsJson = File("../data-test/campaigns.json").readText(),
-        paymentMethodsJson = File("../data-test/payment_methods.json").readText(),
-    )
+    private val data = RealData.test.data
     private val engine = JudgmentEngine(data)
     private val today = LocalDate.of(2026, 7, 20)
 

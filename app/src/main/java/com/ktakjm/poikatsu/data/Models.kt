@@ -129,11 +129,17 @@ data class YolpSearchConfig(
 
 @Serializable
 data class MerchantsFile(
+    /** データ側の版。[SUPPORTED_SCHEMA_VERSION] より新しいファイルは [PoikatsuJson.parse] が拒否する */
     @SerialName("schema_version") val schemaVersion: Int = 1,
     @SerialName("updated_at") val updatedAt: String = "",
     @SerialName("yolp_config") val yolpConfig: YolpConfig? = null,
     val merchants: List<Merchant> = emptyList(),
-)
+) {
+    companion object {
+        /** このアプリが読める schema_version の上限。データ側の版を上げたら同時に上げる(data/README.md「schema_version」) */
+        const val SUPPORTED_SCHEMA_VERSION = 2
+    }
+}
 
 /**
  * 公式が対象/対象外を店舗名で言い切っているリスト。これがある merchant_rule だけ、
@@ -451,7 +457,12 @@ data class CampaignsFile(
     @SerialName("schema_version") val schemaVersion: Int = 1,
     @SerialName("updated_at") val updatedAt: String = "",
     val campaigns: List<Campaign> = emptyList(),
-)
+) {
+    companion object {
+        /** このアプリが読める schema_version の上限。データ側の版を上げたら同時に上げる(data/README.md「schema_version」) */
+        const val SUPPORTED_SCHEMA_VERSION = 14
+    }
+}
 
 /**
  * ポイント価値の倍率(例: V ポイントはウエル活で 1.5 倍価値)。ポイント通貨([PointCurrency])の
@@ -646,7 +657,12 @@ data class PaymentMethodsFile(
     @SerialName("qr_payments") val qrPayments: List<QrPayment> = emptyList(),
     /** ポイント通貨・プログラムのマスタ(#39)。cards/qr_payments の point_currency_id から参照される */
     @SerialName("point_currencies") val pointCurrencies: List<PointCurrency> = emptyList(),
-)
+) {
+    companion object {
+        /** このアプリが読める schema_version の上限。データ側の版を上げたら同時に上げる(data/README.md「schema_version」) */
+        const val SUPPORTED_SCHEMA_VERSION = 13
+    }
+}
 
 // ==================== 自治体マスタ(municipalities.json) ====================
 
@@ -693,26 +709,6 @@ data class AreaGroup(
     val municipalities: List<String> = emptyList(),
 )
 
-/**
- * ユーザーが設定画面で登録した居住地・行動圏(DataStore へ保存)。
- * 自治体単体(type=municipality, code=自治体コード)とグループ(type=group, code=グループid)の
- * どちらも取れる。name/prefecture は表示用のスナップショット(マスタ未ロードでも一覧表示できる)。
- */
-@Serializable
-data class RegisteredArea(
-    val type: RegisteredAreaType,
-    /** 自治体コード(5桁) or グループ id */
-    val code: String,
-    val name: String,
-    val prefecture: String,
-)
-
-@Serializable
-enum class RegisteredAreaType {
-    @SerialName("municipality") MUNICIPALITY,
-    @SerialName("group") GROUP,
-}
-
 data class PoikatsuData(
     val merchants: List<Merchant>,
     val campaigns: List<Campaign>,
@@ -737,16 +733,29 @@ data class PoikatsuData(
     }
 }
 
+/** データファイルの schema_version がアプリの対応版より新しい([PoikatsuJson.parse]) */
+class UnsupportedSchemaVersionException(file: String, version: Int, supported: Int) :
+    IllegalArgumentException("$file の schema_version=$version はこのアプリの対応版($supported)より新しい")
+
 object PoikatsuJson {
     private val json = Json {
         ignoreUnknownKeys = true
         coerceInputValues = true
     }
 
+    /**
+     * 3 ファイルをパースして展開済みの [PoikatsuData] にする。
+     * @throws UnsupportedSchemaVersionException いずれかの schema_version がこのアプリの対応版より新しいとき。
+     *   ignoreUnknownKeys のため新スキーマのキーは黙って落ちて壊れた判定になり得るので、読まずに断る
+     *   (DataRepository.refresh はこれを取得失敗と同じ扱いにしてキャッシュに残さない。#90)
+     */
     fun parse(merchantsJson: String, campaignsJson: String, paymentMethodsJson: String): PoikatsuData {
         val merchantsFile = json.decodeFromString<MerchantsFile>(merchantsJson)
         val campaignsFile = json.decodeFromString<CampaignsFile>(campaignsJson)
         val paymentMethodsFile = json.decodeFromString<PaymentMethodsFile>(paymentMethodsJson)
+        checkSchemaVersion("merchants.json", merchantsFile.schemaVersion, MerchantsFile.SUPPORTED_SCHEMA_VERSION)
+        checkSchemaVersion("campaigns.json", campaignsFile.schemaVersion, CampaignsFile.SUPPORTED_SCHEMA_VERSION)
+        checkSchemaVersion("payment_methods.json", paymentMethodsFile.schemaVersion, PaymentMethodsFile.SUPPORTED_SCHEMA_VERSION)
         // 施策は JSON の記述形(municipal の payment_variants・operator 省略・municipal_defaults)から
         // エンジン・UI が見る「1 施策 = 1 決済手段・全フィールド解決済み」の形へここで展開する(#89)
         val campaigns = resolveCampaigns(
@@ -765,6 +774,10 @@ object PoikatsuJson {
             updatedAt = campaignsFile.updatedAt,
             yolpConfig = merchantsFile.yolpConfig,
         )
+    }
+
+    private fun checkSchemaVersion(file: String, version: Int, supported: Int) {
+        if (version > supported) throw UnsupportedSchemaVersionException(file, version, supported)
     }
 
     fun parseMunicipalities(municipalitiesJson: String): MunicipalityMaster =

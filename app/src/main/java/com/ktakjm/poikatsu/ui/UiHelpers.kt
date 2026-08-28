@@ -67,12 +67,23 @@ import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_TRANSACTION
 import com.ktakjm.poikatsu.data.RegisteredArea
 import com.ktakjm.poikatsu.data.SettingsBackup
 import com.ktakjm.poikatsu.data.ThemeMode
+import com.ktakjm.poikatsu.domain.formatPeriodLabel
 import com.ktakjm.poikatsu.domain.TargetLabelGroup
 import com.ktakjm.poikatsu.domain.trimRate
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningContainerColor
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.Dp
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Checkbox
+import androidx.compose.material.icons.filled.ArrowDropDown
 
 // 施策表示の純ロジック(タイトル解決・対象チェーン列挙・最良特典計算)は
 // domain/CampaignDisplay.kt へ移設済み(#87)。ここには Compose 依存の部品と
@@ -552,25 +563,12 @@ internal fun BrandBadge(label: String, brandColor: Color) {
 
 // ---- 施策表示の Composable・表示整形 (CampaignScreen / JudgmentScreen 共用) ----
 
-/** 期間表示用の日付("2026/07/01")。年を省くと年跨ぎ期間が読めなくなるため常に年付きで出す */
-internal fun formatPeriodDate(date: LocalDate): String =
-    date.format(java.time.format.DateTimeFormatter.ofPattern("yyyy/MM/dd"))
-
-/**
- * 期間テキスト("2026/07/01〜2026/07/31")。開始日・終了日とも無い施策は、早期終了があり得る
- * (may_end_early。期限未発表)なら「終了日未定」、そうでなければ「常設」
- * (空欄・「〜」だけの表示にしない)。
- */
-internal fun formatPeriod(campaign: Campaign): String {
-    if (campaign.periodStart == null && campaign.periodEnd == null) {
-        return if (campaign.mayEndEarly) "終了日未定" else "常設"
-    }
-    return buildString {
-        campaign.periodStart?.let { append(formatPeriodDate(LocalDate.parse(it))) }
-        append("〜")
-        campaign.periodEnd?.let { append(formatPeriodDate(LocalDate.parse(it))) }
-    }
-}
+/** 施策 1 件の期間テキスト(文言の定義は domain の [formatPeriodLabel]。おトクタブの一覧カードと共通) */
+internal fun formatPeriod(campaign: Campaign): String = formatPeriodLabel(
+    start = campaign.periodStart?.let { LocalDate.parse(it) },
+    end = campaign.periodEnd?.let { LocalDate.parse(it) },
+    openEnded = campaign.mayEndEarly,
+)
 
 internal fun formatCap(yen: Int): String =
     "%,d円".format(yen)
@@ -902,5 +900,111 @@ internal fun VerifiedDateRow(verifiedDate: String) {
         "情報確認日：$verifiedDate / 最新の条件は公式サイトで確認してください",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.outline,
+    )
+}
+
+// ---- 小物部品(#90 で各画面の重複実装を統合) ----
+
+/** 発行体識別色のドット。ブランドカラーを見せる用途(カードラベル・ピッカー行)はこの形に揃える */
+@Composable
+internal fun ColorDot(color: Color, size: Dp = 24.dp) {
+    Box(Modifier.size(size).clip(CircleShape).background(color))
+}
+
+/**
+ * 名前の左に発行体の識別色ドットを添える。色未定義(null・形式外)の項目はドットを出さない
+ * (グレー等で埋めると誤った識別色に見えるため)。設定のチェックボックス行(leading が埋まっているので
+ * 名前側に色を併記する)とカスタムキャンペーンの決済ピッカー行(dotSize = 16dp)で共用する
+ */
+@Composable
+internal fun NameWithColorDot(name: String, color: String?, dotSize: Dp = 24.dp) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        parseBrandColor(color)?.let { parsed ->
+            ColorDot(parsed, dotSize)
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(name)
+    }
+}
+
+/**
+ * セクション見出し(titleSmall・primary)。設定サブページ・編集フォーム・自治体ピッカーで共用し、
+ * 余白だけ置き場所に合わせて呼び出し側が決める(既定は設定サブページの ListItem 揃え)
+ */
+@Composable
+internal fun SectionHeader(
+    text: String,
+    padding: PaddingValues = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(padding),
+    )
+}
+
+/** TextButton(現在値+▼)で開く単一選択のドロップダウン。選ぶと閉じる(ブランド・カードクラス・倍率の選択) */
+@Composable
+internal fun <T> SimpleDropdown(
+    buttonLabel: String,
+    options: List<T>,
+    itemLabel: (T) -> String,
+    onSelect: (T) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { expanded = true }) {
+            Text(buttonLabel)
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(itemLabel(option)) },
+                    onClick = {
+                        onSelect(option)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * AssistChip(ラベル+▼)で開く複数選択メニューの骨格。行([CheckboxMenuRow])をトグルしても閉じず
+ * 続けて選べる(カスタムキャンペーンのお店ピッカー・地図タブのお店絞り込みで共用)
+ */
+@Composable
+internal fun PickerChipMenu(
+    chipLabel: String,
+    menuModifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        AssistChip(
+            onClick = { expanded = true },
+            label = { Text(chipLabel) },
+            trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = menuModifier,
+            content = content,
+        )
+    }
+}
+
+/** チェックボックス付きメニュー行。チェック操作は行タップに委ねる(タッチ領域を行全体にする)。indent は業態行の字下げ */
+@Composable
+internal fun CheckboxMenuRow(label: String, checked: Boolean, indent: Boolean = false, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(label) },
+        leadingIcon = { Checkbox(checked = checked, onCheckedChange = null) },
+        onClick = onClick,
+        modifier = if (indent) Modifier.padding(start = 16.dp) else Modifier,
     )
 }

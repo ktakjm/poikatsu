@@ -52,6 +52,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.ktakjm.poikatsu.data.LocationHint
+import com.ktakjm.poikatsu.domain.hasTieredRate
+import com.ktakjm.poikatsu.domain.isEndingSoon
 import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.BestPaymentOption
 import com.ktakjm.poikatsu.domain.CampaignJudgment
@@ -388,7 +390,7 @@ private fun BestOptionBanner(
                     Text(
                         "残り${best.daysRemaining}日",
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (best.daysRemaining <= 3) warningColor()
+                        color = if (isEndingSoon(best.daysRemaining)) warningColor()
                         else MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
@@ -667,8 +669,11 @@ private fun BenefitDisplay(judgment: CampaignJudgment) {
         // 「対象商品」を冠する
         val qualifier = listOfNotNull(
             "対象商品".takeIf { judgment.campaign.productScope != null },
+            // 店舗差は判定ビュー側のフラグ(rateVariesByStore=施策全体ビューのみ)で見る。特定店舗の判定なら
+            // その店の率で確定しているため付けない(おトクタブの campaignGroupMaxBenefit は収録値ベースで
+            // 常にグループ判定するので条件が異なる。対象商品限定もここでは「最大」でなく上の「対象商品」)
             "最大".takeIf {
-                judgment.campaign.rateRules.isNotEmpty() ||
+                judgment.campaign.hasTieredRate ||
                     (judgment.rateVariesByStore && judgment.effectiveRate != null)
             },
             // 円換算で名目と異なる値を出しているときは実質であることを値の上に明示(#13)

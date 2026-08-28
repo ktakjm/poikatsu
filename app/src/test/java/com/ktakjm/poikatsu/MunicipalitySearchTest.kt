@@ -1,13 +1,11 @@
 package com.ktakjm.poikatsu
 
 import com.ktakjm.poikatsu.data.MunicipalityMaster
-import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.RegisteredAreaType
 import com.ktakjm.poikatsu.ui.searchAreas
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /**
  * ピッカーの自治体名検索(searchAreas・#49)の検証。
@@ -15,9 +13,7 @@ import java.io.File
  */
 class MunicipalitySearchTest {
 
-    private val master: MunicipalityMaster = PoikatsuJson.parseMunicipalities(
-        File("../data/municipalities.json").readText()
-    )
+    private val master: MunicipalityMaster = RealData.municipalities
 
     @Test
     fun `自治体名の部分一致で都道府県横断に検索できる`() {

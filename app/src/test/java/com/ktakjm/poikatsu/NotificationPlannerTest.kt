@@ -9,6 +9,8 @@ import com.ktakjm.poikatsu.data.Region
 import com.ktakjm.poikatsu.data.RegisteredArea
 import com.ktakjm.poikatsu.data.RegisteredAreaType
 import com.ktakjm.poikatsu.domain.CampaignNotification
+import com.ktakjm.poikatsu.domain.DEFAULT_NOTIFY_TIME_MINUTES
+import com.ktakjm.poikatsu.domain.clampNotifyTimeMinutes
 import com.ktakjm.poikatsu.domain.NotificationKind
 import com.ktakjm.poikatsu.domain.delayUntilNextNotifyTime
 import com.ktakjm.poikatsu.domain.notificationItemText
@@ -423,5 +425,12 @@ class NotificationPlannerTest {
             Duration.ofMinutes(15),
             delayUntilNextNotifyTime(LocalDateTime.of(2026, 7, 26, 7, 30), notifyTimeMinutes = 7 * 60 + 45),
         )
+    }
+
+    @Test
+    fun `スケジュール-通知時刻は 0時00分〜23時59分に丸める`() {
+        assertEquals(0, clampNotifyTimeMinutes(-5))
+        assertEquals(24 * 60 - 1, clampNotifyTimeMinutes(9999))
+        assertEquals(DEFAULT_NOTIFY_TIME_MINUTES, clampNotifyTimeMinutes(8 * 60))
     }
 }

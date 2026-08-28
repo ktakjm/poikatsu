@@ -2,7 +2,6 @@ package com.ktakjm.poikatsu
 
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.MunicipalityMaster
-import com.ktakjm.poikatsu.data.PoikatsuJson
 import com.ktakjm.poikatsu.data.Region
 import com.ktakjm.poikatsu.data.RegisteredArea
 import com.ktakjm.poikatsu.data.RegisteredAreaType
@@ -12,7 +11,6 @@ import com.ktakjm.poikatsu.domain.municipalCampaignsForLocation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /**
  * 地域フィルタ(filterCampaignsByArea)と自治体マスタ(municipalities.json v2)の検証。
@@ -20,9 +18,7 @@ import java.io.File
  */
 class RegionFilterTest {
 
-    private val master: MunicipalityMaster = PoikatsuJson.parseMunicipalities(
-        File("../data/municipalities.json").readText()
-    )
+    private val master: MunicipalityMaster = RealData.municipalities
 
     private fun municipalCampaign(id: String, prefecture: String, name: String) = Campaign(
         id = id,

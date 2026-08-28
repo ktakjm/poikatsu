@@ -25,16 +25,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,10 +44,8 @@ import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
@@ -65,9 +57,10 @@ import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.ExpiringPointNotice
-import com.ktakjm.poikatsu.domain.campaignGroupDisplayTitle
 import com.ktakjm.poikatsu.domain.groupLabelOf
 import com.ktakjm.poikatsu.util.GeoMath
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 // ---- 近く(地図)タブ(#88 で PoikatsuApp.kt から移設) ----
 
@@ -477,64 +470,31 @@ internal fun NearbyDetailSideSheet(
         // full-bleed でステータスバー裏まで届くため、内容だけ topInset で避ける(右ペインと同じ)
         Column(Modifier.padding(top = topInset).padding(horizontal = 16.dp)) {
             when {
-                storeCheck != null -> {
-                    PaneHeader(
-                        title = storeCheckTitle(storeCheck),
-                        leading = {
-                            IconButton(onClick = onCloseStoreCheck) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "判定詳細に戻る",
-                                )
-                            }
-                        },
-                    )
-                    StoreCheckScreen(
-                        storeCheck = storeCheck,
-                        onBack = onCloseStoreCheck,
-                        onStoreNameChange = onStoreNameChange,
-                    )
-                }
-                selection != null -> {
-                    PaneHeader(
-                        title = selectionTitle(selection),
-                        trailing = {
-                            IconButton(onClick = onBack) {
-                                Icon(Icons.Default.Close, contentDescription = "詳細を閉じる")
-                            }
-                        },
-                    )
-                    JudgmentDetail(
-                        selection = selection,
-                        onBack = onBack,
-                        onOpenStoreCheck = onOpenStoreCheck,
-                        // 地図発の判定詳細は店舗特定済み(displayName あり)のため「近くのこのお店を
-                        // 探す」は描画されず、この導線は呼ばれない
-                        onFindNearby = {},
-                        onExcludeStore = onExcludeStore,
-                        onRestoreExcludedStore = onRestoreExcludedStore,
-                        expiringNotices = expiringNotices,
-                    )
-                }
-                campaignGroup != null -> {
-                    PaneHeader(
-                        title = campaignGroupDisplayTitle(campaignGroup.map { it.campaign }, merchants),
-                        trailing = {
-                            IconButton(onClick = onCloseCampaignDetail) {
-                                Icon(Icons.Default.Close, contentDescription = "詳細を閉じる")
-                            }
-                        },
-                    )
-                    // お知らせピル発は自治体施策のみでカスタムキャンペーンは来ないため、
-                    // 編集・削除(onEditCustom/onDeleteCustom)は出さない
-                    CampaignDetail(
-                        judgments = campaignGroup,
-                        merchants = merchants,
-                        storeRates = storeRates,
-                        onBack = onCloseCampaignDetail,
-                        onFindChains = onFindChains,
-                    )
-                }
+                storeCheck != null -> StoreCheckPane(
+                    storeCheck = storeCheck,
+                    onClose = onCloseStoreCheck,
+                    onStoreNameChange = onStoreNameChange,
+                )
+                selection != null -> JudgmentDetailPane(
+                    selection = selection,
+                    onClose = onBack,
+                    onOpenStoreCheck = onOpenStoreCheck,
+                    // 地図発の判定詳細は店舗特定済み(displayName あり)のため「近くのこのお店を
+                    // 探す」は描画されず、この導線は呼ばれない
+                    onFindNearby = {},
+                    onExcludeStore = onExcludeStore,
+                    onRestoreExcludedStore = onRestoreExcludedStore,
+                    expiringNotices = expiringNotices,
+                )
+                // お知らせピル発は自治体施策のみでカスタムキャンペーンは来ないため、
+                // 編集・削除(onEditCustom/onDeleteCustom)は出さない
+                campaignGroup != null -> CampaignDetailPane(
+                    group = campaignGroup,
+                    merchants = merchants,
+                    storeRates = storeRates,
+                    onClose = onCloseCampaignDetail,
+                    onFindChains = onFindChains,
+                )
             }
         }
     }
@@ -758,9 +718,10 @@ private fun NearbyPreview(
                 Icon(Icons.Default.Close, contentDescription = "プレビューを閉じる")
             }
         }
+        // 値はリスト行・検索結果カードと同じ「最適決済での還元」なので同じ無修飾で出す(#90 で「最大」を外した)
         place.bestBenefit?.let {
             Text(
-                "最大 $it",
+                it.toString(),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -869,51 +830,32 @@ private fun ChainFilterDropdown(
     selected: Set<MainViewModel.NearbyLens>,
     onToggle: (MainViewModel.NearbyLens) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    fun isSelected(lens: MainViewModel.NearbyLens) = selected.any { it.sameTarget(lens) }
-
     @Composable
     fun lensRow(lens: MainViewModel.NearbyLens, label: String, indent: Boolean = false) {
-        DropdownMenuItem(
-            text = { Text(label) },
-            leadingIcon = {
-                Checkbox(
-                    checked = isSelected(lens),
-                    onCheckedChange = null, // 行タップに委ねる(タッチ領域を行全体にする)
-                )
-            },
-            onClick = { onToggle(lens) },
-            modifier = if (indent) Modifier.padding(start = 16.dp) else Modifier,
-        )
+        // 選択判定は sameTarget(同じ merchant/業態を指すレンズ)で行う
+        CheckboxMenuRow(label, checked = selected.any { it.sameTarget(lens) }, indent = indent) { onToggle(lens) }
     }
-    Box {
-        AssistChip(
-            onClick = { expanded = true },
-            label = { Text("お店で絞る") },
-            trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-        )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            chains.forEach { group ->
-                if (group.banners.size >= 2) {
-                    // グループ見出し行(系列まるごと)+業態行。見出しの選択は同系列の業態選択を
-                    // 置き換える(重ね掛けしない。NearbyController.onToggleNearbyLens 側で解決)
-                    lensRow(
-                        MainViewModel.NearbyLens(group.merchant),
-                        "${groupLabelOf(group.merchant)} 全て（${group.total}）",
-                    )
-                    group.banners.forEach { (lens, count) ->
-                        lensRow(lens, "${lens.label}（$count）", indent = true)
-                    }
-                } else {
-                    // 業態が1つだけの系列は行1つ。業態を持たない merchant は従来どおり系列レンズ
-                    // (ブリッジ由来のレンズと一致させる)、業態持ちはその業態レンズで正確に絞る
-                    val lens = if (group.merchant.banners.isEmpty()) {
-                        MainViewModel.NearbyLens(group.merchant)
-                    } else {
-                        group.banners.firstOrNull()?.first ?: MainViewModel.NearbyLens(group.merchant)
-                    }
-                    lensRow(lens, "${lens.label}（${group.total}）")
+    PickerChipMenu(chipLabel = "お店で絞る") {
+        chains.forEach { group ->
+            if (group.banners.size >= 2) {
+                // グループ見出し行(系列まるごと)+業態行。見出しの選択は同系列の業態選択を
+                // 置き換える(重ね掛けしない。NearbyController.onToggleNearbyLens 側で解決)
+                lensRow(
+                    MainViewModel.NearbyLens(group.merchant),
+                    "${groupLabelOf(group.merchant)} 全て（${group.total}）",
+                )
+                group.banners.forEach { (lens, count) ->
+                    lensRow(lens, "${lens.label}（$count）", indent = true)
                 }
+            } else {
+                // 業態が1つだけの系列は行1つ。業態を持たない merchant は従来どおり系列レンズ
+                // (ブリッジ由来のレンズと一致させる)、業態持ちはその業態レンズで正確に絞る
+                val lens = if (group.merchant.banners.isEmpty()) {
+                    MainViewModel.NearbyLens(group.merchant)
+                } else {
+                    group.banners.firstOrNull()?.first ?: MainViewModel.NearbyLens(group.merchant)
+                }
+                lensRow(lens, "${lens.label}（${group.total}）")
             }
         }
     }

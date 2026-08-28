@@ -41,10 +41,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -67,6 +65,8 @@ import com.ktakjm.poikatsu.domain.ENDS_SOON_DAYS
 import com.ktakjm.poikatsu.ui.theme.onWarningContainerColor
 import com.ktakjm.poikatsu.ui.theme.warningColor
 import com.ktakjm.poikatsu.ui.theme.warningContainerColor
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /**
  * 通知時刻の設定刻み(分)。保存形式は分単位で、刻みは UI 側の制約として持つ。
@@ -303,7 +303,7 @@ internal fun NotificationSettingsPage(
         }
         // 通知内容の説明。選べる項目ではないので ListItem(=操作できる行の見た目)にせず、
         // トグル下の説明段落として出す(Android のシステム設定の footer 説明と同じ扱い)
-        SettingsSectionHeader("通知の内容")
+        SectionHeader("通知の内容")
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -645,13 +645,3 @@ internal fun LicensesPage(onBack: () -> Unit) {
     )
 }
 
-/** サブページ内のセクション見出し(お支払い方法サブページの マイカード/国際ブランド/コード決済 等) */
-@Composable
-internal fun SettingsSectionHeader(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
-    )
-}

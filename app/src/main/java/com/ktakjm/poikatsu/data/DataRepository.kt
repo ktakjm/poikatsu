@@ -1,6 +1,7 @@
 package com.ktakjm.poikatsu.data
 
 import java.io.File
+import timber.log.Timber
 
 enum class DataSource { REMOTE, CACHE, BUNDLED }
 
@@ -71,9 +72,11 @@ class DataRepository(
         val sha = resolveSha(ref)
         val fetchRef = sha ?: ref
         val texts = ALL_FILES.map { fetchRemote(it, fetchRef, dataDir) ?: return null }
+        // パース失敗(壊れた JSON・対応版より新しい schema_version)は取得失敗と同じ扱い: キャッシュに書かず
+        // 呼び出し側はローカル(キャッシュ→同梱)で動き続ける
         val data = runCatching {
             PoikatsuJson.parse(texts[0], texts[1], texts[2])
-        }.getOrNull() ?: return null
+        }.onFailure { Timber.w(it, "リモートデータ(%s)を読めないため破棄", fetchRef) }.getOrNull() ?: return null
         runCatching {
             cacheDir.mkdirs()
             ALL_FILES.forEachIndexed { i, name -> File(cacheDir, name).writeText(texts[i]) }

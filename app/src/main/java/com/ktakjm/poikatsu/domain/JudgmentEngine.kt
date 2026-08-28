@@ -15,81 +15,6 @@ import com.ktakjm.poikatsu.data.StoreScope
 import com.ktakjm.poikatsu.util.JapaneseText
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
-
-/**
- * ある店舗に対する 1 施策分の判定結果。カード決済・QR 決済・キャンペーン詳細で共用する。
- * 各フィールドは null / 空ならカード側で非表示になるため、カード種別ごとの分岐は不要。
- */
-data class CampaignJudgment(
-    val campaign: Campaign,
-    val badgeLabel: String,
-    val brandColor: String?,
-    val benefitType: BenefitType,
-    /** 実質還元率(%)。名目率に払い出し通貨の円価値係数(1pt価値 × 条件付き倍率)を掛けた値(#13) */
-    val effectiveRate: Double?,
-    /** 名目還元率(円換算前)。[effectiveRate](実質%)と異なるとき UI が「実質○%相当」を併記する(#13) */
-    val nominalRate: Double? = null,
-    val discountAmount: Int?,
-    val daysRemaining: Int?,
-    /** 「対象」セクション(campaign 直下+その店の merchant_rules をレベル横断で連結)。通常ロールで表示 */
-    val eligibleNotes: List<String>,
-    /** 「対象外」セクション(同上の連結)。warning 面 1 コンテナに箇条書きで表示 */
-    val ineligibleNotes: List<String>,
-    val storeListUrl: String?,
-    val warnings: List<String>,
-    val minPurchase: Int?,
-    val usageLimitText: String?,
-    val perTransactionCap: Int?,
-    val periodTotalCap: Int?,
-    val capNote: String?,
-    val storeSearchUrl: String?,
-    val detailUrl: String?,
-    /** 起動リンク(0〜N 件)。QR は決済アプリ(AEON Pay のように複数あり得る)、カードはウォレット(Google Pay) */
-    val appLinks: List<AppLink> = emptyList(),
-    val pointMultiplier: PointMultiplier?,
-    /**
-     * rebate の払い出し通貨名(「還元: Pontaポイント」行に出す)。[payoutCurrency] が解決できた
-     * ときだけ非 null で、倍率の有無とは独立。discount(即時割引)・lottery には通貨の概念が
-     * 無いため常に null、カタログに `point_currency_id` の無い発行体(MUFG・エポス等)も null
-     * ——誤った通貨名を出すより行を省く。
-     */
-    val payoutCurrencyName: String? = null,
-    /**
-     * 表示中の [effectiveRate] に条件付き倍率(ウエル活等)が実際に掛かっているか。
-     * 払い出し通貨の倍率が有効で、率のある施策のときだけ true(適用時注記の表示条件)。
-     */
-    val welcatsuApplied: Boolean,
-    /** 予算到達次第の早期終了があり得る施策か。true なら注記を出す */
-    val mayEndEarly: Boolean = false,
-    /** recurrence 施策で今日が対象日か。recurrence の無い施策は常に true */
-    val todayIsTarget: Boolean = true,
-    /** recurrence 施策で今日が非対象日のときの次の対象日。対象日当日・recurrence 無しは null */
-    val nextTargetDate: LocalDate? = null,
-    /**
-     * 「対象のお店のみ」(網羅リスト #64)バッジ・注記を出すか。お店タブ(チェーン文脈あり)は
-     * そのチェーンの rule の網羅性、おトクタブの施策詳細(チェーン非依存)は施策単位
-     * ([allStoreListsExhaustive])で呼び出し側が設定する
-     */
-    val exhaustiveStoreList: Boolean = false,
-    /**
-     * effectiveRate が「店舗によって異なる率の最大値」か。施策全体ビュー(おトクタブの施策詳細)
-     * だけが [Campaign.storeRatesVary] で設定し、率表示に「最大」を冠する(#81)。
-     * お店タブ・地図(その店の実際の率を表示)は false のまま
-     */
-    val rateVariesByStore: Boolean = false,
-    /** この金額(円)未満の買い物ならこの定額特典が最良の定率より得(#13)。定率の最良が無いチェーンは null */
-    val breakevenAmount: Int? = null,
-)
-
-/**
- * 判定詳細の起動リンク 1 件。label は「◯◯を開く」の◯◯で、バッジ(カード/サービス名)でなく
- * 起動先アプリの名前を入れる(「三井住友カードアプリを開く」でウォレットが起動する齟齬を避ける)
- */
-data class AppLink(
-    val packageName: String,
-    val label: String,
-)
 
 enum class StoreEligibility {
     /** 公式の対象店舗リストに一致 */
@@ -115,18 +40,6 @@ data class StoreVerdict(
     /** 網羅リスト(list_is_exhaustive)由来の判定か。UI の理由文の出し分けに使う */
     val listIsExhaustive: Boolean = false,
 )
-
-enum class BenefitType(val jsonValue: String) {
-    REBATE("rebate"),
-    DISCOUNT("discount"),
-
-    /** 抽選型。確定還元ではないため「最良特典」比較には載せない(表示のみ) */
-    LOTTERY("lottery");
-
-    companion object {
-        fun fromString(s: String): BenefitType = entries.find { it.jsonValue == s } ?: REBATE
-    }
-}
 
 enum class CampaignType(val jsonValue: String) {
     CARD_PROGRAM("card_program"),
@@ -307,29 +220,6 @@ val Campaign.googlePayIneligibleWarning: String?
         else -> "Google Pay(スマホのタッチ決済)での支払いは還元対象外"
     }
 
-data class BenefitLabel(val value: String, val suffix: String) {
-    override fun toString() = "$value$suffix"
-}
-
-fun formatBenefit(benefitType: BenefitType, rate: Double?, discount: Int?): BenefitLabel? =
-    when (benefitType) {
-        BenefitType.DISCOUNT -> when {
-            discount != null -> BenefitLabel("%,d円".format(discount), "引き")
-            rate != null -> BenefitLabel("${trimRate(rate)}%", " OFF")
-            else -> null
-        }
-        BenefitType.REBATE -> when {
-            discount != null -> BenefitLabel("%,d円".format(discount), "還元")
-            rate != null -> BenefitLabel("${trimRate(rate)}%", " 還元")
-            else -> null
-        }
-        // 抽選は確定特典ではないため定率・定額と同列のラベルにしない(最良特典の比較からも自然に外れる)
-        BenefitType.LOTTERY -> null
-    }
-
-fun trimRate(rate: Double): String =
-    if (rate == rate.toLong().toDouble()) rate.toLong().toString() else rate.toString()
-
 // ---- recurrence(繰り返し日付条件) ----
 // campaignStatus(期間の外枠)とは独立に「その日が対象日か」を判定する。「お店」「地図」の判定は
 // 期間内かつ対象日のみ、おトクタブは期間内なら非対象日でも出して「次の対象日」を案内する。
@@ -377,19 +267,6 @@ private fun dayOfWeekJa(day: String): String = when (day.uppercase()) {
     "SUN" -> "日"
     else -> day
 }
-
-enum class CampaignStatus { ACTIVE, UPCOMING, EXPIRED }
-
-data class BestPaymentOption(
-    val method: String,
-    val rate: Double?,
-    val discountAmount: Int?,
-    val benefitType: BenefitType,
-    val isTimeLimited: Boolean,
-    val daysRemaining: Int?,
-    /** 名目還元率(円換算前)。[rate](実質%)と異なるとき UI が「実質○%相当」を併記する(#13) */
-    val nominalRate: Double? = null,
-)
 
 data class JudgmentResult(
     val judgments: List<CampaignJudgment>,
@@ -660,30 +537,17 @@ class JudgmentEngine(private val data: PoikatsuData) {
     }
 
     // ---- 期間フィルタ ----
-    // recurrence(対象日)は含まない期間の外枠だけの判定。おトクタブは期間内なら
-    // 非対象日でも一覧に出す(「本日対象外」セクションで次の対象日を案内する)ため、対象日は isTargetDay で別判定する。
+    // recurrence(対象日)は含まない期間の外枠だけの判定(境界の定義は CampaignPeriod.kt)。おトクタブは
+    // 期間内なら非対象日でも一覧に出す(「本日対象外」セクションで次の対象日を案内する)ため、対象日は isTargetDay で別判定する。
 
-    fun campaignStatus(campaign: Campaign, today: LocalDate): CampaignStatus {
-        val start = campaign.periodStart?.let { parseDate(it) }
-        val end = campaign.periodEnd?.let { parseDate(it) }
-        return when {
-            end != null && today > end -> CampaignStatus.EXPIRED
-            start != null && today < start -> CampaignStatus.UPCOMING
-            else -> CampaignStatus.ACTIVE
-        }
-    }
+    fun campaignStatus(campaign: Campaign, today: LocalDate): CampaignStatus =
+        campaignStatus(campaign.periodStart?.let { parseDate(it) }, campaign.periodEnd?.let { parseDate(it) }, today)
 
-    fun daysRemaining(campaign: Campaign, today: LocalDate): Int? {
-        val end = campaign.periodEnd?.let { parseDate(it) } ?: return null
-        val days = ChronoUnit.DAYS.between(today, end).toInt()
-        return if (days >= 0) days else null
-    }
+    fun daysRemaining(campaign: Campaign, today: LocalDate): Int? =
+        daysRemaining(campaign.periodEnd?.let { parseDate(it) }, today)
 
-    fun daysUntilStart(campaign: Campaign, today: LocalDate): Int? {
-        val start = campaign.periodStart?.let { parseDate(it) } ?: return null
-        val days = ChronoUnit.DAYS.between(today, start).toInt()
-        return if (days > 0) days else null
-    }
+    fun daysUntilStart(campaign: Campaign, today: LocalDate): Int? =
+        daysUntilStart(campaign.periodStart?.let { parseDate(it) }, today)
 
     /** アクティブな campaign のみ返す */
     fun activeCampaigns(today: LocalDate): List<Campaign> =
@@ -780,7 +644,7 @@ class JudgmentEngine(private val data: PoikatsuData) {
                 listOfNotNull(if (merchant != null && rule != null) bannerScopeNote(merchant, rule) else null),
             storeListUrl = rule?.storeListUrl,
             warnings = buildList {
-                if (days != null && days <= 3) add("残り${days}日")
+                if (isEndingSoon(days)) add("残り${days}日")
                 // Android ユーザーは自然に Google Pay でタッチしがちなので、対象外なら積極的に注意喚起する
                 campaign.googlePayIneligibleWarning?.let { add(it) }
             },

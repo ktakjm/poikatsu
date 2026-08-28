@@ -13,10 +13,9 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.ktakjm.poikatsu.MainActivity
 import com.ktakjm.poikatsu.R
-import com.ktakjm.poikatsu.data.DataRepository
-import com.ktakjm.poikatsu.data.GithubRawClient
-import com.ktakjm.poikatsu.data.MunicipalityMaster
-import com.ktakjm.poikatsu.data.PoikatsuJson
+import com.ktakjm.poikatsu.data.createDataRepository
+import com.ktakjm.poikatsu.data.dataDirFor
+import com.ktakjm.poikatsu.data.loadMunicipalityMaster
 import com.ktakjm.poikatsu.data.SettingsRepository
 import com.ktakjm.poikatsu.domain.CampaignNotification
 import com.ktakjm.poikatsu.domain.campaignGroupKey
@@ -27,7 +26,6 @@ import com.ktakjm.poikatsu.domain.notificationLine
 import com.ktakjm.poikatsu.domain.notificationTargets
 import com.ktakjm.poikatsu.domain.notificationTitle
 import com.ktakjm.poikatsu.domain.planCampaignNotifications
-import java.io.File
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -58,13 +56,8 @@ class CampaignNotificationWorker(
         if (!isTestRun && !settings.notificationsEnabled) return@withContext Result.success()
 
         // データ取得は MainViewModel と同じ設定(テストデータ・同梱・ref)に追従する
-        val dataDir = if (settings.useTestData) "data-test" else "data"
-        val repository = DataRepository(
-            readAsset = { path -> app.assets.open(path).bufferedReader().use { it.readText() } },
-            cacheDir = File(app.filesDir, "remote_data"),
-            fetchRemote = { fileName, ref, dir -> GithubRawClient.fetch(fileName, ref, dir) },
-            resolveSha = { ref -> GithubRawClient.resolveCommitSha(ref) },
-        )
+        val dataDir = dataDirFor(settings.useTestData)
+        val repository = createDataRepository(app)
         // リモートの最新を優先し、取れなければローカル(キャッシュ→同梱)で判定する。
         // 圏外でも「手元のデータで分かる範囲」を通知する方が、黙って何も出ないより価値がある
         val loaded = runCatching {
@@ -80,24 +73,10 @@ class CampaignNotificationWorker(
             return@withContext if (isTestRun) Result.failure() else Result.retry()
         }
         // 自治体マスタが読めないときは空のまま=自治体施策は通知されない(誤配より出さない側に倒す)
-        val master = runCatching {
-            val text = app.assets.open("$dataDir/municipalities.json").bufferedReader().use { it.readText() }
-            PoikatsuJson.parseMunicipalities(text)
-        }.getOrElse { e ->
-            Timber.w(e, "通知ジョブ: 自治体マスタの読み込みに失敗")
-            MunicipalityMaster()
-        }
+        val master = loadMunicipalityMaster(app)
 
-        val merged = mergeUserData(
-            base = loaded.data,
-            cardOverrides = settings.cardOverrides,
-            ownedBrands = settings.ownedBrands,
-            customCards = settings.customCards,
-            customCampaigns = settings.activeCustomCampaigns,
-            enabledPointMultipliers = settings.enabledPointMultipliers,
-            pointCurrencyValues = settings.pointCurrencyValues,
-            pointMultiplierFactors = settings.pointMultiplierFactors,
-        )
+        // カタログ+ユーザー設定のマージはアプリ本体(MainViewModel.rebuild)と同じ入口を通す
+        val merged = mergeUserData(loaded.data, settings)
         val targets = notificationTargets(
             campaigns = merged.engineData.campaigns,
             ownedCards = merged.engineData.cards,

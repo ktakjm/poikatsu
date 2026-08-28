@@ -40,8 +40,8 @@ class SettingsBackupTest {
         cardOverrides = mapOf(
             "olive" to CardOverride(owned = false),
             "epos_gold" to CardOverride(rate = 1.5, brand = "Visa"),
-            // カードクラス・1pt価値(#52。JCB W/S 等)も機種変更で失われないこと
-            "jcb_original" to CardOverride(cardClass = "w", pointValue = 0.7),
+            // カードクラス(#52。JCB W/S 等)も機種変更で失われないこと
+            "jcb_original" to CardOverride(cardClass = "w"),
         ),
         enabledQrPaymentIds = setOf("paypay", "rakuten_pay"),
         ownedBrands = setOf("Amex"),
@@ -154,17 +154,17 @@ class SettingsBackupTest {
         assertTrue(restored.pointMultiplierFactors.isEmpty())
     }
 
-    // 旧 v2 ファイルは新フィールド無しで読める。CardOverride.pointValue は #13 の移行のために
-    // 残置されているため、v2 ファイルにあれば読み込み時点ではそのまま復元される(通貨側への
-    // 移行は次回 rebuild 時に migrateCardPointValues が行う)
+    // 旧 v2 ファイルは新フィールド無しで読める。CardOverride.pointValue(カード単位の 1pt 価値)は
+    // 通貨単位(pointCurrencyValues)へ置き換えて削除済み(#13/#90)なので、v2 ファイルにあっても
+    // 読み捨てられる(ignoreUnknownKeys。エラーにはしない)
     @Test
     fun `v2バックアップは読めて新フィールドは空になる`() {
         val v2Json = """{"schemaVersion": 2, "cardOverrides": {"jcb_original": {"pointValue": 0.8}}}"""
         val restored = decodeSettingsBackup(v2Json)!!.toSettings()
         assertTrue(restored.pointCurrencyValues.isEmpty())
         assertTrue(restored.pointBalances.isEmpty())
-        // 旧 CardOverride.pointValue は残したまま復元される(次回 rebuild 時の移行で通貨側へ移る)
-        assertEquals(0.8, restored.cardOverrides["jcb_original"]!!.pointValue!!, 0.0)
+        // 旧 CardOverride.pointValue は読み捨て(既定値の CardOverride だけが残る)
+        assertEquals(CardOverride(), restored.cardOverrides["jcb_original"])
     }
 
     @Test
@@ -243,15 +243,16 @@ class SettingsBackupTest {
         assertTrue(restored.excludedStorePairsTest.isEmpty())
     }
 
-    // 旧スキーマ(単一 cardId)の登録も、読み込み時に payments へ折り畳まれた形で復元される
+    // 旧スキーマ(単一 cardId / qrPaymentId)のカスタムキャンペーンは #90 で残置フィールドを削除した。
+    // 旧ファイルの登録はエラーにせず読めるが、決済手段は復元されない(payments 空。再設定してもらう)
     @Test
-    fun `旧スキーマのカスタムキャンペーンは payments へ正規化される`() {
+    fun `旧スキーマのカスタムキャンペーンは決済手段なしで読める`() {
         val legacy = """
             {"schemaVersion":1,"customCampaigns":[{"id":"custom:x","name":"旧","cardId":"olive"}]}
         """.trimIndent()
         val restored = decodeSettingsBackup(legacy)!!.toSettings().customCampaigns.single()
-        assertEquals(listOf(CustomPayment(cardId = "olive")), restored.payments)
-        assertNull(restored.cardId)
+        assertEquals("custom:x", restored.id)
+        assertTrue(restored.payments.isEmpty())
     }
 
     // ---- UI 表示 ----

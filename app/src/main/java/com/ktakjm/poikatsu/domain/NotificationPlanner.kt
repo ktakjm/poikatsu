@@ -15,8 +15,11 @@ import java.time.temporal.ChronoUnit
 // 判定自体は純 Kotlin に保ちユニットテストを維持する。通知タイミングは「開始日」と
 // 「終了間近」のみ(recurrence の対象日通知は毎週発火して高頻度になるため出さない)。
 
-/** 「終了間近」として通知に含める残り日数(この日数以下)。UI の警告表示「残り3日」と基準を揃える */
-const val ENDS_SOON_DAYS = 3
+/** 通知時刻(0時からの分)の既定値 8:00。AppSettings / バックアップ / UiState の既定を揃える */
+const val DEFAULT_NOTIFY_TIME_MINUTES = 8 * 60
+
+/** 通知時刻を 0:00〜23:59 に丸める(設定 API とバックアップ復元の両経路で同じ範囲にする) */
+fun clampNotifyTimeMinutes(minutesOfDay: Int): Int = minutesOfDay.coerceIn(0, 24 * 60 - 1)
 
 /**
  * 開始通知が拾う開始からの経過日数。日次ジョブは省電力制約や圏外でスキップされ得るため、
@@ -113,15 +116,14 @@ fun planCampaignNotifications(targets: List<Campaign>, today: LocalDate): List<C
         val campaign = group.first()
         val start = campaign.periodStart?.let { JudgmentEngine.parseDate(it) }
         val end = campaign.periodEnd?.let { JudgmentEngine.parseDate(it) }
-        if (start != null && today < start) return@mapNotNull null // 開始前
-        if (end != null && today > end) return@mapNotNull null // 終了後
+        if (campaignStatus(start, end, today) != CampaignStatus.ACTIVE) return@mapNotNull null // 開始前・終了後
         val sinceStart = start?.let { ChronoUnit.DAYS.between(it, today).toInt() }
-        val remaining = end?.let { ChronoUnit.DAYS.between(today, it).toInt() }
+        val remaining = daysRemaining(end, today)
         when {
             sinceStart != null && sinceStart <= STARTED_LOOKBACK_DAYS ->
                 CampaignNotification(group, NotificationKind.STARTED, sinceStart)
-            remaining != null && remaining <= ENDS_SOON_DAYS ->
-                CampaignNotification(group, NotificationKind.ENDS_SOON, remaining)
+            isEndingSoon(remaining) ->
+                CampaignNotification(group, NotificationKind.ENDS_SOON, remaining!!)
             else -> null
         }
     }

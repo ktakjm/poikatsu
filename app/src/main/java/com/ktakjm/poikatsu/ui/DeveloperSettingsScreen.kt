@@ -130,7 +130,7 @@ internal fun DeveloperSettingsPage(
 
             // 地図の取得データの実測(#70)。YOLP の生 POI と照合・間引き結果を確認する
             // (alias 補完の要否判断・yolp_coverage_note の実測根拠の材料)
-            SettingsSectionHeader("地図")
+            SectionHeader("地図")
             ListItem(
                 headlineContent = { Text("取得した地図データ") },
                 supportingContent = {
@@ -144,7 +144,7 @@ internal fun DeveloperSettingsPage(
             )
 
             // 通知(#6)のテスト。日次ジョブの発火時刻を待たずに本番と同じ判定・通知経路を通す
-            SettingsSectionHeader("通知のテスト")
+            SectionHeader("通知のテスト")
             ListItem(
                 headlineContent = { Text("今すぐテスト通知") },
                 supportingContent = { Text("その日の対象を判定して通知します(端末の通知許可が必要)") },
