@@ -167,7 +167,11 @@ fun mergeUserData(
             ?: "カスタム"
     }
     val customMerchants = buildCustomMerchants(customCampaigns)
-    val convertedCustomCampaigns = customCampaigns.flatMap { it.toCampaigns(operatorFor) }
+    val convertedCustomCampaigns = customCampaigns
+        .flatMap { it.toCampaigns(operatorFor) }
+        // 自治体キャンペーン(#91)には同梱 municipal と同じ QR サービス既定文言を補う。同梱は
+        // resolveCampaigns(読み込み時)で掛かるが、カスタムはここで合流するため個別に掛ける
+        .map { applyMunicipalDefaults(it, base.qrPayments) }
     val mergedMerchants = base.merchants + customMerchants
     val mergedCampaigns = base.campaigns + convertedCustomCampaigns
 

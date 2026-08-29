@@ -1,6 +1,18 @@
 package com.ktakjm.poikatsu
 
+import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.CardBrand
+import com.ktakjm.poikatsu.data.AppSettings
+import com.ktakjm.poikatsu.data.MunicipalDefaults
+import com.ktakjm.poikatsu.data.Region
+import com.ktakjm.poikatsu.data.RegisteredArea
+import com.ktakjm.poikatsu.data.RegisteredAreaType
+import com.ktakjm.poikatsu.data.isMunicipal
+import com.ktakjm.poikatsu.domain.campaignGroupKey
+import com.ktakjm.poikatsu.domain.filterCampaignsByArea
+import com.ktakjm.poikatsu.domain.mergeUserData
+import com.ktakjm.poikatsu.domain.municipalCampaignsForAreas
+import com.ktakjm.poikatsu.domain.municipalCampaignsForLocation
 import com.ktakjm.poikatsu.data.CustomCampaign
 import com.ktakjm.poikatsu.data.CustomPayment
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_PERIOD_TOTAL
@@ -53,12 +65,14 @@ class CustomCampaignTest {
         startDate: String? = null,
         endDate: String? = null,
         daysOfWeek: List<String> = emptyList(),
+        region: Region? = null,
     ) = CustomCampaign(
         id = id,
         name = "テストキャンペーン",
         payments = payments,
         merchantIds = merchantIds,
         storeNames = storeNames,
+        region = region,
         benefitType = benefitType,
         rate = rate,
         discountAmount = discountAmount,
@@ -443,5 +457,150 @@ class CustomCampaignTest {
         val engine = engineWith(listOf(expired), qrPayments = listOf(QrPayment(id = "testpay", name = "テストペイ", brandColor = "#00AA00")))
         val statuses = expired.toCampaigns(::operatorFor).map { engine.campaignStatus(it, today) }
         assertTrue(statuses.all { it == CampaignStatus.EXPIRED })
+    }
+    // ---- 自治体キャンペーン(#91) ----
+
+    private val yuzawa = Region(name = "湯沢市", prefecture = "秋田県")
+    private val paypay = CustomPayment(qrPaymentId = "paypay")
+    private val aupay = CustomPayment(qrPaymentId = "aupay")
+
+    @Test
+    fun `自治体キャンペーンは municipal・external・merchant_rules なしで region を持つ`() {
+        val campaign = custom(payments = listOf(paypay), rate = 20.0, region = yuzawa, endDate = "2026-09-30")
+            .toCampaigns(::operatorFor).single()
+
+        assertEquals(CampaignType.MUNICIPAL, campaign.campaignType)
+        assertEquals(StoreScope.EXTERNAL, campaign.storeScope)
+        assertTrue(campaign.merchantRules.isEmpty())
+        assertEquals(yuzawa, campaign.region)
+        assertTrue(campaign.isCustom)
+        // タイトルは同梱 municipal と同じく region から組むため display_name は持たせない
+        assertNull(campaign.displayName)
+        assertEquals("テストキャンペーン", campaign.name)
+    }
+
+    @Test
+    fun `自治体キャンペーンはお店の指定が残っていても無視する(排他は変換側でも守る)`() {
+        val source = custom(payments = listOf(paypay), region = yuzawa, merchantIds = listOf("mcdonalds"), storeNames = listOf("駅前ベーカリー"))
+        assertTrue(source.isMunicipal)
+        assertTrue(source.toCampaigns(::operatorFor).single().merchantRules.isEmpty())
+        // 自由入力店名の合成 Merchant も作らない(地図の YOLP キーワード検索に混ざらない)
+        assertTrue(buildCustomMerchants(listOf(source)).isEmpty())
+    }
+
+    @Test
+    fun `決済手段ごとの差分は URL 上書き・注記連結・通貨明示として展開に写る`() {
+        val source = custom(
+            payments = listOf(
+                paypay.copy(
+                    detailUrl = "https://paypay.example/yuzawa",
+                    note = "PayPayクレジットも対象",
+                    ineligibleNote = "PayPay商品券は対象外",
+                ),
+                aupay.copy(pointCurrencyId = "aupay_balance"),
+            ),
+            rate = 20.0,
+            region = yuzawa,
+            note = "市内の中小店舗が対象",
+        ).copy(ineligibleNote = "公共料金は対象外", detailUrl = "https://city.example/campaign")
+        val (pp, au) = source.toCampaigns(::operatorFor)
+
+        // 単値は決済側が非 null なら上書き、null なら共通側
+        assertEquals("https://paypay.example/yuzawa", pp.detailUrl)
+        assertEquals("https://city.example/campaign", au.detailUrl)
+        // 注記は共通 → 決済側の順で連結
+        assertEquals(listOf("市内の中小店舗が対象", "PayPayクレジットも対象"), pp.eligibleNotes)
+        assertEquals(listOf("公共料金は対象外", "PayPay商品券は対象外"), pp.ineligibleNotes)
+        assertEquals(listOf("市内の中小店舗が対象"), au.eligibleNotes)
+        // 払い出し通貨は決済側だけが持つ(共通側には無い)
+        assertNull(pp.pointCurrencyId)
+        assertEquals("aupay_balance", au.pointCurrencyId)
+        // 差分があっても展開 id・逆引きは従来どおり
+        assertEquals("custom:test", customCampaignBaseId(au.id))
+    }
+
+    @Test
+    fun `決済手段ごとの差分はお店のキャンペーンでも同じ規則で写る`() {
+        val campaign = custom(
+            payments = listOf(cardPayment.copy(ineligibleNote = "家族カードは対象外")),
+            merchantIds = listOf("mcdonalds"),
+        ).toCampaigns(::operatorFor).single()
+        assertEquals(CampaignType.PROMOTION, campaign.campaignType)
+        assertEquals(listOf("家族カードは対象外"), campaign.ineligibleNotes)
+    }
+
+    @Test
+    fun `自治体キャンペーンには合流時に QR サービス既定文言が補われる`() {
+        val qr = QrPayment(
+            id = "paypay",
+            name = "PayPay",
+            brandColor = "#FF0033",
+            municipalDefaults = MunicipalDefaults(
+                paymentInstruction = "PayPay残高で支払う",
+                ineligibleNotes = listOf("クレジットカード併用は対象外"),
+            ),
+        )
+        val base = PoikatsuData(
+            merchants = emptyList(),
+            campaigns = emptyList(),
+            qrPayments = listOf(qr),
+            updatedAt = "2026-07-01",
+        )
+        val municipal = custom(id = "custom:m", payments = listOf(paypay.copy(ineligibleNote = "商品券は対象外")), rate = 20.0, region = yuzawa)
+        val promo = custom(id = "custom:p", payments = listOf(paypay), merchantIds = listOf("mcdonalds"))
+        val merged = mergeUserData(base, AppSettings(customCampaigns = listOf(municipal, promo)))
+        val campaigns = merged.engineData.campaigns.associateBy { it.id }
+
+        // 自治体: 支払い方法の説明は既定で補い、対象外は施策側の後ろに既定を連結
+        assertEquals("PayPay残高で支払う", campaigns.getValue("custom:m").paymentInstruction)
+        assertEquals(listOf("商品券は対象外", "クレジットカード併用は対象外"), campaigns.getValue("custom:m").ineligibleNotes)
+        // お店のキャンペーンには既定文言を掛けない(同梱 promotion と同じ)
+        assertEquals("", campaigns.getValue("custom:p").paymentInstruction)
+        assertTrue(campaigns.getValue("custom:p").ineligibleNotes.isEmpty())
+        // 運営者はサービス名から導出される
+        assertEquals("PayPay", campaigns.getValue("custom:m").operator)
+    }
+
+    @Test
+    fun `自治体キャンペーンは同梱と同じ地域フィルタ・お知らせ・ピル・グルーピングに乗る`() {
+        val master = RealData.municipalities
+        val yuzawaCode = master.prefectures.first { it.name == "秋田県" }.municipalities.first { it.name == "湯沢市" }.code
+        val registeredYuzawa = listOf(RegisteredArea(RegisteredAreaType.MUNICIPALITY, yuzawaCode, "湯沢市", "秋田県"))
+        val registeredTokyo = listOf(RegisteredArea(RegisteredAreaType.MUNICIPALITY, "13113", "渋谷区", "東京都"))
+        val bundled = Campaign(id = "yuzawa_2026", operator = "PayPay", name = "湯沢市キャンペーン", type = "municipal", region = yuzawa)
+        val mine = custom(payments = listOf(aupay), rate = 10.0, region = yuzawa).toCampaigns(::operatorFor).single()
+        val all = listOf(bundled, mine)
+
+        // 地域フィルタ: 登録地域なら通り、他地域なら落ちる(同梱と同じ)
+        assertEquals(all, filterCampaignsByArea(all, registeredYuzawa, master))
+        assertTrue(filterCampaignsByArea(all, registeredTokyo, master).isEmpty())
+        // お店タブのお知らせバナー・通知の母集団(厳密一致)
+        assertEquals(all, municipalCampaignsForAreas(all, registeredYuzawa, master))
+        // 地図タブのお知らせピル(所在地一致)
+        assertEquals(all, municipalCampaignsForLocation(all, "秋田県", listOf("湯沢市")))
+        // おトクタブは同じ自治体の同梱施策と 1 カードに束なる(穴埋め登録が収録された後も同じカードに並ぶ)
+        assertEquals(campaignGroupKey(bundled), campaignGroupKey(mine))
+    }
+
+    @Test
+    fun `県全域のカスタム自治体キャンペーンは県内の自治体登録で通る`() {
+        val master = RealData.municipalities
+        val kanagawa = Region(name = "神奈川県", prefecture = "神奈川県")
+        val mine = custom(payments = listOf(paypay), rate = 10.0, region = kanagawa).toCampaigns(::operatorFor).single()
+        val yokohamaCode = master.prefectures.first { it.name == "神奈川県" }.municipalities.first { it.name == "横浜市" }.code
+        val registered = listOf(RegisteredArea(RegisteredAreaType.MUNICIPALITY, yokohamaCode, "横浜市", "神奈川県"))
+
+        assertEquals(listOf(mine), filterCampaignsByArea(listOf(mine), registered, master))
+        assertEquals(listOf(mine), municipalCampaignsForLocation(listOf(mine), "神奈川県", listOf("川崎市")))
+        assertTrue(municipalCampaignsForLocation(listOf(mine), "東京都", listOf("渋谷区")).isEmpty())
+    }
+
+    @Test
+    fun `自治体キャンペーンはお店・地図タブの判定には出ない(おトクタブ専用)`() {
+        val engine = engineWith(listOf(custom(payments = listOf(cardPayment), rate = 20.0, region = yuzawa)))
+        // 施策自体は開催中として存在するが、お店の判定(managed のみ対象)には乗らない
+        assertEquals(1, engine.activeCampaigns(today).size)
+        val merchant = engine.search("マクドナルド").first().merchant
+        assertTrue(engine.judgeAll(merchant, today).judgments.isEmpty())
     }
 }

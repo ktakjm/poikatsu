@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.Merchant
 import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.ExpiringPointNotice
@@ -119,8 +120,8 @@ internal fun CampaignDetailPane(
     storeRates: Map<String, Map<String, Double>>,
     onClose: () -> Unit,
     onFindChains: (List<String>) -> Unit,
-    onEditCustom: (() -> Unit)? = null,
-    onDeleteCustom: (() -> Unit)? = null,
+    onEditCustom: ((Campaign) -> Unit)? = null,
+    onDeleteCustom: ((Campaign) -> Unit)? = null,
     contentPadding: PaddingValues = PaddingValues(),
 ) {
     PaneHeader(

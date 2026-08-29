@@ -8,6 +8,7 @@ import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.ProductScope
 import com.ktakjm.poikatsu.data.Recurrence
 import com.ktakjm.poikatsu.data.StoreScope
+import com.ktakjm.poikatsu.data.isMunicipal
 import com.ktakjm.poikatsu.util.JapaneseText
 
 // カスタムキャンペーン(#7)の変換。DataStore の登録内容(CustomCampaign)を既存の
@@ -44,7 +45,8 @@ fun customStoreMerchantId(storeName: String): String =
  */
 fun buildCustomMerchants(customCampaigns: List<CustomCampaign>): List<Merchant> =
     customCampaigns
-        .filterNot { it.allStores } // 全店舗対象は店を持たない(残っていても合成 Merchant を作らない)
+        // 全店舗対象・自治体は店を持たない(残っていても合成 Merchant を作らない)
+        .filterNot { it.allStores || it.isMunicipal }
         .flatMap { it.storeNames }
         .filter { it.isNotBlank() }
         .distinctBy { JapaneseText.normalize(it) }
@@ -62,20 +64,31 @@ private fun splitNotes(s: String): List<String> =
     s.lines().map { it.trim() }.filter { it.isNotEmpty() }
 
 /**
- * 判定エンジンに渡す Campaign へ変換する(決済手段ごとに1件へ展開)。type=promotion にする理由:
+ * 判定エンジンに渡す Campaign へ変換する(決済手段ごとに1件へ展開)。
+ *
+ * お店のキャンペーンは type=promotion にする理由:
  * - おトクタブは card_program 以外を一覧に出す(常設のカード施策と区別)
  * - judgeCards は promotion のとき施策の率をカードの常設実効率より優先する
  * 率も定額も無い特典(メモのみ)は promotion の率なし扱いになり、率を表示せず名前とメモだけ出る。
  *
- * 複数決済の展開 id は「<id>:p<N>」(単一決済はそのまま)。1登録の全展開が率・条件を共有する
- * (決済ごとに率が異なる施策は別登録)。逆引きは [customCampaignBaseId]。
+ * 自治体キャンペーン([CustomCampaign.region] あり。#91)は同梱の municipal と同じ形
+ * (type=municipal・store_scope=external・merchant_rules 空・region)に写す。以降の自治体
+ * グルーピング・地域フィルタ・お知らせピル・通知は type と region しか見ないため、ここで形を
+ * 揃えるだけで同梱施策と同じ経路に乗る。QR サービス既定文言(municipal_defaults)の補完は
+ * 同梱と同じ [applyMunicipalDefaults] を合流側(UserDataMerge)で掛ける(ここは QR カタログを持たない)。
+ * display_name は持たせない(同梱 municipal と同じくタイトルは region から組む)。
+ *
+ * 複数決済の展開 id は「<id>:p<N>」(単一決済はそのまま)。1登録の全展開が率・条件を共有し、
+ * 決済手段ごとの差分([CustomPayment] の detailUrl / note / ineligibleNote / pointCurrencyId)は
+ * 同梱 payment_variants と同じ規則で合成する(単値は上書き・注記は共通の後ろに連結)。
+ * 決済ごとに率が異なる施策は別登録。逆引きは [customCampaignBaseId]。
  *
  * @param operatorFor 決済手段ごとの表示名の解決。おトクタブ詳細のバッジ(判定を経ない表示)に使う
  */
 fun CustomCampaign.toCampaigns(operatorFor: (CustomPayment) -> String): List<Campaign> {
-    // 全店舗対象(allStores)は同梱の external promotion と同じ形(merchant_rules 空)に写す。
+    // 全店舗対象(allStores)・自治体は同梱の external 施策と同じ形(merchant_rules 空)に写す。
     // お店・地図タブの判定は managed のみ対象なので、おトクタブ専用の施策になる
-    val merchantRules = if (allStores) {
+    val merchantRules = if (allStores || isMunicipal) {
         emptyList()
     } else {
         val wholeRules = (merchantIds + storeNames.filter { it.isNotBlank() }.map { customStoreMerchantId(it) })
@@ -93,6 +106,7 @@ fun CustomCampaign.toCampaigns(operatorFor: (CustomPayment) -> String): List<Cam
     }
     val recurrence = Recurrence(daysOfWeek = daysOfWeek, daysOfMonth = daysOfMonth)
         .takeIf { daysOfWeek.isNotEmpty() || daysOfMonth.isNotEmpty() }
+    val commonDetailUrl = detailUrl?.trim()?.takeIf { it.isNotEmpty() }
     return payments.mapIndexed { index, payment ->
         Campaign(
             id = if (payments.size == 1) id else "$id:p$index",
@@ -100,8 +114,9 @@ fun CustomCampaign.toCampaigns(operatorFor: (CustomPayment) -> String): List<Cam
             cardId = payment.cardId,
             cardBrand = payment.cardBrand,
             paymentMethodId = payment.qrPaymentId,
+            pointCurrencyId = payment.pointCurrencyId,
             name = name,
-            displayName = name,
+            displayName = if (isMunicipal) null else name,
             benefitType = benefitType,
             rateBase = rate,
             discountAmount = discountAmount,
@@ -111,18 +126,19 @@ fun CustomCampaign.toCampaigns(operatorFor: (CustomPayment) -> String): List<Cam
             periodEnd = endDate,
             mayEndEarly = mayEndEarly,
             recurrence = recurrence,
-            eligibleNotes = splitNotes(note),
-            ineligibleNotes = splitNotes(ineligibleNote),
+            eligibleNotes = splitNotes(note) + splitNotes(payment.note),
+            ineligibleNotes = splitNotes(ineligibleNote) + splitNotes(payment.ineligibleNote),
             minPurchase = minPurchase,
             minPurchaseScope = minPurchaseScope,
             usageLimit = usageLimit,
             perTransactionCap = perTransactionCap,
             periodTotalCap = periodTotalCap,
             capNote = capNote?.trim()?.takeIf { it.isNotEmpty() },
-            detailUrl = detailUrl?.trim()?.takeIf { it.isNotEmpty() },
+            detailUrl = payment.detailUrl?.trim()?.takeIf { it.isNotEmpty() } ?: commonDetailUrl,
             merchantRules = merchantRules,
-            type = "promotion",
-            storeScopeRaw = (if (allStores) StoreScope.EXTERNAL else StoreScope.MANAGED).jsonValue,
+            region = region,
+            type = if (isMunicipal) CampaignType.MUNICIPAL.jsonValue else CampaignType.PROMOTION.jsonValue,
+            storeScopeRaw = (if (allStores || isMunicipal) StoreScope.EXTERNAL else StoreScope.MANAGED).jsonValue,
         )
     }
 }

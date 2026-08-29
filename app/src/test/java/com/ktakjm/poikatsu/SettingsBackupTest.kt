@@ -7,6 +7,7 @@ import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.CustomPayment
 import com.ktakjm.poikatsu.data.ExcludedStorePair
 import com.ktakjm.poikatsu.data.PointBalance
+import com.ktakjm.poikatsu.data.Region
 import com.ktakjm.poikatsu.data.RegisteredArea
 import com.ktakjm.poikatsu.data.RegisteredAreaType
 import com.ktakjm.poikatsu.data.SETTINGS_BACKUP_SCHEMA_VERSION
@@ -61,6 +62,16 @@ class SettingsBackupTest {
                 storeNames = listOf("駅前ストア"),
                 rate = 10.0,
                 endDate = "2026-12-31",
+            ),
+            CustomCampaign(
+                id = "custom:camp-2",
+                name = "テスト市キャッシュレス還元",
+                payments = listOf(
+                    CustomPayment(qrPaymentId = "paypay", detailUrl = "https://example.com/paypay"),
+                    CustomPayment(qrPaymentId = "aupay", pointCurrencyId = "aupay_balance"),
+                ),
+                region = Region(name = "湯沢市", prefecture = "秋田県"),
+                rate = 20.0,
             ),
         ),
         excludedStorePairs = listOf(
@@ -221,7 +232,7 @@ class SettingsBackupTest {
         )
         val restored = roundTrip(duplicated)
         assertEquals(1, restored.customCards.size)
-        assertEquals(1, restored.customCampaigns.size)
+        assertEquals(settings.customCampaigns.size, restored.customCampaigns.size)
         assertEquals(1, restored.excludedStorePairs.size)
     }
 
@@ -264,7 +275,7 @@ class SettingsBackupTest {
         val backup = settings.toBackup("2026-07-27T10:00:00", "0.9.0")
         assertEquals(
             "マイカードの設定3件・カスタムカード1枚・国際ブランド1件・コード決済2件・ポイント2件・" +
-                "マイエリア1件・自分で登録したキャンペーン1件・対象外に登録したお店1件",
+                "マイエリア1件・自分で登録したキャンペーン2件・対象外に登録したお店1件",
             backupContentSummary(backup),
         )
         assertEquals(

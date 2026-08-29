@@ -58,6 +58,10 @@ data class CustomCard(
 /**
  * カスタムキャンペーンの紐付け先決済手段1件。cardId / qrPaymentId / cardBrand のいずれか
  * 1つだけが入る(campaigns.json の card_id / payment_method_id / card_brand の排他と同じ)。
+ * 帰属に加えて「この決済手段だけの差分」(#91)を持てる。同梱 municipal の payment_variants と
+ * 同じ合成規則で、変換時に施策共通の値へ**単値は上書き・注記は末尾に連結**される
+ * (空/null は共通側のまま)。自治体キャンペーンの「PayPay だけ告知ページが違う・
+ * au PAY は残高還元」のような差分を 1 登録に収めるためのもの。
  */
 @Serializable
 data class CustomPayment(
@@ -67,7 +71,23 @@ data class CustomPayment(
     val qrPaymentId: String? = null,
     /** ブランド指定(カード会社不問。card_brands の name。Amex 会員限定施策等) */
     val cardBrand: String? = null,
-)
+    /** この決済手段の詳細ページ URL。null なら施策共通の [CustomCampaign.detailUrl] */
+    val detailUrl: String? = null,
+    /** この決済手段だけの対象・特典メモ(改行区切り)。共通の [CustomCampaign.note] の後ろに連結 */
+    val note: String = "",
+    /** この決済手段だけの対象外・注意(改行区切り)。共通の [CustomCampaign.ineligibleNote] の後ろに連結 */
+    val ineligibleNote: String = "",
+    /**
+     * 払い出し通貨の明示(point_currencies.id)。null なら決済手段の既定通貨を継承する。
+     * au PAY の残高還元(既定は Ponta)のように、既定のままだと交換所倍率が掛かって過大評価に
+     * なる例外を正す用途(#83 と同じ理由)
+     */
+    val pointCurrencyId: String? = null,
+) {
+    /** 差分(帰属以外)を 1 つでも持つか。エディタの「支払い方法ごとの設定」を初期展開する判定に使う */
+    val hasOverrides: Boolean
+        get() = detailUrl != null || note.isNotBlank() || ineligibleNote.isNotBlank() || pointCurrencyId != null
+}
 
 /** カスタム決済手段の帰属先(#86)。campaigns.json 側と同じ [Attribution] に写して分岐を共用する */
 val CustomPayment.attribution: Attribution?
@@ -95,6 +115,8 @@ data class BannerSelection(
  * 判定エンジンへは domain の変換(toCampaigns / buildCustomMerchants)で Campaign / Merchant に
  * 写して渡すため、エンジン側にカスタム専用の分岐は無い。複数決済手段は変換時に決済ごとの
  * Campaign へ展開される(1登録=1「率・条件」。決済ごとに率が異なる施策は別登録する)。
+ * 対象は「お店」(チェーン/看板/自由入力店名/全店舗)か「地域」([region]。自治体キャンペーン。#91)の
+ * どちらか一方。
  */
 @Serializable
 data class CustomCampaign(
@@ -117,6 +139,16 @@ data class CustomCampaign(
      * 「おトクタブ専用施策」になる(お店・地図タブの判定には出ない)
      */
     val allStores: Boolean = false,
+    /**
+     * 自治体キャンペーン(#91)の対象地域。非 null なら同梱の municipal 施策と同じ形
+     * (type=municipal・store_scope=external・merchant_rules 空)に変換され、おトクタブの自治体
+     * グルーピング・地域フィルタ・地図のお知らせピル・通知・QR サービス既定文言の補完まで
+     * 同じ経路に乗る。name は municipalities.json の自治体名と一致させる(ピッカーで選ぶ。
+     * 自由入力にしないのは名称不一致で地域フィルタ・ピル・通知が効かなくなるため)。
+     * 県全域は name == prefecture(同梱と同じ規約。[com.ktakjm.poikatsu.domain.isPrefectureWide])。
+     * [allStores] / [merchantIds] / [bannerSelections] / [storeNames] とは排他(自治体はお店を列挙しない)
+     */
+    val region: Region? = null,
     /** 特典の型: "rebate"(後日還元) | "discount"(即時割引) | "lottery"(抽選) */
     val benefitType: String = "rebate",
     /** 還元率(%)。率で表せない特典は null にして [note] に書く */
@@ -167,6 +199,9 @@ data class CustomCampaign(
         const val ID_PREFIX = "custom:"
     }
 }
+
+/** 自治体キャンペーンか(#91)。地域を持つ登録がそれで、お店の指定([allStores] 含む)とは排他 */
+val CustomCampaign.isMunicipal: Boolean get() = region != null
 
 /**
  * ユーザーが「このお店ではこの施策は対象外だった」と登録した (施策, 店舗) ペア(#63)。

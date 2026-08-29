@@ -1,6 +1,7 @@
 package com.ktakjm.poikatsu
 
 import com.ktakjm.poikatsu.data.Campaign
+import com.ktakjm.poikatsu.data.Region
 import com.ktakjm.poikatsu.domain.campaignGroupKey
 import com.ktakjm.poikatsu.domain.campaignsInGroup
 import com.ktakjm.poikatsu.domain.isCardProgramBundle
@@ -112,5 +113,16 @@ class CampaignGroupingRealDataTest {
         val epos = data.campaigns.filter { it.id.startsWith("epos_yutai_") }
         assertEquals(5, epos.size)
         assertEquals(1, epos.map { campaignGroupKey(it) }.distinct().size)
+    }
+    @Test
+    fun `カスタムの自治体キャンペーンは同じ自治体の同梱施策と同じキーになる(#91)`() {
+        val region = Region(name = "湯沢市", prefecture = "秋田県")
+        val bundled = Campaign(id = "yuzawa_paypay", operator = "PayPay", name = "湯沢市", type = "municipal", region = region)
+        val custom = Campaign(id = "custom:abc:p0", operator = "au PAY", name = "自作", type = "municipal", region = region)
+        val customPromo = Campaign(id = "custom:abc:p0", operator = "au PAY", name = "自作", type = "promotion")
+        // 自治体分岐がカスタム分岐より先に効く(登録単位でなく地域単位に束ねる)
+        assertEquals(campaignGroupKey(bundled), campaignGroupKey(custom))
+        // お店のカスタムは従来どおり登録単位
+        assertEquals("custom:abc", campaignGroupKey(customPromo))
     }
 }

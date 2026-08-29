@@ -62,7 +62,10 @@ import com.ktakjm.poikatsu.data.CustomPayment
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_PERIOD_TOTAL
 import com.ktakjm.poikatsu.data.MIN_PURCHASE_SCOPE_TRANSACTION
 import com.ktakjm.poikatsu.data.Merchant
+import com.ktakjm.poikatsu.data.MunicipalityMaster
+import com.ktakjm.poikatsu.data.Region
 import com.ktakjm.poikatsu.data.attribution
+import com.ktakjm.poikatsu.data.isMunicipal
 import com.ktakjm.poikatsu.domain.formatPeriodDate
 import com.ktakjm.poikatsu.domain.trimRate
 import java.time.Instant
@@ -113,8 +116,12 @@ private val WEEK_DAYS = listOf(
  * PoikatsuApp 側が出し、この Composable は本文(フォーム+保存ボタン)を描く。
  * onSave には登録内容を渡す(新規は id 空のまま。採番は ViewModel が行う)。
  *
- * 2段階の入力構成: 基本(名前・決済手段・店舗・特典・期間)+折りたたみ「詳細条件」
- * (対象外・商品限定・最低購入額・回数/上限・URL)。詳細は登録すべきデータのガイドを兼ねる。
+ * 2段階の入力構成: 基本(種類・名前・決済手段・店舗または地域・特典・期間)+折りたたみ「詳細条件」
+ * (対象外・商品限定・最低購入額・回数/上限・URL・支払い方法ごとの設定)。詳細は登録すべきデータの
+ * ガイドを兼ねる。種類(#91)は「お店のキャンペーン」(チェーン/看板/自由入力店名/全店舗)と
+ * 「自治体のキャンペーン」(地域を自治体ピッカーで選ぶ)の 2 択で、後者は同梱の municipal 施策と
+ * 同じ経路(自治体グルーピング・地域フィルタ・お知らせピル・通知)に乗る。追加セクションは
+ * CustomCampaignEditorSections.kt。
  */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -122,6 +129,10 @@ internal fun CustomCampaignEditorScreen(
     initial: CustomCampaign?,
     paymentOptions: List<PaymentOptionUi>,
     chains: List<Merchant>,
+    /** 自治体キャンペーンの地域ピッカー用マスタ(#91)。未ロードならピッカーはローディング表示 */
+    municipalityMaster: MunicipalityMaster,
+    /** 「還元されるポイント」の選択肢(お支払い方法ごとの設定。#91)。空なら選択 UI を出さない */
+    pointCurrencies: List<PointCurrencyOptionUi>,
     onSave: (CustomCampaign) -> Unit,
     onClose: () -> Unit,
 ) {
@@ -138,6 +149,16 @@ internal fun CustomCampaignEditorScreen(
     var storeNames by remember { mutableStateOf(initial?.storeNames.orEmpty()) }
     var storeNameInput by remember { mutableStateOf("") }
     var allStores by remember { mutableStateOf(initial?.allStores == true) }
+    // 種類(#91): お店のキャンペーン / 自治体のキャンペーン。切り替えても相手側の入力(お店の選択・地域)は
+    // 消さず、保存時に選ばれている側だけを写す(押し間違いで入力が消えないように)
+    var isMunicipal by remember { mutableStateOf(initial?.isMunicipal == true) }
+    var region by remember { mutableStateOf(initial?.region) }
+    // 決済手段ごとの差分(詳細条件「お支払い方法ごとの設定」)。選択キーで持ち、選択を外しても値は残す
+    var paymentOverrides by remember {
+        mutableStateOf(
+            initial?.payments.orEmpty().associate { it.attribution.selectionKey() to PaymentOverrideUi.from(it) }
+        )
+    }
     var benefitType by remember { mutableStateOf(initial?.benefitType ?: "rebate") }
     var rateText by remember { mutableStateOf(initial?.rate?.let { trimRate(it) }.orEmpty()) }
     var discountText by remember { mutableStateOf(initial?.discountAmount?.toString().orEmpty()) }
@@ -180,7 +201,8 @@ internal fun CustomCampaignEditorScreen(
                     initial.presentationOnly ||
                     initial.minPurchase != null || initial.usageLimit != null ||
                     initial.perTransactionCap != null || initial.periodTotalCap != null ||
-                    initial.capNote != null || initial.detailUrl != null
+                    initial.capNote != null || initial.detailUrl != null ||
+                    initial.payments.any { it.hasOverrides }
                 )
         )
     }
@@ -207,6 +229,8 @@ internal fun CustomCampaignEditorScreen(
     // 全店舗対象トグル ON はお店の指定が不要(選び忘れの誤登録と区別するため明示トグルにしている)
     val hasStore = allStores || merchantIds.isNotEmpty() || bannerSelections.isNotEmpty() ||
         storeNames.isNotEmpty() || storeNameInput.isNotBlank()
+    // 自治体キャンペーンはお店でなく地域が必須
+    val hasTarget = if (isMunicipal) region != null else hasStore
     // 抽選は率・額を持たない(「抽選」表示)。それ以外は率・定額・メモのどれかが必要
     val hasBenefit = isLottery || rate != null || discount != null || note.isNotBlank()
     val minPurchase = minPurchaseText.trim().toIntOrNull()
@@ -217,7 +241,7 @@ internal fun CustomCampaignEditorScreen(
     val detailNumbersOk = !numberError(minPurchaseText, minPurchase) &&
         !numberError(usageLimitText, usageLimit) &&
         !numberError(perCapText, perCap) && !numberError(totalCapText, totalCap)
-    val canSave = name.isNotBlank() && selectedPaymentKeys.isNotEmpty() && hasStore &&
+    val canSave = name.isNotBlank() && selectedPaymentKeys.isNotEmpty() && hasTarget &&
         !rateError && !discountError && !benefitConflict && hasBenefit &&
         recurrenceOk && !daysOfMonthError && !periodError && detailNumbersOk
 
@@ -232,20 +256,25 @@ internal fun CustomCampaignEditorScreen(
 
     fun buildCampaign(): CustomCampaign {
         val optionsByKey = paymentOptions.associateBy { it.key }
+        // お店の指定を写すのは「お店のキャンペーン」かつ全店舗対象でないときだけ。全店舗対象・自治体は
+        // お店を持たせない(切替前に選んだ内容は保存時に捨てる)
+        val keepStores = !isMunicipal && !allStores
         return CustomCampaign(
             id = initial?.id.orEmpty(),
             name = name.trim(),
-            payments = selectedPaymentKeys.mapNotNull { optionsByKey[it]?.toPayment() },
-            // 全店舗対象はお店を持たせない(トグル前に選んだ内容は保存時に捨てる)
-            merchantIds = if (allStores) emptyList() else merchantIds.toList(),
-            // 系列まるごと選択がある merchant の業態選択は冗長なので保存時に除く
-            bannerSelections = if (allStores) {
-                emptyList()
-            } else {
-                bannerSelections.filterNot { it.merchantId in merchantIds }.toList()
+            payments = selectedPaymentKeys.mapNotNull { key ->
+                optionsByKey[key]?.toPayment()?.let { (paymentOverrides[key] ?: PaymentOverrideUi()).applyTo(it) }
             },
-            storeNames = if (allStores) emptyList() else storeNames,
-            allStores = allStores,
+            merchantIds = if (keepStores) merchantIds.toList() else emptyList(),
+            // 系列まるごと選択がある merchant の業態選択は冗長なので保存時に除く
+            bannerSelections = if (keepStores) {
+                bannerSelections.filterNot { it.merchantId in merchantIds }.toList()
+            } else {
+                emptyList()
+            },
+            storeNames = if (keepStores) storeNames else emptyList(),
+            allStores = !isMunicipal && allStores,
+            region = if (isMunicipal) region else null,
             benefitType = benefitType,
             // 抽選は率・額を持たせない(型を切り替える前の入力値を残さない)
             rate = rate.takeUnless { isLottery },
@@ -283,8 +312,29 @@ internal fun CustomCampaignEditorScreen(
             .verticalScroll(rememberScrollState())
             .padding(bottom = 24.dp),
     ) {
+        // --- 種類(#91) ---
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            val kinds = listOf(false to "お店のキャンペーン", true to "自治体のキャンペーン")
+            kinds.forEachIndexed { index, (municipal, label) ->
+                SegmentedButton(
+                    selected = isMunicipal == municipal,
+                    onClick = {
+                        isMunicipal = municipal
+                        // 自治体キャンペーンは予算到達次第の早期終了が標準条項(同梱もほぼ全件 true)なので
+                        // 新規登録では既定 ON にする。編集中の登録は保存済みの値を尊重して触らない
+                        if (municipal && initial == null) mayEndEarly = true
+                    },
+                    shape = SegmentedButtonDefaults.itemShape(index, kinds.size),
+                ) { Text(label) }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
         Text(
-            "会員ポータル限定クーポンなど、アプリに未登録のキャンペーンを自分で登録できます。登録するとお店・地図・おトクタブに表示されます。",
+            if (isMunicipal) {
+                "自治体のキャッシュレス還元キャンペーンなど、アプリに未登録のものを自分で登録できます。登録するとおトクタブの自治体一覧や地図のお知らせに表示されます。"
+            } else {
+                "会員ポータル限定クーポンなど、アプリに未登録のキャンペーンを自分で登録できます。登録するとお店・地図・おトクタブに表示されます。"
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline,
         )
@@ -334,120 +384,125 @@ internal fun CustomCampaignEditorScreen(
             }
         }
 
-        // --- 対象店舗 ---
-        EditorSectionHeader("対象のお店")
-        // 全店舗対象(#44): 抽選会など「その支払い方法が使える全てのお店」が対象でお店を列挙
-        // できない施策。選び忘れの誤登録と区別するため、暗黙(店なし=全店舗)でなく明示トグル
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { allStores = !allStores },
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text("お店を指定しない(全店舗対象)", style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    if (allStores) {
-                        "支払い方法が使える全てのお店が対象のキャンペーンとして、おトクタブにのみ表示されます(お店・地図タブの判定には出ません)。"
-                    } else {
-                        "抽選会など、その支払い方法の全加盟店が対象のキャンペーン向け。"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline,
-                )
-            }
-            Switch(checked = allStores, onCheckedChange = { allStores = it })
-        }
-        if (!allStores) {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+        // --- 対象(お店 or 地域) ---
+        if (isMunicipal) {
+            RegionSection(region = region, master = municipalityMaster, onChange = { region = it })
+        } else {
+            // --- 対象店舗 ---
+            EditorSectionHeader("対象のお店")
+            // 全店舗対象(#44): 抽選会など「その支払い方法が使える全てのお店」が対象でお店を列挙
+            // できない施策。選び忘れの誤登録と区別するため、暗黙(店なし=全店舗)でなく明示トグル
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { allStores = !allStores },
             ) {
-                ChainPickerDropdown(
-                    chains = chains,
-                    selectedIds = merchantIds,
-                    selectedBanners = bannerSelections,
-                    onToggle = { id ->
-                        if (id in merchantIds) {
-                            merchantIds = merchantIds - id
+                Column(Modifier.weight(1f)) {
+                    Text("お店を指定しない(全店舗対象)", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        if (allStores) {
+                            "支払い方法が使える全てのお店が対象のキャンペーンとして、おトクタブにのみ表示されます(お店・地図タブの判定には出ません)。"
                         } else {
-                            merchantIds = merchantIds + id
-                            // 系列まるごとを選んだら、同系列の業態選択は畳む(重ね掛けしない)
-                            bannerSelections = bannerSelections.filterNot { it.merchantId == id }.toSet()
-                        }
-                    },
-                    onToggleBanner = { sel ->
-                        if (sel in bannerSelections) {
-                            bannerSelections = bannerSelections - sel
-                        } else {
-                            bannerSelections = bannerSelections + sel
-                            // 業態を選んだら、同系列のまるごと選択は外す(絞り直しの意図に追従)
-                            merchantIds = merchantIds - sel.merchantId
-                        }
-                    },
-                )
-                chains.filter { it.id in merchantIds }.forEach { m ->
-                    InputChip(
-                        selected = true,
-                        onClick = { merchantIds = merchantIds - m.id },
-                        label = { Text(m.name) },
-                        trailingIcon = {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "${m.name}を外す",
-                                modifier = Modifier.size(18.dp),
-                            )
+                            "抽選会など、その支払い方法の全加盟店が対象のキャンペーン向け。"
                         },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
                     )
                 }
-                bannerSelections.sortedBy { it.merchantId }.forEach { sel ->
-                    val label = chains.firstOrNull { it.id == sel.merchantId }
-                        ?.bannerName(sel.bannerId) ?: sel.bannerId
-                    InputChip(
-                        selected = true,
-                        onClick = { bannerSelections = bannerSelections - sel },
-                        label = { Text(label) },
-                        trailingIcon = {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "${label}を外す",
-                                modifier = Modifier.size(18.dp),
-                            )
-                        },
-                    )
-                }
-                storeNames.forEach { storeName ->
-                    InputChip(
-                        selected = true,
-                        onClick = { storeNames = storeNames - storeName },
-                        label = { Text(storeName) },
-                        trailingIcon = {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "${storeName}を外す",
-                                modifier = Modifier.size(18.dp),
-                            )
-                        },
-                    )
-                }
+                Switch(checked = allStores, onCheckedChange = { allStores = it })
             }
-            OutlinedTextField(
-                value = storeNameInput,
-                onValueChange = { storeNameInput = it },
-                label = { Text("一覧に無いお店の名前を入力") },
-                placeholder = { Text("例: ○○ベーカリー") },
-                singleLine = true,
-                supportingText = { Text("入力した名前の部分一致でお店・地図タブにマッチします") },
-                trailingIcon = {
-                    IconButton(
-                        onClick = { commitStoreNameInput() },
-                        enabled = storeNameInput.isNotBlank(),
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "お店の名前を追加")
+            if (!allStores) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    ChainPickerDropdown(
+                        chains = chains,
+                        selectedIds = merchantIds,
+                        selectedBanners = bannerSelections,
+                        onToggle = { id ->
+                            if (id in merchantIds) {
+                                merchantIds = merchantIds - id
+                            } else {
+                                merchantIds = merchantIds + id
+                                // 系列まるごとを選んだら、同系列の業態選択は畳む(重ね掛けしない)
+                                bannerSelections = bannerSelections.filterNot { it.merchantId == id }.toSet()
+                            }
+                        },
+                        onToggleBanner = { sel ->
+                            if (sel in bannerSelections) {
+                                bannerSelections = bannerSelections - sel
+                            } else {
+                                bannerSelections = bannerSelections + sel
+                                // 業態を選んだら、同系列のまるごと選択は外す(絞り直しの意図に追従)
+                                merchantIds = merchantIds - sel.merchantId
+                            }
+                        },
+                    )
+                    chains.filter { it.id in merchantIds }.forEach { m ->
+                        InputChip(
+                            selected = true,
+                            onClick = { merchantIds = merchantIds - m.id },
+                            label = { Text(m.name) },
+                            trailingIcon = {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "${m.name}を外す",
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            },
+                        )
                     }
-                },
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            )
+                    bannerSelections.sortedBy { it.merchantId }.forEach { sel ->
+                        val label = chains.firstOrNull { it.id == sel.merchantId }
+                            ?.bannerName(sel.bannerId) ?: sel.bannerId
+                        InputChip(
+                            selected = true,
+                            onClick = { bannerSelections = bannerSelections - sel },
+                            label = { Text(label) },
+                            trailingIcon = {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "${label}を外す",
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            },
+                        )
+                    }
+                    storeNames.forEach { storeName ->
+                        InputChip(
+                            selected = true,
+                            onClick = { storeNames = storeNames - storeName },
+                            label = { Text(storeName) },
+                            trailingIcon = {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "${storeName}を外す",
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            },
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = storeNameInput,
+                    onValueChange = { storeNameInput = it },
+                    label = { Text("一覧に無いお店の名前を入力") },
+                    placeholder = { Text("例: ○○ベーカリー") },
+                    singleLine = true,
+                    supportingText = { Text("入力した名前の部分一致でお店・地図タブにマッチします") },
+                    trailingIcon = {
+                        IconButton(
+                            onClick = { commitStoreNameInput() },
+                            enabled = storeNameInput.isNotBlank(),
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "お店の名前を追加")
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                )
+            }
         }
 
         // --- 還元内容 ---
@@ -747,6 +802,13 @@ internal fun CustomCampaignEditorScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 modifier = Modifier.fillMaxWidth(),
             )
+            // 決済手段ごとの差分(#91)。選択中の決済手段だけを出す(外した決済手段の値は残るが保存には写らない)
+            PaymentOverridesSection(
+                selectedOptions = paymentOptions.filter { it.key in selectedPaymentKeys },
+                overrides = paymentOverrides,
+                pointCurrencies = pointCurrencies,
+                onChange = { key, value -> paymentOverrides = paymentOverrides + (key to value) },
+            )
         }
 
         Spacer(Modifier.height(24.dp))
@@ -790,9 +852,9 @@ private fun parseDaysOfMonth(text: String): List<Int>? {
     return days.filterNotNull().distinct().sorted()
 }
 
-/** フォーム内の見出し(横余白は PaddedColumn 側が持つ) */
+/** フォーム内の見出し(横余白は PaddedColumn 側が持つ)。追加セクション(CustomCampaignEditorSections.kt)と共用 */
 @Composable
-private fun EditorSectionHeader(text: String) {
+internal fun EditorSectionHeader(text: String) {
     SectionHeader(text, PaddingValues(top = 16.dp, bottom = 4.dp))
 }
 

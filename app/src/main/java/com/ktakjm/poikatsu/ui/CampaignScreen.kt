@@ -252,11 +252,13 @@ internal fun CampaignPane(
             }
         }
         // 終了済みの自作キャンペーン。判定・上の一覧からは消えているが、編集(期間延長)・削除の
-        // 入口としてここに残す。フィルタ(自治体/以外)は掛けない(自作は常に自治体以外のため)
+        // 入口としてここに残す。フィルタ(自治体/以外)は上の一覧と同じ基準で掛ける(自作にも自治体
+        // キャンペーンがある。#91)。束ねは登録単位(終了済みは同梱と並べる意味が無い)
         val expiredGroups = expiredCustomCampaigns
+            .filter(filterFn)
             .groupBy { customCampaignBaseId(it.id) }
             .values.toList()
-        if (expiredGroups.isNotEmpty() && filter != CampaignFilter.MUNICIPAL) {
+        if (expiredGroups.isNotEmpty()) {
             item {
                 Text(
                     "終了(自作)",
@@ -453,10 +455,14 @@ internal fun CampaignDetail(
     onBack: () -> Unit,
     /** 対象チェーンの地図ブリッジ(merchant_id 群を渡す。チップは1件、まとめては全件) */
     onFindChains: (List<String>) -> Unit,
-    /** カスタムキャンペーンの編集(非 null のときだけ編集・削除の行を出す) */
-    onEditCustom: (() -> Unit)? = null,
+    /**
+     * カスタムキャンペーンの編集(非 null のときだけ編集・削除の操作を出す)。引数は操作対象の
+     * 展開後 Campaign(呼び出し側が登録 CustomCampaign へ逆引きする)。グループ全体が 1 登録なら
+     * 最上部に、同梱施策と混在する自治体束ね(#91)ではカスタム施策のカード直下に出す
+     */
+    onEditCustom: ((Campaign) -> Unit)? = null,
     /** カスタムキャンペーンの削除(確認ダイアログは呼び出し側が出す) */
-    onDeleteCustom: (() -> Unit)? = null,
+    onDeleteCustom: ((Campaign) -> Unit)? = null,
     /** 本文 LazyColumn の余白。二ペインの詳細ペインでは FAB に隠れない高さを下端に空ける(#55) */
     contentPadding: PaddingValues = PaddingValues(bottom = 16.dp),
 ) {
@@ -494,29 +500,28 @@ internal fun CampaignDetail(
         else -> emptyList()
     }
 
+    // カスタムキャンペーンの編集・削除(登録内容の管理はこの詳細に集約)。グループ全体が 1 登録
+    // (お店のカスタム: 決済ごとの展開が並ぶだけ)なら最上部に 1 行、同梱施策と混在し得る自治体束ね
+    // (#91。同じ自治体の同梱+自作が 1 カードに束なる)では登録ごとにそのカード直下へ出す。
+    // 1 登録が複数決済に展開されていても操作行は登録ごと 1 つ(先頭の展開にだけ付ける)
+    val customActionsEnabled = onEditCustom != null || onDeleteCustom != null
+    val customBaseIds = campaigns.filter { it.isCustom }.map { customCampaignBaseId(it.id) }.distinct()
+    val singleCustomGroup = customBaseIds.size == 1 && campaigns.all { it.isCustom }
+    val firstIdPerBase = campaigns.filter { it.isCustom }
+        .groupBy { customCampaignBaseId(it.id) }
+        .mapValues { (_, cs) -> cs.first().id }
+        .values.toSet()
+
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = contentPadding,
     ) {
-        // カスタムキャンペーンだけ編集・削除の操作行を出す(登録内容の管理はこの詳細に集約)
-        if (onEditCustom != null || onDeleteCustom != null) {
+        if (customActionsEnabled && singleCustomGroup) {
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    onEditCustom?.let {
-                        OutlinedButton(onClick = it, modifier = Modifier.weight(1f)) {
-                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("編集")
-                        }
-                    }
-                    onDeleteCustom?.let {
-                        OutlinedButton(onClick = it, modifier = Modifier.weight(1f)) {
-                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("削除")
-                        }
-                    }
-                }
+                CustomCampaignActions(
+                    onEdit = onEditCustom?.let { cb -> { cb(campaigns.first()) } },
+                    onDelete = onDeleteCustom?.let { cb -> { cb(campaigns.first()) } },
+                )
             }
         }
         // ブリッジは判定詳細(お店タブ)と同じく本文の上に置き、見た目・文言も揃える
@@ -531,21 +536,51 @@ internal fun CampaignDetail(
             }
         }
         items(judgments, key = { it.campaign.id }) { judgment ->
-            CampaignJudgmentCard(
-                judgment,
-                // 束ね時はその施策の merchant_rules だけから「対象:」を作りカード内に出す。
-                // 対象が 1 チェーンでも省く条件(上の allLabelCount 判定)は適用しない——
-                // タイトルが「{カード名} 優待・特典」で対象がどこにも出なくなるため
-                targetGroups = if (bundle) {
-                    campaignTargetLabelGroups(
-                        listOf(judgment.campaign),
-                        merchants,
-                        storeRates[judgment.campaign.id].orEmpty(),
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                CampaignJudgmentCard(
+                    judgment,
+                    // 束ね時はその施策の merchant_rules だけから「対象:」を作りカード内に出す。
+                    // 対象が 1 チェーンでも省く条件(上の allLabelCount 判定)は適用しない——
+                    // タイトルが「{カード名} 優待・特典」で対象がどこにも出なくなるため
+                    targetGroups = if (bundle) {
+                        campaignTargetLabelGroups(
+                            listOf(judgment.campaign),
+                            merchants,
+                            storeRates[judgment.campaign.id].orEmpty(),
+                        )
+                    } else {
+                        emptyList()
+                    },
+                )
+                if (customActionsEnabled && !singleCustomGroup && judgment.campaign.id in firstIdPerBase) {
+                    CustomCampaignActions(
+                        onEdit = onEditCustom?.let { cb -> { cb(judgment.campaign) } },
+                        onDelete = onDeleteCustom?.let { cb -> { cb(judgment.campaign) } },
                     )
-                } else {
-                    emptyList()
-                },
-            )
+                }
+            }
+        }
+    }
+}
+
+/** カスタムキャンペーンの「編集」「削除」の操作行(施策詳細)。どちらも null なら何も出さない */
+@Composable
+private fun CustomCampaignActions(onEdit: (() -> Unit)?, onDelete: (() -> Unit)?) {
+    if (onEdit == null && onDelete == null) return
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        onEdit?.let {
+            OutlinedButton(onClick = it, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("編集")
+            }
+        }
+        onDelete?.let {
+            OutlinedButton(onClick = it, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("削除")
+            }
         }
     }
 }

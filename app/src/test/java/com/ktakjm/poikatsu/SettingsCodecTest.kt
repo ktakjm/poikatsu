@@ -10,6 +10,7 @@ import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.CustomPayment
 import com.ktakjm.poikatsu.data.ExcludedStorePair
 import com.ktakjm.poikatsu.data.PointBalance
+import com.ktakjm.poikatsu.data.Region
 import com.ktakjm.poikatsu.data.RegisteredArea
 import com.ktakjm.poikatsu.data.RegisteredAreaType
 import com.ktakjm.poikatsu.data.ThemeMode
@@ -58,6 +59,23 @@ class SettingsCodecTest {
                 payments = listOf(CustomPayment(cardId = "custom:card-1")),
                 bannerSelections = listOf(BannerSelection("tsuruha", "kyorindo")),
                 rate = 10.0,
+            ),
+            // 自治体キャンペーン(#91): 地域と決済手段ごとの差分が往復すること
+            CustomCampaign(
+                id = "custom:camp-2",
+                name = "テスト市キャッシュレス還元",
+                payments = listOf(
+                    CustomPayment(
+                        qrPaymentId = "paypay",
+                        detailUrl = "https://example.com/paypay",
+                        note = "PayPayクレジットも対象",
+                        ineligibleNote = "PayPay商品券は対象外",
+                    ),
+                    CustomPayment(qrPaymentId = "aupay", pointCurrencyId = "aupay_balance"),
+                ),
+                region = Region(name = "湯沢市", prefecture = "秋田県"),
+                rate = 20.0,
+                mayEndEarly = true,
             ),
         ),
         customCampaignsTest = listOf(CustomCampaign(id = "custom:camp-t", name = "テスト側")),

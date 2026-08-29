@@ -95,6 +95,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.CustomCampaign
 import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.Merchant
@@ -551,6 +552,10 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             initial = editing.takeUnless { it.id.isEmpty() },
                             paymentOptions = paymentOptions,
                             chains = state.catalogMerchants,
+                            municipalityMaster = state.municipalityMaster,
+                            pointCurrencies = state.pointCurrencySettings.map {
+                                PointCurrencyOptionUi(id = it.id, name = it.name, color = it.brandColor)
+                            },
                             onSave = { campaign ->
                                 if (editing.id.isEmpty()) {
                                     viewModel.onAddCustomCampaign(campaign)
@@ -591,7 +596,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     }
                     // キャンペーン詳細(タブ非依存のオーバーレイ)。topBar の分岐順と一致させること
                     overlayCampaignGroup != null -> PaddedColumn {
-                        val customSource = customCampaignSource(overlayCampaignGroup, state.customCampaigns)
+                        val customLookup = customCampaignLookup(overlayCampaignGroup, state.customCampaigns)
                         CampaignDetail(
                             judgments = overlayCampaignGroup,
                             merchants = state.merchantsById,
@@ -601,8 +606,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                                 viewModel.nearby.onFindNearbyByIds(ids)
                                 onNearbyClick()
                             },
-                            onEditCustom = customSource?.let { { editingCustomCampaign = it } },
-                            onDeleteCustom = customSource?.let { { deletingCustomCampaign = it } },
+                            onEditCustom = customLookup?.let { lookup -> { c -> lookup(c)?.let { editingCustomCampaign = it } } },
+                            onDeleteCustom = customLookup?.let { lookup -> { c -> lookup(c)?.let { deletingCustomCampaign = it } } },
                         )
                     }
                     overlaySettingsSubpage != null -> settingsSubpageContent(overlaySettingsSubpage)
@@ -693,8 +698,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                             )
                         }
                         if (campaignsTwoPane) {
-                            val customSource = state.selectedCampaignGroup
-                                ?.let { customCampaignSource(it, state.customCampaigns) }
+                            val customLookup = state.selectedCampaignGroup
+                                ?.let { customCampaignLookup(it, state.customCampaigns) }
                             CampaignsListDetail(
                                 selectedGroup = state.selectedCampaignGroup,
                                 merchants = state.merchantsById,
@@ -711,8 +716,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                                     viewModel.nearby.onFindNearbyByIds(ids)
                                     onNearbyClick()
                                 },
-                                onEditCustom = customSource?.let { { editingCustomCampaign = it } },
-                                onDeleteCustom = customSource?.let { { deletingCustomCampaign = it } },
+                                onEditCustom = customLookup?.let { lookup -> { c -> lookup(c)?.let { editingCustomCampaign = it } } },
+                                onDeleteCustom = customLookup?.let { lookup -> { c -> lookup(c)?.let { deletingCustomCampaign = it } } },
                             )
                         } else {
                             PaddedColumn { campaignPane() }
@@ -1193,8 +1198,8 @@ private fun CampaignsListDetail(
     listPane: @Composable () -> Unit,
     onBack: () -> Unit,
     onFindChains: (List<String>) -> Unit,
-    onEditCustom: (() -> Unit)?,
-    onDeleteCustom: (() -> Unit)?,
+    onEditCustom: ((Campaign) -> Unit)?,
+    onDeleteCustom: ((Campaign) -> Unit)?,
 ) {
     TabListDetailScaffold(
         directive = directive,
@@ -1220,16 +1225,21 @@ private fun CampaignsListDetail(
 }
 
 /**
- * 施策詳細グループがカスタムキャンペーン由来なら、その登録内容(編集・削除の対象)を返す。
- * 登録内容は customCampaigns から引く。複数決済の展開 id は決済サフィックスを剥がした
- * 登録単位の id で逆引きする。全画面オーバーレイと二ペインの詳細ペインで共用する。
+ * 施策詳細のカスタム編集・削除用: グループにカスタム施策が 1 件でも含まれるときだけ、
+ * 展開後 Campaign → 登録 CustomCampaign の逆引きを返す(含まれなければ null で操作を出さない)。
+ * 逆引きは複数決済の展開 id(custom:<UUID>:p<N>)を [customCampaignBaseId] で登録単位に戻す。
+ * 自治体キャンペーン(#91)は同じ自治体の同梱施策と 1 グループに束なるため「グループ=1 登録」の
+ * 前提は置けず、操作対象の Campaign を引数に取る形にしている。
  */
-private fun customCampaignSource(
+private fun customCampaignLookup(
     group: List<CampaignJudgment>,
     customCampaigns: List<CustomCampaign>,
-): CustomCampaign? = group.firstOrNull()?.campaign
-    ?.takeIf { it.isCustom }
-    ?.let { c -> customCampaigns.firstOrNull { it.id == customCampaignBaseId(c.id) } }
+): ((Campaign) -> CustomCampaign?)? =
+    if (group.none { it.campaign.isCustom }) {
+        null
+    } else {
+        { c -> customCampaigns.firstOrNull { it.id == customCampaignBaseId(c.id) } }
+    }
 
 /**
  * 設定タブのカテゴリ一覧+サブページ内容の二ペイン(M3 canonical layout の list-detail。#56)。
