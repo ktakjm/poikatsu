@@ -37,6 +37,7 @@ class SettingsBackupTest {
         autoRefresh = false,
         notificationsEnabled = true,
         notificationTimeMinutes = 7 * 60 + 30,
+        showIneligibleStorePins = false,
         cardOverrides = mapOf(
             "olive" to CardOverride(owned = false),
             "epos_gold" to CardOverride(rate = 1.5, brand = "Visa"),
@@ -99,6 +100,7 @@ class SettingsBackupTest {
         assertEquals(false, restored.autoRefresh)
         assertEquals(true, restored.notificationsEnabled)
         assertEquals(7 * 60 + 30, restored.notificationTimeMinutes)
+        assertEquals(false, restored.showIneligibleStorePins)
     }
 
     @Test

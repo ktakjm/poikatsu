@@ -7,11 +7,14 @@ import com.ktakjm.poikatsu.data.StoreScope
 import com.ktakjm.poikatsu.domain.AppLink
 import com.ktakjm.poikatsu.domain.BenefitType
 import com.ktakjm.poikatsu.domain.CampaignType
+import com.ktakjm.poikatsu.domain.HiddenReason
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.StoreEligibility
+import com.ktakjm.poikatsu.domain.StoreVisibility
 import com.ktakjm.poikatsu.domain.WALLET_APP_LABEL
 import com.ktakjm.poikatsu.domain.WALLET_APP_PACKAGE
 import com.ktakjm.poikatsu.domain.campaignType
+import com.ktakjm.poikatsu.domain.classifyStore
 import com.ktakjm.poikatsu.domain.payoutCurrency
 import com.ktakjm.poikatsu.domain.resolveCardCampaignRate
 import kotlinx.serialization.json.jsonArray
@@ -596,11 +599,23 @@ class JudgmentEngineRealDataTest {
             engine.checkStore(merchant, "東京靴流通センター 泡瀬店").single().eligibility,
         )
         // 本土の店は掲載なし=対象外と断定され、施策単位で間引かれる
-        // (地図はブリッジ(チェーン絞り込み)中でもこの店を出さない)
         assertEquals(
             setOf(campaign.id),
             engine.exhaustiveListIneligibleCampaignIds(merchant, "東京靴流通センター 王子店"),
         )
+        // 地図ではブリッジ(チェーン絞り込み)中でも通常ピンにせず、「網羅リスト外」の薄いピンになる(#77)
+        val inPeriod = JudgmentEngine.parseDate(campaign.periodStart!!)
+        val visibility = engine.classifyStore(
+            merchant,
+            merchant.id,
+            "東京靴流通センター 王子店",
+            inPeriod,
+            enabledQrIds = setOf("aupay"),
+            excludedPairs = emptyList(),
+            memberships = emptySet(),
+            previewMerchantIds = setOf(merchant.id),
+        )
+        assertEquals(StoreVisibility.Hidden(HiddenReason.EXHAUSTIVE_INELIGIBLE), visibility)
     }
 
     @Test

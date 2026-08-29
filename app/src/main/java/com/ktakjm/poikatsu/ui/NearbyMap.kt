@@ -52,6 +52,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -90,6 +91,8 @@ import com.google.maps.android.clustering.view.DefaultClusterRenderer
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.MarkerComposable
+import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.MapsComposeExperimentalApi
 import com.google.maps.android.compose.clustering.Clustering
 import com.google.maps.android.compose.clustering.rememberClusterManager
@@ -123,6 +126,12 @@ data class MapMarker(
     val onClick: () -> Unit,
     /** 同一地点(同一ビル等)の店舗数。2 以上ならクラスタバッジと同じ見た目で描く */
     val groupSize: Int = 1,
+    /**
+     * 薄いピン(#77)。間引いた店(公式対象外・網羅リスト外・ユーザー登録の対象外)を淡いグレーで描く。
+     * クラスタリングの対象外(件数バッジは対象店の数を保つ)で、対象ピンの下に個別に描く。
+     * colorHexes は使わない(ブランド色は発行体識別用のため、対象外の店に付けない)。
+     */
+    val dimmed: Boolean = false,
 )
 
 /**
@@ -299,7 +308,8 @@ internal fun NearbyMap(
             mapColorScheme = if (darkMode) ComposeMapColorScheme.DARK else ComposeMapColorScheme.LIGHT,
             contentPadding = PaddingValues(bottom = bottomPadding),
         ) {
-            val clusterItems = remember(markers) { markers.map(::StoreClusterItem) }
+            // 薄いピン(dimmed)はクラスタ管理に載せない(件数バッジ=対象店の数を保つ)。下で個別に描く
+            val clusterItems = remember(markers) { markers.filter { !it.dimmed }.map(::StoreClusterItem) }
             val clusterManager = rememberClusterManager<StoreClusterItem>()
             val clusterRenderer = rememberClusterRenderer(
                 clusterContent = { cluster ->
@@ -374,6 +384,25 @@ internal fun NearbyMap(
             }
             if (clusterManager != null && rendererApplied) {
                 Clustering(items = clusterItems, clusterManager = clusterManager)
+            }
+            // 薄いピン(#77): 対象ピンの下(zIndex 負)に個別マーカーとして描く。件数は限定的
+            // (公式リスト付きチェーンの間引き店だけ)なので MarkerComposable のビットマップ化コストは許容
+            markers.filter { it.dimmed }.forEach { marker ->
+                key(marker.point, marker.label) {
+                    val state = remember(marker.point) { MarkerState(LatLng(marker.point.lat, marker.point.lon)) }
+                    MarkerComposable(
+                        marker.selected,
+                        state = state,
+                        title = marker.label,
+                        zIndex = -1f,
+                        onClick = {
+                            marker.onClick()
+                            true
+                        },
+                    ) {
+                        DimmedStorePin(selected = marker.selected)
+                    }
+                }
             }
         }
 
@@ -752,6 +781,31 @@ private fun StorePin(marker: MapMarker) {
                     size = ovalSize,
                     style = Stroke(width = sw),
                 )
+            },
+    )
+}
+
+/**
+ * 薄いピン(#77)。間引いた店を「対象ではない」と読める淡いグレー(surfaceVariant 塗り+outline 縁)で、
+ * 対象ピンより一段小さく描く。色は colorScheme のロールから取り、ブランド色は使わない。
+ * 選択時は対象ピンと同じく拡大して強調する。
+ */
+@Composable
+private fun DimmedStorePin(selected: Boolean) {
+    val sizeDp = if (selected) 30.dp else 20.dp
+    val fill = MaterialTheme.colorScheme.surfaceVariant
+    val stroke = MaterialTheme.colorScheme.outline
+    val strokeWidth = if (selected) 3.dp else 2.dp
+    Box(
+        modifier = Modifier
+            .size(sizeDp)
+            .drawBehind {
+                val sw = strokeWidth.toPx()
+                val inset = sw / 2f
+                val ovalSize = Size(size.width - sw, size.height - sw)
+                val ovalOffset = Offset(inset, inset)
+                drawOval(fill, topLeft = ovalOffset, size = ovalSize)
+                drawOval(stroke, topLeft = ovalOffset, size = ovalSize, style = Stroke(width = sw))
             },
     )
 }

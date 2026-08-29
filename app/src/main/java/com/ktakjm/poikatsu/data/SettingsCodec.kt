@@ -28,6 +28,9 @@ internal object SettingsKeys {
     val USE_TEST_DATA = booleanPreferencesKey("use_test_data")
     val USE_BUNDLED_DATA = booleanPreferencesKey("use_bundled_data")
     val DEVELOPER_MODE = booleanPreferencesKey("developer_mode")
+
+    /** 地図で間引いた店を薄いピンで残すか(#77) */
+    val SHOW_INELIGIBLE_STORE_PINS = booleanPreferencesKey("show_ineligible_store_pins")
     val QR_ENABLED = stringPreferencesKey("qr_enabled")
     val OWNED_BRANDS = stringPreferencesKey("owned_brands")
 
@@ -80,6 +83,7 @@ internal fun Preferences.readSettings(): AppSettings = AppSettings(
     useTestData = this[SettingsKeys.USE_TEST_DATA] ?: false,
     useBundledData = this[SettingsKeys.USE_BUNDLED_DATA] ?: false,
     developerMode = this[SettingsKeys.DEVELOPER_MODE] ?: false,
+    showIneligibleStorePins = this[SettingsKeys.SHOW_INELIGIBLE_STORE_PINS] ?: true,
     enabledQrPaymentIds = decodeJson(SettingsKeys.QR_ENABLED, emptySet()),
     ownedBrands = decodeJson(SettingsKeys.OWNED_BRANDS, emptySet()),
     enabledPointMultipliers = decodeJson(SettingsKeys.ENABLED_POINT_MULTIPLIERS, emptySet()),
@@ -109,6 +113,7 @@ internal fun MutablePreferences.writeSettings(settings: AppSettings) {
     this[SettingsKeys.AUTO_REFRESH] = settings.autoRefresh
     this[SettingsKeys.NOTIFICATIONS_ENABLED] = settings.notificationsEnabled
     this[SettingsKeys.NOTIFICATION_TIME] = settings.notificationTimeMinutes
+    this[SettingsKeys.SHOW_INELIGIBLE_STORE_PINS] = settings.showIneligibleStorePins
     this[SettingsKeys.CARD_OVERRIDES] = settingsJson.encodeToString(settings.cardOverrides)
     this[SettingsKeys.QR_ENABLED] = settingsJson.encodeToString(settings.enabledQrPaymentIds)
     this[SettingsKeys.OWNED_BRANDS] = settingsJson.encodeToString(settings.ownedBrands)

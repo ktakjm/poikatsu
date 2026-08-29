@@ -430,6 +430,23 @@ class JudgmentEngine(private val data: PoikatsuData) {
     }
 
     /**
+     * お店タブの検索が 0 件のときのフォールバック(#77 施策6)。地図 POI 照合と同じ [matchStore] で
+     * 入力から系列を特定できれば案内用のヒットを 1 件返す(通常の検索結果には混ぜない。呼び出し側が
+     * [search] 空のときだけ使う)。[search] との実質差は漢字 2 文字キー(松屋・夢庵等)の許可で、
+     * 「松屋渋谷店」型の具体店舗名入力を拾う。カテゴリ絞り込みは検索と同じく守る。
+     */
+    fun searchFallback(query: String, selectedCategories: Set<String> = emptySet()): SearchHit? {
+        if (JapaneseText.normalize(query).isBlank()) return null
+        val match = matchStore(query) ?: return null
+        if (selectedCategories.isNotEmpty() && match.merchant.category !in selectedCategories) return null
+        return if (match.bannerId == match.merchant.id) {
+            SearchHit(match.merchant)
+        } else {
+            SearchHit(match.merchant, match.bannerId, match.bannerName)
+        }
+    }
+
+    /**
      * 地図POIの店舗名(例: "マクドナルド 渋谷駅前店")から該当チェーンを特定する。
      * 「ステーキガスト」が「ガスト」に誤マッチしないよう、一致したキーが最長のものを採用する。
      * 傘下看板(banners)のキーにも一致し、どの看板に一致したかを返す(判定の看板スコープと

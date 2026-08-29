@@ -145,14 +145,16 @@ private fun SettingsCategoryRow(
 
 // ---- サブページ: 表示 ----
 
-/** 表示サブページ。テーマ(セグメントボタン)と dynamic color の切替 */
+/** 表示サブページ。テーマ(セグメントボタン)・dynamic color・地図の薄いピン(#77)の切替 */
 @Composable
 internal fun DisplaySettingsPage(
     themeMode: ThemeMode,
     dynamicColor: Boolean,
+    showIneligibleStorePins: Boolean,
     onBack: () -> Unit,
     onThemeModeChange: (ThemeMode) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
+    onShowIneligibleStorePinsChange: (Boolean) -> Unit,
 ) {
     BackHandler(onBack = onBack)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -168,6 +170,19 @@ internal fun DisplaySettingsPage(
                     checked = dynamicColor && dynamicSupported,
                     onCheckedChange = onDynamicColorChange,
                     enabled = dynamicSupported,
+                )
+            },
+            colors = transparentListItemColors(),
+        )
+        ListItem(
+            headlineContent = { Text("地図に対象外のお店を薄く表示") },
+            supportingContent = {
+                Text("キャンペーンの対象外と分かっているお店を、理由付きの薄いピンで残します")
+            },
+            trailingContent = {
+                Switch(
+                    checked = showIneligibleStorePins,
+                    onCheckedChange = onShowIneligibleStorePinsChange,
                 )
             },
             colors = transparentListItemColors(),

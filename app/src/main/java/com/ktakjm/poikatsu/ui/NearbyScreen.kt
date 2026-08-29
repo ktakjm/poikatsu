@@ -26,6 +26,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -55,6 +56,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ktakjm.poikatsu.data.Campaign
 import com.ktakjm.poikatsu.data.Merchant
+import com.ktakjm.poikatsu.domain.HiddenReason
 import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.ExpiringPointNotice
 import com.ktakjm.poikatsu.domain.groupLabelOf
@@ -123,6 +125,10 @@ internal fun NearbyPane(
     onPreviewPlace: (MainViewModel.NearbyPlace) -> Unit,
     onClearPreview: () -> Unit,
     onOpenDetail: (MainViewModel.NearbyPlace) -> Unit,
+    /** 薄いピン(#77)のプレビュー「根拠を確認」→ 店舗判定画面(公式リストの一致箇所・出典) */
+    onOpenStoreCheck: (MainViewModel.NearbyPlace) -> Unit,
+    /** 薄いピン(#77)を描くか(設定→表示)。OFF でも分類は済んでおり、描画だけ抑止する */
+    showIneligiblePins: Boolean,
     /**
      * 詳細サイドシート(#57)を閉じる。クラスタ/複合ピンのタップでグループリストを出すとき、
      * シートが上に残るとグループリストが隠れて見えないため、開くのと同時に閉じる。
@@ -204,6 +210,16 @@ internal fun NearbyPane(
             else -> nearby.places.filter { it.merchant?.category in selectedCategories }
         }
     }
+    // 薄いピン(#77)の表示集合。レンズ(お店/ジャンル)は対象ピンと同じ条件で掛ける。表示 OFF なら空
+    val visibleHiddenPlaces = remember(nearby.hiddenPlaces, selectedCategories, merchantFilters, showIneligiblePins) {
+        when {
+            !showIneligiblePins -> emptyList()
+            merchantFilters.isNotEmpty() ->
+                nearby.hiddenPlaces.filter { p -> merchantFilters.any { it.matches(p) } }
+            selectedCategories.isEmpty() -> nearby.hiddenPlaces
+            else -> nearby.hiddenPlaces.filter { it.merchant?.category in selectedCategories }
+        }
+    }
     // 「お店で絞る」ピッカー用: いま(ジャンル絞り込み後の)周辺に在る系列と、その配下の業態別件数。
     // 多い順→読み順。全体ではなく周辺に在るものだけ出す(「地図」の約束)。絞り込み中もピッカーは残し、
     // 追加・解除を続けられる。
@@ -228,7 +244,7 @@ internal fun NearbyPane(
     // タップでズーム分解できない重なりを、クラスタバッジと同じ見た目で一つにまとめる。
     // markerGroups はマーカー座標→グループ内店舗の逆引きで、ライブラリクラスタの
     // タップ時に内包店舗のリスト(onClusterOpen)へ展開するのに使う。
-    val (markers, markerGroups) = remember(visiblePlaces, selectedPlace) {
+    val (markers, markerGroups) = remember(visiblePlaces, visibleHiddenPlaces, selectedPlace) {
         val groups = groupByProximity(visiblePlaces)
         val byPoint = HashMap<MapPoint, List<MainViewModel.NearbyPlace>>()
         val built = groups.map { group ->
@@ -259,7 +275,18 @@ internal fun NearbyPane(
                 )
             }
         }
-        built to byPoint
+        // 薄いピン(#77)は近接グルーピング・クラスタの対象外で 1 店 1 ピン。タップで理由付きプレビュー
+        val dimmed = visibleHiddenPlaces.map { place ->
+            MapMarker(
+                point = MapPoint(place.lat, place.lon),
+                label = place.name,
+                colorHexes = emptyList(),
+                selected = place == selectedPlace,
+                onClick = { onPreviewPlace(place) },
+                dimmed = true,
+            )
+        }
+        (built + dimmed) to byPoint
     }
 
     // 再検索の一時失敗は地図を残したまま Snackbar で通知する。外側 Scaffold の host は下部シート/
@@ -328,6 +355,8 @@ internal fun NearbyPane(
             onPreviewPlace = onPreviewPlace,
             onClearPreview = onClearPreview,
             onOpenDetail = onOpenDetail,
+            onOpenStoreCheck = onOpenStoreCheck,
+            showIneligiblePins = showIneligiblePins,
             onCloseGroup = { placeGroup = null },
             maxHeight = paneMaxHeight,
             onMeasured = onMeasured,
@@ -523,6 +552,8 @@ private fun NearbySheetContent(
     onPreviewPlace: (MainViewModel.NearbyPlace) -> Unit,
     onClearPreview: () -> Unit,
     onOpenDetail: (MainViewModel.NearbyPlace) -> Unit,
+    onOpenStoreCheck: (MainViewModel.NearbyPlace) -> Unit,
+    showIneligiblePins: Boolean,
     onCloseGroup: () -> Unit,
     maxHeight: Dp?,
     onMeasured: ((Dp) -> Unit)?,
@@ -542,6 +573,7 @@ private fun NearbySheetContent(
                 place = selectedPlace,
                 originName = originName,
                 onOpenDetail = { onOpenDetail(selectedPlace) },
+                onOpenStoreCheck = { onOpenStoreCheck(selectedPlace) },
                 onClose = onClearPreview,
             )
         }
@@ -616,7 +648,8 @@ private fun NearbySheetContent(
                             // 目の前に店があるのに「この範囲にありません」では嘘になるため)
                             merchantFilters.isNotEmpty() && nearby.ineligibleHiddenCount > 0 ->
                                 "この範囲の" + merchantFilters.joinToString("") { "「${it.label}」" } +
-                                    "はこのキャンペーンの対象のお店ではないため表示していません。" +
+                                    "はこのキャンペーンの対象のお店ではないため" +
+                                    (if (showIneligiblePins) "薄いピンで示しています。" else "表示していません。") +
                                     "対象のお店があるエリアへ地図を動かしてください。"
                             merchantFilters.isNotEmpty() ->
                                 merchantFilters.joinToString("") { "「${it.label}」" } +
@@ -689,6 +722,7 @@ private fun NearbyPreview(
     place: MainViewModel.NearbyPlace,
     originName: String?,
     onOpenDetail: () -> Unit,
+    onOpenStoreCheck: () -> Unit,
     onClose: () -> Unit,
 ) {
     Column(
@@ -718,20 +752,60 @@ private fun NearbyPreview(
                 Icon(Icons.Default.Close, contentDescription = "プレビューを閉じる")
             }
         }
-        // 値はリスト行・検索結果カードと同じ「最適決済での還元」なので同じ無修飾で出す(#90 で「最大」を外した)
-        place.bestBenefit?.let {
-            Text(
-                it.toString(),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-        Button(onClick = onOpenDetail, modifier = Modifier.fillMaxWidth()) {
-            Text("詳細を確認")
+        val hiddenReason = place.hiddenReason
+        if (hiddenReason != null) {
+            // 薄いピン(#77): 還元の代わりに間引いた理由を出す。対象外の事実は「不可」でなく「参考情報」
+            // として Info+onSurfaceVariant(yolp_coverage_note と同じ通常の補足)で見せる
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    Icons.Default.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    hiddenReasonText(hiddenReason),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            when (hiddenReason) {
+                // 登録対象外は判定詳細の「対象外に登録済み」セクションからその場で解除できる
+                HiddenReason.USER_EXCLUDED -> Button(onClick = onOpenDetail, modifier = Modifier.fillMaxWidth()) {
+                    Text("詳細を確認")
+                }
+                // 公式対象外・網羅リスト外は店舗判定画面で公式リストの一致箇所・出典を見せる
+                HiddenReason.OFFICIALLY_EXCLUDED, HiddenReason.EXHAUSTIVE_INELIGIBLE ->
+                    Button(onClick = onOpenStoreCheck, modifier = Modifier.fillMaxWidth()) {
+                        Text("根拠を確認")
+                    }
+            }
+        } else {
+            // 値はリスト行・検索結果カードと同じ「最適決済での還元」なので同じ無修飾で出す(#90 で「最大」を外した)
+            place.bestBenefit?.let {
+                Text(
+                    it.toString(),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Button(onClick = onOpenDetail, modifier = Modifier.fillMaxWidth()) {
+                Text("詳細を確認")
+            }
         }
         // peek の下端にボタンが密着して欠けて見えないよう、最後に余白を確保する
         Spacer(Modifier.height(12.dp))
     }
+}
+
+/** 薄いピン(#77)のプレビューに出す間引き理由の文言 */
+private fun hiddenReasonText(reason: HiddenReason): String = when (reason) {
+    HiddenReason.OFFICIALLY_EXCLUDED -> "公式に対象外と記載されているお店です。"
+    HiddenReason.EXHAUSTIVE_INELIGIBLE -> "キャンペーンの対象のお店リストに掲載がないお店です。"
+    HiddenReason.USER_EXCLUDED -> "対象外として登録したお店です。"
 }
 
 /**

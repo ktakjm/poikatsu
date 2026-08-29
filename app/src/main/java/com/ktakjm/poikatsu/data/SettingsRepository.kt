@@ -50,6 +50,10 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore.edit { it[SettingsKeys.AUTO_REFRESH] = enabled }
     }
 
+    suspend fun setShowIneligibleStorePins(enabled: Boolean) {
+        context.settingsDataStore.edit { it[SettingsKeys.SHOW_INELIGIBLE_STORE_PINS] = enabled }
+    }
+
     suspend fun setNotificationsEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { it[SettingsKeys.NOTIFICATIONS_ENABLED] = enabled }
     }

@@ -12,10 +12,15 @@ import com.ktakjm.poikatsu.data.MerchantRule
 import com.ktakjm.poikatsu.data.PoikatsuData
 import com.ktakjm.poikatsu.data.YolpClient
 import com.ktakjm.poikatsu.data.YolpSearchConfig
+import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.CampaignType
+import com.ktakjm.poikatsu.domain.HiddenReason
 import com.ktakjm.poikatsu.domain.JudgmentEngine
+import com.ktakjm.poikatsu.domain.JudgmentResult
+import com.ktakjm.poikatsu.domain.StoreVisibility
 import com.ktakjm.poikatsu.domain.bestBenefitLabel
 import com.ktakjm.poikatsu.domain.campaignType
+import com.ktakjm.poikatsu.domain.classifyStore
 import com.ktakjm.poikatsu.domain.isPrefectureWide
 import com.ktakjm.poikatsu.domain.isTimeLimited
 import com.ktakjm.poikatsu.domain.municipalCampaignsForLocation
@@ -323,6 +328,8 @@ class NearbyController(
         // 開発者モード中だけ生 POI と照合・間引き結果を記録する(#70。設定→開発者向け→
         // 「取得した地図データ」で表示。OFF 時は記録しない=オーバーヘッドなし)
         val debugPois = if (settings.developerMode) mutableListOf<DebugPoi>() else null
+        // 薄いピンで残す間引き店(#77)。通常ピンとは別リストに集め、重複排除は同じ基準で掛ける
+        val hiddenPlaces = mutableListOf<NearbyPlace>()
         val places = pois
             .mapNotNull { poi ->
                 fun record(matchLabel: String?, status: DebugPoiStatus) {
@@ -340,72 +347,63 @@ class NearbyController(
                     record(matchLabel, DebugPoiStatus.FACILITY_TENANT)
                     return@mapNotNull null
                 }
-                if (engine.isExcludedStore(merchant, poi.name)) {
-                    record(matchLabel, DebugPoiStatus.OFFICIALLY_EXCLUDED)
-                    return@mapNotNull null
-                }
-                // POI は具体的な看板(業態)なので看板スコープで判定する(対象外業態はここで判定なしになり消える)。
-                // ユーザー登録の対象外ペア(#63)と網羅リストの店舗対象外(#64)も店舗単位でここで間引く
-                // (該当施策だけ判定から外れ、全施策が間引かれた店は下の判定なしと同じ扱いで消える)
-                val excludedIds =
-                    engine.excludedCampaignIdsFor(merchant, poi.name, settings.activeExcludedStorePairs)
-                val ineligibleIds = engine.exhaustiveListIneligibleCampaignIds(merchant, poi.name)
-                val result = engine.judgeAll(
+                // POI は具体的な看板(業態)なので看板スコープで判定し、通常ピン / 薄いピン+理由 / 描かない
+                // に分類する(基準は domain/StoreVisibility.kt。ユーザー登録の対象外ペア #63・網羅リストの
+                // 店舗対象外 #64・公式対象外の店舗単位の間引きと、ブリッジ中の下見残しを含む)
+                val visibility = engine.classifyStore(
                     merchant,
+                    match.bannerId,
+                    poi.name,
                     today,
                     qrIds,
-                    match.bannerId,
-                    excludedIds,
-                    ineligibleIds,
-                    memberships = settings.pointProgramMemberships,
+                    settings.activeExcludedStorePairs,
+                    settings.pointProgramMemberships,
+                    previewMerchantIds = filterIds,
                 )
-                // 並記枠(提示のみ)しか無い店も「特典あり」としてピンを出す
-                val visible = result.judgments + result.presentationJudgments
-                // 判定なしは通常出さないが、チェーン絞り込み中(ブリッジ由来)の merchant は
-                // 非対象日の場所確認用に残す(bestBenefit なし=還元率ラベルなしで表示)。
-                // ただし網羅リストで対象外と確定した店(ineligibleIds に間引かれた店。#64)は
-                // 下見の意味が無いため、明示対象外(isExcludedStore)と同様ブリッジ中でも出さない
-                // (施策詳細から「近くの対象のお店を探す」と全国の非対象店が並んでしまう。#70)
-                if (visible.isEmpty() && (merchant.id !in filterIds || ineligibleIds.isNotEmpty())) {
-                    if (merchant.id in filterIds && ineligibleIds.isNotEmpty()) {
+                fun place(visible: List<CampaignJudgment>, result: JudgmentResult?, hiddenReason: HiddenReason?) =
+                    NearbyPlace(
+                        name = poi.name,
+                        distanceMeters = GeoMath.distanceMeters(originLat, originLon, poi.lat, poi.lon),
+                        distanceFromCenter = GeoMath.distanceMeters(centerLat, centerLon, poi.lat, poi.lon),
+                        merchant = merchant,
+                        bannerId = match.bannerId,
+                        bestBenefit = result?.bestBenefitLabel(),
+                        lat = poi.lat,
+                        lon = poi.lon,
+                        brandColors = visible.mapNotNull { it.brandColor }.distinct(),
+                        hasTimeLimited = visible.any { it.campaign.isTimeLimited },
+                        hiddenReason = hiddenReason,
+                    )
+                // ブリッジ中チェーンの網羅リスト外(0 件表示の案内の出し分け用。#70)
+                fun countIneligibleHidden() {
+                    if (merchant.id in filterIds) {
                         ineligibleHidden += "${merchant.id}:${engine.normalizedBranch(merchant, poi.name)}"
                     }
-                    record(
-                        matchLabel,
-                        if (ineligibleIds.isNotEmpty()) DebugPoiStatus.EXHAUSTIVE_INELIGIBLE
-                        else DebugPoiStatus.NO_JUDGMENT,
-                    )
-                    return@mapNotNull null
                 }
-                record(matchLabel, DebugPoiStatus.SHOWN)
-                val allCampaigns = visible.map { it.campaign }
-                NearbyPlace(
-                    name = poi.name,
-                    distanceMeters = GeoMath.distanceMeters(originLat, originLon, poi.lat, poi.lon),
-                    distanceFromCenter = GeoMath.distanceMeters(centerLat, centerLon, poi.lat, poi.lon),
-                    merchant = merchant,
-                    bannerId = match.bannerId,
-                    bestBenefit = result.bestBenefitLabel(),
-                    lat = poi.lat,
-                    lon = poi.lon,
-                    brandColors = visible.mapNotNull { it.brandColor }.distinct(),
-                    hasTimeLimited = allCampaigns.any { it.isTimeLimited },
-                )
+                when (visibility) {
+                    is StoreVisibility.Shown -> {
+                        record(matchLabel, DebugPoiStatus.SHOWN)
+                        // 並記枠(提示のみ)しか無い店も「特典あり」としてピンを出す
+                        place(visibility.visible, visibility.result, hiddenReason = null)
+                    }
+                    is StoreVisibility.Hidden -> {
+                        if (visibility.reason == HiddenReason.EXHAUSTIVE_INELIGIBLE) countIneligibleHidden()
+                        record(matchLabel, visibility.reason.debugStatus())
+                        hiddenPlaces += place(emptyList(), result = null, hiddenReason = visibility.reason)
+                        null
+                    }
+                    is StoreVisibility.Dropped -> {
+                        if (visibility.exhaustiveIneligible) countIneligibleHidden()
+                        record(
+                            matchLabel,
+                            if (visibility.exhaustiveIneligible) DebugPoiStatus.EXHAUSTIVE_INELIGIBLE
+                            else DebugPoiStatus.NO_JUDGMENT,
+                        )
+                        null
+                    }
+                }
             }
-            // 同一店舗の重複を排除(YOLP は同じ店を別名・空白違いで複数返すことがある。
-            // 例: 「KFC…店」と「ケンタッキーフライドチキン…店」、空白有無違いの同名)。
-            // 「チェーン + 支店名」がともに一致するものを同一店舗とみなし、1件だけ残す。
-            // 座標基準にしないのは、同一モール内に同チェーンの別店舗(例: レイクタウンの複数スタバ)が
-            // 入る場合に誤って1件へ潰さないため(支店名が異なれば別物として残る)。
-            // 残す1件は座標の辞書順で選ぶ。「最も近い1件」にすると、同一店舗が座標違いで重複登録
-            // されている場合(例: リヴィンオズ大泉のドトール、施設実位置と住所ジオコード点が約44m差)に
-            // 検索起点しだいで残る座標が入れ替わり、近接グルーピングの結果が検索のたびに揺れるため
-            .groupBy { p ->
-                val m = p.merchant
-                if (m == null) "?:${p.name}" else "${m.id}:${engine.normalizedBranch(m, p.name)}"
-            }
-            .map { (_, dups) -> dups.minWith(compareBy({ it.lat }, { it.lon }, { it.name })) }
-            .sortedBy { it.distanceFromCenter }
+            .dedupSameStore(engine)
         val effectiveZoom = if (adaptZoom) {
             val nearCount = places.count { it.distanceFromCenter <= NEARBY_DENSE_RADIUS_M }
             if (nearCount < NEARBY_DENSE_THRESHOLD) NEARBY_WIDE_ZOOM else zoom
@@ -416,6 +414,7 @@ class NearbyController(
             gen,
             NearbyUi(
                 places = places,
+                hiddenPlaces = hiddenPlaces.dedupSameStore(engine),
                 ineligibleHiddenCount = ineligibleHidden.size,
                 rawPoiCount = pois.size,
                 centerLat = centerLat,
@@ -441,9 +440,36 @@ class NearbyController(
         )
 
     /**
-     * 判定が 0 件になった店はピンごと消える(チェーン絞り込み中の merchant は場所確認用に残す。
-     * loadNearbyAround と同基準)。一度消えた店は登録を解除しても次の検索まで戻らない
-     * (タブを離れて戻れば再検索される)。
+     * 同一店舗の重複を排除する(YOLP は同じ店を別名・空白違いで複数返すことがある。
+     * 例: 「KFC…店」と「ケンタッキーフライドチキン…店」、空白有無違いの同名)。
+     * 「チェーン + 支店名」がともに一致するものを同一店舗とみなし、1件だけ残す。
+     * 座標基準にしないのは、同一モール内に同チェーンの別店舗(例: レイクタウンの複数スタバ)が
+     * 入る場合に誤って1件へ潰さないため(支店名が異なれば別物として残る)。
+     * 残す1件は座標の辞書順で選ぶ。「最も近い1件」にすると、同一店舗が座標違いで重複登録
+     * されている場合(例: リヴィンオズ大泉のドトール、施設実位置と住所ジオコード点が約44m差)に
+     * 検索起点しだいで残る座標が入れ替わり、近接グルーピングの結果が検索のたびに揺れるため。
+     * 並び順は地図中心からの距離(一覧のソート)。通常ピン・薄いピンの両リストに同じ基準で掛ける
+     */
+    private fun List<NearbyPlace>.dedupSameStore(engine: JudgmentEngine): List<NearbyPlace> =
+        groupBy { p ->
+            val m = p.merchant
+            if (m == null) "?:${p.name}" else "${m.id}:${engine.normalizedBranch(m, p.name)}"
+        }
+            .map { (_, dups) -> dups.minWith(compareBy({ it.lat }, { it.lon }, { it.name })) }
+            .sortedBy { it.distanceFromCenter }
+
+    /** 薄いピンの理由を開発者向け一覧の間引き理由に写す */
+    private fun HiddenReason.debugStatus(): DebugPoiStatus = when (this) {
+        HiddenReason.OFFICIALLY_EXCLUDED -> DebugPoiStatus.OFFICIALLY_EXCLUDED
+        HiddenReason.EXHAUSTIVE_INELIGIBLE -> DebugPoiStatus.EXHAUSTIVE_INELIGIBLE
+        HiddenReason.USER_EXCLUDED -> DebugPoiStatus.USER_EXCLUDED
+    }
+
+    /**
+     * 取得済みの店(通常ピン+薄いピン)を新しいエンジン・設定で再分類する(loadNearbyAround と同基準)。
+     * 対象外ペア(#63)の登録/解除で通常ピン ⇄ 薄いピンの両方向に動く(薄いピン側も
+     * メモリに持っているため、解除しても次の検索まで戻らない、ということが無い)。
+     * 除外に関係なく判定が 0 件になった店(Dropped)は従来どおり消える。
      */
     private fun recomputeNearbyPlaces(
         nearby: NearbyUi,
@@ -451,44 +477,63 @@ class NearbyController(
         settings: AppSettings,
         filters: Set<NearbyLens>,
     ): NearbyUi {
-        if (nearby.places.isEmpty()) return nearby
+        if (nearby.places.isEmpty() && nearby.hiddenPlaces.isEmpty()) return nearby
         val today = LocalDate.now()
         val qrIds = settings.enabledQrPaymentIds
         val filterIds = filters.map { it.merchant.id }.toSet()
-        // 検索時(loadNearbyAround)に間引いた分に、この再計算で新たに間引いた分を積む
-        // (places はメモリ内の残存分だけなので検索時の分は数え直せない。次の検索でリセットされる)
+        // 検索時(loadNearbyAround)に間引いた分に、この再計算で通常ピンから新たに間引いた分だけを積む
+        // (薄いピンに留まる店は検索時に数え済み。次の検索でリセットされる)
         var ineligibleHidden = nearby.ineligibleHiddenCount
-        val places = nearby.places.mapNotNull { place ->
-            val merchant = place.merchant ?: return@mapNotNull place
-            val excludedIds =
-                engine.excludedCampaignIdsFor(merchant, place.name, settings.activeExcludedStorePairs)
-            val ineligibleIds = engine.exhaustiveListIneligibleCampaignIds(merchant, place.name)
-            val result = engine.judgeAll(
-                merchant,
-                today,
-                qrIds,
-                place.bannerId,
-                excludedIds,
-                ineligibleIds,
-                memberships = settings.pointProgramMemberships,
-            )
-            val visible = result.judgments + result.presentationJudgments
-            // 網羅リストの対象外店はブリッジ中でも残さない(loadNearbyAround と同基準。#70)
-            if (visible.isEmpty() && (merchant.id !in filterIds || ineligibleIds.isNotEmpty())) {
-                if (merchant.id in filterIds && ineligibleIds.isNotEmpty()) ineligibleHidden++
-                return@mapNotNull null
+        val shown = mutableListOf<NearbyPlace>()
+        val hidden = mutableListOf<NearbyPlace>()
+        (nearby.places + nearby.hiddenPlaces).forEach { place ->
+            val merchant = place.merchant ?: run { shown += place; return@forEach }
+            val wasShown = place.hiddenReason == null
+            fun countIneligibleHidden() {
+                if (wasShown && merchant.id in filterIds) ineligibleHidden++
             }
-            place.copy(
-                bestBenefit = result.bestBenefitLabel(),
-                brandColors = visible.mapNotNull { it.brandColor }.distinct(),
-                hasTimeLimited = visible.any { it.campaign.isTimeLimited },
-            )
+            when (
+                val v = engine.classifyStore(
+                    merchant,
+                    place.bannerId,
+                    place.name,
+                    today,
+                    qrIds,
+                    settings.activeExcludedStorePairs,
+                    settings.pointProgramMemberships,
+                    previewMerchantIds = filterIds,
+                )
+            ) {
+                is StoreVisibility.Shown -> shown += place.copy(
+                    bestBenefit = v.result.bestBenefitLabel(),
+                    brandColors = v.visible.mapNotNull { it.brandColor }.distinct(),
+                    hasTimeLimited = v.visible.any { it.campaign.isTimeLimited },
+                    hiddenReason = null,
+                )
+                is StoreVisibility.Hidden -> {
+                    if (v.reason == HiddenReason.EXHAUSTIVE_INELIGIBLE) countIneligibleHidden()
+                    hidden += place.copy(
+                        bestBenefit = null,
+                        brandColors = emptyList(),
+                        hasTimeLimited = false,
+                        hiddenReason = v.reason,
+                    )
+                }
+                is StoreVisibility.Dropped -> if (v.exhaustiveIneligible) countIneligibleHidden()
+            }
         }
-        // プレビュー中の店は再計算後のインスタンスへ差し替え、消えた店ならプレビューを閉じる
+        shown.sortBy { it.distanceFromCenter }
+        hidden.sortBy { it.distanceFromCenter }
+        // プレビュー中の店は再計算後のインスタンスへ差し替え(通常⇄薄いの移動を含む)、消えた店ならプレビューを閉じる
         val selected = nearby.selectedPlace?.let { sp ->
-            places.firstOrNull { it.name == sp.name && it.lat == sp.lat && it.lon == sp.lon }
+            (shown + hidden).firstOrNull { it.name == sp.name && it.lat == sp.lat && it.lon == sp.lon }
         }
-        return nearby.copy(places = places, selectedPlace = selected, ineligibleHiddenCount = ineligibleHidden)
+        return nearby.copy(
+            places = shown,
+            hiddenPlaces = hidden,
+            selectedPlace = selected,
+            ineligibleHiddenCount = ineligibleHidden,
+        )
     }
 
     /**
@@ -669,12 +714,45 @@ class NearbyController(
                 st.selectedCampaignGroup != null
             val merchant = place.merchant
             if (detailOpen && merchant != null) {
-                selectionFor(merchant, place.name, place.name, place.bannerId)?.let { sel ->
-                    s = s.withSelection(sel)
+                // 薄いピン(#77)の公式対象外・網羅リスト外は判定詳細でなく店舗判定(根拠)に差し替える
+                // (判定詳細は公式対象外を判定に反映しないため、対象のように見えてしまう)
+                val check = storeCheckFor(place)
+                if (check != null) {
+                    s = s.copy(selection = null, storeCheck = check, selectedCampaignGroup = null)
+                } else {
+                    selectionFor(merchant, place.name, place.name, place.bannerId)?.let { sel ->
+                        s = s.withSelection(sel)
+                    }
                 }
             }
             s
         }
+    }
+
+    /**
+     * 薄いピン(#77)のプレビュー「根拠を確認」→ 店舗判定画面を単独で開く(公式リストの一致箇所・出典が見える)。
+     * 判定詳細を下に積まないのは、判定詳細が公式対象外を反映せず対象のように見えてしまうため。
+     * 戻る/✕ で地図(プレビュー)へ戻る。
+     */
+    fun onOpenNearbyStoreCheck(place: NearbyPlace) {
+        val check = storeCheckFor(place) ?: return
+        state.update { it.copy(selection = null, storeCheck = check, selectedCampaignGroup = null) }
+    }
+
+    /** 公式対象外・網羅リスト外の薄いピンに対する店舗判定の状態。それ以外(通常ピン・登録対象外)は null */
+    private fun storeCheckFor(place: NearbyPlace): MainViewModel.StoreCheckState? {
+        val merchant = place.merchant ?: return null
+        val engine = engine() ?: return null
+        val byOfficialList = when (place.hiddenReason) {
+            HiddenReason.OFFICIALLY_EXCLUDED, HiddenReason.EXHAUSTIVE_INELIGIBLE -> true
+            HiddenReason.USER_EXCLUDED, null -> false
+        }
+        if (!byOfficialList || !engine.canCheckStore(merchant)) return null
+        return MainViewModel.StoreCheckState(
+            merchant = merchant,
+            input = place.name,
+            verdicts = engine.checkStore(merchant, place.name),
+        )
     }
 
     /**

@@ -440,6 +440,35 @@ class JudgmentEngineTest {
         return JudgmentEngine(data) to merchant
     }
 
+    // ---- 検索 0 件時の matchStore フォールバック(#77 施策6) ----
+
+    private val engineWithMatsuya = JudgmentEngine(
+        data.copy(merchants = data.merchants + Merchant(id = "matsuya", name = "松屋", reading = "まつや", category = "ファストフード")),
+    )
+
+    @Test
+    fun `検索が0件でも matchStore で系列を特定できれば案内用ヒットを返す`() {
+        // 漢字 2 文字キーは search の 3 文字制限で具体店舗名入力(「松屋渋谷店」)に当たらないが、
+        // matchStore(地図 POI 照合)は漢字 2 文字キーを許可しているため拾える
+        assertTrue(engineWithMatsuya.search("松屋渋谷店").isEmpty())
+        val hit = engineWithMatsuya.searchFallback("松屋渋谷店")
+        assertEquals("matsuya", hit?.merchant?.id)
+        // 代表看板への一致は search と同じくグループとしてのヒット(bannerId なし)
+        assertNull(hit?.bannerId)
+    }
+
+    @Test
+    fun `フォールバックは無関係な入力には当たらない`() {
+        assertNull(engineWithMatsuya.searchFallback("だるま食堂"))
+        assertNull(engineWithMatsuya.searchFallback(""))
+    }
+
+    @Test
+    fun `フォールバックもカテゴリ絞り込みを守る`() {
+        assertNull(engineWithMatsuya.searchFallback("松屋渋谷店", setOf("コンビニ")))
+        assertEquals("matsuya", engineWithMatsuya.searchFallback("松屋渋谷店", setOf("ファストフード"))?.merchant?.id)
+    }
+
     // ---- isExactNameMatch ----
 
     @Test

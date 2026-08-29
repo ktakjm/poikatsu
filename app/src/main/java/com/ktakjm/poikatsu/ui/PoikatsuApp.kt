@@ -98,6 +98,7 @@ import androidx.compose.material3.TextButton
 import com.ktakjm.poikatsu.data.CustomCampaign
 import com.ktakjm.poikatsu.data.CustomCard
 import com.ktakjm.poikatsu.data.Merchant
+import com.ktakjm.poikatsu.domain.SearchHit
 import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.ExpiringPointNotice
 import com.ktakjm.poikatsu.domain.campaignGroupDisplayTitle
@@ -421,9 +422,11 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                     SettingsSubpage.DISPLAY -> DisplaySettingsPage(
                         themeMode = state.themeMode,
                         dynamicColor = state.dynamicColor,
+                        showIneligibleStorePins = state.showIneligibleStorePins,
                         onBack = viewModel::onCloseSettingsSubpage,
                         onThemeModeChange = viewModel::onSetThemeMode,
                         onDynamicColorChange = viewModel::onSetDynamicColor,
+                        onShowIneligibleStorePinsChange = viewModel::onSetShowIneligibleStorePins,
                     )
                     SettingsSubpage.PAYMENT_METHODS -> PaymentMethodsSettingsPage(
                         cards = state.cardSettings,
@@ -631,6 +634,8 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                                 onPreviewPlace = viewModel.nearby::onPreviewNearby,
                                 onClearPreview = viewModel.nearby::onClearNearbyPreview,
                                 onOpenDetail = viewModel.nearby::onSelectNearby,
+                                onOpenStoreCheck = viewModel.nearby::onOpenNearbyStoreCheck,
+                                showIneligiblePins = state.showIneligibleStorePins,
                                 onCloseDetail = viewModel.nearby::onCloseNearbyDetail,
                                 onSearchHere = viewModel.nearby::searchHere,
                                 onSelectionZoomChanged = viewModel.nearby::onSelectionZoomChanged,
@@ -779,6 +784,7 @@ fun PoikatsuApp(viewModel: MainViewModel = viewModel()) {
                                 selectedCategories = state.selectedCategories,
                                 results = state.results,
                                 unrewardedNames = state.unrewardedNames,
+                                searchFallbackHit = state.searchFallbackHit,
                                 dataStatus = dataStatusLabel(
                                     state.dataUpdatedAt,
                                     state.dataSource,
@@ -902,6 +908,7 @@ private fun SearchPane(
     selectedCategories: Set<String>,
     results: List<MainViewModel.SearchResult>,
     unrewardedNames: List<String>,
+    searchFallbackHit: SearchHit?,
     dataStatus: String,
     refreshing: Boolean,
     municipalAreaNames: List<String>,
@@ -1005,6 +1012,16 @@ private fun SearchPane(
         else -> LazyColumn(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // 名前検索 0 件 → matchStore で拾った系列(#77 施策6)。通常結果と区別できるよう案内を 1 行添える
+            if (searchFallbackHit != null) {
+                item(key = "__fallback_note") {
+                    Text(
+                        searchFallbackNote(query, searchFallbackHit),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                }
+            }
             items(results, key = { it.merchant.id }) { result ->
                 SearchResultCard(
                     result,
@@ -1013,6 +1030,12 @@ private fun SearchPane(
             }
         }
     }
+}
+
+/** 検索 0 件時の matchStore フォールバック(#77 施策6)の案内。看板ヒットなら「系列名 の 看板名」と併記する */
+private fun searchFallbackNote(query: String, hit: SearchHit): String {
+    val registeredAs = hit.bannerName?.let { "${hit.merchant.name} の $it" } ?: hit.merchant.name
+    return "「$query」は $registeredAs として登録されています"
 }
 
 /**

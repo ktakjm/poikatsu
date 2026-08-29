@@ -41,6 +41,7 @@ class SettingsCodecTest {
         useTestData = true,
         useBundledData = true,
         developerMode = true,
+        showIneligibleStorePins = false,
         enabledQrPaymentIds = setOf("paypay"),
         ownedBrands = setOf("Amex"),
         enabledPointMultipliers = setOf("vpoint"),

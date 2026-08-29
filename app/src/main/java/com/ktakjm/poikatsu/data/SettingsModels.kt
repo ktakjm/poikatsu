@@ -232,6 +232,11 @@ data class AppSettings(
      * 開発者向け設定を一括で既定値に戻す(戻し忘れによる実データとの取り違え防止)。
      */
     val developerMode: Boolean = false,
+    /**
+     * 地図で間引いた店(公式対象外・網羅リスト外・ユーザー登録の対象外)を薄いピンで残すか(#77)。
+     * 既定 ON。「対象店だけ見たい」人向けに OFF にできる(分類自体は常に行い、描画だけ抑止する)。
+     */
+    val showIneligibleStorePins: Boolean = true,
     /** 利用中の QR 決済 ID。payment_methods.json の qr_payments カタログからユーザーが選択 */
     val enabledQrPaymentIds: Set<String> = emptySet(),
     /**

@@ -39,8 +39,10 @@ import com.ktakjm.poikatsu.domain.CampaignJudgment
 import com.ktakjm.poikatsu.domain.CampaignStatus
 import com.ktakjm.poikatsu.domain.DEFAULT_NOTIFY_TIME_MINUTES
 import com.ktakjm.poikatsu.domain.ExpiringPointNotice
+import com.ktakjm.poikatsu.domain.HiddenReason
 import com.ktakjm.poikatsu.domain.JudgmentEngine
 import com.ktakjm.poikatsu.domain.FixedBenefitAdvice
+import com.ktakjm.poikatsu.domain.SearchHit
 import com.ktakjm.poikatsu.domain.StackedRate
 import com.ktakjm.poikatsu.domain.StoreVerdict
 import com.ktakjm.poikatsu.domain.allowsManualRate
@@ -199,6 +201,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          */
         val brandColors: List<String> = emptyList(),
         val hasTimeLimited: Boolean = false,
+        /**
+         * 薄いピン(#77)の間引き理由。null = 通常の対象店。非 null の店は [NearbyUi.hiddenPlaces] 側に
+         * 入り、bestBenefit/brandColors は空。プレビューで理由文と根拠への導線に使う
+         */
+        val hiddenReason: HiddenReason? = null,
     )
 
     /**
@@ -222,6 +229,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         FACILITY_TENANT("テナント除外"),
         OFFICIALLY_EXCLUDED("公式対象外"),
         EXHAUSTIVE_INELIGIBLE("網羅リスト外"),
+        /** ユーザー登録の対象外ペア(#63)で全施策が消えた店(薄いピン。#77) */
+        USER_EXCLUDED("登録対象外"),
         NO_JUDGMENT("判定なし"),
     }
 
@@ -284,6 +293,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val loadingPhase: NearbyLoadPhase = NearbyLoadPhase.SEARCHING,
         val error: String? = null,
         val places: List<NearbyPlace> = emptyList(),
+        /**
+         * 薄いピンで残す間引き店(#77)。除外(公式対象外・網羅リスト外・ユーザー登録)が無ければ特典が
+         * 出ていた店だけ(分類は domain/StoreVisibility.kt)。[places] と分けて持つことで一覧・件数バッジ・
+         * 「お店で絞る」の母集団は対象店のまま保ち、地図ピンだけに追加で描く。
+         * 表示 OFF(AppSettings.showIneligibleStorePins)でも分類は行い、描画側で抑止する。
+         */
+        val hiddenPlaces: List<NearbyPlace> = emptyList(),
         /**
          * ブリッジ(チェーン絞り込み)中のチェーンだが、網羅リストで対象外と確定して間引いた
          * 店舗の数(#70。重複排除と同じ「チェーン+支店名」単位)。0 件表示のとき
@@ -387,6 +403,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val results: List<SearchResult> = emptyList(),
         /** 検索にヒットしたが判定 0 件で一覧から落としたチェーンの表示名(0 件時の案内の出し分け用。#70) */
         val unrewardedNames: List<String> = emptyList(),
+        /**
+         * 名前検索が 0 件のとき matchStore(地図 POI 照合)で拾った系列(#77 施策6)。非 null なら
+         * results/unrewardedNames はこのヒットから作られており、一覧の上に「『{query}』は {系列名} として
+         * 登録されています」の案内を出す。
+         */
+        val searchFallbackHit: SearchHit? = null,
         /**
          * 期間限定ポイントの失効通知(#13)。施策・お店と独立の内容のためどのお店の判定画面でも
          * 同じ一覧を出す(施策 0 件でも表示。設計書 §4)。rebuild で算出する
@@ -496,6 +518,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val useTestData: Boolean = false,
         val useBundledData: Boolean = false,
         val developerMode: Boolean = false,
+        /** 地図で間引いた店を薄いピンで残すか(#77。設定→表示) */
+        val showIneligibleStorePins: Boolean = true,
         /** 表示中の設定サブページ(設定タブ上のオーバーレイ)。null ならトップページ */
         val settingsSubpage: SettingsSubpage? = null,
         /**
@@ -812,18 +836,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     data class SearchOutcome(
         val results: List<SearchResult> = emptyList(),
         val unrewardedNames: List<String> = emptyList(),
+        /** 名前検索 0 件時の matchStore フォールバックで拾った系列(#77 施策6)。通常検索の結果なら null */
+        val fallbackHit: SearchHit? = null,
     )
 
     /**
      * 検索結果のうち、所有カードで対象になる施策が1つ以上あるチェーンだけ残す(reward 無しは一覧に出さない)。
      * 落としたヒットの表示名は unrewardedNames として別枠で返す — 検索 0 件時に
-     * 「アプリ未収録」と「収録済みだが今出せるキャンペーンが無い」を区別して案内するため(#70)
+     * 「アプリ未収録」と「収録済みだが今出せるキャンペーンが無い」を区別して案内するため(#70)。
+     * 名前検索が完全に 0 件のときだけ matchStore フォールバック([JudgmentEngine.searchFallback])を試し、
+     * 当たればそのヒットを同じ流れに乗せて fallbackHit に印を付ける(#77 施策6。通常結果には混ぜない)
      */
     private fun JudgmentEngine.searchRewarded(query: String, categories: Set<String>): SearchOutcome {
         val today = LocalDate.now()
         val results = mutableListOf<SearchResult>()
         val unrewarded = mutableListOf<String>()
-        search(query, categories).forEach { hit ->
+        var hits = search(query, categories)
+        var fallbackHit: SearchHit? = null
+        if (hits.isEmpty()) {
+            fallbackHit = searchFallback(query, categories)
+            hits = listOfNotNull(fallbackHit)
+        }
+        hits.forEach { hit ->
             // 業態ヒットはその業態としての判定(看板スコープ外の施策は数えない)
             val result = judgeAll(
                 hit.merchant,
@@ -849,7 +883,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 hasTimeLimited = allCampaigns.any { it.isTimeLimited },
             )
         }
-        return SearchOutcome(results, unrewarded)
+        return SearchOutcome(results, unrewarded, fallbackHit)
     }
 
     private fun applyData(loaded: LoadedData) {
@@ -1053,6 +1087,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 categories = newEngine.categories,
                 results = searchOutcome.results,
                 unrewardedNames = searchOutcome.unrewardedNames,
+                searchFallbackHit = searchOutcome.fallbackHit,
                 expiringPointNotices = expiringNotices,
                 selection = it.selection?.let { sel ->
                     newDisplayData.merchants.firstOrNull { m -> m.id == sel.merchant.id }
@@ -1090,6 +1125,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 useTestData = settings.useTestData,
                 useBundledData = settings.useBundledData,
                 developerMode = settings.developerMode,
+                showIneligibleStorePins = settings.showIneligibleStorePins,
                 // 開発者モード OFF は開発者向け設定の一括リセット。生 POI 記録もここで消す
                 nearbyDebugPois = if (settings.developerMode) it.nearbyDebugPois else emptyList(),
                 campaignsActive = campaignsActive,
@@ -1116,6 +1152,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 query = query,
                 results = outcome.results,
                 unrewardedNames = outcome.unrewardedNames,
+                searchFallbackHit = outcome.fallbackHit,
                 selection = null,
                 storeCheck = null,
             )
@@ -1158,6 +1195,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 selectedCategories = selected,
                 results = outcome.results,
                 unrewardedNames = outcome.unrewardedNames,
+                searchFallbackHit = outcome.fallbackHit,
                 selection = null,
                 storeCheck = null,
             )
@@ -1283,6 +1321,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun onSetDynamicColor(enabled: Boolean) = viewModelScope.launch { settingsRepo.setDynamicColor(enabled) }
 
     fun onSetAutoRefresh(enabled: Boolean) = viewModelScope.launch { settingsRepo.setAutoRefresh(enabled) }
+
+    fun onSetShowIneligibleStorePins(enabled: Boolean) =
+        viewModelScope.launch { settingsRepo.setShowIneligibleStorePins(enabled) }
 
     /**
      * キャンペーン通知(#6)の ON/OFF。設定の保存に加えて日次ジョブの登録/解除も行う。
