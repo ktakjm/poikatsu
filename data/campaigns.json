@@ -1,6 +1,6 @@
 {
   "schema_version": 14,
-  "updated_at": "2026-08-26",
+  "updated_at": "2026-09-09",
   "campaigns": [
     {
       "id": "smcc_combini_restaurant",
@@ -132,7 +132,7 @@
         { "merchant_id": "akachan_honpo", "eligible_notes": ["Online Shop含む"], "ineligible_notes": ["Amexは店頭決済のみ対象外(Online Shopは対象)"], "ineligible_brands": ["Amex"], "official_store_list": {"eligible_stores": ["シーナシーナ屯田", "新さっぽろアークシティ", "アリオ札幌", "シーナシーナ青森", "仙台泉", "ヨークパーク郡山", "トナリエつくば", "ニューポートひたちなか", "ベルモール", "高崎", "スマーク伊勢崎", "ステラタウン大宮", "アリオ川口", "エミテラス所沢", "アリオ深谷", "アリオ上尾", "ALCo越谷", "和光イトーヨーカドー", "アリオ鷲宮", "テラスモール松戸", "アリオ柏", "アリオ市原", "四街道イトーヨーカドー", "アリオ北砂", "ウィラ大井", "池袋東武", "セブンタウン小豆沢", "アリオ西新井", "アリオ亀有", "アリオ葛西", "セレオ八王子", "昭島イトーヨーカドー", "武蔵小金井イトーヨーカドー", "東久留米イトーヨーカドー", "横浜別所イトーヨーカドー", "港南台バーズ", "グランツリー武蔵小杉", "溝口", "古淵イトーヨーカドー", "アリオ橋本", "テラスモール湘南", "大和鶴間イトーヨーカドー", "新潟亀田アピタ", "リバーサイド千秋", "ファボーレ", "アピタタウン金沢ベイ", "アルプラザ小松", "福井", "甲府昭和イトーヨーカドー", "アリオ上田", "アイシティ２１", "カラフルタウン岐阜", "静岡イトーヨーカドー", "浜松プラザ", "アクロスプラザ春日井", "リーフウォーク稲沢", "プライムツリー赤池", "ビバシティ彦根", "エイスクエア草津", "洛北阪急スクエア", "MOMOテラス", "精華台", "あべのイトーヨーカドー", "京阪シティモール", "大阪本町", "高槻阪急スクエア", "くずはモール", "アリオ八尾", "ホームズ寝屋川", "スマイル御影クラッセ", "ブルメール舞多聞", "カナート西神戸", "ゆめタウン姫路", "MEGAドン・キホーテ姫路広畑", "つかしん", "明石イトーヨーカドー", "トナリエ大和高田", "イズミヤ和歌山", "ゆめタウン出雲", "ハピータウン岡南", "ブランチ北長瀬", "フジグラン緑井", "ゆめタウンみゆき", "ゆめタウン福山", "ゆめタウン廿日市", "イオンタウン防府", "ゆめタウン徳島", "瓦町FLAG", "エミフルMASAKI", "リバーウォーク北九州", "福岡マリナタウン", "ガーデンズ千早", "ゆめタウン飯塚", "ゆめタウン筑紫野", "ゆめタウン佐賀", "ゆめタウンはません", "ゆめタウン光の森", "パークプレイス大分", "ニトリモール宮崎", "オプシアミスミ", "浦添西海岸パルコシティ", "ハンビータウン", "西原シティ"], "ineligible_stores": ["ララガーデン長町", "ララガーデン川口", "ララガーデン春日部", "ららぽーと富士見", "ららぽーと新三郷", "幕張イトーヨーカドー", "ららぽーとTOKYO-BAY", "ららぽーと柏の葉", "アルカキット錦糸町", "ららぽーと豊洲", "ららぽーと立川立飛", "ららぽーと横浜", "立場イトーヨーカドー", "ラゾーナ川崎", "ららぽーと湘南平塚", "ららぽーと海老名", "ららぽーと沼津", "ららぽーと磐田", "ららぽーと名古屋みなとアクルス", "ららぽーと安城", "ららぽーと愛知東郷", "ららぽーと堺", "ららぽーとEXPOCITY", "ららぽーと和泉", "ららぽーと門真", "ららぽーと甲子園"], "updated_date": "2026-06-15", "date_is_official": false, "source_url": "https://www.akachan.jp/topics/mufgCPlist/"} },
         { "merchant_id": "curves", "eligible_notes": ["入会金・月会費が対象"], "ineligible_brands": [] }
       ],
-      "verified_date": "2026-08-09"
+      "verified_date": "2026-09-09"
     },
     {
       "id": "jcb_jpoint_partner",
@@ -187,7 +187,7 @@
         { "merchant_id": "haruyama", "rate_override": 2.5, "ineligible_notes": ["オンラインストアでのカード決済は対象外(店頭での支払いのみ対象)"], "official_store_list": {"ineligible_stores": ["西友厚別", "イオン三笠"], "updated_date": "2026-08-07", "date_is_official": false, "source_url": "https://j-pointpartner.jcb.co.jp/shop/000336"} },
         { "merchant_id": "owndays", "rate_override": 1.5, "ineligible_notes": ["オンラインストアでのカード決済は対象外(店頭での支払いのみ対象)"], "store_list_url": "https://j-pointpartner.jcb.co.jp/shop/000028", "official_store_list": {"eligible_stores": ["池袋西口店", "秋津店", "サンエー西原シティ店", "ブルメール舞多聞店", "本厚木店", "豊見城店", "秋葉原ラジオ会館店", "サンエーマチナトシティ店", "サンエー大山シティー店", "サンエー具志川メインシティ店", "心斎橋店", "吉祥寺店", "サンエー八重瀬店", "ザ・ビッグ豊平店", "サンエー石川シティ店", "サンエー那覇メインプレイス店", "京王高幡不動SC店", "くみまちモールあさか店", "赤羽ビビオ店", "渋谷地下街店", "石垣島店", "カインズ前橋吉岡店", "島忠ホームズ所沢店", "久米島店", "ヨリマチFUSHIMI店", "サンエー大湾シティ店", "ビナフロント海老名店", "JR佐賀店", "宮古島店", "HAB@熊本店"], "list_is_exhaustive": true, "updated_date": "2026-08-07", "date_is_official": false, "source_url": "https://j-pointpartner.jcb.co.jp/shop/000028"} }
       ],
-      "verified_date": "2026-08-08"
+      "verified_date": "2026-09-09"
     },
     {
       "id": "dcard_tokuyakuten",
@@ -227,7 +227,7 @@
         { "merchant_id": "excelsior", "rate_override": 4.0, "eligible_notes": ["ドトール バリューカードはエクセルシオール カフェでも利用できる"], "ineligible_notes": ["対象はドトール バリューカードへのクレジットチャージのみ(チャージ時にポイント付与。マイドトール登録によるオンラインチャージ)", "店頭ではクレジットカードでのチャージ不可(店頭での支払い自体はポイント付与の対象外)"] },
         { "merchant_id": "tower_records", "rate_override": 2.0, "ineligible_notes": ["iDでの支払いのみ対象(Visa/Mastercardでのカード決済は対象外)", "一部対象外の店舗あり", "dカード プリペイドは対象外"] }
       ],
-      "verified_date": "2026-08-15"
+      "verified_date": "2026-09-09"
     },
     {
       "id": "epos_yutai_monteroza",
@@ -282,7 +282,7 @@
         { "merchant_id": "bariyasu_sakaba", "rate_override": 2.5 },
         { "merchant_id": "kamifusen", "rate_override": 2.5 }
       ],
-      "verified_date": "2026-08-16"
+      "verified_date": "2026-09-09"
     },
     {
       "id": "epos_yutai_keyuca",
@@ -314,7 +314,7 @@
       "merchant_rules": [
         { "merchant_id": "keyuca", "rate_override": 2.5 }
       ],
-      "verified_date": "2026-08-16"
+      "verified_date": "2026-09-09"
     },
     {
       "id": "epos_yutai_karaokekan",
@@ -345,7 +345,7 @@
       "merchant_rules": [
         { "merchant_id": "karaoke_kan", "rate_override": 30.0 }
       ],
-      "verified_date": "2026-08-16"
+      "verified_date": "2026-09-09"
     },
     {
       "id": "epos_yutai_bigecho_course",
@@ -371,7 +371,7 @@
       "merchant_rules": [
         { "merchant_id": "big_echo", "rate_override": 10.0 }
       ],
-      "verified_date": "2026-08-16"
+      "verified_date": "2026-09-09"
     },
     {
       "id": "epos_yutai_presentation",
@@ -395,7 +395,7 @@
         { "merchant_id": "big_echo", "rate_override": 30.0, "ineligible_notes": ["一般料金からの割引(ビッグエコー会員割引・他の割引や特典・キャンペーンとの併用不可)", "ドリンクバー付き・飲み放題コースの利用時は対象外(コース利用はエポスカード決済で総額10%OFFの優待が対象)", "パーティーコース・テレワークプランは対象外", "一部店舗は対象外"] },
         { "merchant_id": "jankara", "rate_override": 20.0, "ineligible_notes": ["エポトクプラザのクーポン画面(QRコード)の提示なしは対象外(精算機で読み取り)", "19時より前の入店は対象外", "1名での利用は対象外(2名以上1組が条件)", "他のクーポンとの併用不可"] }
       ],
-      "verified_date": "2026-08-16"
+      "verified_date": "2026-09-09"
     },
 {
       "id": "yuzawa_2026_07",
@@ -442,93 +442,6 @@
         {
           "payment_method_id": "rakuten_pay",
           "detail_url": "https://yuzawa-cashless.jp/",
-          "verified_date": "2026-07-18"
-        }
-      ]
-    },
-{
-      "id": "oshu_2026_07",
-      "type": "municipal",
-      "benefit_type": "rebate",
-      "store_scope": "external",
-      "name": "物価高騰に負けるな奥州!最大20%戻ってくるキャンペーン 第3弾",
-      "rate_base": 20.0,
-      "period_start": "2026-07-01",
-      "period_end": "2026-07-27",
-      "per_transaction_cap": 5000,
-      "period_total_cap": 10000,
-      "may_end_early": true,
-      "region": {
-        "name": "奥州市",
-        "prefecture": "岩手県"
-      },
-      "ineligible_notes": [
-        "タバコ・自動販売機/券売機・オンラインショップ・他社アプリ経由・PayPay商品券での支払いは対象外"
-      ],
-      "memo": [
-        "予算到達見込みのため当初の7/31から7/27(23:59)へ早期終了(公式告知。period_endに反映済み)"
-      ],
-      "payment_variants": [
-        { "payment_method_id": "paypay", "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイント・PayPayデビットで支払う", "detail_url": "https://paypay.ne.jp/event/iwate-oshu-city-20260701/", "verified_date": "2026-07-18" }
-      ]
-    },
-{
-      "id": "oda_2026_07",
-      "type": "municipal",
-      "benefit_type": "rebate",
-      "store_scope": "external",
-      "name": "おおだキャッシュレスキャンペーン（最大20%戻ってくる）",
-      "rate_base": 20.0,
-      "period_start": "2026-07-01",
-      "period_end": "2026-08-10",
-      "per_transaction_cap": 2000,
-      "period_total_cap": 5000,
-      "cap_note": "決済サービスごとに適用",
-      "may_end_early": true,
-      "region": {
-        "name": "大田市",
-        "prefecture": "島根県"
-      },
-      "ineligible_notes": [
-        "インターネット販売・公共料金/納税・商品券/切手/プリペイドカード等の換金性が高いものは対象外",
-        "コンビニ・病院・調剤薬局・保険代理店は対象外店舗"
-      ],
-      "payment_variants": [
-        {
-          "payment_method_id": "paypay",
-          "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイント・PayPayデビットで支払う",
-          "detail_url": "https://paypay.ne.jp/event/shimane-oda-city-20260701/",
-          "ineligible_notes": [
-            "タバコ・自動販売機/券売機・PayPay商品券での支払いは対象外"
-          ],
-          "verified_date": "2026-08-09"
-        },
-        {
-          "payment_method_id": "aupay",
-          "point_currency_id": "aupay_balance",
-          "detail_url": "https://media.aupay.wallet.auone.jp/dominant/lp/202607_oda/",
-          "ineligible_notes": ["タバコは対象外"],
-          "memo": ["還元はau PAY残高(不課税)"],
-          "verified_date": "2026-08-09"
-        },
-        {
-          "payment_method_id": "dpay",
-          "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/oda_03/",
-          "ineligible_notes": [
-            "タバコ・自動販売機/券売機・クーポン利用分は対象外",
-            "一部店舗は8月1日以降のみ対象"
-          ],
-          "memo": ["還元はdポイント(期間・用途限定。発行から6か月有効)"],
-          "verified_date": "2026-08-09"
-        },
-        {
-          "payment_method_id": "rakuten_pay",
-          "detail_url": "https://www.city.oda.lg.jp/update_info/10976",
-          "verified_date": "2026-07-18"
-        },
-        {
-          "payment_method_id": "aeon_pay",
-          "detail_url": "https://www.city.oda.lg.jp/update_info/10976",
           "verified_date": "2026-07-18"
         }
       ]
@@ -596,49 +509,6 @@
         { "merchant_id": "sushiro", "ineligible_notes": ["スシロー秋葉原中央通り店(イートイン専門)は対象外"] }
       ],
       "detail_url": "https://media.aupay.wallet.auone.jp/articles/5157",
-      "verified_date": "2026-08-09"
-    },
-    {
-      "id": "aupay_kojima_shutoken_2026_08a",
-      "type": "promotion",
-      "benefit_type": "discount",
-      "store_scope": "managed",
-      "payment_method_id": "aupay",
-      "name": "コジマ×ビックカメラ 首都圏の対象20店舗限定 au PAY最大20%割引クーポン(第2弾)",
-      "payment_instruction": "au PAYアプリで事前にクーポンを獲得し、コード支払いで支払う",
-      "rate_base": 20.0,
-      "period_start": "2026-08-01",
-      "period_end": "2026-08-09",
-      "min_purchase": 100,
-      "per_transaction_cap": 1000,
-      "may_end_early": true,
-      "ineligible_notes": [
-        "事前にクーポンの獲得が必要(支払い後のクーポン利用は不可)",
-        "一部対象外の商品あり"
-      ],
-      "memo": [
-        "コジマのキャッシュレスリレーキャンペーン第2弾(PayPay弾の第1弾は終了・第3弾は詳細未公表のため未収録)",
-        "割引はクーポン適用による会計時の即時割引(割引上限1,000円/回)",
-        "対象店舗リストはコジマ公式ページ(埼玉5・東京15)より。au PAY記事(5167)と一致確認済み"
-      ],
-      "merchant_rules": [
-        {
-          "merchant_id": "kojima",
-          "official_store_list": {
-            "eligible_stores": [
-              "ニトリホームズ宮原店", "浦和店", "川口店", "和光店", "新座店",
-              "KAMEIDO CLOCK店", "南砂町SUNAMO店", "善福寺店", "高井戸東店",
-              "ベルクスモール浮間舟渡店", "高島平店", "志村店", "上板橋店", "豊玉店",
-              "新小岩店", "江戸川店", "三鷹店", "コーナン田無店", "西友ひばりヶ丘店", "西東京店"
-            ],
-            "list_is_exhaustive": true,
-            "updated_date": "2026-08-06",
-            "date_is_official": false,
-            "source_url": "https://www.kojima.net/shop/campaign/cashless/"
-          }
-        }
-      ],
-      "detail_url": "https://media.aupay.wallet.auone.jp/articles/5167",
       "verified_date": "2026-08-09"
     },
     {
@@ -1602,7 +1472,7 @@
       "detail_url": "https://aupay.auone.jp/contents/lp/tanuki-lottery/index.html",
       "verified_date": "2026-08-09"
     },
-{
+    {
       "id": "kanagawa_kanatoku_2026_06",
       "type": "municipal",
       "benefit_type": "rebate",
@@ -1614,6 +1484,7 @@
         { "condition": "大手企業の店舗", "rate": 10.0 }
       ],
       "period_start": "2026-06-19",
+      "period_end": "2026-09-06",
       "per_transaction_cap": 1500,
       "period_total_cap": 2500,
       "cap_note": "20%店舗と10%店舗の合算・決済サービスごとに適用",
@@ -1642,7 +1513,7 @@
           "detail_url": "https://media.aupay.wallet.auone.jp/dominant/lp/202606_kanagawa/",
           "memo": [
             "還元はau PAY残高(不課税)",
-            "au PAYの自治体一覧では終了日を2026/9/6と表示するが、au PAY記事(articles/5060)・PayPay公式はいずれも「6月19日〜予算上限まで」で終了日の記載が無い(2026-08-21再確認)。一覧側の9/6は予算消化見込みの目安と判断し period_end は null のまま"
+            "2026年9月6日23:59に予算上限到達で早期終了(PayPay・au PAY公式ページにて確認)"
           ],
           "verified_date": "2026-08-21"
         },
@@ -1708,30 +1579,30 @@
         {
           "payment_method_id": "paypay",
           "detail_url": "https://paypay.ne.jp/notice/20260615/cp-jichitai/",
-          "verified_date": "2026-08-09"
+          "verified_date": "2026-09-09"
         },
         {
           "payment_method_id": "aupay",
           "point_currency_id": "aupay_balance",
           "detail_url": "https://www.pref.chiba.lg.jp/keisei/press/2026/r8cashless-campaign.html",
           "memo": ["還元はau PAY残高(不課税)"],
-          "verified_date": "2026-08-09"
+          "verified_date": "2026-09-09"
         },
         {
           "payment_method_id": "dpay",
           "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/chiba_03/",
-          "verified_date": "2026-08-09"
+          "verified_date": "2026-09-09"
         },
         {
           "payment_method_id": "rakuten_pay",
           "detail_url": "https://www.pref.chiba.lg.jp/keisei/press/2026/r8cashless-campaign.html",
-          "verified_date": "2026-07-16"
+          "verified_date": "2026-09-09"
         },
         {
           "payment_method_id": "aeon_pay",
           "detail_url": "https://www.pref.chiba.lg.jp/keisei/press/2026/r8cashless-campaign.html",
           "memo": ["還元はAEON Pay残高"],
-          "verified_date": "2026-07-16"
+          "verified_date": "2026-09-09"
         }
       ]
     },
@@ -1909,7 +1780,7 @@
         { "payment_method_id": "paypay", "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイント・PayPayデビットで支払う", "detail_url": "https://www.city.kakogawa.lg.jp/soshikikarasagasu/chiikishinkobu/shokorosei/syogyo_kogyo/syogyosinko/40284.html", "verified_date": "2026-08-09" }
       ]
     },
-{
+    {
       "id": "takehara_2026_08",
       "type": "municipal",
       "benefit_type": "rebate",
@@ -1930,7 +1801,7 @@
         "コンビニ・病院/医院・調剤薬局・介護施設・保険代理店・公共料金・金券・プリペイドカード・たばこ・市指定ごみ袋等は対象外"
       ],
       "payment_variants": [
-        { "payment_method_id": "paypay", "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイントで支払う", "detail_url": "https://www.city.takehara.lg.jp/soshikikarasagasu/sangyoshinkoka/gyomuannai/6/2/2261.html", "verified_date": "2026-08-09" }
+        { "payment_method_id": "paypay", "payment_instruction": "PayPay残高・PayPayクレジット・PayPayポイントで支払う", "detail_url": "https://www.city.takehara.lg.jp/soshikikarasagasu/sangyoshinkoka/gyomuannai/6/2/2261.html", "verified_date": "2026-09-09" }
       ]
     },
 {
@@ -2015,7 +1886,7 @@
         }
       ]
     },
-{
+    {
       "id": "yurihonjo_2026_09",
       "type": "municipal",
       "benefit_type": "rebate",
@@ -2080,7 +1951,7 @@
         }
       ]
     },
-{
+    {
       "id": "makurazaki_2026_09",
       "type": "municipal",
       "benefit_type": "rebate",
@@ -2127,7 +1998,7 @@
         }
       ]
     },
-{
+    {
       "id": "asaka_2026_09",
       "type": "municipal",
       "benefit_type": "rebate",
@@ -2147,10 +2018,10 @@
         "朝霞市内の中規模・小規模PayPay加盟店のうち指定店舗以外は対象外"
       ],
       "payment_variants": [
-        { "payment_method_id": "paypay", "detail_url": "https://paypay.ne.jp/notice/20260715/cp-jichitai/", "verified_date": "2026-08-09" }
+        { "payment_method_id": "paypay", "detail_url": "https://paypay.ne.jp/event/saitama-asaka-city-20260928/", "verified_date": "2026-09-09" }
       ]
     },
-{
+    {
       "id": "ama_2026_09",
       "type": "municipal",
       "benefit_type": "rebate",
@@ -2168,10 +2039,10 @@
       },
       "ineligible_notes": ["あま市とPayPayが指定する市内加盟店以外は対象外"],
       "payment_variants": [
-        { "payment_method_id": "paypay", "detail_url": "https://paypay.ne.jp/notice/20260715/cp-jichitai/", "verified_date": "2026-08-09" }
+        { "payment_method_id": "paypay", "detail_url": "https://paypay.ne.jp/event/aichi-ama-city-20260901/", "verified_date": "2026-09-09" }
       ]
     },
-{
+    {
       "id": "kimino_2026_09",
       "type": "municipal",
       "benefit_type": "rebate",
@@ -2189,7 +2060,7 @@
       },
       "ineligible_notes": ["紀美野町とPayPayが指定する町内加盟店以外は対象外"],
       "payment_variants": [
-        { "payment_method_id": "paypay", "detail_url": "https://paypay.ne.jp/notice/20260715/cp-jichitai/", "verified_date": "2026-08-09" }
+        { "payment_method_id": "paypay", "detail_url": "https://paypay.ne.jp/event/wakayama-kimino-town-20260901/", "verified_date": "2026-09-09"}
       ]
     },
 {
@@ -2221,7 +2092,7 @@
         { "payment_method_id": "dpay", "detail_url": "https://service.smt.docomo.ne.jp/keitai_payment/campaign/dpay_ouen/erimo_02/", "verified_date": "2026-08-21" }
       ]
     },
-{
+    {
       "id": "toyota_2026_08",
       "type": "municipal",
       "benefit_type": "rebate",
@@ -2244,10 +2115,10 @@
         "出典はドコモの2026-07-17プレスリリース(8月開始のdポイント/d払い自治体キャンペーン)。専用キャンペーンページが公開されたら detail_url を差し替える"
       ],
       "payment_variants": [
-        { "payment_method_id": "dpay", "detail_url": "https://prtimes.jp/main/html/rd/p/000000863.000118641.html", "verified_date": "2026-08-09" }
+        {"payment_method_id": "dpay", "detail_url": "https://prtimes.jp/main/html/rd/p/000000863.000118641.html", "verified_date": "2026-09-09"}
       ]
     },
-{
+    {
       "id": "tono_2026_10",
       "type": "municipal",
       "benefit_type": "rebate",
@@ -2282,6 +2153,122 @@
           "memo": ["PayPayお知らせページ(2026-08-07付)で対象は残高・PayPayクレジット・PayPay商品券と明記(他自治体と異なりPayPay商品券が対象)。専用ページ公開後に照合"],
           "verified_date": "2026-08-09"
         }
+      ]
+    },
+    {
+      "id": "aupay_biccamera_coupon_2026_09b",
+      "type": "promotion",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "payment_method_id": "aupay",
+      "name": "ビックカメラの対象店舗で使える au PAY 1,000円割引クーポン(第2期)",
+      "payment_instruction": "au PAYアプリで事前にクーポンを獲得し、コード支払いで支払う",
+      "discount_amount": 1000,
+      "period_start": "2026-09-11",
+      "period_end": "2026-09-14",
+      "min_purchase": 10000,
+      "ineligible_notes": ["事前にクーポンの獲得が必要(支払い後のクーポン利用は不可)", "金券類など一部対象外の商品あり"],
+      "memo": [
+        "4期間に分けて対象店舗を入れ替えて開催(第1期9/4〜9/7は終了済みのため未収録)。期ごとに1エントリ",
+        "公式は「その他の店舗および『ビックカメラ・ドットコム』ではご利用いただけません」と明記(list_is_exhaustive)"
+      ],
+      "merchant_rules": [
+        {"merchant_id": "biccamera", "official_store_list": {"eligible_stores": ["池袋本店", "新宿西口店", "立川店", "JR八王子駅店", "藤沢店", "相模大野駅店", "名古屋JRゲートタワー店"], "list_is_exhaustive": true, "updated_date": "2026-09-01", "date_is_official": true, "source_url": "https://aupay-cp.auone.jp/202609_biccamera/"}}
+      ],
+      "detail_url": "https://aupay-cp.auone.jp/202609_biccamera/",
+      "verified_date": "2026-09-09"
+    },
+    {
+      "id": "aupay_biccamera_coupon_2026_09c",
+      "type": "promotion",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "payment_method_id": "aupay",
+      "name": "ビックカメラの対象店舗で使える au PAY 1,000円割引クーポン(第3期)",
+      "payment_instruction": "au PAYアプリで事前にクーポンを獲得し、コード支払いで支払う",
+      "discount_amount": 1000,
+      "period_start": "2026-09-18",
+      "period_end": "2026-09-24",
+      "min_purchase": 10000,
+      "ineligible_notes": ["事前にクーポンの獲得が必要(支払い後のクーポン利用は不可)", "金券類など一部対象外の商品あり"],
+      "memo": [
+        "4期間に分けて対象店舗を入れ替えて開催(第1期9/4〜9/7は終了済みのため未収録)。期ごとに1エントリ",
+        "公式は「その他の店舗および『ビックカメラ・ドットコム』ではご利用いただけません」と明記(list_is_exhaustive)"
+      ],
+      "merchant_rules": [
+        {"merchant_id": "biccamera", "official_store_list": {"eligible_stores": ["新宿西口店", "大宮西口そごう店", "立川店", "相模大野駅店", "ららぽーと愛知東郷店", "広島駅前店", "天神1号館", "天神2号館"], "list_is_exhaustive": true, "updated_date": "2026-09-01", "date_is_official": true, "source_url": "https://aupay-cp.auone.jp/202609_biccamera/"}}
+      ],
+      "detail_url": "https://aupay-cp.auone.jp/202609_biccamera/",
+      "verified_date": "2026-09-09"
+    },
+    {
+      "id": "aupay_biccamera_coupon_2026_09d",
+      "type": "promotion",
+      "benefit_type": "discount",
+      "store_scope": "managed",
+      "payment_method_id": "aupay",
+      "name": "ビックカメラの対象店舗で使える au PAY 1,000円割引クーポン(第4期)",
+      "payment_instruction": "au PAYアプリで事前にクーポンを獲得し、コード支払いで支払う",
+      "discount_amount": 1000,
+      "period_start": "2026-09-25",
+      "period_end": "2026-09-28",
+      "min_purchase": 10000,
+      "ineligible_notes": ["事前にクーポンの獲得が必要(支払い後のクーポン利用は不可)", "金券類など一部対象外の商品あり"],
+      "memo": [
+        "4期間に分けて対象店舗を入れ替えて開催(第1期9/4〜9/7は終了済みのため未収録)。期ごとに1エントリ",
+        "公式は「その他の店舗および『ビックカメラ・ドットコム』ではご利用いただけません」と明記(list_is_exhaustive)"
+      ],
+      "merchant_rules": [
+        {"merchant_id": "biccamera", "official_store_list": {"eligible_stores": ["池袋本店", "新宿東口店", "新宿西口店", "大宮西口そごう店", "赤坂見附駅店", "立川店", "相模大野駅店", "イオンモール松本店", "浜松店", "名古屋駅西店", "岡山駅前店", "天神1号館"], "list_is_exhaustive": true, "updated_date": "2026-09-01", "date_is_official": true, "source_url": "https://aupay-cp.auone.jp/202609_biccamera/"}}
+      ],
+      "detail_url": "https://aupay-cp.auone.jp/202609_biccamera/",
+      "verified_date": "2026-09-09"
+    },
+    {
+      "id": "miyakojima_2026_10",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "name": "宮古島市キャッシュレス還元キャンペーン",
+      "rate_base": 25.0,
+      "period_start": "2026-10-01",
+      "period_end": "2026-12-31",
+      "per_transaction_cap": 2000,
+      "period_total_cap": 8000,
+      "may_end_early": true,
+      "region": {
+        "name": "宮古島市",
+        "prefecture": "沖縄県"
+      },
+      "ineligible_notes": ["宮古島市とPayPayが指定する市内加盟店以外は対象外"],
+      "memo": ["専用キャンペーンページが公開されたら detail_url を差し替える"],
+      "payment_variants": [
+        {"payment_method_id": "paypay", "detail_url": "https://paypay.ne.jp/notice/20260831/cp-jichitai/", "verified_date": "2026-09-09"}
+      ]
+    },
+    {
+      "id": "miyakonojo_2026_10",
+      "type": "municipal",
+      "benefit_type": "rebate",
+      "store_scope": "external",
+      "name": "中心市街地の対象店舗で最大15％ポイント付与！ 都城商工会議所まちなか回遊キャンペーン（第5弾）",
+      "rate_base": 15.0,
+      "period_start": "2026-10-01",
+      "period_end": "2026-10-31",
+      "per_transaction_cap": 1000,
+      "period_total_cap": 1500,
+      "may_end_early": true,
+      "region": {
+        "name": "都城市",
+        "prefecture": "宮崎県"
+      },
+      "ineligible_notes": ["都城市中心市街地(まちなかエリア)の対象店舗以外は対象外"],
+      "memo": [
+        "都城商工会議所主催。市全域ではなく中心市街地まちなかエリア限定だが、店舗一覧が公表されておらず店舗特定ができないため municipal + external で収録(toyota_2026_08と同様)",
+        "専用キャンペーンページが公開されたら detail_url を差し替える"
+      ],
+      "payment_variants": [
+        {"payment_method_id": "paypay", "detail_url": "https://paypay.ne.jp/notice/20260831/cp-jichitai/", "verified_date": "2026-09-09"}
       ]
     }
   ]
