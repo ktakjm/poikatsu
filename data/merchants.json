@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-08-16",
+  "updated_at": "2026-10-24",
 
   "yolp_config": {
     "gc_groups": [
@@ -213,7 +213,8 @@
         { "id": "health_bank", "name": "ヘルスバンク", "reading": "へるすばんく" },
         { "id": "family_drug", "name": "ファミリードラッグ", "reading": "ふぁみりーどらっぐ" },
         { "id": "matsukiyo_lab", "name": "matsukiyo LAB", "reading": "まつきよらぼ" },
-        { "id": "petit_madoca", "name": "petit madoca", "reading": "ぷちまどか" }
+        { "id": "petit_madoca", "name": "petit madoca", "reading": "ぷちまどか" },
+        { "id": "keiport", "name": "ケイポート", "reading": "けいぽーと" }
       ] },
     { "id": "big_echo", "name": "ビッグエコー", "reading": "びっぐえこー", "aliases": ["BIG ECHO"], "category": "カラオケ" },
     { "id": "jankara", "name": "ジャンカラ", "reading": "じゃんから", "aliases": ["スーパージャンカラ"], "category": "カラオケ" },
@@ -249,15 +250,19 @@
         { "id": "drug_tops", "name": "ドラッグトップス", "reading": "どらっぐとっぷす" },
         { "id": "big_drug", "name": "ビッグドラッグ", "reading": "びっぐどらっぐ" },
         { "id": "sa_drug", "name": "エスエードラッグ", "reading": "えすえーどらっぐ" },
-        { "id": "drug_you", "name": "ドラッグ・ユー", "reading": "どらっぐゆー" }
+        { "id": "drug_you", "name": "ドラッグ・ユー", "reading": "どらっぐゆー" },
+        { "id": "dairex", "name": "ダイレックス", "reading": "だいれっくす" }
       ] },
     { "id": "seims", "name": "ドラッグセイムス", "reading": "どらっぐせいむす", "aliases": ["セイムス"], "category": "ドラッグストア",
       "group_label": "富士薬品グループ",
       "banners": [
-        { "id": "drug_yutaka", "name": "ドラッグユタカ", "reading": "どらっぐゆたか" },
+        { "id": "drug_yutaka", "name": "ドラッグユタカ", "reading": "どらっぐゆたか", "aliases": ["DRUG ユタカ"] },
         { "id": "super_drug_kirin", "name": "スーパードラッグキリン", "reading": "すーぱーどらっぐきりん" },
-        { "id": "drug_store_ace", "name": "ドラッグストアエース", "reading": "どらっぐすとあえーす" },
-        { "id": "kyumeido", "name": "くすりの救命堂", "reading": "くすりのきゅうめいどう" }
+        { "id": "drug_store_ace", "name": "ドラッグストアエース", "reading": "どらっぐすとあえーす", "aliases": ["あみはま薬局"] },
+        { "id": "kyumeido", "name": "くすりの救命堂", "reading": "くすりのきゅうめいどう" },
+        { "id": "american_drug", "name": "アメリカンドラッグ", "reading": "あめりかんどらっぐ" },
+        { "id": "drug_smile", "name": "ドラッグストアスマイル", "reading": "どらっぐすとあすまいる" },
+        { "id": "just_drug", "name": "JUSTDRUG", "reading": "じゃすとどらっぐ" }
       ] },
     { "id": "daikoku_drug", "name": "ダイコクドラッグ", "reading": "だいこくどらっぐ", "aliases": [], "category": "ドラッグストア" },
     { "id": "cocokara_fine", "name": "ココカラファイン", "reading": "ここからふぁいん", "aliases": ["ココカラ"], "category": "ドラッグストア",
@@ -269,7 +274,41 @@
         { "id": "lifort", "name": "ライフォート", "reading": "らいふぉーと" },
         { "id": "love_drug", "name": "くすりのラブ", "reading": "くすりのらぶ" },
         { "id": "kodama", "name": "クスリのコダマ", "reading": "くすりのこだま" },
-        { "id": "cocokara_izumiya", "name": "ココカラファインプラスイズミヤ", "reading": "ここからふぁいんぷらすいずみや" }
-      ] }
+        { "id": "cocokara_izumiya", "name": "ココカラファインプラスイズミヤ", "reading": "ここからふぁいんぷらすいずみや" },
+        { "id": "healthcare_seijo", "name": "ヘルスケアセイジョー", "reading": "へるすけあせいじょー" },
+        { "id": "segami_pharmacy", "name": "セガミ薬局", "reading": "せがみやっきょく" },
+        { "id": "kusuri_iwasaki", "name": "クスリ岩崎チェーン", "reading": "くすりいわさきちぇーん" }
+      ] },
+    {"id": "kawachi_yakuhin", "name": "カワチ薬品", "reading": "かわちやくひん", "aliases": ["カワチ", "CAWACHI"], "category": "ドラッグストア", "group_label": "カワチ薬品グループ",
+      "banners": [
+        { "id": "drug_kuramochi", "name": "ドラッグストアクラモチ", "reading": "どらっぐすとあくらもち" },
+        { "id": "kawachi_pharmacy", "name": "カワチファーマシー", "reading": "かわちふぁーましー" },
+        { "id": "aikokochi", "name": "アイココチ", "reading": "あいここち" }
+      ] },
+    {"id": "kirindo", "name": "キリン堂", "reading": "きりんどう", "aliases": [], "category": "ドラッグストア"},
+    {"id": "create_sd", "name": "クリエイトエス・ディー", "reading": "くりえいとえすでぃー", "aliases": ["クリエイト"], "category": "ドラッグストア",
+      "banners": [
+        { "id": "cremo", "name": "Cremo", "reading": "くれも" }
+      ] },
+    {"id": "sugiyama_yakuhin", "name": "スギヤマ薬品", "reading": "すぎやまやくひん", "aliases": [], "category": "ドラッグストア",
+      "banners": [
+        { "id": "drug_sugiyama", "name": "ドラッグスギヤマ", "reading": "どらっぐすぎやま" }
+      ] },
+    {"id": "seki_yakuhin", "name": "セキ薬品", "reading": "せきやくひん", "aliases": [], "category": "ドラッグストア",
+      "banners": [
+        { "id": "drug_seki", "name": "ドラッグストアセキ", "reading": "どらっぐすとあせき" }
+      ] },
+    {"id": "chubu_yakuhin", "name": "V・drug", "reading": "ぶいどらっぐ", "aliases": ["中部薬品", "ブイ・ドラッグ"], "category": "ドラッグストア"},
+    {"id": "tomods", "name": "トモズ", "reading": "ともず", "aliases": ["トモズ薬局"], "category": "ドラッグストア", "group_label": "トモズグループ",
+      "banners": [
+        { "id": "katsumata", "name": "カツマタ", "reading": "かつまた" },
+        { "id": "american_pharmacy", "name": "AMERICAN PHARMACY", "reading": "あめりかんふぁーましー" },
+        { "id": "ap_american_pharmacy", "name": "AP by AMERICAN PHARMACY", "reading": "えーぴーばいあめりかんふぁーましー" }
+      ] },
+    {"id": "yokohama_pharmacy", "name": "スーパードラッグアサヒ", "reading": "すーぱーどらっぐあさひ", "aliases": ["横浜ファーマシー"], "category": "ドラッグストア", "group_label": "横浜ファーマシーグループ",
+      "banners": [
+        { "id": "super_city_asahi", "name": "スーパーシティアサヒ", "reading": "すーぱーしてぃあさひ" }
+      ] },
+    {"id": "cainz", "name": "カインズ", "reading": "かいんず", "aliases": ["CAINZ", "CAINZ Mobile Store"], "category": "ホームセンター", "yolp_search": "keyword", "yolp_keyword": "カインズ"}
   ]
 }
